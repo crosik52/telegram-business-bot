@@ -158,6 +158,13 @@ async def on_edited_business_message(message: Message, bot: Bot) -> None:
         # "notify me when the other side edits" feature is for.
         return
 
+    if connection.is_blocked or not connection.notifications_enabled:
+        logger.info(
+            "Owner notifications disabled for connection_id=%s; skipping edit notification",
+            connection.business_connection_id,
+        )
+        return
+
     counterpart = _counterpart_label(message.chat, connection.user_telegram_id)
     text = (
         f"✏️ {counterpart} отредактировал(а) сообщение:\n\n"
@@ -201,9 +208,12 @@ async def on_deleted_business_messages(deleted: BusinessMessagesDeleted, bot: Bo
                 connection is None
                 or removed is None
                 or removed.sender_telegram_id == connection.user_telegram_id
+                or connection.is_blocked
+                or not connection.notifications_enabled
             ):
-                # Unknown connection, untracked message, or the owner
-                # deleted their own message — nothing to notify about.
+                # Unknown connection, untracked message, the owner deleted
+                # their own message, or notifications are disabled for this
+                # connection — nothing to notify about.
                 continue
 
             counterpart = _counterpart_label(deleted.chat, connection.user_telegram_id)

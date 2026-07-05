@@ -22,6 +22,7 @@ from app.database.base import Base
 from app.database.session import dispose_engine, get_engine
 from app.logging_config import configure_logging, get_logger
 from app.middlewares.logging_middleware import RequestLoggingMiddleware
+from app.miniapp import routes as miniapp_routes
 from app.routers import health, webhook
 
 settings = get_settings()
@@ -94,3 +95,4 @@ app.include_router(dashboard_home.router)
 app.include_router(dashboard_messages.router)
 app.include_router(dashboard_stats.router)
 app.include_router(dashboard_export.router)
+app.include_router(miniapp_routes.router)

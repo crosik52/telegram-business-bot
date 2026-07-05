@@ -213,6 +213,40 @@
     min-width: 30px;
     text-align: right;
   }
+  .row.clickable { cursor: pointer; }
+  .row.clickable:active { background: rgba(120,120,128,0.1); }
+  .row-chevron { color: var(--hint); font-size: 18px; font-weight: 700; padding-left: 2px; flex-shrink: 0; }
+
+  .share-btn {
+    width: 100%;
+    margin-top: 12px;
+    border: none;
+    border-radius: 14px;
+    padding: 13px;
+    font-size: 13.5px;
+    font-weight: 700;
+    background: rgba(120,120,128,0.12);
+    color: var(--link);
+  }
+  .share-btn:active { transform: scale(0.98); }
+
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%) translateY(20px);
+    background: rgba(20,20,22,0.92);
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 30px;
+    font-size: 13px;
+    font-weight: 600;
+    opacity: 0;
+    transition: all 0.25s ease;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
   .empty, .error {
     text-align: center;
@@ -374,8 +408,9 @@
         const chips = [];
         if (s.edited_count) chips.push(`<span class="chip edited">✏️ ${s.edited_count}</span>`);
         if (s.deleted_count) chips.push(`<span class="chip deleted">🗑 ${s.deleted_count}</span>`);
+        const clickable = s.username ? ` data-username="${s.username}"` : "";
         return `
-          <div class="row">
+          <div class="row${s.username ? " clickable" : ""}"${clickable}>
             <div class="rank">${medal(i)}</div>
             <div class="avatar" style="background:${colorFor(s.display_name)}">${initials(s.display_name)}</div>
             <div class="row-main">
@@ -388,11 +423,12 @@
               <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
             </div>
             <div class="row-count">${s.message_count}</div>
+            ${s.username ? '<div class="row-chevron">›</div>' : ""}
           </div>
         `;
       }).join("");
 
-      return `${controls}<div class="section-title">🏆 Топ собеседников <span class="sub">${sorted.length} из ${stats.top_interlocutors.length}</span></div><div class="list">${rows}</div>`;
+      return `${controls}<div class="section-title">🏆 Топ собеседников <span class="sub">${sorted.length} из ${stats.top_interlocutors.length}</span></div><div class="list">${rows}</div><button class="share-btn" id="shareBtn">📋 Скопировать сводку статистики</button>`;
     }
 
     function attachTopHandlers() {
@@ -414,6 +450,57 @@
           attachTopHandlers();
         });
       });
+      document.querySelectorAll(".row.clickable").forEach((row) => {
+        row.addEventListener("click", () => {
+          const username = row.dataset.username;
+          if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
+          if (tg && tg.openTelegramLink) tg.openTelegramLink(`https://t.me/${username}`);
+          else window.open(`https://t.me/${username}`, "_blank");
+        });
+      });
+      const shareBtn = document.getElementById("shareBtn");
+      if (shareBtn) shareBtn.addEventListener("click", copySummary);
+    }
+
+    function buildSummaryText(stats) {
+      const lines = [
+        "📊 Моя статистика в Telegram Business Bot",
+        `💬 Сообщений: ${stats.total_messages}`,
+        `👥 Собеседников: ${stats.total_chats}`,
+        `✏️ Правок: ${stats.edited_messages}`,
+        `🗑 Удалений: ${stats.deleted_messages}`,
+      ];
+      const top = stats.top_interlocutors.slice(0, 5);
+      if (top.length) {
+        lines.push("", "🏆 Топ собеседников:");
+        top.forEach((s, i) => lines.push(`${i + 1}. ${s.display_name} — ${s.message_count} сообщ.`));
+      }
+      return lines.join("\n");
+    }
+
+    async function copySummary() {
+      if (!lastStats) return;
+      const text = buildSummaryText(lastStats);
+      try {
+        await navigator.clipboard.writeText(text);
+        if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+        toastMessage("Сводка скопирована");
+      } catch (e) {
+        if (tg) tg.showAlert(text);
+      }
+    }
+
+    function toastMessage(msg) {
+      let toast = document.getElementById("miniToast");
+      if (!toast) {
+        toast = document.createElement("div");
+        toast.id = "miniToast";
+        toast.className = "toast";
+        document.body.appendChild(toast);
+      }
+      toast.textContent = msg;
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 2200);
     }
 
     async function loadStats(isRefresh) {

@@ -192,6 +192,67 @@
   }
   .chip.edited { color: var(--accent-3); background: rgba(255,159,10,0.14); }
   .chip.deleted { color: var(--accent-4); background: rgba(255,69,58,0.14); }
+  .chip.streak { color: #FF6B00; background: rgba(255,107,0,0.14); }
+  .mutual-dot { font-size: 12px; }
+  .game-btn {
+    margin-top: 8px;
+    border: none;
+    border-radius: 10px;
+    padding: 6px 12px;
+    font-size: 12.5px;
+    font-weight: 700;
+    background: linear-gradient(90deg, var(--link), var(--accent-2));
+    color: #fff;
+    display: inline-block;
+  }
+  .game-btn:active { opacity: 0.8; }
+  .game-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex;
+    align-items: flex-end;
+    z-index: 1000;
+  }
+  .game-sheet {
+    width: 100%;
+    background: var(--bg-secondary, #fff);
+    border-radius: 18px 18px 0 0;
+    padding: 18px 16px 24px;
+    animation: slideUp 0.2s ease-out;
+  }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .game-sheet-title { font-size: 15px; font-weight: 700; margin-bottom: 14px; text-align: center; }
+  .game-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .game-pick {
+    border: none;
+    border-radius: 14px;
+    background: rgba(120,120,128,0.12);
+    padding: 14px 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .game-pick:active { background: rgba(120,120,128,0.22); }
+  .game-pick-emoji { font-size: 26px; }
+  .game-cancel {
+    width: 100%;
+    border: none;
+    border-radius: 14px;
+    padding: 13px;
+    font-size: 14px;
+    font-weight: 700;
+    background: rgba(120,120,128,0.12);
+    color: var(--accent-4);
+  }
   .bar-track {
     height: 5px;
     border-radius: 3px;
@@ -319,6 +380,7 @@
     let lastStats = null;
     let sortMode = "messages";
     let searchQuery = "";
+    let currentInitData = "";
 
     const AVATAR_COLORS = ["#FF6B6B", "#4ECDC4", "#45AAF2", "#F7B731", "#A55EEA", "#26DE81", "#FD9644", "#2BCBBA"];
 
@@ -406,21 +468,26 @@
         const pct = max > 0 ? Math.max(6, Math.round((s.message_count / max) * 100)) : 0;
         const sub = s.username ? "@" + s.username : "личный контакт";
         const chips = [];
+        if (s.streak_days >= 2) chips.push(`<span class="chip streak">🔥 ${s.streak_days} дн подряд</span>`);
         if (s.edited_count) chips.push(`<span class="chip edited">✏️ ${s.edited_count}</span>`);
         if (s.deleted_count) chips.push(`<span class="chip deleted">🗑 ${s.deleted_count}</span>`);
         const clickable = s.username ? ` data-username="${s.username}"` : "";
+        const gameBtn = s.mutual_connected
+          ? `<button class="game-btn" data-game-chat="${s.chat_id}" data-game-name="${s.display_name}">🎮 Игра</button>`
+          : "";
         return `
           <div class="row${s.username ? " clickable" : ""}"${clickable}>
             <div class="rank">${medal(i)}</div>
             <div class="avatar" style="background:${colorFor(s.display_name)}">${initials(s.display_name)}</div>
             <div class="row-main">
-              <div class="row-name">${s.display_name}</div>
+              <div class="row-name">${s.display_name}${s.mutual_connected ? ' <span class="mutual-dot" title="Тоже подключил бота">🤝</span>' : ""}</div>
               <div class="row-sub">
                 <span>${sub}</span>
                 <span class="chip">${timeAgo(s.last_message_at)}</span>
                 ${chips.join("")}
               </div>
               <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+              ${gameBtn}
             </div>
             <div class="row-count">${s.message_count}</div>
             ${s.username ? '<div class="row-chevron">›</div>' : ""}
@@ -458,8 +525,61 @@
           else window.open(`https://t.me/${username}`, "_blank");
         });
       });
+      document.querySelectorAll(".game-btn").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openGamePicker(btn.dataset.gameChat, btn.dataset.gameName);
+        });
+      });
       const shareBtn = document.getElementById("shareBtn");
       if (shareBtn) shareBtn.addEventListener("click", copySummary);
+    }
+
+    const GAMES = [
+      { emoji: "🎲", label: "Кубик" },
+      { emoji: "🎯", label: "Дартс" },
+      { emoji: "🏀", label: "Баскетбол" },
+      { emoji: "⚽", label: "Футбол" },
+      { emoji: "🎳", label: "Боулинг" },
+      { emoji: "🎰", label: "Слоты" },
+    ];
+
+    function openGamePicker(chatId, name) {
+      const overlay = document.createElement("div");
+      overlay.className = "game-overlay";
+      overlay.innerHTML = `
+        <div class="game-sheet">
+          <div class="game-sheet-title">🎮 Отправить игру — ${name}</div>
+          <div class="game-grid">
+            ${GAMES.map(g => `<button class="game-pick" data-emoji="${g.emoji}"><span class="game-pick-emoji">${g.emoji}</span><span>${g.label}</span></button>`).join("")}
+          </div>
+          <button class="game-cancel">Отмена</button>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+      overlay.querySelector(".game-cancel").addEventListener("click", () => overlay.remove());
+      overlay.querySelectorAll(".game-pick").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          overlay.remove();
+          await sendGame(chatId, btn.dataset.emoji);
+        });
+      });
+    }
+
+    async function sendGame(chatId, emoji) {
+      try {
+        if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred("medium");
+        const res = await fetch("./api/game/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initData: currentInitData, chatId: Number(chatId), emoji }),
+        });
+        if (!res.ok) throw new Error("failed");
+        if (tg && tg.showAlert) tg.showAlert(`${emoji} Игра отправлена в чат!`);
+      } catch (err) {
+        if (tg && tg.showAlert) tg.showAlert("Не удалось отправить игру. Попробуйте ещё раз.");
+      }
     }
 
     function buildSummaryText(stats) {
@@ -505,6 +625,7 @@
 
     async function loadStats(isRefresh) {
       const initData = tg ? tg.initData : "";
+      currentInitData = initData;
       const subtitle = document.getElementById("subtitle");
       const content = document.getElementById("content");
       const refreshBtn = document.getElementById("refreshBtn");

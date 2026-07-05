@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Message detail — Business Inbox{% endblock %}
+{% block content %}
+<a href="/messages" class="text-sm text-brand-600 dark:text-brand-400 hover:underline">&larr; Back to messages</a>
+<h1 class="text-2xl font-semibold mt-3 mb-6">Message detail</h1>
+
+<div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 mb-6">
+  <div class="flex flex-wrap gap-2 mb-4">
+    {% if message.is_deleted %}<span class="text-xs rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 px-2 py-0.5">Deleted {{ message.deleted_at.strftime('%b %d, %Y %H:%M') if message.deleted_at }}</span>{% endif %}
+    {% if message.is_edited %}<span class="text-xs rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 px-2 py-0.5">Edited {{ message.edit_count }}x</span>{% endif %}
+    <span class="text-xs rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 px-2 py-0.5">{{ message.media_type.value }}</span>
+  </div>
+
+  <dl class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 text-sm mb-6">
+    <div><dt class="text-slate-500 dark:text-slate-400">Sender</dt><dd class="font-medium">{{ message.sender_first_name or '' }} {{ message.sender_last_name or '' }} (@{{ message.sender_username or 'n/a' }})</dd></div>
+    <div><dt class="text-slate-500 dark:text-slate-400">Chat ID</dt><dd class="font-medium">{{ message.chat_id }}</dd></div>
+    <div><dt class="text-slate-500 dark:text-slate-400">Message ID</dt><dd class="font-medium">{{ message.message_id }}</dd></div>
+    <div><dt class="text-slate-500 dark:text-slate-400">Sent at</dt><dd class="font-medium">{{ message.sent_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}</dd></div>
+    {% if message.reply_to_message_id %}<div><dt class="text-slate-500 dark:text-slate-400">Reply to</dt><dd class="font-medium">#{{ message.reply_to_message_id }}</dd></div>{% endif %}
+    {% if message.file_id %}<div><dt class="text-slate-500 dark:text-slate-400">File ID</dt><dd class="font-mono text-xs break-all">{{ message.file_id }}</dd></div>{% endif %}
+  </dl>
+
+  <div class="border-t border-slate-100 dark:border-slate-800 pt-4">
+    <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Current content</p>
+    <p class="whitespace-pre-wrap text-sm">{{ message.text or message.caption or '(no text)' }}</p>
+  </div>
+
+  {% if message.is_edited %}
+  <div class="border-t border-slate-100 dark:border-slate-800 pt-4 mt-4">
+    <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Original content (preserved)</p>
+    <p class="whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-400">{{ message.original_text or message.original_caption or '(no text)' }}</p>
+  </div>
+  {% endif %}
+</div>
+
+{% if message.edit_history %}
+<h2 class="text-lg font-semibold mb-3">Edit history</h2>
+<div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
+  {% for entry in message.edit_history %}
+  <div class="px-5 py-3">
+    <p class="text-xs text-slate-400 mb-1">Edited {{ entry.edited_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}</p>
+    <p class="whitespace-pre-wrap text-sm">{{ entry.text or entry.caption or '(no text)' }}</p>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

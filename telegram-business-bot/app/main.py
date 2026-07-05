@@ -1,0 +1,98 @@
+"""FastAPI application entrypoint.
+
+Wires together the Telegram webhook, health check, and admin dashboard into
+a single ASGI app. Runs entirely in webhook mode — polling is never used.
+"""
+
+from __future__ import annotations
+
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
+
+from app.config import get_settings
+from app.dashboard.routes import auth as dashboard_auth
+from app.dashboard.routes import export as dashboard_export
+from app.dashboard.routes import home as dashboard_home
+from app.dashboard.routes import messages as dashboard_messages
+from app.dashboard.routes import stats as dashboard_stats
+from app.database.base import Base
+from app.database.session import dispose_engine, get_engine
+from app.logging_config import configure_logging, get_logger
+from app.middlewares.logging_middleware import RequestLoggingMiddleware
+from app.miniapp import routes as miniapp_routes
+from app.routers import health, webhook
+
+settings = get_settings()
+configure_logging(settings.log_level)
+logger = get_logger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Starting Telegram Business Bot (environment=%s)", settings.environment)
+
+    # Ensure tables exist. Alembic migrations remain the source of truth for
+    # schema evolution; this is a safety net for fresh deployments where
+    # migrations haven't been run yet.
+    engine = get_engine()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    if settings.webhook_base_url:
+        from app.business.dispatcher import get_bot
+
+        bot = get_bot(settings)
+        webhook_url = settings.webhook_base_url.rstrip("/") + settings.webhook_path
+        await bot.set_webhook(
+            url=webhook_url,
+            secret_token=settings.telegram_webhook_secret or None,
+            allowed_updates=[
+                "message",
+                "business_connection",
+                "business_message",
+                "edited_business_message",
+                "deleted_business_messages",
+            ],
+            drop_pending_updates=False,
+        )
+        logger.info("Telegram webhook set to %s", webhook_url)
+    else:
+        logger.warning(
+            "WEBHOOK_BASE_URL is not set — skipping automatic setWebhook call. "
+            "Set it (or call setWebhook manually) before the bot can receive updates."
+        )
+
+    yield
+
+    logger.info("Shutting down Telegram Business Bot")
+    from app.business.dispatcher import close_bot
+
+    await close_bot()
+    await dispose_engine()
+
+
+app = FastAPI(title="Telegram Business Bot", lifespan=lifespan)
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.session_secret,
+    max_age=settings.session_max_age_seconds,
+    same_site="lax",
+)
+app.add_middleware(RequestLoggingMiddleware)
+
+app.mount(
+    "/static", StaticFiles(directory="app/dashboard/static"), name="static"
+)
+
+app.include_router(health.router)
+app.include_router(webhook.router)
+app.include_router(dashboard_auth.router)
+app.include_router(dashboard_home.router)
+app.include_router(dashboard_messages.router)
+app.include_router(dashboard_stats.router)
+app.include_router(dashboard_export.router)
+app.include_router(miniapp_routes.router)

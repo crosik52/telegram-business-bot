@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Sign in — Business Inbox{% endblock %}
+{% block guest_content %}
+<div class="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-brand-600 to-brand-900">
+  <div class="w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl shadow-xl p-8">
+    <h1 class="text-2xl font-semibold text-center text-slate-900 dark:text-slate-100">Business Inbox</h1>
+    <p class="text-center text-sm text-slate-500 dark:text-slate-400 mt-1 mb-6">Sign in to view your message archive</p>
+    {% if error %}
+    <div class="mb-4 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm px-3 py-2">
+      {{ error }}
+    </div>
+    {% endif %}
+    <form method="post" action="/login" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+      <div>
+        <label class="block text-sm font-medium mb-1" for="username">Username</label>
+        <input class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" type="text" name="username" id="username" required autofocus />
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1" for="password">Password</label>
+        <input class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" type="password" name="password" id="password" required />
+      </div>
+      <button type="submit" class="w-full rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-medium py-2 text-sm transition-colors">Sign in</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

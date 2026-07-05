@@ -29,6 +29,15 @@ class BusinessConnection(Base):
     user_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     can_reply: Mapped[bool] = mapped_column(Boolean, default=False)
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    # Admin-controlled settings (managed from the /app/admin mini app panel,
+    # independent of the raw Telegram-reported `is_enabled`/`can_reply`
+    # above). `is_blocked` fully disables the mini app + owner notifications
+    # for this connection; `notifications_enabled` only toggles the
+    # edit/delete DM notifications.
+    notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_blocked: Mapped[bool] = mapped_column(Boolean, default=False)
+
     connected_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: dt.datetime.now(dt.UTC)
     )

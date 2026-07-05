@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Business Inbox{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc',
+              400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca',
+              800: '#3730a3', 900: '#312e81'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="/static/css/app.css" />
+  <script>
+    if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  </script>
+</head>
+<body class="h-full bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors">
+  {% if authenticated %}
+  <div class="min-h-full flex">
+    <aside class="hidden md:flex md:w-60 md:flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+      <div class="h-16 flex items-center px-5 border-b border-slate-200 dark:border-slate-800">
+        <span class="text-lg font-semibold tracking-tight text-brand-600 dark:text-brand-400">Business Inbox</span>
+      </div>
+      <nav class="flex-1 px-3 py-4 space-y-1 text-sm">
+        <a href="/" class="block rounded-lg px-3 py-2 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 {% if active_nav == 'dashboard' %}bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300{% endif %}">Dashboard</a>
+        <a href="/messages" class="block rounded-lg px-3 py-2 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 {% if active_nav == 'messages' %}bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300{% endif %}">Messages</a>
+        <a href="/messages/deleted" class="block rounded-lg px-3 py-2 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 {% if active_nav == 'deleted' %}bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300{% endif %}">Deleted</a>
+        <a href="/statistics" class="block rounded-lg px-3 py-2 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 {% if active_nav == 'statistics' %}bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300{% endif %}">Statistics</a>
+      </nav>
+      <div class="p-3 border-t border-slate-200 dark:border-slate-800">
+        <button id="theme-toggle" class="w-full text-left text-sm rounded-lg px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">Toggle theme</button>
+        <form method="post" action="/logout">
+          <button class="w-full text-left text-sm rounded-lg px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-red-600 dark:text-red-400">Log out</button>
+        </form>
+      </div>
+    </aside>
+    <div class="flex-1 flex flex-col min-w-0">
+      <header class="md:hidden h-14 flex items-center justify-between px-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <span class="font-semibold text-brand-600 dark:text-brand-400">Business Inbox</span>
+        <div class="flex items-center gap-3 text-sm">
+          <a href="/messages" class="hover:underline">Messages</a>
+          <a href="/statistics" class="hover:underline">Stats</a>
+          <form method="post" action="/logout"><button class="text-red-600 dark:text-red-400">Log out</button></form>
+        </div>
+      </header>
+      <main class="flex-1 p-4 md:p-8 max-w-6xl w-full mx-auto">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+  {% else %}
+  {% block guest_content %}{% endblock %}
+  {% endif %}
+  <script>
+    const themeToggle = document.getElementById('theme-toggle');
+    if (themeToggle) {
+      themeToggle.addEventListener('click', () => {
+        document.documentElement.classList.toggle('dark');
+        localStorage.theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+      });
+    }
+  </script>
+</body>
+</html>

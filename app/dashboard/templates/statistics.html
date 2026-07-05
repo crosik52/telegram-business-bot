@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Statistics — Business Inbox{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-semibold mb-6">Statistics</h1>
+<div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+  <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5">
+    <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Total messages</p>
+    <p class="text-3xl font-semibold mt-1">{{ stats.total_messages }}</p>
+  </div>
+  <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5">
+    <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Total users</p>
+    <p class="text-3xl font-semibold mt-1">{{ stats.total_users }}</p>
+  </div>
+  <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5">
+    <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Edited messages</p>
+    <p class="text-3xl font-semibold mt-1">{{ stats.edited_messages }}</p>
+  </div>
+  <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5">
+    <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Deleted messages</p>
+    <p class="text-3xl font-semibold mt-1">{{ stats.deleted_messages }}</p>
+  </div>
+  <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5">
+    <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Text messages</p>
+    <p class="text-3xl font-semibold mt-1">{{ stats.text_messages }}</p>
+  </div>
+  <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5">
+    <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Media messages</p>
+    <p class="text-3xl font-semibold mt-1">{{ stats.media_messages }}</p>
+  </div>
+</div>
+
+<h2 class="text-lg font-semibold mb-3">Media breakdown</h2>
+<div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
+  {% for item in stats.media_breakdown %}
+  <div class="flex items-center justify-between px-5 py-3">
+    <span class="text-sm capitalize">{{ item.media_type }}</span>
+    <span class="text-sm font-medium">{{ item.count }}</span>
+  </div>
+  {% else %}
+  <p class="px-5 py-6 text-sm text-slate-500 dark:text-slate-400">No media messages recorded yet.</p>
+  {% endfor %}
+</div>
+{% endblock %}

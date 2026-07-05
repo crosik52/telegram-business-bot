@@ -121,15 +121,9 @@ async def miniapp_stats(
     }
 
 
-class AdminOverviewRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    init_data: str = Field(alias="initData")
-
-
 @router.post("/app/api/admin/overview")
 async def admin_overview(
-    payload: AdminOverviewRequest, session: AsyncSession = Depends(get_db_session)
+    payload: StatsRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
     _require_admin(payload.init_data)
 

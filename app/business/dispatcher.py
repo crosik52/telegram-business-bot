@@ -6,6 +6,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
+from app.bot.commands import router as commands_router
 from app.business.handlers import router as business_router
 from app.config import Settings
 
@@ -27,6 +28,7 @@ def get_dispatcher() -> Dispatcher:
     global _dispatcher
     if _dispatcher is None:
         _dispatcher = Dispatcher()
+        _dispatcher.include_router(commands_router)
         _dispatcher.include_router(business_router)
     return _dispatcher
 

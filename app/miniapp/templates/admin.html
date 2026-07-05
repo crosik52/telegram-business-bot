@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Админ-панель</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #f2f2f7);
+    --secondary-bg: var(--tg-theme-secondary-bg-color, #ffffff);
+    --text: var(--tg-theme-text-color, #17181a);
+    --hint: var(--tg-theme-hint-color, #8a8a8e);
+    --link: var(--tg-theme-link-color, #2481cc);
+    --button: var(--tg-theme-button-color, #2481cc);
+    --button-text: var(--tg-theme-button-text-color, #ffffff);
+    --danger: #ff3b30;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 16px 16px 32px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  .header { text-align: center; padding: 12px 0 20px; }
+  .header h1 { font-size: 20px; margin: 0 0 4px; }
+  .header p { margin: 0; color: var(--hint); font-size: 13px; }
+  .cards {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .card {
+    background: var(--secondary-bg);
+    border-radius: 16px;
+    padding: 14px;
+    text-align: center;
+  }
+  .card .value { font-size: 28px; font-weight: 700; }
+  .card .label { font-size: 12px; color: var(--hint); margin-top: 4px; }
+  .section-title { font-size: 15px; font-weight: 600; margin: 0 0 10px 4px; }
+  .list { display: flex; flex-direction: column; gap: 10px; }
+  .user-card {
+    background: var(--secondary-bg);
+    border-radius: 16px;
+    padding: 14px;
+  }
+  .user-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .user-name { font-size: 15px; font-weight: 600; }
+  .user-sub { font-size: 12px; color: var(--hint); margin-top: 2px; }
+  .badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 8px;
+    background: rgba(120,120,128,0.15);
+    color: var(--hint);
+    white-space: nowrap;
+  }
+  .badge.blocked { background: rgba(255,59,48,0.15); color: var(--danger); }
+  .user-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin: 12px 0;
+  }
+  .stat { text-align: center; }
+  .stat .n { font-size: 16px; font-weight: 700; }
+  .stat .l { font-size: 10px; color: var(--hint); margin-top: 2px; }
+  .actions { display: flex; gap: 8px; margin-top: 4px; }
+  .toggle-btn {
+    flex: 1;
+    border: none;
+    border-radius: 10px;
+    padding: 9px 6px;
+    font-size: 12px;
+    font-weight: 600;
+    background: rgba(120,120,128,0.15);
+    color: var(--text);
+  }
+  .toggle-btn.active {
+    background: var(--button);
+    color: var(--button-text);
+  }
+  .toggle-btn.danger.active {
+    background: var(--danger);
+    color: #fff;
+  }
+  .empty, .error {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--hint);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .empty .big-emoji, .error .big-emoji { font-size: 40px; display: block; margin-bottom: 12px; }
+  .skeleton { animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>🛠 Админ-панель</h1>
+    <p id="subtitle">Загружаем данные…</p>
+  </div>
+
+  <div id="content">
+    <div class="cards skeleton">
+      <div class="card"><div class="value">—</div><div class="label">Пользователей бота</div></div>
+    </div>
+  </div>
+
+  <script>
+    const tg = window.Telegram && window.Telegram.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+    }
+
+    const initData = tg ? tg.initData : "";
+
+    function fmtDate(iso) {
+      if (!iso) return "нет данных";
+      const d = new Date(iso);
+      return d.toLocaleDateString("ru-RU") + " " + d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+    }
+
+    function displayName(u) {
+      const name = [u.first_name, u.last_name].filter(Boolean).join(" ");
+      return name || (u.username ? "@" + u.username : "ID " + u.owner_telegram_id);
+    }
+
+    function renderUser(u) {
+      const sub = u.username ? "@" + u.username + " · ID " + u.owner_telegram_id : "ID " + u.owner_telegram_id;
+      return `
+        <div class="user-card" data-owner="${u.owner_telegram_id}">
+          <div class="user-top">
+            <div>
+              <div class="user-name">${displayName(u)}</div>
+              <div class="user-sub">${sub}</div>
+              <div class="user-sub">Подключён: ${fmtDate(u.connected_at)}</div>
+              <div class="user-sub">Активность: ${fmtDate(u.last_activity_at)}</div>
+            </div>
+            ${u.is_blocked ? '<span class="badge blocked">Заблокирован</span>' : '<span class="badge">Активен</span>'}
+          </div>
+          <div class="user-stats">
+            <div class="stat"><div class="n">${u.total_messages}</div><div class="l">Сообщений</div></div>
+            <div class="stat"><div class="n">${u.total_chats}</div><div class="l">Собеседников</div></div>
+            <div class="stat"><div class="n">${u.edited_messages}</div><div class="l">Правок</div></div>
+            <div class="stat"><div class="n">${u.deleted_messages}</div><div class="l">Удалений</div></div>
+          </div>
+          <div class="actions">
+            <button class="toggle-btn ${u.notifications_enabled ? "active" : ""}" data-action="notifications" data-value="${!u.notifications_enabled}">
+              🔔 Уведомления ${u.notifications_enabled ? "вкл" : "выкл"}
+            </button>
+            <button class="toggle-btn danger ${u.is_blocked ? "active" : ""}" data-action="block" data-value="${!u.is_blocked}">
+              ${u.is_blocked ? "🚫 Разблокировать" : "🚫 Заблокировать"}
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function render(overview) {
+      const content = document.getElementById("content");
+      const subtitle = document.getElementById("subtitle");
+      subtitle.textContent = "Все подключённые пользователи бота";
+
+      const cards = `
+        <div class="cards">
+          <div class="card"><div class="value">${overview.total_users}</div><div class="label">Пользователей бота</div></div>
+        </div>
+      `;
+
+      if (!overview.users.length) {
+        content.innerHTML = cards + `<div class="empty"><span class="big-emoji">👥</span>Пока никто не подключил бота.</div>`;
+        return;
+      }
+
+      const list = `<div class="section-title">Пользователи</div><div class="list">${overview.users.map(renderUser).join("")}</div>`;
+      content.innerHTML = cards + list;
+
+      content.querySelectorAll(".toggle-btn").forEach((btn) => {
+        btn.addEventListener("click", () => onToggle(btn));
+      });
+    }
+
+    async function onToggle(btn) {
+      const card = btn.closest(".user-card");
+      const ownerTelegramId = Number(card.dataset.owner);
+      const action = btn.dataset.action;
+      const value = btn.dataset.value === "true";
+
+      btn.disabled = true;
+      const body = { initData, ownerTelegramId };
+      if (action === "notifications") body.notificationsEnabled = value;
+      if (action === "block") body.isBlocked = value;
+
+      try {
+        const res = await fetch("./app/api/admin/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        if (!res.ok) throw new Error("bad_status");
+        await loadOverview();
+        if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+      } catch (e) {
+        btn.disabled = false;
+        if (tg) tg.showAlert("Не удалось сохранить изменения. Попробуй ещё раз.");
+      }
+    }
+
+    async function loadOverview() {
+      const subtitle = document.getElementById("subtitle");
+      const content = document.getElementById("content");
+
+      if (!initData) {
+        subtitle.textContent = "Открыто вне Telegram";
+        content.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Открой это приложение через кнопку в Telegram-боте.</div>`;
+        return;
+      }
+
+      try {
+        const res = await fetch("./app/api/admin/overview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initData })
+        });
+
+        if (res.status === 403) {
+          subtitle.textContent = "Доступ запрещён";
+          content.innerHTML = `<div class="error"><span class="big-emoji">🔒</span>У тебя нет доступа к админ-панели.</div>`;
+          return;
+        }
+        if (!res.ok) throw new Error("bad_status");
+
+        const overview = await res.json();
+        render(overview);
+      } catch (e) {
+        subtitle.textContent = "Не удалось загрузить данные";
+        content.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не получилось загрузить данные. Попробуй закрыть и открыть приложение ещё раз.</div>`;
+      }
+    }
+
+    loadOverview();
+  </script>
+</body>
+</html>

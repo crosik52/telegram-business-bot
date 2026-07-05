@@ -8,6 +8,7 @@ only flip a flag + timestamp on the existing row.
 from __future__ import annotations
 
 import datetime as dt
+from dataclasses import dataclass
 
 from aiogram.types import Message as AiogramMessage
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +19,16 @@ from app.repositories.message_repository import MessageRepository
 from app.repositories.user_repository import UserRepository
 
 logger = get_logger(__name__)
+
+
+@dataclass
+class EditOutcome:
+    """Result of ingesting an edit, including the pre-edit content for notifications."""
+
+    message: Message
+    previous_text: str | None
+    previous_caption: str | None
+    is_first_capture: bool
 
 
 def _resolve_media(message: AiogramMessage) -> tuple[MediaType, str | None, str | None]:
@@ -127,7 +138,7 @@ class MessageService:
 
     async def ingest_edited_message(
         self, message: AiogramMessage, *, business_connection_id: str
-    ) -> Message | None:
+    ) -> EditOutcome:
         existing = await self._messages.get_by_telegram_ids(
             business_connection_id, message.chat.id, message.message_id
         )
@@ -137,7 +148,15 @@ class MessageService:
             existing = await self.ingest_new_message(
                 message, business_connection_id=business_connection_id
             )
-            return existing
+            return EditOutcome(
+                message=existing,
+                previous_text=None,
+                previous_caption=None,
+                is_first_capture=True,
+            )
+
+        previous_text = existing.text
+        previous_caption = existing.caption
 
         edited_at = (
             dt.datetime.fromtimestamp(message.edit_date, tz=dt.UTC)
@@ -156,7 +175,12 @@ class MessageService:
             existing.message_id,
             existing.edit_count,
         )
-        return existing
+        return EditOutcome(
+            message=existing,
+            previous_text=previous_text,
+            previous_caption=previous_caption,
+            is_first_capture=False,
+        )
 
     async def mark_deleted(
         self, *, business_connection_id: str, chat_id: int, message_id: int

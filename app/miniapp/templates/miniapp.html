@@ -570,7 +570,7 @@
     async function sendGame(chatId, emoji) {
       try {
         if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred("medium");
-        const res = await fetch("./api/game/send", {
+        const res = await fetch("/app/api/game/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ initData: currentInitData, chatId: Number(chatId), emoji }),
@@ -639,7 +639,7 @@
       if (isRefresh && refreshBtn) refreshBtn.classList.add("spinning");
 
       try {
-        const res = await fetch("./api/stats", {
+        const res = await fetch("/app/api/stats", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ initData })

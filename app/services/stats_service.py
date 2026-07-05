@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.stats_repository import DashboardStats, OwnerStats, StatsRepository
+from app.repositories.stats_repository import (
+    AdminOverview,
+    DashboardStats,
+    OwnerStats,
+    StatsRepository,
+)
 
 
 class StatsService:
@@ -19,4 +24,20 @@ class StatsService:
     ) -> OwnerStats:
         return await self._repo.get_owner_stats(
             connection_ids=connection_ids, owner_telegram_id=owner_telegram_id
+        )
+
+    async def get_admin_overview(self) -> AdminOverview:
+        return await self._repo.get_admin_overview()
+
+    async def set_owner_settings(
+        self,
+        *,
+        owner_telegram_id: int,
+        notifications_enabled: bool | None = None,
+        is_blocked: bool | None = None,
+    ) -> int:
+        return await self._repo.set_owner_settings(
+            owner_telegram_id=owner_telegram_id,
+            notifications_enabled=notifications_enabled,
+            is_blocked=is_blocked,
         )

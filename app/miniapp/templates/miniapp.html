@@ -14,89 +14,159 @@
     --link: var(--tg-theme-link-color, #2481cc);
     --button: var(--tg-theme-button-color, #2481cc);
     --button-text: var(--tg-theme-button-text-color, #ffffff);
+    --accent-2: #34c759;
+    --accent-3: #ff9f0a;
+    --accent-4: #ff453a;
+    --card-radius: 20px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06);
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
     margin: 0;
-    padding: 16px 16px 32px;
+    padding: 14px 14px 40px;
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
   .header {
     text-align: center;
-    padding: 12px 0 20px;
+    padding: 18px 0 22px;
+    animation: fadeIn 0.4s ease;
   }
-  .header h1 {
-    font-size: 20px;
-    margin: 0 0 4px;
+  .header .avatar-ring {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 10px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--link), var(--accent-2));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
   }
-  .header p {
-    margin: 0;
-    color: var(--hint);
+  .header h1 { font-size: 19px; margin: 0 0 4px; font-weight: 700; }
+  .header p { margin: 0; color: var(--hint); font-size: 13px; }
+
+  .segmented {
+    display: flex;
+    background: rgba(120,120,128,0.12);
+    border-radius: 12px;
+    padding: 3px;
+    margin-bottom: 18px;
+    gap: 2px;
+  }
+  .segmented button {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: 8px 4px;
     font-size: 13px;
+    font-weight: 600;
+    color: var(--hint);
+    border-radius: 9px;
+    transition: all 0.2s ease;
   }
+  .segmented button.active {
+    background: var(--secondary-bg);
+    color: var(--text);
+    box-shadow: var(--shadow);
+  }
+
   .cards {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
-    margin-bottom: 24px;
+    margin-bottom: 22px;
   }
   .card {
     background: var(--secondary-bg);
-    border-radius: 16px;
-    padding: 14px;
+    border-radius: var(--card-radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+    position: relative;
+    overflow: hidden;
+    animation: riseIn 0.35s ease backwards;
   }
-  .card .value {
-    font-size: 26px;
-    font-weight: 700;
-    line-height: 1.1;
-  }
-  .card .label {
-    font-size: 12px;
-    color: var(--hint);
-    margin-top: 4px;
-  }
+  .card .icon { font-size: 18px; opacity: 0.9; margin-bottom: 8px; }
+  .card .value { font-size: 28px; font-weight: 800; line-height: 1.1; letter-spacing: -0.5px; }
+  .card .label { font-size: 12px; color: var(--hint); margin-top: 4px; font-weight: 500; }
+  .card.accent-messages .icon { color: var(--link); }
+  .card.accent-chats .icon { color: var(--accent-2); }
+  .card.accent-edited .icon { color: var(--accent-3); }
+  .card.accent-deleted .icon { color: var(--accent-4); }
+
   .section-title {
-    font-size: 15px;
-    font-weight: 600;
-    margin: 0 0 10px 4px;
+    font-size: 16px;
+    font-weight: 700;
+    margin: 4px 0 12px 2px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
+  .section-title .sub {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--hint);
+  }
+
+  .search-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--secondary-bg);
+    border-radius: 14px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow);
+  }
+  .search-box input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--text);
+    font-size: 14px;
+  }
+  .search-box input::placeholder { color: var(--hint); }
+
   .list {
     background: var(--secondary-bg);
-    border-radius: 16px;
+    border-radius: var(--card-radius);
     overflow: hidden;
+    box-shadow: var(--shadow);
   }
   .row {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 12px 14px;
-    border-bottom: 1px solid rgba(120,120,128,0.15);
+    padding: 13px 14px;
+    border-bottom: 1px solid rgba(120,120,128,0.12);
+    transition: background 0.15s ease;
   }
+  .row:active { background: rgba(120,120,128,0.08); }
   .row:last-child { border-bottom: none; }
   .rank {
-    width: 26px;
+    width: 22px;
     text-align: center;
-    font-size: 15px;
+    font-size: 14px;
     flex-shrink: 0;
+    font-weight: 700;
+    color: var(--hint);
   }
   .avatar {
-    width: 38px;
-    height: 38px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     color: #fff;
-    font-weight: 600;
+    font-weight: 700;
     font-size: 15px;
     flex-shrink: 0;
   }
-  .row-main {
-    flex: 1;
-    min-width: 0;
-  }
+  .row-main { flex: 1; min-width: 0; }
   .row-name {
     font-size: 14px;
     font-weight: 600;
@@ -105,52 +175,92 @@
     text-overflow: ellipsis;
   }
   .row-sub {
-    font-size: 12px;
+    font-size: 11.5px;
     color: var(--hint);
     margin-top: 2px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
   }
+  .chip {
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 6px;
+    background: rgba(120,120,128,0.14);
+  }
+  .chip.edited { color: var(--accent-3); background: rgba(255,159,10,0.14); }
+  .chip.deleted { color: var(--accent-4); background: rgba(255,69,58,0.14); }
   .bar-track {
-    height: 4px;
-    border-radius: 2px;
-    background: rgba(120,120,128,0.15);
-    margin-top: 6px;
+    height: 5px;
+    border-radius: 3px;
+    background: rgba(120,120,128,0.14);
+    margin-top: 7px;
     overflow: hidden;
   }
   .bar-fill {
     height: 100%;
-    background: var(--link);
-    border-radius: 2px;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--link), var(--accent-2));
+    transition: width 0.6s cubic-bezier(.2,.8,.2,1);
   }
   .row-count {
-    font-size: 16px;
-    font-weight: 700;
+    font-size: 17px;
+    font-weight: 800;
     flex-shrink: 0;
-    padding-left: 6px;
+    padding-left: 4px;
+    min-width: 30px;
+    text-align: right;
   }
+
   .empty, .error {
     text-align: center;
-    padding: 40px 20px;
+    padding: 48px 20px;
     color: var(--hint);
     font-size: 14px;
     line-height: 1.5;
+    background: var(--secondary-bg);
+    border-radius: var(--card-radius);
   }
-  .empty .big-emoji, .error .big-emoji {
-    font-size: 40px;
-    display: block;
-    margin-bottom: 12px;
+  .empty .big-emoji, .error .big-emoji { font-size: 42px; display: block; margin-bottom: 12px; }
+
+  .refresh-fab {
+    position: fixed;
+    right: 16px;
+    bottom: 20px;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    border: none;
+    background: var(--button);
+    color: var(--button-text);
+    font-size: 19px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease;
   }
-  .skeleton {
-    animation: pulse 1.2s ease-in-out infinite;
-  }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-  }
+  .refresh-fab:active { transform: scale(0.9) rotate(120deg); }
+  .refresh-fab.spinning { animation: spin 0.8s linear; }
+
+  .skeleton .card .value, .skeleton .card .label { opacity: 0.35; }
+  .skeleton { animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+  @keyframes riseIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  .card:nth-child(1) { animation-delay: 0.02s; }
+  .card:nth-child(2) { animation-delay: 0.06s; }
+  .card:nth-child(3) { animation-delay: 0.1s; }
+  .card:nth-child(4) { animation-delay: 0.14s; }
 </style>
 </head>
 <body>
   <div class="header">
-    <h1 id="greeting">📊 Моя статистика</h1>
+    <div class="avatar-ring">📊</div>
+    <h1 id="greeting">Моя статистика</h1>
     <p id="subtitle">Загружаем данные…</p>
   </div>
 
@@ -163,12 +273,18 @@
     </div>
   </div>
 
+  <button class="refresh-fab" id="refreshBtn" title="Обновить">↻</button>
+
   <script>
     const tg = window.Telegram && window.Telegram.WebApp;
     if (tg) {
       tg.ready();
       tg.expand();
     }
+
+    let lastStats = null;
+    let sortMode = "messages";
+    let searchQuery = "";
 
     const AVATAR_COLORS = ["#FF6B6B", "#4ECDC4", "#45AAF2", "#F7B731", "#A55EEA", "#26DE81", "#FD9644", "#2BCBBA"];
 
@@ -192,15 +308,40 @@
       return String(rank + 1);
     }
 
+    function timeAgo(iso) {
+      if (!iso) return "нет данных";
+      const diffMs = Date.now() - new Date(iso).getTime();
+      const min = Math.floor(diffMs / 60000);
+      if (min < 1) return "только что";
+      if (min < 60) return `${min} мин назад`;
+      const hr = Math.floor(min / 60);
+      if (hr < 24) return `${hr} ч назад`;
+      const days = Math.floor(hr / 24);
+      if (days < 30) return `${days} дн назад`;
+      return new Date(iso).toLocaleDateString("ru-RU");
+    }
+
     function renderCards(stats) {
       return `
         <div class="cards">
-          <div class="card"><div class="value">${stats.total_messages}</div><div class="label">Сообщений</div></div>
-          <div class="card"><div class="value">${stats.total_chats}</div><div class="label">Собеседников</div></div>
-          <div class="card"><div class="value">${stats.edited_messages}</div><div class="label">Правок</div></div>
-          <div class="card"><div class="value">${stats.deleted_messages}</div><div class="label">Удалений</div></div>
+          <div class="card accent-messages"><div class="icon">💬</div><div class="value">${stats.total_messages}</div><div class="label">Сообщений</div></div>
+          <div class="card accent-chats"><div class="icon">👥</div><div class="value">${stats.total_chats}</div><div class="label">Собеседников</div></div>
+          <div class="card accent-edited"><div class="icon">✏️</div><div class="value">${stats.edited_messages}</div><div class="label">Правок</div></div>
+          <div class="card accent-deleted"><div class="icon">🗑</div><div class="value">${stats.deleted_messages}</div><div class="label">Удалений</div></div>
         </div>
       `;
+    }
+
+    function getSorted(list) {
+      const filtered = searchQuery
+        ? list.filter(s => s.display_name.toLowerCase().includes(searchQuery) || (s.username || "").toLowerCase().includes(searchQuery))
+        : list.slice();
+      const sorters = {
+        messages: (a, b) => b.message_count - a.message_count,
+        recent: (a, b) => new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0),
+        edited: (a, b) => b.edited_count - a.edited_count,
+      };
+      return filtered.sort(sorters[sortMode] || sorters.messages);
     }
 
     function renderTop(stats) {
@@ -208,17 +349,42 @@
         return `<div class="empty"><span class="big-emoji">💬</span>Пока нет сообщений для статистики.<br>Как только в подключённом Business-чате появятся сообщения — здесь будет топ собеседников.</div>`;
       }
 
-      const max = Math.max(...stats.top_interlocutors.map(s => s.message_count));
-      const rows = stats.top_interlocutors.map((s, i) => {
+      const sorted = getSorted(stats.top_interlocutors);
+      const max = Math.max(...stats.top_interlocutors.map(s => s.message_count), 1);
+
+      const controls = `
+        <div class="search-box">
+          <span>🔍</span>
+          <input id="searchInput" type="text" placeholder="Найти собеседника…" value="${searchQuery}" />
+        </div>
+        <div class="segmented" id="sortTabs">
+          <button data-sort="messages" class="${sortMode === "messages" ? "active" : ""}">По сообщениям</button>
+          <button data-sort="recent" class="${sortMode === "recent" ? "active" : ""}">По активности</button>
+          <button data-sort="edited" class="${sortMode === "edited" ? "active" : ""}">По правкам</button>
+        </div>
+      `;
+
+      if (!sorted.length) {
+        return controls + `<div class="empty"><span class="big-emoji">🔎</span>Никого не нашлось.</div>`;
+      }
+
+      const rows = sorted.map((s, i) => {
         const pct = max > 0 ? Math.max(6, Math.round((s.message_count / max) * 100)) : 0;
-        const sub = s.username ? "@" + s.username : "";
+        const sub = s.username ? "@" + s.username : "личный контакт";
+        const chips = [];
+        if (s.edited_count) chips.push(`<span class="chip edited">✏️ ${s.edited_count}</span>`);
+        if (s.deleted_count) chips.push(`<span class="chip deleted">🗑 ${s.deleted_count}</span>`);
         return `
           <div class="row">
             <div class="rank">${medal(i)}</div>
             <div class="avatar" style="background:${colorFor(s.display_name)}">${initials(s.display_name)}</div>
             <div class="row-main">
-              <div class="row-name"></div>
-              <div class="row-sub"></div>
+              <div class="row-name">${s.display_name}</div>
+              <div class="row-sub">
+                <span>${sub}</span>
+                <span class="chip">${timeAgo(s.last_message_at)}</span>
+                ${chips.join("")}
+              </div>
               <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
             </div>
             <div class="row-count">${s.message_count}</div>
@@ -226,22 +392,35 @@
         `;
       }).join("");
 
-      return `<div class="section-title">🏆 Топ собеседников</div><div class="list">${rows}</div>`;
+      return `${controls}<div class="section-title">🏆 Топ собеседников <span class="sub">${sorted.length} из ${stats.top_interlocutors.length}</span></div><div class="list">${rows}</div>`;
     }
 
-    function fillNames(stats) {
-      const nameEls = document.querySelectorAll(".row-name");
-      const subEls = document.querySelectorAll(".row-sub");
-      stats.top_interlocutors.forEach((s, i) => {
-        if (nameEls[i]) nameEls[i].textContent = s.display_name;
-        if (subEls[i]) subEls[i].textContent = s.username ? "@" + s.username : "";
+    function attachTopHandlers() {
+      const input = document.getElementById("searchInput");
+      if (input) {
+        input.addEventListener("input", (e) => {
+          searchQuery = e.target.value.toLowerCase();
+          const caret = e.target.selectionStart;
+          document.getElementById("content").innerHTML = renderCards(lastStats) + renderTop(lastStats);
+          attachTopHandlers();
+          const newInput = document.getElementById("searchInput");
+          if (newInput) { newInput.focus(); newInput.setSelectionRange(caret, caret); }
+        });
+      }
+      document.querySelectorAll("#sortTabs button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          sortMode = btn.dataset.sort;
+          document.getElementById("content").innerHTML = renderCards(lastStats) + renderTop(lastStats);
+          attachTopHandlers();
+        });
       });
     }
 
-    async function loadStats() {
+    async function loadStats(isRefresh) {
       const initData = tg ? tg.initData : "";
       const subtitle = document.getElementById("subtitle");
       const content = document.getElementById("content");
+      const refreshBtn = document.getElementById("refreshBtn");
 
       if (!initData) {
         subtitle.textContent = "Открыто вне Telegram";
@@ -249,8 +428,10 @@
         return;
       }
 
+      if (isRefresh && refreshBtn) refreshBtn.classList.add("spinning");
+
       try {
-        const res = await fetch("./app/api/stats", {
+        const res = await fetch("./api/stats", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ initData })
@@ -258,10 +439,11 @@
 
         if (!res.ok) throw new Error("bad_status");
         const stats = await res.json();
+        lastStats = stats;
 
         if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
           document.getElementById("greeting").textContent =
-            "📊 Привет, " + (tg.initDataUnsafe.user.first_name || "друг") + "!";
+            "Привет, " + (tg.initDataUnsafe.user.first_name || "друг") + "!";
         }
 
         if (!stats.connected) {
@@ -272,14 +454,19 @@
 
         subtitle.textContent = "Статистика общения в подключённых чатах";
         content.innerHTML = renderCards(stats) + renderTop(stats);
-        fillNames(stats);
+        attachTopHandlers();
+        if (tg && tg.HapticFeedback && isRefresh) tg.HapticFeedback.notificationOccurred("success");
       } catch (e) {
         subtitle.textContent = "Не удалось загрузить данные";
         content.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не получилось загрузить статистику. Попробуй закрыть и открыть приложение ещё раз.</div>`;
+      } finally {
+        if (refreshBtn) setTimeout(() => refreshBtn.classList.remove("spinning"), 400);
       }
     }
 
-    loadStats();
+    document.getElementById("refreshBtn").addEventListener("click", () => loadStats(true));
+
+    loadStats(false);
   </script>
 </body>
 </html>

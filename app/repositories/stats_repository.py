@@ -41,6 +41,8 @@ class InterlocutorStat:
     edited_count: int
     deleted_count: int
     last_message_at: dt.datetime | None
+    streak_days: int = 0
+    mutual_connected: bool = False
 
 
 @dataclass
@@ -188,6 +190,7 @@ class StatsRepository:
                     "last_message_at": None,
                     "counterpart": None,
                     "counterpart_at": None,
+                    "active_dates": set(),
                 },
             )
             chat["message_count"] += 1
@@ -195,6 +198,8 @@ class StatsRepository:
                 chat["edited_count"] += 1
             if r.is_deleted:
                 chat["deleted_count"] += 1
+            if r.sent_at:
+                chat["active_dates"].add(r.sent_at.date())
             if chat["last_message_at"] is None or (
                 r.sent_at and r.sent_at > chat["last_message_at"]
             ):
@@ -210,6 +215,8 @@ class StatsRepository:
                     r.sender_username,
                 )
                 chat["counterpart_at"] = r.sent_at
+
+        mutual_owner_ids = await self._get_active_owner_telegram_ids()
 
         top_interlocutors: list[InterlocutorStat] = []
         for chat_id, data in chats.items():
@@ -229,6 +236,8 @@ class StatsRepository:
                     edited_count=data["edited_count"],
                     deleted_count=data["deleted_count"],
                     last_message_at=data["last_message_at"],
+                    streak_days=_calculate_streak(data["active_dates"]),
+                    mutual_connected=chat_id in mutual_owner_ids,
                 )
             )
 
@@ -242,6 +251,45 @@ class StatsRepository:
             deleted_messages=deleted_messages,
             top_interlocutors=top_interlocutors[:top_n],
         )
+
+    async def owner_has_chat(
+        self, *, connection_ids: list[str], chat_id: int
+    ) -> bool:
+        """Whether any message exists in one of these connections for the
+        given chat — i.e. the caller actually has this counterpart in their
+        own message history (authorization check before sending a game)."""
+
+        if not connection_ids:
+            return False
+
+        result = await self._session.execute(
+            select(Message.id)
+            .where(
+                Message.business_connection_id.in_(connection_ids),
+                Message.chat_id == chat_id,
+            )
+            .limit(1)
+        )
+        return result.first() is not None
+
+    async def _get_active_owner_telegram_ids(self) -> set[int]:
+        """Telegram user ids of everyone who currently has an active
+        (non-blocked) business connection to the bot.
+
+        Used to detect "mutual" connections: a chat counterpart is only
+        offered in-chat games if they are a bot user too, since games are
+        delivered by sending a dice-type message via *that counterpart's*
+        business connection.
+        """
+
+        rows = (
+            await self._session.execute(
+                select(BusinessConnection.user_telegram_id).where(
+                    BusinessConnection.is_blocked.is_(False)
+                )
+            )
+        ).all()
+        return {row[0] for row in rows}
 
     async def get_admin_overview(self) -> AdminOverview:
         """Every connected owner plus their aggregated activity, for the
@@ -335,3 +383,28 @@ class StatsRepository:
                 conn.is_blocked = is_blocked
 
         return len(connections)
+
+
+def _calculate_streak(active_dates: set[dt.date]) -> int:
+    """Consecutive-day messaging streak, ending today or yesterday.
+
+    A streak is "alive" only if the most recent active day was today or
+    yesterday (grace period so the streak doesn't reset mid-timezone-day);
+    otherwise it has already been broken and the streak is 0.
+    """
+
+    if not active_dates:
+        return 0
+
+    today = dt.datetime.now(dt.UTC).date()
+    most_recent = max(active_dates)
+    if (today - most_recent).days > 1:
+        return 0
+
+    streak = 0
+    cursor = most_recent
+    while cursor in active_dates:
+        streak += 1
+        cursor -= dt.timedelta(days=1)
+
+    return streak

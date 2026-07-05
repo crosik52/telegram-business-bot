@@ -49,6 +49,15 @@ class Settings(BaseSettings):
         default=60 * 60 * 12, alias="SESSION_MAX_AGE_SECONDS"
     )
 
+    # --- Mini App super-admin ----------------------------------------------
+    # The Telegram @username (without "@") that is allowed to open the
+    # /app/admin mini app panel and manage every connected user. Distinct
+    # from the web dashboard login above — this is Telegram-identity-based,
+    # verified via signed WebApp initData, not a password.
+    miniapp_admin_username: str = Field(
+        default="niggathree", alias="MINIAPP_ADMIN_USERNAME"
+    )
+
     @property
     def normalized_database_url(self) -> str:
         """Return a database URL with an async-capable driver.

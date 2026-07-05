@@ -205,7 +205,7 @@
       if (action === "block") body.isBlocked = value;
 
       try {
-        const res = await fetch("./app/api/admin/settings", {
+        const res = await fetch("./api/admin/settings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body)
@@ -230,7 +230,7 @@
       }
 
       try {
-        const res = await fetch("./app/api/admin/overview", {
+        const res = await fetch("./api/admin/overview", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ initData })

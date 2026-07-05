@@ -1,0 +1,11 @@
+{% macro render(page, base_url, extra_qs) %}
+<div class="flex items-center justify-between text-sm text-slate-500 dark:text-slate-400 mt-4">
+  <span>{{ page.start_index }}-{{ page.end_index }} of {{ page.total }}</span>
+  <div class="flex gap-2">
+    <a href="{{ base_url }}?page={{ page.page - 1 }}{{ extra_qs }}"
+       class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 {% if not page.has_prev %}pointer-events-none opacity-40{% else %}hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}">Previous</a>
+    <a href="{{ base_url }}?page={{ page.page + 1 }}{{ extra_qs }}"
+       class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 {% if not page.has_next %}pointer-events-none opacity-40{% else %}hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}">Next</a>
+  </div>
+</div>
+{% endmacro %}

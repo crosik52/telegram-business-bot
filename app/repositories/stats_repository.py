@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.business_connection import BusinessConnection
 from app.models.message import MediaType, Message
 from app.models.user import TelegramUser
 
@@ -52,6 +53,32 @@ class OwnerStats:
     edited_messages: int
     deleted_messages: int
     top_interlocutors: list[InterlocutorStat] = field(default_factory=list)
+
+
+@dataclass
+class AdminUserRow:
+    """One connected owner, as shown in the super-admin mini app panel."""
+
+    owner_telegram_id: int
+    username: str | None
+    first_name: str | None
+    last_name: str | None
+    connected_at: dt.datetime
+    is_enabled: bool
+    can_reply: bool
+    notifications_enabled: bool
+    is_blocked: bool
+    total_messages: int
+    total_chats: int
+    edited_messages: int
+    deleted_messages: int
+    last_activity_at: dt.datetime | None
+
+
+@dataclass
+class AdminOverview:
+    total_users: int
+    users: list[AdminUserRow] = field(default_factory=list)
 
 
 class StatsRepository:
@@ -215,3 +242,96 @@ class StatsRepository:
             deleted_messages=deleted_messages,
             top_interlocutors=top_interlocutors[:top_n],
         )
+
+    async def get_admin_overview(self) -> AdminOverview:
+        """Every connected owner plus their aggregated activity, for the
+        super-admin mini app panel.
+
+        One row per distinct `user_telegram_id` (an owner can technically
+        have more than one `BusinessConnection` row, e.g. after
+        disconnect/reconnect) — settings and messages are aggregated across
+        all of that owner's connection ids.
+        """
+
+        connections = (
+            await self._session.execute(
+                select(BusinessConnection).order_by(
+                    BusinessConnection.connected_at.desc()
+                )
+            )
+        ).scalars().all()
+
+        by_owner: dict[int, list[BusinessConnection]] = {}
+        for conn in connections:
+            by_owner.setdefault(conn.user_telegram_id, []).append(conn)
+
+        users: list[AdminUserRow] = []
+        for owner_telegram_id, conns in by_owner.items():
+            connection_ids = [c.business_connection_id for c in conns]
+            latest = max(conns, key=lambda c: c.connected_at)
+
+            stmt = select(
+                Message.is_edited,
+                Message.is_deleted,
+                Message.chat_id,
+                Message.sent_at,
+            ).where(Message.business_connection_id.in_(connection_ids))
+            rows = (await self._session.execute(stmt)).all()
+
+            total_messages = len(rows)
+            edited_messages = sum(1 for r in rows if r.is_edited)
+            deleted_messages = sum(1 for r in rows if r.is_deleted)
+            total_chats = len({r.chat_id for r in rows})
+            last_activity_at = max(
+                (r.sent_at for r in rows if r.sent_at is not None), default=None
+            )
+
+            users.append(
+                AdminUserRow(
+                    owner_telegram_id=owner_telegram_id,
+                    username=latest.user_username,
+                    first_name=latest.user_first_name,
+                    last_name=latest.user_last_name,
+                    connected_at=min(c.connected_at for c in conns),
+                    is_enabled=any(c.is_enabled for c in conns),
+                    can_reply=any(c.can_reply for c in conns),
+                    notifications_enabled=all(c.notifications_enabled for c in conns),
+                    is_blocked=any(c.is_blocked for c in conns),
+                    total_messages=total_messages,
+                    total_chats=total_chats,
+                    edited_messages=edited_messages,
+                    deleted_messages=deleted_messages,
+                    last_activity_at=last_activity_at,
+                )
+            )
+
+        users.sort(key=lambda u: u.total_messages, reverse=True)
+
+        return AdminOverview(total_users=len(users), users=users)
+
+    async def set_owner_settings(
+        self,
+        *,
+        owner_telegram_id: int,
+        notifications_enabled: bool | None = None,
+        is_blocked: bool | None = None,
+    ) -> int:
+        """Apply admin-controlled settings to every connection owned by
+        `owner_telegram_id`. Returns the number of connection rows updated.
+        """
+
+        connections = (
+            await self._session.execute(
+                select(BusinessConnection).where(
+                    BusinessConnection.user_telegram_id == owner_telegram_id
+                )
+            )
+        ).scalars().all()
+
+        for conn in connections:
+            if notifications_enabled is not None:
+                conn.notifications_enabled = notifications_enabled
+            if is_blocked is not None:
+                conn.is_blocked = is_blocked
+
+        return len(connections)

@@ -29,6 +29,13 @@ class StatsService:
     async def get_admin_overview(self) -> AdminOverview:
         return await self._repo.get_admin_overview()
 
+    async def owner_has_chat(
+        self, *, connection_ids: list[str], chat_id: int
+    ) -> bool:
+        return await self._repo.owner_has_chat(
+            connection_ids=connection_ids, chat_id=chat_id
+        )
+
     async def set_owner_settings(
         self,
         *,

@@ -34,6 +34,19 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("Starting Telegram Business Bot (environment=%s)", settings.environment)
 
+    if settings.is_sqlite:
+        logger.warning(
+            "Database is SQLite (%s). On platforms with ephemeral container "
+            "filesystems (e.g. Railway without a mounted volume), the SQLite "
+            "file is WIPED on every redeploy — this permanently loses all "
+            "business connections, forcing users to reconnect the bot every "
+            "time. Set DATABASE_URL to a persistent PostgreSQL instance to "
+            "fix this.",
+            settings.normalized_database_url,
+        )
+    else:
+        logger.info("Database dialect: %s (persistent)", "postgresql" if settings.is_postgres else "other")
+
     # Ensure tables exist. Alembic migrations remain the source of truth for
     # schema evolution; this is a safety net for fresh deployments where
     # migrations haven't been run yet.
@@ -96,5 +109,3 @@ app.include_router(dashboard_messages.router)
 app.include_router(dashboard_stats.router)
 app.include_router(dashboard_export.router)
 app.include_router(miniapp_routes.router)
-
-# deploy-trigger-final 1783274144

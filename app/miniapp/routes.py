@@ -105,34 +105,40 @@ async def miniapp_stats(
             "top_interlocutors": [],
         }
 
-    stats_service = StatsService(session)
-    stats = await stats_service.get_owner_stats(
-        connection_ids=connection_ids, owner_telegram_id=owner_telegram_id
-    )
+    try:
+        stats_service = StatsService(session)
+        stats = await stats_service.get_owner_stats(
+            connection_ids=connection_ids, owner_telegram_id=owner_telegram_id
+        )
 
-    return {
-        "connected": True,
-        "total_messages": stats.total_messages,
-        "total_chats": stats.total_chats,
-        "edited_messages": stats.edited_messages,
-        "deleted_messages": stats.deleted_messages,
-        "top_interlocutors": [
-            {
-                "chat_id": s.chat_id,
-                "display_name": s.display_name,
-                "username": s.username,
-                "message_count": s.message_count,
-                "edited_count": s.edited_count,
-                "deleted_count": s.deleted_count,
-                "last_message_at": (
-                    s.last_message_at.isoformat() if s.last_message_at else None
-                ),
-                "streak_days": s.streak_days,
-                "mutual_connected": s.mutual_connected,
-            }
-            for s in stats.top_interlocutors
-        ],
-    }
+        return {
+            "connected": True,
+            "total_messages": stats.total_messages,
+            "total_chats": stats.total_chats,
+            "edited_messages": stats.edited_messages,
+            "deleted_messages": stats.deleted_messages,
+            "top_interlocutors": [
+                {
+                    "chat_id": s.chat_id,
+                    "display_name": s.display_name,
+                    "username": s.username,
+                    "message_count": s.message_count,
+                    "edited_count": s.edited_count,
+                    "deleted_count": s.deleted_count,
+                    "last_message_at": (
+                        s.last_message_at.isoformat() if s.last_message_at else None
+                    ),
+                    "streak_days": s.streak_days,
+                    "mutual_connected": s.mutual_connected,
+                }
+                for s in stats.top_interlocutors
+            ],
+        }
+    except Exception:
+        logger.exception(
+            "Failed to build owner stats for owner_telegram_id=%s", owner_telegram_id
+        )
+        raise HTTPException(status_code=500, detail="Failed to load stats") from None
 
 
 @router.post("/app/api/game/send")

@@ -14,109 +14,145 @@
     --link: var(--tg-theme-link-color, #2481cc);
     --button: var(--tg-theme-button-color, #2481cc);
     --button-text: var(--tg-theme-button-text-color, #ffffff);
+    --accent-2: #34c759;
+    --accent-3: #ff9f0a;
     --danger: #ff3b30;
+    --card-radius: 20px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06);
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
     margin: 0;
-    padding: 16px 16px 32px;
+    padding: 14px 14px 40px;
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
-  .header { text-align: center; padding: 12px 0 20px; }
-  .header h1 { font-size: 20px; margin: 0 0 4px; }
+  .header { text-align: center; padding: 16px 0 20px; animation: fadeIn 0.4s ease; }
+  .header .avatar-ring {
+    width: 52px; height: 52px; margin: 0 auto 10px; border-radius: 50%;
+    background: linear-gradient(135deg, #6c5ce7, var(--link));
+    display: flex; align-items: center; justify-content: center; font-size: 24px;
+  }
+  .header h1 { font-size: 19px; margin: 0 0 4px; font-weight: 700; }
   .header p { margin: 0; color: var(--hint); font-size: 13px; }
-  .cards {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 10px;
-    margin-bottom: 24px;
-  }
+
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
   .card {
-    background: var(--secondary-bg);
-    border-radius: 16px;
-    padding: 14px;
-    text-align: center;
+    background: var(--secondary-bg); border-radius: 16px; padding: 12px 10px;
+    text-align: center; box-shadow: var(--shadow);
   }
-  .card .value { font-size: 28px; font-weight: 700; }
-  .card .label { font-size: 12px; color: var(--hint); margin-top: 4px; }
-  .section-title { font-size: 15px; font-weight: 600; margin: 0 0 10px 4px; }
+  .card .value { font-size: 22px; font-weight: 800; letter-spacing: -0.4px; }
+  .card .label { font-size: 10.5px; color: var(--hint); margin-top: 3px; font-weight: 500; }
+
+  .search-box {
+    display: flex; align-items: center; gap: 8px; background: var(--secondary-bg);
+    border-radius: 14px; padding: 10px 14px; margin-bottom: 10px; box-shadow: var(--shadow);
+  }
+  .search-box input { flex: 1; border: none; outline: none; background: transparent; color: var(--text); font-size: 14px; }
+  .search-box input::placeholder { color: var(--hint); }
+
+  .segmented {
+    display: flex; background: rgba(120,120,128,0.12); border-radius: 12px;
+    padding: 3px; margin-bottom: 6px; gap: 2px;
+  }
+  .segmented button {
+    flex: 1; border: none; background: transparent; padding: 8px 4px; font-size: 12.5px;
+    font-weight: 600; color: var(--hint); border-radius: 9px; transition: all 0.2s ease;
+  }
+  .segmented button.active { background: var(--secondary-bg); color: var(--text); box-shadow: var(--shadow); }
+
+  .sort-row { display: flex; gap: 8px; margin: 10px 0 12px; overflow-x: auto; padding-bottom: 2px; }
+  .sort-chip {
+    flex-shrink: 0; border: none; background: rgba(120,120,128,0.12); color: var(--hint);
+    font-size: 11.5px; font-weight: 600; padding: 6px 12px; border-radius: 20px;
+  }
+  .sort-chip.active { background: var(--link); color: #fff; }
+
+  .section-title { font-size: 15px; font-weight: 700; margin: 4px 2px 10px; display: flex; justify-content: space-between; align-items: center; }
+  .section-title .sub { font-size: 12px; font-weight: 500; color: var(--hint); }
+
   .list { display: flex; flex-direction: column; gap: 10px; }
   .user-card {
-    background: var(--secondary-bg);
-    border-radius: 16px;
-    padding: 14px;
+    background: var(--secondary-bg); border-radius: var(--card-radius); padding: 14px;
+    box-shadow: var(--shadow); animation: riseIn 0.3s ease backwards;
   }
-  .user-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 8px;
+  .user-top { display: flex; gap: 10px; align-items: flex-start; }
+  .avatar {
+    width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; color: #fff; font-weight: 700; font-size: 15px; flex-shrink: 0;
   }
-  .user-name { font-size: 15px; font-weight: 600; }
-  .user-sub { font-size: 12px; color: var(--hint); margin-top: 2px; }
+  .user-main { flex: 1; min-width: 0; }
+  .user-name { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .user-sub { font-size: 11.5px; color: var(--hint); margin-top: 2px; }
   .badge {
-    font-size: 11px;
-    font-weight: 600;
-    padding: 3px 8px;
-    border-radius: 8px;
-    background: rgba(120,120,128,0.15);
-    color: var(--hint);
-    white-space: nowrap;
+    font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 8px;
+    background: rgba(52,199,89,0.15); color: var(--accent-2); white-space: nowrap; flex-shrink: 0;
   }
   .badge.blocked { background: rgba(255,59,48,0.15); color: var(--danger); }
-  .user-stats {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 6px;
-    margin: 12px 0;
-  }
-  .stat { text-align: center; }
-  .stat .n { font-size: 16px; font-weight: 700; }
-  .stat .l { font-size: 10px; color: var(--hint); margin-top: 2px; }
-  .actions { display: flex; gap: 8px; margin-top: 4px; }
+
+  .user-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 14px 0 12px; }
+  .stat { text-align: center; padding: 8px 2px; border-radius: 12px; background: rgba(120,120,128,0.07); }
+  .stat .n { font-size: 16px; font-weight: 800; }
+  .stat .l { font-size: 9.5px; color: var(--hint); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.3px; }
+
+  .actions { display: flex; gap: 8px; }
   .toggle-btn {
-    flex: 1;
-    border: none;
-    border-radius: 10px;
-    padding: 9px 6px;
-    font-size: 12px;
-    font-weight: 600;
-    background: rgba(120,120,128,0.15);
-    color: var(--text);
+    flex: 1; border: none; border-radius: 12px; padding: 10px 6px; font-size: 12px;
+    font-weight: 700; background: rgba(120,120,128,0.12); color: var(--text);
+    transition: transform 0.1s ease, opacity 0.2s ease;
   }
-  .toggle-btn.active {
-    background: var(--button);
-    color: var(--button-text);
+  .toggle-btn:active { transform: scale(0.96); }
+  .toggle-btn:disabled { opacity: 0.5; }
+  .toggle-btn.active { background: var(--link); color: #fff; }
+  .toggle-btn.danger.active { background: var(--danger); color: #fff; }
+
+  .expand-btn {
+    width: 100%; border: none; background: transparent; color: var(--link);
+    font-size: 12px; font-weight: 600; padding: 10px 0 2px; text-align: center;
   }
-  .toggle-btn.danger.active {
-    background: var(--danger);
-    color: #fff;
-  }
+  .details { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(120,120,128,0.14); font-size: 12px; color: var(--hint); }
+  .details.open { display: block; }
+  .details div { padding: 3px 0; }
+  .details b { color: var(--text); }
+
   .empty, .error {
-    text-align: center;
-    padding: 40px 20px;
-    color: var(--hint);
-    font-size: 14px;
-    line-height: 1.5;
+    text-align: center; padding: 48px 20px; color: var(--hint); font-size: 14px; line-height: 1.5;
+    background: var(--secondary-bg); border-radius: var(--card-radius);
   }
-  .empty .big-emoji, .error .big-emoji { font-size: 40px; display: block; margin-bottom: 12px; }
+  .empty .big-emoji, .error .big-emoji { font-size: 42px; display: block; margin-bottom: 12px; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px);
+    background: rgba(20,20,22,0.92); color: #fff; padding: 10px 18px; border-radius: 30px;
+    font-size: 13px; font-weight: 600; opacity: 0; transition: all 0.25s ease; pointer-events: none;
+    z-index: 10;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
   .skeleton { animation: pulse 1.2s ease-in-out infinite; }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+  @keyframes riseIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 </style>
 </head>
 <body>
   <div class="header">
-    <h1>🛠 Админ-панель</h1>
+    <div class="avatar-ring">🛠</div>
+    <h1>Админ-панель</h1>
     <p id="subtitle">Загружаем данные…</p>
   </div>
 
   <div id="content">
     <div class="cards skeleton">
-      <div class="card"><div class="value">—</div><div class="label">Пользователей бота</div></div>
+      <div class="card"><div class="value">—</div><div class="label">Пользователей</div></div>
+      <div class="card"><div class="value">—</div><div class="label">Активных</div></div>
+      <div class="card"><div class="value">—</div><div class="label">Заблокир.</div></div>
     </div>
   </div>
+
+  <div class="toast" id="toast"></div>
 
   <script>
     const tg = window.Telegram && window.Telegram.WebApp;
@@ -126,6 +162,26 @@
     }
 
     const initData = tg ? tg.initData : "";
+    let overview = null;
+    let searchQuery = "";
+    let filterMode = "all";
+    let sortMode = "messages";
+    const expandedIds = new Set();
+
+    const AVATAR_COLORS = ["#FF6B6B", "#4ECDC4", "#45AAF2", "#F7B731", "#A55EEA", "#26DE81", "#FD9644", "#2BCBBA"];
+
+    function colorFor(seed) {
+      let hash = 0;
+      for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+      return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+    }
+
+    function initials(name) {
+      const parts = name.trim().split(/\s+/).filter(Boolean);
+      if (parts.length === 0) return "?";
+      if (parts.length === 1) return parts[0][0].toUpperCase();
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
 
     function fmtDate(iso) {
       if (!iso) return "нет данных";
@@ -133,50 +189,102 @@
       return d.toLocaleDateString("ru-RU") + " " + d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
     }
 
+    function timeAgo(iso) {
+      if (!iso) return "нет активности";
+      const diffMs = Date.now() - new Date(iso).getTime();
+      const min = Math.floor(diffMs / 60000);
+      if (min < 1) return "только что";
+      if (min < 60) return `${min} мин назад`;
+      const hr = Math.floor(min / 60);
+      if (hr < 24) return `${hr} ч назад`;
+      const days = Math.floor(hr / 24);
+      if (days < 30) return `${days} дн назад`;
+      return new Date(iso).toLocaleDateString("ru-RU");
+    }
+
     function displayName(u) {
       const name = [u.first_name, u.last_name].filter(Boolean).join(" ");
       return name || (u.username ? "@" + u.username : "ID " + u.owner_telegram_id);
     }
 
+    function showToast(msg) {
+      const toast = document.getElementById("toast");
+      toast.textContent = msg;
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 2200);
+    }
+
+    function getFilteredSorted() {
+      let list = overview.users.slice();
+      if (filterMode === "active") list = list.filter(u => !u.is_blocked);
+      if (filterMode === "blocked") list = list.filter(u => u.is_blocked);
+      if (filterMode === "muted") list = list.filter(u => !u.notifications_enabled);
+      if (searchQuery) {
+        list = list.filter(u =>
+          displayName(u).toLowerCase().includes(searchQuery) ||
+          (u.username || "").toLowerCase().includes(searchQuery) ||
+          String(u.owner_telegram_id).includes(searchQuery)
+        );
+      }
+      const sorters = {
+        messages: (a, b) => b.total_messages - a.total_messages,
+        recent: (a, b) => new Date(b.last_activity_at || 0) - new Date(a.last_activity_at || 0),
+        newest: (a, b) => new Date(b.connected_at || 0) - new Date(a.connected_at || 0),
+      };
+      return list.sort(sorters[sortMode] || sorters.messages);
+    }
+
     function renderUser(u) {
       const sub = u.username ? "@" + u.username + " · ID " + u.owner_telegram_id : "ID " + u.owner_telegram_id;
+      const isOpen = expandedIds.has(u.owner_telegram_id);
       return `
         <div class="user-card" data-owner="${u.owner_telegram_id}">
           <div class="user-top">
-            <div>
+            <div class="avatar" style="background:${colorFor(displayName(u))}">${initials(displayName(u))}</div>
+            <div class="user-main">
               <div class="user-name">${displayName(u)}</div>
               <div class="user-sub">${sub}</div>
-              <div class="user-sub">Подключён: ${fmtDate(u.connected_at)}</div>
-              <div class="user-sub">Активность: ${fmtDate(u.last_activity_at)}</div>
             </div>
-            ${u.is_blocked ? '<span class="badge blocked">Заблокирован</span>' : '<span class="badge">Активен</span>'}
+            ${u.is_blocked ? '<span class="badge blocked">🚫 Блок</span>' : '<span class="badge">✓ Активен</span>'}
           </div>
           <div class="user-stats">
-            <div class="stat"><div class="n">${u.total_messages}</div><div class="l">Сообщений</div></div>
-            <div class="stat"><div class="n">${u.total_chats}</div><div class="l">Собеседников</div></div>
-            <div class="stat"><div class="n">${u.edited_messages}</div><div class="l">Правок</div></div>
-            <div class="stat"><div class="n">${u.deleted_messages}</div><div class="l">Удалений</div></div>
+            <div class="stat"><div class="n">${u.total_messages}</div><div class="l">Сообщ.</div></div>
+            <div class="stat"><div class="n">${u.total_chats}</div><div class="l">Чаты</div></div>
+            <div class="stat"><div class="n">${u.edited_messages}</div><div class="l">Правки</div></div>
+            <div class="stat"><div class="n">${u.deleted_messages}</div><div class="l">Удал.</div></div>
           </div>
           <div class="actions">
             <button class="toggle-btn ${u.notifications_enabled ? "active" : ""}" data-action="notifications" data-value="${!u.notifications_enabled}">
-              🔔 Уведомления ${u.notifications_enabled ? "вкл" : "выкл"}
+              🔔 ${u.notifications_enabled ? "Вкл" : "Выкл"}
             </button>
             <button class="toggle-btn danger ${u.is_blocked ? "active" : ""}" data-action="block" data-value="${!u.is_blocked}">
               ${u.is_blocked ? "🚫 Разблокировать" : "🚫 Заблокировать"}
             </button>
           </div>
+          <button class="expand-btn" data-toggle-details>${isOpen ? "Скрыть детали ▲" : "Подробнее ▼"}</button>
+          <div class="details ${isOpen ? "open" : ""}">
+            <div>Подключён: <b>${fmtDate(u.connected_at)}</b></div>
+            <div>Последняя активность: <b>${timeAgo(u.last_activity_at)}</b></div>
+            <div>Может отвечать: <b>${u.can_reply ? "да" : "нет"}</b></div>
+            <div>Подключение включено (Telegram): <b>${u.is_enabled ? "да" : "нет"}</b></div>
+          </div>
         </div>
       `;
     }
 
-    function render(overview) {
+    function render() {
       const content = document.getElementById("content");
       const subtitle = document.getElementById("subtitle");
       subtitle.textContent = "Все подключённые пользователи бота";
 
+      const activeCount = overview.users.filter(u => !u.is_blocked).length;
+      const blockedCount = overview.users.filter(u => u.is_blocked).length;
+
       const cards = `
         <div class="cards">
-          <div class="card"><div class="value">${overview.total_users}</div><div class="label">Пользователей бота</div></div>
+          <div class="card"><div class="value">${overview.total_users}</div><div class="label">Пользователей</div></div>
+          <div class="card"><div class="value">${activeCount}</div><div class="label">Активных</div></div>
+          <div class="card"><div class="value">${blockedCount}</div><div class="label">Заблокир.</div></div>
         </div>
       `;
 
@@ -185,10 +293,64 @@
         return;
       }
 
-      const list = `<div class="section-title">Пользователи</div><div class="list">${overview.users.map(renderUser).join("")}</div>`;
-      content.innerHTML = cards + list;
+      const controls = `
+        <div class="search-box">
+          <span>🔍</span>
+          <input id="searchInput" type="text" placeholder="Поиск по имени, юзернейму, ID…" value="${searchQuery}" />
+        </div>
+        <div class="segmented" id="filterTabs">
+          <button data-filter="all" class="${filterMode === "all" ? "active" : ""}">Все</button>
+          <button data-filter="active" class="${filterMode === "active" ? "active" : ""}">Активные</button>
+          <button data-filter="blocked" class="${filterMode === "blocked" ? "active" : ""}">Заблок.</button>
+          <button data-filter="muted" class="${filterMode === "muted" ? "active" : ""}">Без увед.</button>
+        </div>
+        <div class="sort-row" id="sortTabs">
+          <button class="sort-chip ${sortMode === "messages" ? "active" : ""}" data-sort="messages">По сообщениям</button>
+          <button class="sort-chip ${sortMode === "recent" ? "active" : ""}" data-sort="recent">По активности</button>
+          <button class="sort-chip ${sortMode === "newest" ? "active" : ""}" data-sort="newest">По дате подключения</button>
+        </div>
+      `;
 
-      content.querySelectorAll(".toggle-btn").forEach((btn) => {
+      const filtered = getFilteredSorted();
+      const listHtml = filtered.length
+        ? `<div class="section-title">Пользователи <span class="sub">${filtered.length} из ${overview.users.length}</span></div><div class="list">${filtered.map(renderUser).join("")}</div>`
+        : `<div class="empty"><span class="big-emoji">🔎</span>Никого не нашлось.</div>`;
+
+      content.innerHTML = cards + controls + listHtml;
+      attachHandlers();
+    }
+
+    function attachHandlers() {
+      const input = document.getElementById("searchInput");
+      if (input) {
+        input.addEventListener("input", (e) => {
+          searchQuery = e.target.value.toLowerCase();
+          const caret = e.target.selectionStart;
+          render();
+          const newInput = document.getElementById("searchInput");
+          if (newInput) { newInput.focus(); newInput.setSelectionRange(caret, caret); }
+        });
+      }
+
+      document.querySelectorAll("#filterTabs button").forEach((btn) => {
+        btn.addEventListener("click", () => { filterMode = btn.dataset.filter; render(); });
+      });
+
+      document.querySelectorAll("#sortTabs button").forEach((btn) => {
+        btn.addEventListener("click", () => { sortMode = btn.dataset.sort; render(); });
+      });
+
+      document.querySelectorAll("[data-toggle-details]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const card = btn.closest(".user-card");
+          const ownerTelegramId = Number(card.dataset.owner);
+          if (expandedIds.has(ownerTelegramId)) expandedIds.delete(ownerTelegramId);
+          else expandedIds.add(ownerTelegramId);
+          render();
+        });
+      });
+
+      document.querySelectorAll(".toggle-btn").forEach((btn) => {
         btn.addEventListener("click", () => onToggle(btn));
       });
     }
@@ -199,7 +361,9 @@
       const action = btn.dataset.action;
       const value = btn.dataset.value === "true";
 
-      btn.disabled = true;
+      const allButtons = card.querySelectorAll(".toggle-btn");
+      allButtons.forEach(b => b.disabled = true);
+
       const body = { initData, ownerTelegramId };
       if (action === "notifications") body.notificationsEnabled = value;
       if (action === "block") body.isBlocked = value;
@@ -211,10 +375,17 @@
           body: JSON.stringify(body)
         });
         if (!res.ok) throw new Error("bad_status");
-        await loadOverview();
+
+        const user = overview.users.find(u => u.owner_telegram_id === ownerTelegramId);
+        if (user) {
+          if (action === "notifications") user.notifications_enabled = value;
+          if (action === "block") user.is_blocked = value;
+        }
+        render();
+        showToast(action === "block" ? (value ? "Пользователь заблокирован" : "Пользователь разблокирован") : (value ? "Уведомления включены" : "Уведомления отключены"));
         if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
       } catch (e) {
-        btn.disabled = false;
+        allButtons.forEach(b => b.disabled = false);
         if (tg) tg.showAlert("Не удалось сохранить изменения. Попробуй ещё раз.");
       }
     }
@@ -243,8 +414,8 @@
         }
         if (!res.ok) throw new Error("bad_status");
 
-        const overview = await res.json();
-        render(overview);
+        overview = await res.json();
+        render();
       } catch (e) {
         subtitle.textContent = "Не удалось загрузить данные";
         content.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не получилось загрузить данные. Попробуй закрыть и открыть приложение ещё раз.</div>`;

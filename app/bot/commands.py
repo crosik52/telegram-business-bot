@@ -41,17 +41,29 @@ async def on_start(message: Message) -> None:
 
     reply_markup: InlineKeyboardMarkup | None = None
     if settings.webhook_base_url:
-        miniapp_url = settings.webhook_base_url.rstrip("/") + "/app"
-        reply_markup = InlineKeyboardMarkup(
-            inline_keyboard=[
+        base_url = settings.webhook_base_url.rstrip("/")
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    text="\U0001f4ca Моя статистика",
+                    web_app=WebAppInfo(url=base_url + "/app"),
+                )
+            ]
+        ]
+
+        username = (message.from_user.username or "").lstrip("@").lower() if message.from_user else ""
+        admin_username = settings.miniapp_admin_username.lstrip("@").lower()
+        if admin_username and username == admin_username:
+            keyboard.append(
                 [
                     InlineKeyboardButton(
-                        text="\U0001f4ca Моя статистика",
-                        web_app=WebAppInfo(url=miniapp_url),
+                        text="\U0001f6e0 Админ-панель",
+                        web_app=WebAppInfo(url=base_url + "/app/admin"),
                     )
                 ]
-            ]
-        )
+            )
+
+        reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
 
     await message.answer(_GREETING, reply_markup=reply_markup)
     logger.info("Sent /start greeting to chat_id=%s", message.chat.id)

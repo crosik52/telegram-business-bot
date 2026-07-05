@@ -39,6 +39,9 @@
   .header p { margin: 0; color: var(--hint); font-size: 13px; }
 
   .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+  .cards.cards-4 { grid-template-columns: repeat(4, 1fr); }
+  .cards.cards-4 .card { padding: 10px 6px; }
+  .cards.cards-4 .value { font-size: 18px; }
   .card {
     background: var(--secondary-bg); border-radius: 16px; padding: 12px 10px;
     text-align: center; box-shadow: var(--shadow);
@@ -98,6 +101,7 @@
   .stat .l { font-size: 9.5px; color: var(--hint); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.3px; }
 
   .actions { display: flex; gap: 8px; }
+  .actions.secondary { margin-top: 8px; }
   .toggle-btn {
     flex: 1; border: none; border-radius: 12px; padding: 10px 6px; font-size: 12px;
     font-weight: 700; background: rgba(120,120,128,0.12); color: var(--text);
@@ -207,6 +211,16 @@
       return name || (u.username ? "@" + u.username : "ID " + u.owner_telegram_id);
     }
 
+    function confirmAction(message) {
+      return new Promise((resolve) => {
+        if (tg && tg.showConfirm) {
+          tg.showConfirm(message, (ok) => resolve(!!ok));
+        } else {
+          resolve(window.confirm(message));
+        }
+      });
+    }
+
     function showToast(msg) {
       const toast = document.getElementById("toast");
       toast.textContent = msg;
@@ -261,6 +275,10 @@
               ${u.is_blocked ? "🚫 Разблокировать" : "🚫 Заблокировать"}
             </button>
           </div>
+          <div class="actions secondary">
+            ${u.username ? `<button class="toggle-btn" data-action="message" data-username="${u.username}">✉️ Написать</button>` : ""}
+            <button class="toggle-btn" data-action="copy-id" data-copy="${u.owner_telegram_id}">📋 Копировать ID</button>
+          </div>
           <button class="expand-btn" data-toggle-details>${isOpen ? "Скрыть детали ▲" : "Подробнее ▼"}</button>
           <div class="details ${isOpen ? "open" : ""}">
             <div>Подключён: <b>${fmtDate(u.connected_at)}</b></div>
@@ -279,12 +297,14 @@
 
       const activeCount = overview.users.filter(u => !u.is_blocked).length;
       const blockedCount = overview.users.filter(u => u.is_blocked).length;
+      const totalMessages = overview.users.reduce((sum, u) => sum + u.total_messages, 0);
 
       const cards = `
-        <div class="cards">
+        <div class="cards cards-4">
           <div class="card"><div class="value">${overview.total_users}</div><div class="label">Пользователей</div></div>
           <div class="card"><div class="value">${activeCount}</div><div class="label">Активных</div></div>
           <div class="card"><div class="value">${blockedCount}</div><div class="label">Заблокир.</div></div>
+          <div class="card"><div class="value">${totalMessages}</div><div class="label">Сообщений всего</div></div>
         </div>
       `;
 
@@ -350,8 +370,30 @@
         });
       });
 
-      document.querySelectorAll(".toggle-btn").forEach((btn) => {
+      document.querySelectorAll(".toggle-btn[data-action='notifications'], .toggle-btn[data-action='block']").forEach((btn) => {
         btn.addEventListener("click", () => onToggle(btn));
+      });
+
+      document.querySelectorAll(".toggle-btn[data-action='message']").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const username = btn.dataset.username;
+          if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
+          if (tg && tg.openTelegramLink) tg.openTelegramLink(`https://t.me/${username}`);
+          else window.open(`https://t.me/${username}`, "_blank");
+        });
+      });
+
+      document.querySelectorAll(".toggle-btn[data-action='copy-id']").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = btn.dataset.copy;
+          try {
+            await navigator.clipboard.writeText(id);
+            if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+            showToast("ID скопирован: " + id);
+          } catch (e) {
+            if (tg) tg.showAlert("ID: " + id);
+          }
+        });
       });
     }
 
@@ -360,6 +402,11 @@
       const ownerTelegramId = Number(card.dataset.owner);
       const action = btn.dataset.action;
       const value = btn.dataset.value === "true";
+
+      if (action === "block" && value) {
+        const confirmed = await confirmAction("Заблокировать этого пользователя? Он перестанет получать уведомления и будет исключён из активной статистики.");
+        if (!confirmed) return;
+      }
 
       const allButtons = card.querySelectorAll(".toggle-btn");
       allButtons.forEach(b => b.disabled = true);

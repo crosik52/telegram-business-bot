@@ -252,6 +252,55 @@ class StatsRepository:
             top_interlocutors=top_interlocutors[:top_n],
         )
 
+    async def get_owner_activity(
+        self, *, connection_ids: list[str], days: int = 90
+    ) -> dict[str, int]:
+        """Message counts per calendar day for the last `days` days, for the
+        personal activity heatmap in the mini app."""
+
+        if not connection_ids:
+            return {}
+
+        since = dt.datetime.now(dt.UTC) - dt.timedelta(days=days)
+        stmt = (
+            select(func.date(Message.sent_at), func.count(Message.id))
+            .where(
+                Message.business_connection_id.in_(connection_ids),
+                Message.sent_at >= since,
+            )
+            .group_by(func.date(Message.sent_at))
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return {str(row[0]): int(row[1]) for row in rows}
+
+    async def get_admin_growth(self, *, days: int = 30) -> dict[str, dict[str, int]]:
+        """Daily new-connection counts and message volume for the admin
+        analytics chart."""
+
+        since = dt.datetime.now(dt.UTC) - dt.timedelta(days=days)
+
+        conn_stmt = (
+            select(
+                func.date(BusinessConnection.connected_at),
+                func.count(func.distinct(BusinessConnection.user_telegram_id)),
+            )
+            .where(BusinessConnection.connected_at >= since)
+            .group_by(func.date(BusinessConnection.connected_at))
+        )
+        conn_rows = (await self._session.execute(conn_stmt)).all()
+
+        msg_stmt = (
+            select(func.date(Message.sent_at), func.count(Message.id))
+            .where(Message.sent_at >= since)
+            .group_by(func.date(Message.sent_at))
+        )
+        msg_rows = (await self._session.execute(msg_stmt)).all()
+
+        return {
+            "connections_by_day": {str(r[0]): int(r[1]) for r in conn_rows},
+            "messages_by_day": {str(r[0]): int(r[1]) for r in msg_rows},
+        }
+
     async def owner_has_chat(
         self, *, connection_ids: list[str], chat_id: int
     ) -> bool:

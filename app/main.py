@@ -55,6 +55,8 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
 
     if settings.webhook_base_url:
+        from aiogram.types import MenuButtonWebApp, WebAppInfo
+
         from app.business.dispatcher import get_bot
 
         bot = get_bot(settings)
@@ -72,6 +74,15 @@ async def lifespan(app: FastAPI):
             drop_pending_updates=False,
         )
         logger.info("Telegram webhook set to %s", webhook_url)
+
+        base_url = settings.webhook_base_url.rstrip("/")
+        await bot.set_chat_menu_button(
+            menu_button=MenuButtonWebApp(
+                text="Статистика",
+                web_app=WebAppInfo(url=base_url + "/app"),
+            )
+        )
+        logger.info("Telegram chat menu button set to open mini app")
     else:
         logger.warning(
             "WEBHOOK_BASE_URL is not set — skipping automatic setWebhook call. "

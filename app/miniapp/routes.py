@@ -36,6 +36,13 @@ class AdminSettingsRequest(BaseModel):
     is_blocked: bool | None = Field(default=None, alias="isBlocked")
 
 
+class AdminUserStatsRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    init_data: str = Field(alias="initData")
+    owner_telegram_id: int = Field(alias="ownerTelegramId")
+
+
 GAME_EMOJIS = {"🎲", "🎯", "🏀", "⚽", "🎳", "🎰"}
 
 
@@ -234,6 +241,54 @@ async def admin_overview(
                 ),
             }
             for u in overview.users
+        ],
+    }
+
+
+@router.post("/app/api/admin/user_stats")
+async def admin_user_stats(
+    payload: AdminUserStatsRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    _require_admin(payload.init_data)
+
+    result = await session.execute(
+        select(BusinessConnection.business_connection_id).where(
+            BusinessConnection.user_telegram_id == payload.owner_telegram_id
+        )
+    )
+    connection_ids = [row[0] for row in result.all()]
+
+    if not connection_ids:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    stats_service = StatsService(session)
+    stats = await stats_service.get_owner_stats(
+        connection_ids=connection_ids,
+        owner_telegram_id=payload.owner_telegram_id,
+        top_n=50,
+    )
+
+    return {
+        "owner_telegram_id": stats.owner_telegram_id,
+        "total_messages": stats.total_messages,
+        "total_chats": stats.total_chats,
+        "edited_messages": stats.edited_messages,
+        "deleted_messages": stats.deleted_messages,
+        "chats": [
+            {
+                "chat_id": s.chat_id,
+                "display_name": s.display_name,
+                "username": s.username,
+                "message_count": s.message_count,
+                "edited_count": s.edited_count,
+                "deleted_count": s.deleted_count,
+                "last_message_at": (
+                    s.last_message_at.isoformat() if s.last_message_at else None
+                ),
+                "streak_days": s.streak_days,
+                "mutual_connected": s.mutual_connected,
+            }
+            for s in stats.top_interlocutors
         ],
     }
 

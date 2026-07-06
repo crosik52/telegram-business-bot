@@ -340,6 +340,58 @@
   .refresh-fab:active { transform: scale(0.9) rotate(120deg); }
   .refresh-fab.spinning { animation: spin 0.8s linear; }
 
+  .heatmap-card {
+    background: var(--secondary-bg);
+    border-radius: var(--card-radius);
+    padding: 14px;
+    box-shadow: var(--shadow);
+    margin-bottom: 22px;
+  }
+  .heatmap-grid {
+    display: grid;
+    grid-template-columns: repeat(13, 1fr);
+    gap: 3px;
+    margin-bottom: 10px;
+  }
+  .heat-cell {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 3px;
+    background: rgba(120,120,128,0.14);
+  }
+  .heat-cell.level-1 { background: rgba(52,199,89,0.3); }
+  .heat-cell.level-2 { background: rgba(52,199,89,0.5); }
+  .heat-cell.level-3 { background: rgba(52,199,89,0.75); }
+  .heat-cell.level-4 { background: rgba(52,199,89,1); }
+  .heatmap-legend {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--hint);
+    justify-content: flex-end;
+  }
+  .heatmap-legend .heat-cell { width: 12px; height: 12px; flex-shrink: 0; }
+
+  .badges-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 22px;
+  }
+  .badge-card {
+    background: var(--secondary-bg);
+    border-radius: 16px;
+    padding: 14px 10px;
+    text-align: center;
+    box-shadow: var(--shadow);
+    transition: opacity 0.2s ease;
+  }
+  .badge-card.locked { opacity: 0.4; filter: grayscale(1); }
+  .badge-emoji { font-size: 28px; margin-bottom: 6px; }
+  .badge-title { font-size: 12.5px; font-weight: 700; }
+  .badge-desc { font-size: 10.5px; color: var(--hint); margin-top: 2px; }
+
   .skeleton .card .value, .skeleton .card .label { opacity: 0.35; }
   .skeleton { animation: pulse 1.2s ease-in-out infinite; }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
@@ -378,6 +430,7 @@
     }
 
     let lastStats = null;
+    let lastActivity = {};
     let sortMode = "messages";
     let searchQuery = "";
     let currentInitData = "";
@@ -426,6 +479,65 @@
           <div class="card accent-deleted"><div class="icon">🗑</div><div class="value">${stats.deleted_messages}</div><div class="label">Удалений</div></div>
         </div>
       `;
+    }
+
+    function renderHeatmap(activity) {
+      const days = 91;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const counts = [];
+      let maxCount = 0;
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        const key = d.toISOString().slice(0, 10);
+        const count = activity[key] || 0;
+        counts.push({ date: d, count });
+        if (count > maxCount) maxCount = count;
+      }
+      function levelFor(count) {
+        if (count === 0) return 0;
+        if (maxCount <= 1) return 4;
+        const ratio = count / maxCount;
+        if (ratio > 0.75) return 4;
+        if (ratio > 0.5) return 3;
+        if (ratio > 0.25) return 2;
+        return 1;
+      }
+      const cells = counts
+        .map((c) => `<div class="heat-cell level-${levelFor(c.count)}" title="${c.date.toLocaleDateString("ru-RU")}: ${c.count} сообщ."></div>`)
+        .join("");
+      return `
+        <div class="section-title">🗓 Активность за 90 дней</div>
+        <div class="heatmap-card">
+          <div class="heatmap-grid">${cells}</div>
+          <div class="heatmap-legend">
+            <span>Меньше</span>
+            <span class="heat-cell level-0"></span>
+            <span class="heat-cell level-1"></span>
+            <span class="heat-cell level-2"></span>
+            <span class="heat-cell level-3"></span>
+            <span class="heat-cell level-4"></span>
+            <span>Больше</span>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderBadges(badges) {
+      if (!badges || !badges.length) return "";
+      const items = badges
+        .map(
+          (b) => `
+        <div class="badge-card ${b.achieved ? "achieved" : "locked"}">
+          <div class="badge-emoji">${b.emoji}</div>
+          <div class="badge-title">${b.title}</div>
+          <div class="badge-desc">${b.description}</div>
+        </div>
+      `
+        )
+        .join("");
+      return `<div class="section-title">🏅 Достижения <span class="sub">${badges.filter(b => b.achieved).length} из ${badges.length}</span></div><div class="badges-grid">${items}</div>`;
     }
 
     function getSorted(list) {
@@ -495,7 +607,7 @@
         `;
       }).join("");
 
-      return `${controls}<div class="section-title">🏆 Топ собеседников <span class="sub">${sorted.length} из ${stats.top_interlocutors.length}</span></div><div class="list">${rows}</div><button class="share-btn" id="shareBtn">📋 Скопировать сводку статистики</button>`;
+      return `${controls}<div class="section-title">🏆 Топ собеседников <span class="sub">${sorted.length} из ${stats.top_interlocutors.length}</span></div><div class="list">${rows}</div><button class="share-btn" id="shareBtn">📋 Скопировать сводку статистики</button><button class="share-btn" id="downloadCardBtn">🖼 Скачать карточку статистики</button>`;
     }
 
     function attachTopHandlers() {
@@ -533,6 +645,83 @@
       });
       const shareBtn = document.getElementById("shareBtn");
       if (shareBtn) shareBtn.addEventListener("click", copySummary);
+      const downloadCardBtn = document.getElementById("downloadCardBtn");
+      if (downloadCardBtn) downloadCardBtn.addEventListener("click", downloadShareCard);
+    }
+
+    function downloadShareCard() {
+      if (!lastStats) return;
+      const canvas = document.createElement("canvas");
+      canvas.width = 900;
+      canvas.height = 1200;
+      const ctx = canvas.getContext("2d");
+
+      const grad = ctx.createLinearGradient(0, 0, 900, 1200);
+      grad.addColorStop(0, "#2481cc");
+      grad.addColorStop(1, "#34c759");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 900, 1200);
+
+      ctx.fillStyle = "#ffffff";
+      ctx.textAlign = "center";
+      ctx.font = "bold 54px sans-serif";
+      ctx.fillText("📊 Моя статистика", 450, 130);
+      ctx.font = "28px sans-serif";
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.fillText("Telegram Business Bot", 450, 175);
+
+      const rows = [
+        ["💬", lastStats.total_messages, "Сообщений"],
+        ["👥", lastStats.total_chats, "Собеседников"],
+        ["✏️", lastStats.edited_messages, "Правок"],
+        ["🗑", lastStats.deleted_messages, "Удалений"],
+      ];
+      let y = 320;
+      rows.forEach(([emoji, value, label]) => {
+        ctx.textAlign = "left";
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "48px sans-serif";
+        ctx.fillText(emoji, 90, y);
+        ctx.font = "bold 44px sans-serif";
+        ctx.fillText(String(value), 170, y);
+        ctx.font = "28px sans-serif";
+        ctx.fillStyle = "rgba(255,255,255,0.85)";
+        ctx.fillText(label, 320, y);
+        y += 100;
+      });
+
+      const top = (lastStats.top_interlocutors || []).slice(0, 3);
+      if (top.length) {
+        ctx.textAlign = "left";
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 34px sans-serif";
+        ctx.fillText("🏆 Топ собеседников", 90, y + 30);
+        y += 90;
+        top.forEach((s, i) => {
+          ctx.font = "30px sans-serif";
+          ctx.fillText(`${i + 1}. ${s.display_name} — ${s.message_count} сообщ.`, 90, y);
+          y += 55;
+        });
+      }
+
+      ctx.textAlign = "center";
+      ctx.font = "24px sans-serif";
+      ctx.fillStyle = "rgba(255,255,255,0.7)";
+      ctx.fillText(new Date().toLocaleDateString("ru-RU"), 450, 1150);
+
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "my-stats.png";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+        toastMessage("Карточка сохранена");
+      }, "image/png");
     }
 
     const GAMES = [
@@ -639,15 +828,23 @@
       if (isRefresh && refreshBtn) refreshBtn.classList.add("spinning");
 
       try {
-        const res = await fetch("/app/api/stats", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ initData })
-        });
+        const [statsRes, activityRes] = await Promise.all([
+          fetch("/app/api/stats", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ initData })
+          }),
+          fetch("/app/api/activity", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ initData })
+          }).catch(() => null),
+        ]);
 
-        if (!res.ok) throw new Error("bad_status");
-        const stats = await res.json();
+        if (!statsRes.ok) throw new Error("bad_status");
+        const stats = await statsRes.json();
         lastStats = stats;
+        lastActivity = activityRes && activityRes.ok ? (await activityRes.json()).activity || {} : {};
 
         if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
           document.getElementById("greeting").textContent =
@@ -661,7 +858,7 @@
         }
 
         subtitle.textContent = "Статистика общения в подключённых чатах";
-        content.innerHTML = renderCards(stats) + renderTop(stats);
+        content.innerHTML = renderCards(stats) + renderHeatmap(lastActivity) + renderBadges(stats.badges) + renderTop(stats);
         attachTopHandlers();
         if (tg && tg.HapticFeedback && isRefresh) tg.HapticFeedback.notificationOccurred("success");
       } catch (e) {

@@ -19,6 +19,7 @@ class MessageFilters:
     text_query: str | None = None
     username: str | None = None
     chat_id: int | None = None
+    connection_ids: list[str] | None = None
     date_from: dt.datetime | None = None
     date_to: dt.datetime | None = None
     only_deleted: bool = False
@@ -46,6 +47,8 @@ class MessageRepository:
             conditions.append(Message.sender_username.ilike(like))
         if filters.chat_id is not None:
             conditions.append(Message.chat_id == filters.chat_id)
+        if filters.connection_ids is not None:
+            conditions.append(Message.business_connection_id.in_(filters.connection_ids))
         if filters.date_from is not None:
             conditions.append(Message.sent_at >= filters.date_from)
         if filters.date_to is not None:

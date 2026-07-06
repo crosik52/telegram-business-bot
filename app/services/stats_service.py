@@ -20,10 +20,12 @@ class StatsService:
         return await self._repo.get_dashboard_stats()
 
     async def get_owner_stats(
-        self, *, connection_ids: list[str], owner_telegram_id: int
+        self, *, connection_ids: list[str], owner_telegram_id: int, top_n: int = 10
     ) -> OwnerStats:
         return await self._repo.get_owner_stats(
-            connection_ids=connection_ids, owner_telegram_id=owner_telegram_id
+            connection_ids=connection_ids,
+            owner_telegram_id=owner_telegram_id,
+            top_n=top_n,
         )
 
     async def get_admin_overview(self) -> AdminOverview:

@@ -77,15 +77,19 @@ def _compute_badges(stats) -> list[dict]:
     """Rule-based achievement badges computed from already-aggregated
     per-owner stats — no extra DB queries needed."""
 
-    max_streak = max((c.streak_days for c in stats.top_interlocutors), default=0)
+    # Use global streak fields (computed across ALL chats, not just top_n) so
+    # streaks in lower-volume chats are correctly reflected in badges.
+    best_streak = stats.best_streak
+    best_longest = stats.global_longest_streak
 
     definitions = [
         ("🎉", "Первые шаги", "Отправлено первое сообщение", stats.total_messages >= 1),
         ("💬", "Активный собеседник", "100+ сообщений", stats.total_messages >= 100),
-        ("🏆", "Мастер переписки", "1000+ сообщений", stats.total_messages >= 1000),
+        ("🏆", "Мастер переписки", "1 000+ сообщений", stats.total_messages >= 1000),
         ("🌐", "Душа компании", "5+ разных чатов", stats.total_chats >= 5),
-        ("🔥", "Не разлей вода", "Серия 7+ дней подряд", max_streak >= 7),
-        ("🚀", "Марафонец", "Серия 30+ дней подряд", max_streak >= 30),
+        ("🔥", "Не разлей вода", "Серия 7+ дней подряд", best_streak >= 7),
+        ("🚀", "Марафонец", "Серия 30+ дней подряд", best_streak >= 30),
+        ("💎", "Легенда", "Серия 100+ дней подряд", best_longest >= 100),
         (
             "🕵️",
             "Внимание к деталям",
@@ -178,6 +182,9 @@ async def miniapp_stats(
             "total_chats": stats.total_chats,
             "edited_messages": stats.edited_messages,
             "deleted_messages": stats.deleted_messages,
+            "best_streak": stats.best_streak,
+            "best_streak_name": stats.best_streak_name,
+            "global_longest_streak": stats.global_longest_streak,
             "top_interlocutors": [
                 {
                     "chat_id": s.chat_id,
@@ -190,6 +197,7 @@ async def miniapp_stats(
                         s.last_message_at.isoformat() if s.last_message_at else None
                     ),
                     "streak_days": s.streak_days,
+                    "longest_streak": s.longest_streak,
                     "mutual_connected": s.mutual_connected,
                 }
                 for s in stats.top_interlocutors

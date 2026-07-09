@@ -14,370 +14,153 @@
     --link: var(--tg-theme-link-color, #2481cc);
     --button: var(--tg-theme-button-color, #2481cc);
     --button-text: var(--tg-theme-button-text-color, #ffffff);
-    --accent-2: #34c759;
-    --accent-3: #ff9f0a;
-    --accent-4: #ff453a;
+    --green: #34c759;
+    --orange: #ff9f0a;
+    --red: #ff453a;
+    --streak-1: #ffb340;
+    --streak-2: #ff6b00;
+    --streak-3: #ff3b30;
+    --streak-legendary: #bf5af2;
     --card-radius: 20px;
-    --shadow: 0 1px 3px rgba(0,0,0,0.06);
+    --shadow: 0 1px 4px rgba(0,0,0,0.07);
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
     margin: 0;
-    padding: 14px 14px 40px;
+    padding: 0 14px 60px;
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
+
+  /* ── Header ── */
   .header {
     text-align: center;
-    padding: 18px 0 22px;
-    animation: fadeIn 0.4s ease;
+    padding: 20px 0 18px;
+    animation: fadeDown 0.4s ease;
   }
   .header .avatar-ring {
-    width: 56px;
-    height: 56px;
+    width: 58px; height: 58px;
     margin: 0 auto 10px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--link), var(--accent-2));
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 26px;
+    background: linear-gradient(135deg, var(--link), var(--green));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 27px;
+    box-shadow: 0 4px 14px rgba(36,129,204,0.3);
   }
-  .header h1 { font-size: 19px; margin: 0 0 4px; font-weight: 700; }
+  .header h1 { font-size: 19px; margin: 0 0 3px; font-weight: 700; }
   .header p { margin: 0; color: var(--hint); font-size: 13px; }
 
-  .segmented {
+  /* ── Streak Banner ── */
+  .streak-banner {
+    border-radius: var(--card-radius);
+    padding: 16px 18px;
+    margin-bottom: 16px;
     display: flex;
-    background: rgba(120,120,128,0.12);
-    border-radius: 12px;
-    padding: 3px;
-    margin-bottom: 18px;
-    gap: 2px;
+    align-items: center;
+    gap: 14px;
+    animation: riseIn 0.35s ease backwards;
+    position: relative;
+    overflow: hidden;
   }
-  .segmented button {
-    flex: 1;
-    border: none;
-    background: transparent;
-    padding: 8px 4px;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--hint);
-    border-radius: 9px;
-    transition: all 0.2s ease;
+  .streak-banner.level-warm  { background: linear-gradient(135deg, rgba(255,179,64,0.18), rgba(255,107,0,0.10)); border: 1.5px solid rgba(255,179,64,0.35); }
+  .streak-banner.level-hot   { background: linear-gradient(135deg, rgba(255,107,0,0.20), rgba(255,59,48,0.12)); border: 1.5px solid rgba(255,107,0,0.4); }
+  .streak-banner.level-blaze { background: linear-gradient(135deg, rgba(255,59,48,0.22), rgba(255,107,0,0.14)); border: 1.5px solid rgba(255,59,48,0.45); }
+  .streak-banner.level-legend{ background: linear-gradient(135deg, rgba(191,90,242,0.22), rgba(255,59,48,0.14)); border: 1.5px solid rgba(191,90,242,0.45); }
+  .streak-banner.at-risk     { border-style: dashed; }
+  .streak-fire { font-size: 36px; flex-shrink: 0; animation: fireWobble 1.8s ease-in-out infinite; }
+  @keyframes fireWobble { 0%,100%{transform:scale(1) rotate(-3deg)} 50%{transform:scale(1.08) rotate(3deg)} }
+  .streak-info { flex: 1; min-width: 0; }
+  .streak-info .streak-days {
+    font-size: 28px; font-weight: 900; line-height: 1;
+    letter-spacing: -0.5px;
+    background: linear-gradient(90deg, var(--streak-2), var(--streak-3));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   }
-  .segmented button.active {
-    background: var(--secondary-bg);
-    color: var(--text);
-    box-shadow: var(--shadow);
+  .streak-banner.level-legend .streak-info .streak-days {
+    background: linear-gradient(90deg, var(--streak-legendary), var(--streak-3));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .streak-info .streak-label { font-size: 12.5px; color: var(--hint); margin-top: 1px; }
+  .streak-info .streak-name  { font-size: 13px; font-weight: 600; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .streak-at-risk-badge {
+    font-size: 11px; font-weight: 700; color: var(--orange);
+    background: rgba(255,159,10,0.14); border-radius: 8px;
+    padding: 3px 8px; flex-shrink: 0;
   }
 
+  /* ── Stats Cards ── */
   .cards {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
-    margin-bottom: 22px;
+    margin-bottom: 16px;
   }
   .card {
     background: var(--secondary-bg);
     border-radius: var(--card-radius);
-    padding: 16px;
+    padding: 16px 14px;
     box-shadow: var(--shadow);
     position: relative;
     overflow: hidden;
     animation: riseIn 0.35s ease backwards;
   }
-  .card .icon { font-size: 18px; opacity: 0.9; margin-bottom: 8px; }
-  .card .value { font-size: 28px; font-weight: 800; line-height: 1.1; letter-spacing: -0.5px; }
-  .card .label { font-size: 12px; color: var(--hint); margin-top: 4px; font-weight: 500; }
-  .card.accent-messages .icon { color: var(--link); }
-  .card.accent-chats .icon { color: var(--accent-2); }
-  .card.accent-edited .icon { color: var(--accent-3); }
-  .card.accent-deleted .icon { color: var(--accent-4); }
+  .card .icon { font-size: 17px; margin-bottom: 7px; display: block; }
+  .card .value { font-size: 30px; font-weight: 900; line-height: 1.05; letter-spacing: -1px; }
+  .card .label { font-size: 11.5px; color: var(--hint); margin-top: 4px; font-weight: 500; }
+  .card.accent-messages .value { color: var(--link); }
+  .card.accent-chats .value    { color: var(--green); }
+  .card.accent-edited .value   { color: var(--orange); }
+  .card.accent-deleted .value  { color: var(--red); }
+  .card.accent-streak .value   { color: var(--streak-2); }
+  .card.accent-record .value   { color: var(--streak-legendary); }
+  .card:nth-child(1){animation-delay:0.02s} .card:nth-child(2){animation-delay:0.06s}
+  .card:nth-child(3){animation-delay:0.10s} .card:nth-child(4){animation-delay:0.14s}
+  .card:nth-child(5){animation-delay:0.18s} .card:nth-child(6){animation-delay:0.22s}
 
+  /* ── Section title ── */
   .section-title {
-    font-size: 16px;
-    font-weight: 700;
-    margin: 4px 0 12px 2px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    font-size: 15px; font-weight: 700;
+    margin: 4px 0 10px 2px;
+    display: flex; align-items: center; justify-content: space-between;
   }
-  .section-title .sub {
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--hint);
-  }
+  .section-title .sub { font-size: 12px; font-weight: 500; color: var(--hint); }
 
-  .search-box {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--secondary-bg);
-    border-radius: 14px;
-    padding: 10px 14px;
-    margin-bottom: 12px;
-    box-shadow: var(--shadow);
-  }
-  .search-box input {
-    flex: 1;
-    border: none;
-    outline: none;
-    background: transparent;
-    color: var(--text);
-    font-size: 14px;
-  }
-  .search-box input::placeholder { color: var(--hint); }
-
-  .list {
-    background: var(--secondary-bg);
-    border-radius: var(--card-radius);
-    overflow: hidden;
-    box-shadow: var(--shadow);
-  }
-  .row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 13px 14px;
-    border-bottom: 1px solid rgba(120,120,128,0.12);
-    transition: background 0.15s ease;
-  }
-  .row:active { background: rgba(120,120,128,0.08); }
-  .row:last-child { border-bottom: none; }
-  .rank {
-    width: 22px;
-    text-align: center;
-    font-size: 14px;
-    flex-shrink: 0;
-    font-weight: 700;
-    color: var(--hint);
-  }
-  .avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-weight: 700;
-    font-size: 15px;
-    flex-shrink: 0;
-  }
-  .row-main { flex: 1; min-width: 0; }
-  .row-name {
-    font-size: 14px;
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .row-sub {
-    font-size: 11.5px;
-    color: var(--hint);
-    margin-top: 2px;
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-  .chip {
-    font-size: 10.5px;
-    font-weight: 600;
-    padding: 1px 6px;
-    border-radius: 6px;
-    background: rgba(120,120,128,0.14);
-  }
-  .chip.edited { color: var(--accent-3); background: rgba(255,159,10,0.14); }
-  .chip.deleted { color: var(--accent-4); background: rgba(255,69,58,0.14); }
-  .chip.streak { color: #FF6B00; background: rgba(255,107,0,0.14); }
-  .mutual-dot { font-size: 12px; }
-  .game-btn {
-    margin-top: 8px;
-    border: none;
-    border-radius: 10px;
-    padding: 6px 12px;
-    font-size: 12.5px;
-    font-weight: 700;
-    background: linear-gradient(90deg, var(--link), var(--accent-2));
-    color: #fff;
-    display: inline-block;
-  }
-  .game-btn:active { opacity: 0.8; }
-  .game-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.45);
-    display: flex;
-    align-items: flex-end;
-    z-index: 1000;
-  }
-  .game-sheet {
-    width: 100%;
-    background: var(--bg-secondary, #fff);
-    border-radius: 18px 18px 0 0;
-    padding: 18px 16px 24px;
-    animation: slideUp 0.2s ease-out;
-  }
-  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-  .game-sheet-title { font-size: 15px; font-weight: 700; margin-bottom: 14px; text-align: center; }
-  .game-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-    margin-bottom: 14px;
-  }
-  .game-pick {
-    border: none;
-    border-radius: 14px;
-    background: rgba(120,120,128,0.12);
-    padding: 14px 6px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    font-weight: 600;
-  }
-  .game-pick:active { background: rgba(120,120,128,0.22); }
-  .game-pick-emoji { font-size: 26px; }
-  .game-cancel {
-    width: 100%;
-    border: none;
-    border-radius: 14px;
-    padding: 13px;
-    font-size: 14px;
-    font-weight: 700;
-    background: rgba(120,120,128,0.12);
-    color: var(--accent-4);
-  }
-  .bar-track {
-    height: 5px;
-    border-radius: 3px;
-    background: rgba(120,120,128,0.14);
-    margin-top: 7px;
-    overflow: hidden;
-  }
-  .bar-fill {
-    height: 100%;
-    border-radius: 3px;
-    background: linear-gradient(90deg, var(--link), var(--accent-2));
-    transition: width 0.6s cubic-bezier(.2,.8,.2,1);
-  }
-  .row-count {
-    font-size: 17px;
-    font-weight: 800;
-    flex-shrink: 0;
-    padding-left: 4px;
-    min-width: 30px;
-    text-align: right;
-  }
-  .row.clickable { cursor: pointer; }
-  .row.clickable:active { background: rgba(120,120,128,0.1); }
-  .row-chevron { color: var(--hint); font-size: 18px; font-weight: 700; padding-left: 2px; flex-shrink: 0; }
-
-  .share-btn {
-    width: 100%;
-    margin-top: 12px;
-    border: none;
-    border-radius: 14px;
-    padding: 13px;
-    font-size: 13.5px;
-    font-weight: 700;
-    background: rgba(120,120,128,0.12);
-    color: var(--link);
-  }
-  .share-btn:active { transform: scale(0.98); }
-
-  .toast {
-    position: fixed;
-    left: 50%;
-    bottom: 24px;
-    transform: translateX(-50%) translateY(20px);
-    background: rgba(20,20,22,0.92);
-    color: #fff;
-    padding: 10px 18px;
-    border-radius: 30px;
-    font-size: 13px;
-    font-weight: 600;
-    opacity: 0;
-    transition: all 0.25s ease;
-    pointer-events: none;
-    z-index: 10;
-  }
-  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-
-  .empty, .error {
-    text-align: center;
-    padding: 48px 20px;
-    color: var(--hint);
-    font-size: 14px;
-    line-height: 1.5;
-    background: var(--secondary-bg);
-    border-radius: var(--card-radius);
-  }
-  .empty .big-emoji, .error .big-emoji { font-size: 42px; display: block; margin-bottom: 12px; }
-
-  .refresh-fab {
-    position: fixed;
-    right: 16px;
-    bottom: 20px;
-    width: 46px;
-    height: 46px;
-    border-radius: 50%;
-    border: none;
-    background: var(--button);
-    color: var(--button-text);
-    font-size: 19px;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.2);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.2s ease;
-  }
-  .refresh-fab:active { transform: scale(0.9) rotate(120deg); }
-  .refresh-fab.spinning { animation: spin 0.8s linear; }
-
+  /* ── Heatmap ── */
   .heatmap-card {
     background: var(--secondary-bg);
     border-radius: var(--card-radius);
     padding: 14px;
     box-shadow: var(--shadow);
-    margin-bottom: 22px;
+    margin-bottom: 18px;
   }
   .heatmap-grid {
     display: grid;
     grid-template-columns: repeat(13, 1fr);
     gap: 3px;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
   .heat-cell {
-    width: 100%;
-    aspect-ratio: 1;
-    border-radius: 3px;
-    background: rgba(120,120,128,0.14);
+    width: 100%; aspect-ratio: 1; border-radius: 3px;
+    background: rgba(120,120,128,0.13);
   }
-  .heat-cell.level-1 { background: rgba(52,199,89,0.3); }
-  .heat-cell.level-2 { background: rgba(52,199,89,0.5); }
-  .heat-cell.level-3 { background: rgba(52,199,89,0.75); }
+  .heat-cell.level-1 { background: rgba(52,199,89,0.28); }
+  .heat-cell.level-2 { background: rgba(52,199,89,0.50); }
+  .heat-cell.level-3 { background: rgba(52,199,89,0.74); }
   .heat-cell.level-4 { background: rgba(52,199,89,1); }
   .heatmap-legend {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 11px;
-    color: var(--hint);
-    justify-content: flex-end;
+    display: flex; align-items: center; gap: 4px;
+    font-size: 11px; color: var(--hint); justify-content: flex-end;
   }
   .heatmap-legend .heat-cell { width: 12px; height: 12px; flex-shrink: 0; }
 
+  /* ── Badges ── */
   .badges-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
-    margin-bottom: 22px;
+    margin-bottom: 18px;
   }
   .badge-card {
     background: var(--secondary-bg);
@@ -385,23 +168,193 @@
     padding: 14px 10px;
     text-align: center;
     box-shadow: var(--shadow);
-    transition: opacity 0.2s ease;
+    transition: opacity 0.2s, transform 0.2s;
+    position: relative;
   }
-  .badge-card.locked { opacity: 0.4; filter: grayscale(1); }
-  .badge-emoji { font-size: 28px; margin-bottom: 6px; }
-  .badge-title { font-size: 12.5px; font-weight: 700; }
-  .badge-desc { font-size: 10.5px; color: var(--hint); margin-top: 2px; }
+  .badge-card.achieved { border: 1.5px solid rgba(52,199,89,0.35); }
+  .badge-card.locked   { opacity: 0.38; filter: grayscale(1); }
+  .badge-emoji   { font-size: 28px; margin-bottom: 5px; }
+  .badge-title   { font-size: 12.5px; font-weight: 700; }
+  .badge-desc    { font-size: 10.5px; color: var(--hint); margin-top: 2px; line-height: 1.35; }
+  .badge-new-dot {
+    position: absolute; top: 8px; right: 8px;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green);
+  }
 
-  .skeleton .card .value, .skeleton .card .label { opacity: 0.35; }
+  /* ── Search + Sort ── */
+  .search-box {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--secondary-bg);
+    border-radius: 14px; padding: 10px 14px;
+    margin-bottom: 10px; box-shadow: var(--shadow);
+  }
+  .search-box input {
+    flex: 1; border: none; outline: none;
+    background: transparent; color: var(--text); font-size: 14px;
+  }
+  .search-box input::placeholder { color: var(--hint); }
+
+  .segmented {
+    display: flex; background: rgba(120,120,128,0.12);
+    border-radius: 12px; padding: 3px; margin-bottom: 14px; gap: 2px; overflow-x: auto;
+  }
+  .segmented::-webkit-scrollbar { display: none; }
+  .segmented button {
+    flex: 0 0 auto; border: none; background: transparent;
+    padding: 8px 10px; font-size: 12.5px; font-weight: 600;
+    color: var(--hint); border-radius: 9px; transition: all 0.18s ease;
+    white-space: nowrap;
+  }
+  .segmented button.active {
+    background: var(--secondary-bg); color: var(--text); box-shadow: var(--shadow);
+  }
+
+  /* ── List rows ── */
+  .list {
+    background: var(--secondary-bg);
+    border-radius: var(--card-radius); overflow: hidden; box-shadow: var(--shadow);
+  }
+  .row {
+    display: flex; align-items: center; gap: 11px;
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(120,120,128,0.10);
+    transition: background 0.12s;
+  }
+  .row:active { background: rgba(120,120,128,0.07); }
+  .row:last-child { border-bottom: none; }
+  .rank {
+    width: 22px; text-align: center; font-size: 14px;
+    flex-shrink: 0; font-weight: 700; color: var(--hint);
+  }
+  .avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 15px; flex-shrink: 0;
+  }
+  .row-main { flex: 1; min-width: 0; }
+  .row-name {
+    font-size: 14px; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .row-sub {
+    font-size: 11.5px; color: var(--hint); margin-top: 2px;
+    display: flex; gap: 5px; align-items: center; flex-wrap: wrap;
+  }
+  .bar-track {
+    height: 4px; border-radius: 3px;
+    background: rgba(120,120,128,0.13);
+    margin-top: 6px; overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, var(--link), var(--green));
+    transition: width 0.65s cubic-bezier(.2,.8,.2,1);
+  }
+  .row-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+  .row-count { font-size: 17px; font-weight: 800; }
+  .row-streak-badge {
+    font-size: 11px; font-weight: 700; border-radius: 7px; padding: 2px 7px;
+    white-space: nowrap;
+  }
+  .row-streak-badge.s-warm    { color: var(--streak-1); background: rgba(255,179,64,0.15); }
+  .row-streak-badge.s-hot     { color: var(--streak-2); background: rgba(255,107,0,0.15); }
+  .row-streak-badge.s-blaze   { color: var(--streak-3); background: rgba(255,59,48,0.16); }
+  .row-streak-badge.s-legend  { color: var(--streak-legendary); background: rgba(191,90,242,0.16); }
+  .row-chevron { color: var(--hint); font-size: 18px; padding-left: 2px; flex-shrink: 0; }
+
+  /* ── Chips ── */
+  .chip {
+    font-size: 10.5px; font-weight: 600; padding: 1px 6px;
+    border-radius: 6px; background: rgba(120,120,128,0.13);
+  }
+  .chip.edited  { color: var(--orange); background: rgba(255,159,10,0.13); }
+  .chip.deleted { color: var(--red);    background: rgba(255,69,58,0.13); }
+  .chip.mutual  { color: var(--green);  background: rgba(52,199,89,0.13); }
+  .chip.at-risk { color: var(--orange); background: rgba(255,159,10,0.13); animation: pulse 1.5s ease-in-out infinite; }
+
+  /* ── Game button ── */
+  .game-btn {
+    margin-top: 7px; border: none; border-radius: 10px;
+    padding: 5px 11px; font-size: 12px; font-weight: 700;
+    background: linear-gradient(90deg, var(--link), var(--green));
+    color: #fff; display: inline-block;
+  }
+  .game-btn:active { opacity: 0.8; }
+  .game-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    display: flex; align-items: flex-end; z-index: 1000;
+  }
+  .game-sheet {
+    width: 100%; background: var(--secondary-bg);
+    border-radius: 20px 20px 0 0; padding: 18px 16px 32px;
+    animation: slideUp 0.2s ease-out;
+  }
+  @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+  .game-sheet-title { font-size: 15px; font-weight: 700; margin-bottom: 14px; text-align: center; }
+  .game-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 14px; }
+  .game-pick {
+    border: none; border-radius: 14px; background: rgba(120,120,128,0.11);
+    padding: 14px 6px; display: flex; flex-direction: column;
+    align-items: center; gap: 5px; font-size: 12px; font-weight: 600;
+  }
+  .game-pick:active { background: rgba(120,120,128,0.2); }
+  .game-pick-emoji { font-size: 26px; }
+  .game-cancel {
+    width: 100%; border: none; border-radius: 14px; padding: 13px;
+    font-size: 14px; font-weight: 700;
+    background: rgba(120,120,128,0.11); color: var(--red);
+  }
+
+  /* ── Share buttons ── */
+  .share-btn {
+    width: 100%; margin-top: 10px; border: none; border-radius: 14px;
+    padding: 13px; font-size: 13.5px; font-weight: 700;
+    background: rgba(120,120,128,0.11); color: var(--link);
+  }
+  .share-btn:active { transform: scale(0.98); }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed; left: 50%; bottom: 24px;
+    transform: translateX(-50%) translateY(20px);
+    background: rgba(20,20,22,0.92); color: #fff;
+    padding: 10px 18px; border-radius: 30px;
+    font-size: 13px; font-weight: 600;
+    opacity: 0; transition: all 0.25s ease;
+    pointer-events: none; z-index: 10;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── Empty / Error ── */
+  .empty, .error {
+    text-align: center; padding: 44px 20px; color: var(--hint);
+    font-size: 14px; line-height: 1.55;
+    background: var(--secondary-bg); border-radius: var(--card-radius);
+  }
+  .empty .big-emoji, .error .big-emoji { font-size: 42px; display: block; margin-bottom: 12px; }
+
+  /* ── FAB ── */
+  .refresh-fab {
+    position: fixed; right: 16px; bottom: 20px;
+    width: 48px; height: 48px; border-radius: 50%; border: none;
+    background: var(--button); color: var(--button-text);
+    font-size: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.22);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.18s ease;
+  }
+  .refresh-fab:active { transform: scale(0.88); }
+  .refresh-fab.spinning { animation: spin 0.75s linear infinite; }
+
+  /* ── Skeleton ── */
   .skeleton { animation: pulse 1.2s ease-in-out infinite; }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
-  @keyframes riseIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-  .card:nth-child(1) { animation-delay: 0.02s; }
-  .card:nth-child(2) { animation-delay: 0.06s; }
-  .card:nth-child(3) { animation-delay: 0.1s; }
-  .card:nth-child(4) { animation-delay: 0.14s; }
+  .skeleton .value, .skeleton .label { opacity: 0.3; }
+
+  /* ── Keyframes ── */
+  @keyframes fadeDown  { from{opacity:0;transform:translateY(-7px)} to{opacity:1;transform:none} }
+  @keyframes riseIn    { from{opacity:0;transform:translateY(9px)}  to{opacity:1;transform:none} }
+  @keyframes spin      { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+  @keyframes pulse     { 0%,100%{opacity:1} 50%{opacity:0.45} }
 </style>
 </head>
 <body>
@@ -413,10 +366,10 @@
 
   <div id="content">
     <div class="cards skeleton">
-      <div class="card"><div class="value">—</div><div class="label">Сообщений</div></div>
-      <div class="card"><div class="value">—</div><div class="label">Собеседников</div></div>
-      <div class="card"><div class="value">—</div><div class="label">Правок</div></div>
-      <div class="card"><div class="value">—</div><div class="label">Удалений</div></div>
+      <div class="card"><span class="icon">💬</span><div class="value">—</div><div class="label">Сообщений</div></div>
+      <div class="card"><span class="icon">👥</span><div class="value">—</div><div class="label">Собеседников</div></div>
+      <div class="card"><span class="icon">✏️</span><div class="value">—</div><div class="label">Правок</div></div>
+      <div class="card"><span class="icon">🗑</span><div class="value">—</div><div class="label">Удалений</div></div>
     </div>
   </div>
 
@@ -424,10 +377,7 @@
 
   <script>
     const tg = window.Telegram && window.Telegram.WebApp;
-    if (tg) {
-      tg.ready();
-      tg.expand();
-    }
+    if (tg) { tg.ready(); tg.expand(); }
 
     let lastStats = null;
     let lastActivity = {};
@@ -435,17 +385,17 @@
     let searchQuery = "";
     let currentInitData = "";
 
-    const AVATAR_COLORS = ["#FF6B6B", "#4ECDC4", "#45AAF2", "#F7B731", "#A55EEA", "#26DE81", "#FD9644", "#2BCBBA"];
+    const AVATAR_COLORS = ["#FF6B6B","#4ECDC4","#45AAF2","#F7B731","#A55EEA","#26DE81","#FD9644","#2BCBBA"];
 
     function colorFor(seed) {
-      let hash = 0;
-      for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-      return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+      let h = 0;
+      for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+      return AVATAR_COLORS[h % AVATAR_COLORS.length];
     }
 
     function initials(name) {
       const parts = name.trim().split(/\s+/).filter(Boolean);
-      if (parts.length === 0) return "?";
+      if (!parts.length) return "?";
       if (parts.length === 1) return parts[0][0].toUpperCase();
       return (parts[0][0] + parts[1][0]).toUpperCase();
     }
@@ -459,8 +409,8 @@
 
     function timeAgo(iso) {
       if (!iso) return "нет данных";
-      const diffMs = Date.now() - new Date(iso).getTime();
-      const min = Math.floor(diffMs / 60000);
+      const diff = Date.now() - new Date(iso).getTime();
+      const min = Math.floor(diff / 60000);
       if (min < 1) return "только что";
       if (min < 60) return `${min} мин назад`;
       const hr = Math.floor(min / 60);
@@ -470,86 +420,182 @@
       return new Date(iso).toLocaleDateString("ru-RU");
     }
 
-    function renderCards(stats) {
+    // Returns UTC date string "YYYY-MM-DD" for right now
+    function todayUTC() {
+      return new Date().toISOString().slice(0, 10);
+    }
+    function yesterdayUTC() {
+      const d = new Date();
+      d.setUTCDate(d.getUTCDate() - 1);
+      return d.toISOString().slice(0, 10);
+    }
+
+    // Is the streak alive but last message was yesterday → at risk of breaking today
+    function isAtRisk(streak_days, last_message_at) {
+      if (!streak_days || streak_days < 1 || !last_message_at) return false;
+      const lastDate = new Date(last_message_at).toISOString().slice(0, 10);
+      return lastDate === yesterdayUTC();
+    }
+
+    // Streak level: 0=none,1=warm(2-3),2=hot(4-6),3=blaze(7-29),4=legend(30+)
+    function streakLevel(days) {
+      if (days < 2)  return 0;
+      if (days < 4)  return 1;
+      if (days < 7)  return 2;
+      if (days < 30) return 3;
+      return 4;
+    }
+
+    function streakEmoji(level) {
+      return ["","🔥","🔥","🔥","💎"][level] || "";
+    }
+
+    function streakLevelClass(level) {
+      return ["","s-warm","s-hot","s-blaze","s-legend"][level] || "";
+    }
+
+    function streakBannerClass(level) {
+      return ["","level-warm","level-hot","level-blaze","level-legend"][level] || "";
+    }
+
+    // ── Streak Banner ──
+    // Uses global best_streak/best_streak_name from API (computed across ALL chats, not just top_n).
+    function renderStreakBanner(stats) {
+      const days = stats.best_streak || 0;
+      if (days < 2) return "";
+
+      // Find last_message_at for the best-streak person (may be in top_interlocutors)
+      const bestInList = stats.top_interlocutors
+        .filter(s => s.streak_days === days)
+        .sort((a, b) => b.streak_days - a.streak_days)[0];
+      const lastAt = bestInList ? bestInList.last_message_at : null;
+      const atRisk = lastAt ? isAtRisk(days, lastAt) : false;
+
+      const level = streakLevel(days);
+      const bannerClass = streakBannerClass(level);
+      const fire = level >= 4 ? "💎" : "🔥";
+      const name = stats.best_streak_name || "";
+      const riskBadge = atRisk ? `<span class="streak-at-risk-badge">⚡ Горит сегодня</span>` : "";
+
       return `
-        <div class="cards">
-          <div class="card accent-messages"><div class="icon">💬</div><div class="value">${stats.total_messages}</div><div class="label">Сообщений</div></div>
-          <div class="card accent-chats"><div class="icon">👥</div><div class="value">${stats.total_chats}</div><div class="label">Собеседников</div></div>
-          <div class="card accent-edited"><div class="icon">✏️</div><div class="value">${stats.edited_messages}</div><div class="label">Правок</div></div>
-          <div class="card accent-deleted"><div class="icon">🗑</div><div class="value">${stats.deleted_messages}</div><div class="label">Удалений</div></div>
+        <div class="streak-banner ${bannerClass}${atRisk ? " at-risk" : ""}" style="animation-delay:0.04s">
+          <div class="streak-fire">${fire}</div>
+          <div class="streak-info">
+            <div class="streak-days">${days}</div>
+            <div class="streak-label">${plural(days, "день", "дня", "дней")} подряд</div>
+            ${name ? `<div class="streak-name">с ${name}</div>` : ""}
+          </div>
+          ${riskBadge}
         </div>
       `;
     }
 
+    function plural(n, one, few, many) {
+      const mod10 = n % 10, mod100 = n % 100;
+      if (mod100 >= 11 && mod100 <= 14) return many;
+      if (mod10 === 1) return one;
+      if (mod10 >= 2 && mod10 <= 4) return few;
+      return many;
+    }
+
+    // ── Stats Cards ──
+    function renderCards(stats) {
+      const bestStreak   = stats.best_streak || 0;
+      const longestEver  = stats.global_longest_streak || 0;
+      return `
+        <div class="cards">
+          <div class="card accent-messages"><span class="icon">💬</span><div class="value">${stats.total_messages}</div><div class="label">Сообщений</div></div>
+          <div class="card accent-chats"><span class="icon">👥</span><div class="value">${stats.total_chats}</div><div class="label">Собеседников</div></div>
+          <div class="card accent-edited"><span class="icon">✏️</span><div class="value">${stats.edited_messages}</div><div class="label">Правок</div></div>
+          <div class="card accent-deleted"><span class="icon">🗑</span><div class="value">${stats.deleted_messages}</div><div class="label">Удалений</div></div>
+          ${bestStreak >= 1 ? `<div class="card accent-streak"><span class="icon">🔥</span><div class="value">${bestStreak}</div><div class="label">Лучшая серия сейчас</div></div>` : ""}
+          ${longestEver > bestStreak ? `<div class="card accent-record"><span class="icon">💎</span><div class="value">${longestEver}</div><div class="label">Рекорд серии</div></div>` : ""}
+        </div>
+      `;
+    }
+
+    // ── Heatmap ──
     function renderHeatmap(activity) {
       const days = 91;
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const today = new Date(); today.setHours(0,0,0,0);
       const counts = [];
       let maxCount = 0;
       for (let i = days - 1; i >= 0; i--) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - i);
-        const key = d.toISOString().slice(0, 10);
+        const d = new Date(today); d.setDate(d.getDate() - i);
+        const key = d.toISOString().slice(0,10);
         const count = activity[key] || 0;
         counts.push({ date: d, count });
         if (count > maxCount) maxCount = count;
       }
-      function levelFor(count) {
-        if (count === 0) return 0;
+      function levelFor(c) {
+        if (c === 0) return 0;
         if (maxCount <= 1) return 4;
-        const ratio = count / maxCount;
-        if (ratio > 0.75) return 4;
-        if (ratio > 0.5) return 3;
-        if (ratio > 0.25) return 2;
+        const r = c / maxCount;
+        if (r > 0.75) return 4;
+        if (r > 0.5)  return 3;
+        if (r > 0.25) return 2;
         return 1;
       }
-      const cells = counts
-        .map((c) => `<div class="heat-cell level-${levelFor(c.count)}" title="${c.date.toLocaleDateString("ru-RU")}: ${c.count} сообщ."></div>`)
-        .join("");
+      const cells = counts.map(c =>
+        `<div class="heat-cell level-${levelFor(c.count)}" title="${c.date.toLocaleDateString("ru-RU")}: ${c.count} сообщ."></div>`
+      ).join("");
       return `
         <div class="section-title">🗓 Активность за 90 дней</div>
         <div class="heatmap-card">
           <div class="heatmap-grid">${cells}</div>
           <div class="heatmap-legend">
             <span>Меньше</span>
-            <span class="heat-cell level-0"></span>
-            <span class="heat-cell level-1"></span>
-            <span class="heat-cell level-2"></span>
-            <span class="heat-cell level-3"></span>
-            <span class="heat-cell level-4"></span>
+            <div class="heat-cell level-0"></div>
+            <div class="heat-cell level-1"></div>
+            <div class="heat-cell level-2"></div>
+            <div class="heat-cell level-3"></div>
+            <div class="heat-cell level-4"></div>
             <span>Больше</span>
           </div>
         </div>
       `;
     }
 
+    // ── Badges ──
     function renderBadges(badges) {
       if (!badges || !badges.length) return "";
-      const items = badges
-        .map(
-          (b) => `
+      const achieved = badges.filter(b => b.achieved).length;
+      const items = badges.map(b => `
         <div class="badge-card ${b.achieved ? "achieved" : "locked"}">
+          ${b.achieved ? '<div class="badge-new-dot"></div>' : ""}
           <div class="badge-emoji">${b.emoji}</div>
           <div class="badge-title">${b.title}</div>
           <div class="badge-desc">${b.description}</div>
         </div>
-      `
-        )
-        .join("");
-      return `<div class="section-title">🏅 Достижения <span class="sub">${badges.filter(b => b.achieved).length} из ${badges.length}</span></div><div class="badges-grid">${items}</div>`;
+      `).join("");
+      return `
+        <div class="section-title">🏅 Достижения <span class="sub">${achieved} из ${badges.length}</span></div>
+        <div class="badges-grid">${items}</div>
+      `;
     }
 
+    // ── Top interlocutors ──
     function getSorted(list) {
       const filtered = searchQuery
-        ? list.filter(s => s.display_name.toLowerCase().includes(searchQuery) || (s.username || "").toLowerCase().includes(searchQuery))
+        ? list.filter(s => s.display_name.toLowerCase().includes(searchQuery) || (s.username||"").toLowerCase().includes(searchQuery))
         : list.slice();
       const sorters = {
-        messages: (a, b) => b.message_count - a.message_count,
-        recent: (a, b) => new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0),
-        edited: (a, b) => b.edited_count - a.edited_count,
+        messages: (a,b) => b.message_count - a.message_count,
+        recent:   (a,b) => new Date(b.last_message_at||0) - new Date(a.last_message_at||0),
+        streaks:  (a,b) => b.streak_days - a.streak_days || b.longest_streak - a.longest_streak,
+        edited:   (a,b) => b.edited_count - a.edited_count,
       };
       return filtered.sort(sorters[sortMode] || sorters.messages);
+    }
+
+    function renderStreakBadge(s) {
+      const level = streakLevel(s.streak_days);
+      if (level === 0) return "";
+      const cls = streakLevelClass(level);
+      const emoji = streakEmoji(level);
+      const atRisk = isAtRisk(s.streak_days, s.last_message_at);
+      const riskMark = atRisk ? "⚡" : "";
+      return `<div class="row-streak-badge ${cls}">${emoji}${riskMark} ${s.streak_days} дн</div>`;
     }
 
     function renderTop(stats) {
@@ -566,9 +612,10 @@
           <input id="searchInput" type="text" placeholder="Найти собеседника…" value="${searchQuery}" />
         </div>
         <div class="segmented" id="sortTabs">
-          <button data-sort="messages" class="${sortMode === "messages" ? "active" : ""}">По сообщениям</button>
-          <button data-sort="recent" class="${sortMode === "recent" ? "active" : ""}">По активности</button>
-          <button data-sort="edited" class="${sortMode === "edited" ? "active" : ""}">По правкам</button>
+          <button data-sort="messages" class="${sortMode==="messages"?"active":""}">По сообщениям</button>
+          <button data-sort="streaks"  class="${sortMode==="streaks" ?"active":""}">🔥 По серии</button>
+          <button data-sort="recent"   class="${sortMode==="recent"  ?"active":""}">По активности</button>
+          <button data-sort="edited"   class="${sortMode==="edited"  ?"active":""}">По правкам</button>
         </div>
       `;
 
@@ -577,37 +624,53 @@
       }
 
       const rows = sorted.map((s, i) => {
-        const pct = max > 0 ? Math.max(6, Math.round((s.message_count / max) * 100)) : 0;
+        const pct = max > 0 ? Math.max(5, Math.round((s.message_count / max) * 100)) : 0;
         const sub = s.username ? "@" + s.username : "личный контакт";
         const chips = [];
-        if (s.streak_days >= 2) chips.push(`<span class="chip streak">🔥 ${s.streak_days} дн подряд</span>`);
-        if (s.edited_count) chips.push(`<span class="chip edited">✏️ ${s.edited_count}</span>`);
+        if (s.mutual_connected) chips.push(`<span class="chip mutual">🤝 взаимный</span>`);
+        if (s.edited_count)  chips.push(`<span class="chip edited">✏️ ${s.edited_count}</span>`);
         if (s.deleted_count) chips.push(`<span class="chip deleted">🗑 ${s.deleted_count}</span>`);
-        const clickable = s.username ? ` data-username="${s.username}"` : "";
+        const atRisk = isAtRisk(s.streak_days, s.last_message_at);
+        if (atRisk) chips.push(`<span class="chip at-risk">⚡ серия горит</span>`);
+
+        const longestNote = (s.longest_streak > s.streak_days && s.longest_streak > 2)
+          ? `<span class="chip">💎 рекорд ${s.longest_streak} дн</span>` : "";
+
         const gameBtn = s.mutual_connected
           ? `<button class="game-btn" data-game-chat="${s.chat_id}" data-game-name="${s.display_name}">🎮 Игра</button>`
           : "";
+
         return `
-          <div class="row${s.username ? " clickable" : ""}"${clickable}>
+          <div class="row${s.username ? " clickable" : ""}"${s.username ? ` data-username="${s.username}"` : ""}>
             <div class="rank">${medal(i)}</div>
             <div class="avatar" style="background:${colorFor(s.display_name)}">${initials(s.display_name)}</div>
             <div class="row-main">
-              <div class="row-name">${s.display_name}${s.mutual_connected ? ' <span class="mutual-dot" title="Тоже подключил бота">🤝</span>' : ""}</div>
+              <div class="row-name">${s.display_name}</div>
               <div class="row-sub">
                 <span>${sub}</span>
                 <span class="chip">${timeAgo(s.last_message_at)}</span>
                 ${chips.join("")}
+                ${longestNote}
               </div>
               <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
               ${gameBtn}
             </div>
-            <div class="row-count">${s.message_count}</div>
+            <div class="row-right">
+              <div class="row-count">${s.message_count}</div>
+              ${renderStreakBadge(s)}
+            </div>
             ${s.username ? '<div class="row-chevron">›</div>' : ""}
           </div>
         `;
       }).join("");
 
-      return `${controls}<div class="section-title">🏆 Топ собеседников <span class="sub">${sorted.length} из ${stats.top_interlocutors.length}</span></div><div class="list">${rows}</div><button class="share-btn" id="shareBtn">📋 Скопировать сводку статистики</button><button class="share-btn" id="downloadCardBtn">🖼 Скачать карточку статистики</button>`;
+      return `
+        ${controls}
+        <div class="section-title">🏆 Топ собеседников <span class="sub">${sorted.length} из ${stats.top_interlocutors.length}</span></div>
+        <div class="list">${rows}</div>
+        <button class="share-btn" id="shareBtn">📋 Скопировать сводку</button>
+        <button class="share-btn" id="downloadCardBtn">🖼 Скачать карточку</button>
+      `;
     }
 
     function attachTopHandlers() {
@@ -616,20 +679,19 @@
         input.addEventListener("input", (e) => {
           searchQuery = e.target.value.toLowerCase();
           const caret = e.target.selectionStart;
-          document.getElementById("content").innerHTML = renderCards(lastStats) + renderTop(lastStats);
-          attachTopHandlers();
+          renderContent();
           const newInput = document.getElementById("searchInput");
           if (newInput) { newInput.focus(); newInput.setSelectionRange(caret, caret); }
         });
       }
-      document.querySelectorAll("#sortTabs button").forEach((btn) => {
+      document.querySelectorAll("#sortTabs button").forEach(btn => {
         btn.addEventListener("click", () => {
+          if (tg && tg.HapticFeedback) tg.HapticFeedback.selectionChanged();
           sortMode = btn.dataset.sort;
-          document.getElementById("content").innerHTML = renderCards(lastStats) + renderTop(lastStats);
-          attachTopHandlers();
+          renderContent();
         });
       });
-      document.querySelectorAll(".row.clickable").forEach((row) => {
+      document.querySelectorAll(".row.clickable").forEach(row => {
         row.addEventListener("click", () => {
           const username = row.dataset.username;
           if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
@@ -637,7 +699,7 @@
           else window.open(`https://t.me/${username}`, "_blank");
         });
       });
-      document.querySelectorAll(".game-btn").forEach((btn) => {
+      document.querySelectorAll(".game-btn").forEach(btn => {
         btn.addEventListener("click", (e) => {
           e.stopPropagation();
           openGamePicker(btn.dataset.gameChat, btn.dataset.gameName);
@@ -645,30 +707,50 @@
       });
       const shareBtn = document.getElementById("shareBtn");
       if (shareBtn) shareBtn.addEventListener("click", copySummary);
-      const downloadCardBtn = document.getElementById("downloadCardBtn");
-      if (downloadCardBtn) downloadCardBtn.addEventListener("click", downloadShareCard);
+      const dlBtn = document.getElementById("downloadCardBtn");
+      if (dlBtn) dlBtn.addEventListener("click", downloadShareCard);
     }
 
+    function renderContent() {
+      const el = document.getElementById("content");
+      if (!lastStats) return;
+      el.innerHTML =
+        renderStreakBanner(lastStats) +
+        renderCards(lastStats) +
+        renderHeatmap(lastActivity) +
+        renderBadges(lastStats.badges) +
+        renderTop(lastStats);
+      attachTopHandlers();
+    }
+
+    // ── Share card (Canvas) ──
     function downloadShareCard() {
       if (!lastStats) return;
       const canvas = document.createElement("canvas");
-      canvas.width = 900;
-      canvas.height = 1200;
+      canvas.width = 900; canvas.height = 1200;
       const ctx = canvas.getContext("2d");
 
       const grad = ctx.createLinearGradient(0, 0, 900, 1200);
-      grad.addColorStop(0, "#2481cc");
-      grad.addColorStop(1, "#34c759");
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, 900, 1200);
+      grad.addColorStop(0, "#1a1a2e");
+      grad.addColorStop(0.5, "#16213e");
+      grad.addColorStop(1, "#0f3460");
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, 900, 1200);
 
-      ctx.fillStyle = "#ffffff";
-      ctx.textAlign = "center";
-      ctx.font = "bold 54px sans-serif";
-      ctx.fillText("📊 Моя статистика", 450, 130);
-      ctx.font = "28px sans-serif";
-      ctx.fillStyle = "rgba(255,255,255,0.85)";
-      ctx.fillText("Telegram Business Bot", 450, 175);
+      // Glow circle
+      const glow = ctx.createRadialGradient(450, 300, 50, 450, 300, 400);
+      glow.addColorStop(0, "rgba(36,129,204,0.18)"); glow.addColorStop(1, "transparent");
+      ctx.fillStyle = glow; ctx.fillRect(0, 0, 900, 1200);
+
+      ctx.fillStyle = "#ffffff"; ctx.textAlign = "center";
+      ctx.font = "bold 52px sans-serif"; ctx.fillText("📊 Моя статистика", 450, 120);
+      ctx.font = "26px sans-serif"; ctx.fillStyle = "rgba(255,255,255,0.6)";
+      ctx.fillText("Telegram Business Bot", 450, 162);
+
+      const streak = lastStats.best_streak || 0;
+      if (streak >= 2) {
+        ctx.font = "bold 32px sans-serif"; ctx.fillStyle = "#ff6b00";
+        ctx.fillText(`🔥 Серия ${streak} ${streak === 1 ? "день" : streak < 5 ? "дня" : "дней"} подряд!`, 450, 218);
+      }
 
       const rows = [
         ["💬", lastStats.total_messages, "Сообщений"],
@@ -676,61 +758,49 @@
         ["✏️", lastStats.edited_messages, "Правок"],
         ["🗑", lastStats.deleted_messages, "Удалений"],
       ];
-      let y = 320;
+      let y = 330;
       rows.forEach(([emoji, value, label]) => {
-        ctx.textAlign = "left";
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "48px sans-serif";
-        ctx.fillText(emoji, 90, y);
-        ctx.font = "bold 44px sans-serif";
-        ctx.fillText(String(value), 170, y);
-        ctx.font = "28px sans-serif";
-        ctx.fillStyle = "rgba(255,255,255,0.85)";
+        ctx.textAlign = "left"; ctx.fillStyle = "#ffffff";
+        ctx.font = "46px sans-serif"; ctx.fillText(emoji, 90, y);
+        ctx.font = "bold 44px sans-serif"; ctx.fillText(String(value), 165, y);
+        ctx.font = "27px sans-serif"; ctx.fillStyle = "rgba(255,255,255,0.7)";
         ctx.fillText(label, 320, y);
-        y += 100;
+        y += 96;
       });
 
       const top = (lastStats.top_interlocutors || []).slice(0, 3);
       if (top.length) {
-        ctx.textAlign = "left";
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "bold 34px sans-serif";
-        ctx.fillText("🏆 Топ собеседников", 90, y + 30);
-        y += 90;
+        ctx.textAlign = "left"; ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 32px sans-serif"; ctx.fillText("🏆 Топ собеседников", 90, y + 30);
+        y += 80;
         top.forEach((s, i) => {
-          ctx.font = "30px sans-serif";
-          ctx.fillText(`${i + 1}. ${s.display_name} — ${s.message_count} сообщ.`, 90, y);
-          y += 55;
+          ctx.font = "28px sans-serif"; ctx.fillStyle = "#ffffff";
+          const streak_info = s.streak_days >= 2 ? ` 🔥${s.streak_days}` : "";
+          ctx.fillText(`${["🥇","🥈","🥉"][i]} ${s.display_name} — ${s.message_count} сообщ.${streak_info}`, 90, y);
+          y += 52;
         });
       }
 
-      ctx.textAlign = "center";
-      ctx.font = "24px sans-serif";
-      ctx.fillStyle = "rgba(255,255,255,0.7)";
-      ctx.fillText(new Date().toLocaleDateString("ru-RU"), 450, 1150);
+      ctx.textAlign = "center"; ctx.font = "22px sans-serif";
+      ctx.fillStyle = "rgba(255,255,255,0.4)";
+      ctx.fillText(new Date().toLocaleDateString("ru-RU"), 450, 1160);
 
-      canvas.toBlob((blob) => {
+      canvas.toBlob(blob => {
         if (!blob) return;
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = url;
-        a.download = "my-stats.png";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
+        a.href = url; a.download = "my-stats.png";
+        document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
         if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
         toastMessage("Карточка сохранена");
       }, "image/png");
     }
 
+    // ── Game picker ──
     const GAMES = [
-      { emoji: "🎲", label: "Кубик" },
-      { emoji: "🎯", label: "Дартс" },
-      { emoji: "🏀", label: "Баскетбол" },
-      { emoji: "⚽", label: "Футбол" },
-      { emoji: "🎳", label: "Боулинг" },
-      { emoji: "🎰", label: "Слоты" },
+      {emoji:"🎲",label:"Кубик"},{emoji:"🎯",label:"Дартс"},{emoji:"🏀",label:"Баскетбол"},
+      {emoji:"⚽",label:"Футбол"},{emoji:"🎳",label:"Боулинг"},{emoji:"🎰",label:"Слоты"},
     ];
 
     function openGamePicker(chatId, name) {
@@ -746,13 +816,10 @@
         </div>
       `;
       document.body.appendChild(overlay);
-      overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+      overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
       overlay.querySelector(".game-cancel").addEventListener("click", () => overlay.remove());
-      overlay.querySelectorAll(".game-pick").forEach((btn) => {
-        btn.addEventListener("click", async () => {
-          overlay.remove();
-          await sendGame(chatId, btn.dataset.emoji);
-        });
+      overlay.querySelectorAll(".game-pick").forEach(btn => {
+        btn.addEventListener("click", async () => { overlay.remove(); await sendGame(chatId, btn.dataset.emoji); });
       });
     }
 
@@ -761,28 +828,34 @@
         if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred("medium");
         const res = await fetch("/app/api/game/send", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ initData: currentInitData, chatId: Number(chatId), emoji }),
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData: currentInitData, chatId: Number(chatId), emoji}),
         });
         if (!res.ok) throw new Error("failed");
         if (tg && tg.showAlert) tg.showAlert(`${emoji} Игра отправлена в чат!`);
-      } catch (err) {
-        if (tg && tg.showAlert) tg.showAlert("Не удалось отправить игру. Попробуйте ещё раз.");
+      } catch {
+        if (tg && tg.showAlert) tg.showAlert("Не удалось отправить игру.");
       }
     }
 
+    // ── Copy summary ──
     function buildSummaryText(stats) {
+      const streak = stats.best_streak || 0;
       const lines = [
-        "📊 Моя статистика в Telegram Business Bot",
+        "📊 Моя статистика — Telegram Business Bot",
         `💬 Сообщений: ${stats.total_messages}`,
         `👥 Собеседников: ${stats.total_chats}`,
         `✏️ Правок: ${stats.edited_messages}`,
         `🗑 Удалений: ${stats.deleted_messages}`,
       ];
+      if (streak >= 2) lines.push(`🔥 Лучшая серия: ${streak} дн подряд`);
       const top = stats.top_interlocutors.slice(0, 5);
       if (top.length) {
         lines.push("", "🏆 Топ собеседников:");
-        top.forEach((s, i) => lines.push(`${i + 1}. ${s.display_name} — ${s.message_count} сообщ.`));
+        top.forEach((s, i) => {
+          const streak_info = s.streak_days >= 2 ? ` (🔥${s.streak_days} дн)` : "";
+          lines.push(`${i+1}. ${s.display_name} — ${s.message_count} сообщ.${streak_info}`);
+        });
       }
       return lines.join("\n");
     }
@@ -794,30 +867,26 @@
         await navigator.clipboard.writeText(text);
         if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
         toastMessage("Сводка скопирована");
-      } catch (e) {
-        if (tg) tg.showAlert(text);
-      }
+      } catch { if (tg) tg.showAlert(text); }
     }
 
     function toastMessage(msg) {
-      let toast = document.getElementById("miniToast");
-      if (!toast) {
-        toast = document.createElement("div");
-        toast.id = "miniToast";
-        toast.className = "toast";
-        document.body.appendChild(toast);
+      let t = document.getElementById("miniToast");
+      if (!t) {
+        t = document.createElement("div"); t.id = "miniToast"; t.className = "toast";
+        document.body.appendChild(t);
       }
-      toast.textContent = msg;
-      toast.classList.add("show");
-      setTimeout(() => toast.classList.remove("show"), 2200);
+      t.textContent = msg; t.classList.add("show");
+      setTimeout(() => t.classList.remove("show"), 2200);
     }
 
+    // ── Load data ──
     async function loadStats(isRefresh) {
       const initData = tg ? tg.initData : "";
       currentInitData = initData;
       const subtitle = document.getElementById("subtitle");
-      const content = document.getElementById("content");
-      const refreshBtn = document.getElementById("refreshBtn");
+      const content  = document.getElementById("content");
+      const fab      = document.getElementById("refreshBtn");
 
       if (!initData) {
         subtitle.textContent = "Открыто вне Telegram";
@@ -825,28 +894,26 @@
         return;
       }
 
-      if (isRefresh && refreshBtn) refreshBtn.classList.add("spinning");
+      if (isRefresh && fab) fab.classList.add("spinning");
 
       try {
-        const [statsRes, activityRes] = await Promise.all([
+        const [statsRes, actRes] = await Promise.all([
           fetch("/app/api/stats", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ initData })
+            method: "POST", headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({initData}),
           }),
           fetch("/app/api/activity", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ initData })
+            method: "POST", headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({initData}),
           }).catch(() => null),
         ]);
 
         if (!statsRes.ok) throw new Error("bad_status");
         const stats = await statsRes.json();
         lastStats = stats;
-        lastActivity = activityRes && activityRes.ok ? (await activityRes.json()).activity || {} : {};
+        lastActivity = actRes && actRes.ok ? ((await actRes.json()).activity || {}) : {};
 
-        if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+        if (tg?.initDataUnsafe?.user) {
           document.getElementById("greeting").textContent =
             "Привет, " + (tg.initDataUnsafe.user.first_name || "друг") + "!";
         }
@@ -858,19 +925,18 @@
         }
 
         subtitle.textContent = "Статистика общения в подключённых чатах";
-        content.innerHTML = renderCards(stats) + renderHeatmap(lastActivity) + renderBadges(stats.badges) + renderTop(stats);
-        attachTopHandlers();
-        if (tg && tg.HapticFeedback && isRefresh) tg.HapticFeedback.notificationOccurred("success");
-      } catch (e) {
+        renderContent();
+        if (tg?.HapticFeedback && isRefresh) tg.HapticFeedback.notificationOccurred("success");
+
+      } catch {
         subtitle.textContent = "Не удалось загрузить данные";
-        content.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не получилось загрузить статистику. Попробуй закрыть и открыть приложение ещё раз.</div>`;
+        content.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не получилось загрузить статистику.<br>Попробуй закрыть и открыть приложение ещё раз.</div>`;
       } finally {
-        if (refreshBtn) setTimeout(() => refreshBtn.classList.remove("spinning"), 400);
+        if (fab) setTimeout(() => fab.classList.remove("spinning"), 450);
       }
     }
 
     document.getElementById("refreshBtn").addEventListener("click", () => loadStats(true));
-
     loadStats(false);
   </script>
 </body>

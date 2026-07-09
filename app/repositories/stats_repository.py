@@ -42,6 +42,7 @@ class InterlocutorStat:
     deleted_count: int
     last_message_at: dt.datetime | None
     streak_days: int = 0
+    longest_streak: int = 0
     mutual_connected: bool = False
 
 
@@ -54,6 +55,9 @@ class OwnerStats:
     total_chats: int
     edited_messages: int
     deleted_messages: int
+    best_streak: int = 0
+    best_streak_name: str = ""
+    global_longest_streak: int = 0
     top_interlocutors: list[InterlocutorStat] = field(default_factory=list)
 
 
@@ -227,6 +231,8 @@ class StatsRepository:
                 if name_parts
                 else (f"@{username}" if username else f"Чат {chat_id}")
             )
+            current_streak = _calculate_streak(data["active_dates"])
+            longest = _calculate_longest_streak(data["active_dates"])
             top_interlocutors.append(
                 InterlocutorStat(
                     chat_id=chat_id,
@@ -236,12 +242,20 @@ class StatsRepository:
                     edited_count=data["edited_count"],
                     deleted_count=data["deleted_count"],
                     last_message_at=data["last_message_at"],
-                    streak_days=_calculate_streak(data["active_dates"]),
+                    streak_days=current_streak,
+                    longest_streak=longest,
                     mutual_connected=chat_id in mutual_owner_ids,
                 )
             )
 
         top_interlocutors.sort(key=lambda s: s.message_count, reverse=True)
+
+        best_streak = max((s.streak_days for s in top_interlocutors), default=0)
+        global_longest_streak = max((s.longest_streak for s in top_interlocutors), default=0)
+        best_streak_holder = max(
+            top_interlocutors, key=lambda s: s.streak_days, default=None
+        )
+        best_streak_name = best_streak_holder.display_name if best_streak_holder and best_streak_holder.streak_days >= 2 else ""
 
         return OwnerStats(
             owner_telegram_id=owner_telegram_id,
@@ -249,6 +263,9 @@ class StatsRepository:
             total_chats=len(chats),
             edited_messages=edited_messages,
             deleted_messages=deleted_messages,
+            best_streak=best_streak,
+            best_streak_name=best_streak_name,
+            global_longest_streak=global_longest_streak,
             top_interlocutors=top_interlocutors[:top_n],
         )
 
@@ -432,6 +449,23 @@ class StatsRepository:
                 conn.is_blocked = is_blocked
 
         return len(connections)
+
+
+def _calculate_longest_streak(active_dates: set[dt.date]) -> int:
+    """Find the longest consecutive-day streak ever recorded, regardless of recency."""
+    if not active_dates:
+        return 0
+    sorted_dates = sorted(active_dates)
+    longest = 1
+    current = 1
+    for i in range(1, len(sorted_dates)):
+        if (sorted_dates[i] - sorted_dates[i - 1]).days == 1:
+            current += 1
+            if current > longest:
+                longest = current
+        else:
+            current = 1
+    return longest
 
 
 def _calculate_streak(active_dates: set[dt.date]) -> int:

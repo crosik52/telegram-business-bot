@@ -492,6 +492,16 @@
     let messagesPage = 1;
     let currentChatId = null;
 
+    // Escape HTML to prevent XSS when injecting untrusted user/message data via innerHTML
+    function esc(str) {
+      return String(str ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
     const AVATAR_COLORS = ["#FF6B6B","#4ECDC4","#45AAF2","#F7B731","#A55EEA","#26DE81","#FD9644","#2BCBBA"];
 
     function colorFor(seed) {
@@ -578,16 +588,17 @@
     function renderUser(u) {
       const isOpen = expandedIds.has(u.owner_telegram_id);
       const statusCls = userStatusClass(u);
-      const sub = u.username ? "@" + u.username : "ID " + u.owner_telegram_id;
+      const name = displayName(u);
+      const sub = u.username ? "@" + esc(u.username) : "ID " + esc(u.owner_telegram_id);
       return `
-        <div class="user-card" data-owner="${u.owner_telegram_id}">
+        <div class="user-card" data-owner="${esc(u.owner_telegram_id)}">
           <div class="user-top">
             <div class="avatar-wrap">
-              <div class="avatar" style="background:${colorFor(displayName(u))}">${initials(displayName(u))}</div>
+              <div class="avatar" style="background:${colorFor(name)}">${esc(initials(name))}</div>
               <div class="status-dot ${statusCls}"></div>
             </div>
             <div class="user-main">
-              <div class="user-name">${displayName(u)}</div>
+              <div class="user-name">${esc(name)}</div>
               <div class="user-meta">
                 <span class="user-sub">${sub}</span>
                 <span class="user-badge ${statusCls}">${userStatusLabel(u)}</span>
@@ -595,15 +606,15 @@
             </div>
             <div class="user-last">
               <div style="font-size:11px;color:var(--hint)">активен</div>
-              <div style="font-size:12px;font-weight:600">${timeAgo(u.last_activity_at)}</div>
+              <div style="font-size:12px;font-weight:600">${esc(timeAgo(u.last_activity_at))}</div>
             </div>
           </div>
 
           <div class="user-stats">
-            <div class="stat"><div class="n">${u.total_messages}</div><div class="l">Сообщ.</div></div>
-            <div class="stat"><div class="n">${u.total_chats}</div><div class="l">Чаты</div></div>
-            <div class="stat"><div class="n">${u.edited_messages}</div><div class="l">Правки</div></div>
-            <div class="stat"><div class="n">${u.deleted_messages}</div><div class="l">Удал.</div></div>
+            <div class="stat"><div class="n">${esc(u.total_messages)}</div><div class="l">Сообщ.</div></div>
+            <div class="stat"><div class="n">${esc(u.total_chats)}</div><div class="l">Чаты</div></div>
+            <div class="stat"><div class="n">${esc(u.edited_messages)}</div><div class="l">Правки</div></div>
+            <div class="stat"><div class="n">${esc(u.deleted_messages)}</div><div class="l">Удал.</div></div>
           </div>
 
           <div class="actions">
@@ -616,14 +627,14 @@
           </div>
           <div class="actions" style="margin-top:7px">
             <button class="action-btn" data-action="chats">💬 Чаты</button>
-            ${u.username ? `<button class="action-btn" data-action="message" data-username="${u.username}">✉️ Написать</button>` : ""}
-            <button class="action-btn" data-action="copy-id" data-copy="${u.owner_telegram_id}">📋 ID</button>
+            ${u.username ? `<button class="action-btn" data-action="message" data-username="${esc(u.username)}">✉️ Написать</button>` : ""}
+            <button class="action-btn" data-action="copy-id" data-copy="${esc(u.owner_telegram_id)}">📋 ID</button>
           </div>
 
           <button class="expand-btn" data-toggle-details>${isOpen ? "Скрыть ▲" : "Подробнее ▼"}</button>
           <div class="details ${isOpen ? "open" : ""}">
-            <div class="detail-row"><span class="dl">Подключён</span><span class="dv">${fmtDate(u.connected_at)}</span></div>
-            <div class="detail-row"><span class="dl">Последняя активность</span><span class="dv">${timeAgo(u.last_activity_at)}</span></div>
+            <div class="detail-row"><span class="dl">Подключён</span><span class="dv">${esc(fmtDate(u.connected_at))}</span></div>
+            <div class="detail-row"><span class="dl">Последняя активность</span><span class="dv">${esc(timeAgo(u.last_activity_at))}</span></div>
             <div class="detail-row"><span class="dl">Может отвечать</span><span class="dv">${u.can_reply ? "✓ Да" : "— Нет"}</span></div>
             <div class="detail-row"><span class="dl">Подключение (TG)</span><span class="dv">${u.is_enabled ? "✓ Включено" : "— Выключено"}</span></div>
           </div>
@@ -903,18 +914,18 @@
         return `<div class="empty"><span class="big-emoji">📜</span>Журнал пока пуст.</div>`;
       }
       const items = data.entries.map(e => {
-        const meta = ACTION_META[e.action] || { label: e.action, dot: "other" };
+        const meta = ACTION_META[e.action] || { label: esc(e.action), dot: "other" };
         return `
           <div class="log-item">
             <div class="log-dot ${meta.dot}"></div>
             <div class="log-body">
               <div class="log-top">
                 <span class="log-action">${meta.label}</span>
-                <span class="log-time">${fmtDate(e.created_at)}</span>
+                <span class="log-time">${esc(fmtDate(e.created_at))}</span>
               </div>
-              ${e.admin_username ? `<div class="log-admin">@${e.admin_username}</div>` : ""}
-              ${e.target_owner_telegram_id ? `<div class="log-details">Пользователь ID: ${e.target_owner_telegram_id}</div>` : ""}
-              ${e.details ? `<div class="log-details">${e.details}</div>` : ""}
+              ${e.admin_username ? `<div class="log-admin">@${esc(e.admin_username)}</div>` : ""}
+              ${e.target_owner_telegram_id ? `<div class="log-details">Пользователь ID: ${esc(e.target_owner_telegram_id)}</div>` : ""}
+              ${e.details ? `<div class="log-details">${esc(e.details)}</div>` : ""}
             </div>
           </div>
         `;
@@ -942,22 +953,22 @@
     /* ── Chats sheet ── */
     function renderChat(c) {
       const chips = [
-        c.streak_days > 0 ? `<span class="chat-chip streak">🔥 ${c.streak_days} дн</span>` : "",
+        c.streak_days > 0 ? `<span class="chat-chip streak">🔥 ${esc(c.streak_days)} дн</span>` : "",
         c.mutual_connected ? `<span class="chat-chip mutual">🤝 взаимный</span>` : "",
       ].join("");
       return `
-        <div class="chat-card" data-chat-id="${c.chat_id}" data-chat-name="${displayNameEscaped(c.display_name)}">
+        <div class="chat-card" data-chat-id="${esc(c.chat_id)}" data-chat-name="${esc(c.display_name)}">
           <div class="chat-top">
             <div>
-              <div class="chat-name">${c.display_name}</div>
-              <div class="chat-sub">${c.username ? "@" + c.username + " · " : ""}${timeAgo(c.last_message_at)}</div>
+              <div class="chat-name">${esc(c.display_name)}</div>
+              <div class="chat-sub">${c.username ? "@" + esc(c.username) + " · " : ""}${esc(timeAgo(c.last_message_at))}</div>
             </div>
             <div class="chat-chips">${chips}</div>
           </div>
           <div class="chat-stats">
-            <div class="stat"><div class="n">${c.message_count}</div><div class="l">Сообщ.</div></div>
-            <div class="stat"><div class="n">${c.edited_count}</div><div class="l">Правки</div></div>
-            <div class="stat"><div class="n">${c.deleted_count}</div><div class="l">Удал.</div></div>
+            <div class="stat"><div class="n">${esc(c.message_count)}</div><div class="l">Сообщ.</div></div>
+            <div class="stat"><div class="n">${esc(c.edited_count)}</div><div class="l">Правки</div></div>
+            <div class="stat"><div class="n">${esc(c.deleted_count)}</div><div class="l">Удал.</div></div>
           </div>
         </div>
       `;
@@ -1009,20 +1020,22 @@
     }
 
     function renderMessage(m) {
-      const sender = [m.sender_first_name, m.sender_last_name].filter(Boolean).join(" ")
-        || (m.sender_username ? "@" + m.sender_username : "ID " + m.sender_telegram_id);
-      const text = m.text || m.caption || (m.media_type && m.media_type !== "text" ? `[${m.media_type}]` : "(без текста)");
+      const sender = esc(
+        [m.sender_first_name, m.sender_last_name].filter(Boolean).join(" ")
+        || (m.sender_username ? "@" + m.sender_username : "ID " + m.sender_telegram_id)
+      );
+      const rawText = m.text || m.caption || (m.media_type && m.media_type !== "text" ? `[${m.media_type}]` : "(без текста)");
       const flags = [
-        m.is_edited  ? `<span class="m-flag edited">✏️ ред. ${m.edit_count}</span>` : "",
+        m.is_edited  ? `<span class="m-flag edited">✏️ ред. ${esc(m.edit_count)}</span>` : "",
         m.is_deleted ? `<span class="m-flag deleted">🗑 удалено</span>` : "",
       ].join("");
       return `
         <div class="message-item">
           <div class="message-top">
             <span>${sender}</span>
-            <span class="message-time">${fmtDate(m.sent_at)}</span>
+            <span class="message-time">${esc(fmtDate(m.sent_at))}</span>
           </div>
-          <div class="message-text">${text}</div>
+          <div class="message-text">${esc(rawText)}</div>
           ${flags ? `<div class="message-flags">${flags}</div>` : ""}
         </div>
       `;

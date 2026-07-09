@@ -1441,10 +1441,9 @@
       if (!btn || btn.disabled) return;
       btn.disabled = true; btn.textContent = "⏳ Получаем…";
       try {
-        const streak = lastStats?.best_streak || 0;
         const res = await fetch("/app/api/wallet/claim_daily", {
           method: "POST", headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({initData: currentInitData, streakDays: streak}),
+          body: JSON.stringify({initData: currentInitData}),
         });
         if (!res.ok) throw new Error();
         const data = await res.json();

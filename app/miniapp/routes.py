@@ -130,7 +130,6 @@ class ClaimDailyRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     init_data: str = Field(alias="initData")
-    streak_days: int = Field(default=0, alias="streakDays")
 
 
 class SlotSpinRequest(BaseModel):
@@ -471,10 +470,29 @@ async def wallet_claim_daily(
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid init data")
     owner_id = int(user["id"])
+
+    # Derive streak server-side — never trust client-supplied values for reward math.
+    streak_days = 0
+    conn_result = await session.execute(
+        select(BusinessConnection).where(
+            BusinessConnection.user_telegram_id == owner_id,
+            BusinessConnection.is_blocked.is_(False),
+        )
+    )
+    connections = conn_result.scalars().all()
+    if connections:
+        connection_ids = [c.business_connection_id for c in connections]
+        stats_service = StatsService(session)
+        owner_stats = await stats_service.get_owner_stats(
+            owner_telegram_id=owner_id,
+            connection_ids=connection_ids,
+            top_n=1,
+        )
+        streak_days = max(0, owner_stats.best_streak or 0)
+
     repo = WalletRepository(session)
-    wallet = await repo.get_or_create(owner_id)
     try:
-        result = await repo.claim_daily(wallet, streak_days=payload.streak_days)
+        result = await repo.claim_daily(owner_id, streak_days=streak_days)
     except ValueError as e:
         raise HTTPException(status_code=429, detail=str(e)) from e
     return {
@@ -495,9 +513,8 @@ async def wallet_slots(
         raise HTTPException(status_code=401, detail="Invalid init data")
     owner_id = int(user["id"])
     repo = WalletRepository(session)
-    wallet = await repo.get_or_create(owner_id)
     try:
-        result = await repo.spin_slots(wallet)
+        result = await repo.spin_slots(owner_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return {
@@ -521,9 +538,8 @@ async def wallet_flip(
         raise HTTPException(status_code=400, detail="choice must be heads or tails")
     owner_id = int(user["id"])
     repo = WalletRepository(session)
-    wallet = await repo.get_or_create(owner_id)
     try:
-        result = await repo.flip_coin(wallet, payload.bet, payload.choice)
+        result = await repo.flip_coin(owner_id, payload.bet, payload.choice)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return {

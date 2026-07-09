@@ -13,7 +13,6 @@ ENVIRONMENT = "production"
 HOST = "0.0.0.0"
 LOG_LEVEL = "INFO"
 PORT = "5000"
-WEBHOOK_BASE_URL = "https://c6fa2bf6-83f4-4655-9651-8828f4acd023-00-x8c0jdcxbs7a.sisko.replit.dev"
 
 [workflows]
 runButton = "Project"

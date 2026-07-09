@@ -1,0 +1,1 @@
+- [Wallet security patterns](wallet-security.md) — coin economy mutations require row-level locks + server-derived streak; never trust client reward params

@@ -14,227 +14,428 @@
     --link: var(--tg-theme-link-color, #2481cc);
     --button: var(--tg-theme-button-color, #2481cc);
     --button-text: var(--tg-theme-button-text-color, #ffffff);
-    --accent-2: #34c759;
-    --accent-3: #ff9f0a;
+    --green: #34c759;
+    --orange: #ff9f0a;
     --danger: #ff3b30;
+    --purple: #6c5ce7;
     --card-radius: 20px;
-    --shadow: 0 1px 3px rgba(0,0,0,0.06);
+    --shadow: 0 1px 4px rgba(0,0,0,0.07);
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
     margin: 0;
-    padding: 14px 14px 40px;
+    padding: 0 14px 60px;
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  .header { text-align: center; padding: 16px 0 20px; animation: fadeIn 0.4s ease; }
+
+  /* ── Header ── */
+  .header {
+    text-align: center;
+    padding: 20px 0 18px;
+    animation: fadeDown 0.4s ease;
+  }
   .header .avatar-ring {
-    width: 52px; height: 52px; margin: 0 auto 10px; border-radius: 50%;
-    background: linear-gradient(135deg, #6c5ce7, var(--link));
-    display: flex; align-items: center; justify-content: center; font-size: 24px;
+    width: 58px; height: 58px;
+    margin: 0 auto 10px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--purple), var(--link));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px;
+    box-shadow: 0 4px 16px rgba(108,92,231,0.35);
   }
-  .header h1 { font-size: 19px; margin: 0 0 4px; font-weight: 700; }
-  .header p { margin: 0; color: var(--hint); font-size: 13px; }
+  .header h1 { font-size: 19px; margin: 0 0 3px; font-weight: 700; }
+  .header p  { margin: 0; color: var(--hint); font-size: 13px; }
 
-  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
-  .cards.cards-4 { grid-template-columns: repeat(4, 1fr); }
-  .cards.cards-4 .card { padding: 10px 6px; }
-  .cards.cards-4 .value { font-size: 18px; }
+  /* ── Tab bar ── */
+  .tab-row {
+    display: flex; gap: 6px; margin-bottom: 18px;
+    overflow-x: auto; padding-bottom: 2px;
+  }
+  .tab-row::-webkit-scrollbar { display: none; }
+  .tab-chip {
+    flex-shrink: 0; border: none;
+    background: var(--secondary-bg);
+    color: var(--hint);
+    font-size: 13px; font-weight: 600;
+    padding: 9px 16px; border-radius: 14px;
+    box-shadow: var(--shadow);
+    transition: all 0.18s ease;
+  }
+  .tab-chip.active {
+    background: var(--link); color: #fff;
+    box-shadow: 0 3px 10px rgba(36,129,204,0.3);
+  }
+
+  /* ── Summary cards ── */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .cards.cols-3 { grid-template-columns: repeat(3, 1fr); }
   .card {
-    background: var(--secondary-bg); border-radius: 16px; padding: 12px 10px;
-    text-align: center; box-shadow: var(--shadow);
+    background: var(--secondary-bg);
+    border-radius: var(--card-radius);
+    padding: 15px 14px;
+    box-shadow: var(--shadow);
+    animation: riseIn 0.3s ease backwards;
   }
-  .card .value { font-size: 22px; font-weight: 800; letter-spacing: -0.4px; }
-  .card .label { font-size: 10.5px; color: var(--hint); margin-top: 3px; font-weight: 500; }
+  .card .c-icon { font-size: 16px; margin-bottom: 6px; display: block; }
+  .card .c-val  { font-size: 28px; font-weight: 900; line-height: 1.05; letter-spacing: -0.8px; }
+  .card .c-lbl  { font-size: 11px; color: var(--hint); margin-top: 4px; font-weight: 500; }
+  .card.c-users  .c-val { color: var(--link); }
+  .card.c-active .c-val { color: var(--green); }
+  .card.c-block  .c-val { color: var(--danger); }
+  .card.c-msgs   .c-val { color: var(--orange); }
+  .card:nth-child(1){animation-delay:.02s} .card:nth-child(2){animation-delay:.06s}
+  .card:nth-child(3){animation-delay:.10s} .card:nth-child(4){animation-delay:.14s}
 
+  /* ── Search & filters ── */
   .search-box {
-    display: flex; align-items: center; gap: 8px; background: var(--secondary-bg);
-    border-radius: 14px; padding: 10px 14px; margin-bottom: 10px; box-shadow: var(--shadow);
+    display: flex; align-items: center; gap: 8px;
+    background: var(--secondary-bg);
+    border-radius: 14px; padding: 10px 14px;
+    margin-bottom: 10px; box-shadow: var(--shadow);
   }
-  .search-box input { flex: 1; border: none; outline: none; background: transparent; color: var(--text); font-size: 14px; }
+  .search-box input {
+    flex: 1; border: none; outline: none;
+    background: transparent; color: var(--text); font-size: 14px;
+  }
   .search-box input::placeholder { color: var(--hint); }
 
   .segmented {
-    display: flex; background: rgba(120,120,128,0.12); border-radius: 12px;
-    padding: 3px; margin-bottom: 6px; gap: 2px;
+    display: flex; background: rgba(120,120,128,0.11);
+    border-radius: 12px; padding: 3px; margin-bottom: 8px; gap: 2px;
   }
   .segmented button {
-    flex: 1; border: none; background: transparent; padding: 8px 4px; font-size: 12.5px;
-    font-weight: 600; color: var(--hint); border-radius: 9px; transition: all 0.2s ease;
+    flex: 1; border: none; background: transparent;
+    padding: 7px 4px; font-size: 12px; font-weight: 600;
+    color: var(--hint); border-radius: 9px; transition: all 0.18s ease;
   }
-  .segmented button.active { background: var(--secondary-bg); color: var(--text); box-shadow: var(--shadow); }
+  .segmented button.active {
+    background: var(--secondary-bg); color: var(--text); box-shadow: var(--shadow);
+  }
 
-  .sort-row { display: flex; gap: 8px; margin: 10px 0 12px; overflow-x: auto; padding-bottom: 2px; }
+  .sort-row {
+    display: flex; gap: 6px; margin: 8px 0 14px;
+    overflow-x: auto; padding-bottom: 2px;
+  }
+  .sort-row::-webkit-scrollbar { display: none; }
   .sort-chip {
-    flex-shrink: 0; border: none; background: rgba(120,120,128,0.12); color: var(--hint);
-    font-size: 11.5px; font-weight: 600; padding: 6px 12px; border-radius: 20px;
+    flex-shrink: 0; border: none;
+    background: var(--secondary-bg);
+    color: var(--hint); font-size: 12px; font-weight: 600;
+    padding: 7px 13px; border-radius: 20px; box-shadow: var(--shadow);
   }
   .sort-chip.active { background: var(--link); color: #fff; }
 
-  .section-title { font-size: 15px; font-weight: 700; margin: 4px 2px 10px; display: flex; justify-content: space-between; align-items: center; }
+  /* ── Section title ── */
+  .section-title {
+    font-size: 15px; font-weight: 700;
+    margin: 4px 2px 12px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
   .section-title .sub { font-size: 12px; font-weight: 500; color: var(--hint); }
 
+  /* ── User cards ── */
   .list { display: flex; flex-direction: column; gap: 10px; }
   .user-card {
-    background: var(--secondary-bg); border-radius: var(--card-radius); padding: 14px;
-    box-shadow: var(--shadow); animation: riseIn 0.3s ease backwards;
+    background: var(--secondary-bg);
+    border-radius: var(--card-radius);
+    padding: 14px;
+    box-shadow: var(--shadow);
+    animation: riseIn 0.3s ease backwards;
+    overflow: hidden;
   }
-  .user-top { display: flex; gap: 10px; align-items: flex-start; }
+  .user-top { display: flex; gap: 11px; align-items: flex-start; }
+  .avatar-wrap { position: relative; flex-shrink: 0; }
   .avatar {
-    width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center;
-    justify-content: center; color: #fff; font-weight: 700; font-size: 15px; flex-shrink: 0;
+    width: 44px; height: 44px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 16px;
   }
+  .status-dot {
+    position: absolute; bottom: 0; right: 0;
+    width: 12px; height: 12px; border-radius: 50%;
+    border: 2px solid var(--secondary-bg);
+  }
+  .status-dot.active  { background: var(--green); }
+  .status-dot.blocked { background: var(--danger); }
+  .status-dot.muted   { background: var(--orange); }
+
   .user-main { flex: 1; min-width: 0; }
-  .user-name { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .user-sub { font-size: 11.5px; color: var(--hint); margin-top: 2px; }
-  .badge {
-    font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 8px;
-    background: rgba(52,199,89,0.15); color: var(--accent-2); white-space: nowrap; flex-shrink: 0;
+  .user-name {
+    font-size: 15px; font-weight: 700;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    margin-bottom: 2px;
   }
-  .badge.blocked { background: rgba(255,59,48,0.15); color: var(--danger); }
+  .user-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .user-sub  { font-size: 11.5px; color: var(--hint); }
+  .user-badge {
+    font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 7px;
+    white-space: nowrap;
+  }
+  .user-badge.active  { background: rgba(52,199,89,0.14);  color: var(--green); }
+  .user-badge.blocked { background: rgba(255,59,48,0.14);  color: var(--danger); }
+  .user-badge.muted   { background: rgba(255,159,10,0.14); color: var(--orange); }
+  .user-last { font-size: 11px; color: var(--hint); text-align: right; flex-shrink: 0; line-height: 1.4; }
 
-  .user-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 14px 0 12px; }
-  .stat { text-align: center; padding: 8px 2px; border-radius: 12px; background: rgba(120,120,128,0.07); }
+  /* mini stats row */
+  .user-stats {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 0; margin: 12px 0;
+    background: rgba(120,120,128,0.07);
+    border-radius: 14px; overflow: hidden;
+  }
+  .stat {
+    text-align: center; padding: 9px 2px;
+    border-right: 1px solid rgba(120,120,128,0.1);
+  }
+  .stat:last-child { border-right: none; }
   .stat .n { font-size: 16px; font-weight: 800; }
-  .stat .l { font-size: 9.5px; color: var(--hint); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .stat .l { font-size: 9px; color: var(--hint); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.3px; }
 
-  .actions { display: flex; gap: 8px; }
-  .actions.secondary { margin-top: 8px; }
-  .toggle-btn {
-    flex: 1; border: none; border-radius: 12px; padding: 10px 6px; font-size: 12px;
-    font-weight: 700; background: rgba(120,120,128,0.12); color: var(--text);
-    transition: transform 0.1s ease, opacity 0.2s ease;
+  /* action buttons */
+  .actions { display: flex; gap: 7px; flex-wrap: wrap; }
+  .actions + .actions { margin-top: 7px; }
+  .action-btn {
+    flex: 1; min-width: 0; border: none; border-radius: 11px;
+    padding: 9px 8px; font-size: 12px; font-weight: 700;
+    background: rgba(120,120,128,0.1); color: var(--text);
+    transition: opacity 0.15s, transform 0.1s;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .toggle-btn:active { transform: scale(0.96); }
-  .toggle-btn:disabled { opacity: 0.5; }
-  .toggle-btn.active { background: var(--link); color: #fff; }
-  .toggle-btn.danger.active { background: var(--danger); color: #fff; }
+  .action-btn:active { transform: scale(0.96); opacity: 0.8; }
+  .action-btn:disabled { opacity: 0.4; }
+  .action-btn.on   { background: var(--link);   color: #fff; }
+  .action-btn.danger { background: rgba(255,59,48,0.12); color: var(--danger); }
+  .action-btn.danger.on { background: var(--danger); color: #fff; }
 
+  /* expandable details */
   .expand-btn {
-    width: 100%; border: none; background: transparent; color: var(--link);
-    font-size: 12px; font-weight: 600; padding: 10px 0 2px; text-align: center;
+    width: 100%; border: none; background: transparent;
+    color: var(--link); font-size: 12px; font-weight: 600;
+    padding: 10px 0 2px; text-align: center;
   }
-  .details { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(120,120,128,0.14); font-size: 12px; color: var(--hint); }
+  .details {
+    display: none; margin-top: 10px; padding-top: 12px;
+    border-top: 1px solid rgba(120,120,128,0.12);
+  }
   .details.open { display: block; }
-  .details div { padding: 3px 0; }
-  .details b { color: var(--text); }
+  .detail-row {
+    display: flex; justify-content: space-between;
+    padding: 5px 0; font-size: 12.5px;
+    border-bottom: 1px solid rgba(120,120,128,0.06);
+  }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-row .dl { color: var(--hint); }
+  .detail-row .dv { font-weight: 600; text-align: right; }
 
+  /* ── Growth chart ── */
+  .growth-card {
+    background: var(--secondary-bg);
+    border-radius: var(--card-radius);
+    padding: 16px 14px;
+    box-shadow: var(--shadow);
+    margin-bottom: 14px;
+  }
+  .growth-bars {
+    display: flex; align-items: flex-end; gap: 3px;
+    height: 110px; margin-top: 12px;
+  }
+  .growth-bar-col {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-end; height: 100%;
+  }
+  .growth-bar {
+    width: 100%; border-radius: 4px 4px 0 0;
+    min-height: 3px; transition: height 0.5s ease;
+  }
+  .growth-bar.type-conn { background: linear-gradient(to top, var(--purple), rgba(108,92,231,0.5)); }
+  .growth-bar.type-msg  { background: linear-gradient(to top, var(--link), rgba(36,129,204,0.5)); }
+  .growth-legend {
+    display: flex; justify-content: space-between;
+    font-size: 10.5px; color: var(--hint); margin-top: 6px;
+  }
+
+  /* ── Broadcast ── */
+  .broadcast-card {
+    background: var(--secondary-bg);
+    border-radius: var(--card-radius);
+    padding: 16px; box-shadow: var(--shadow); margin-bottom: 14px;
+  }
+  .broadcast-label {
+    font-size: 13px; font-weight: 700; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .broadcast-card textarea {
+    width: 100%; min-height: 110px;
+    border: 1.5px solid rgba(120,120,128,0.2);
+    border-radius: 14px; padding: 12px 13px;
+    font-size: 14px; font-family: inherit; color: var(--text);
+    background: var(--bg); resize: vertical; outline: none;
+    transition: border-color 0.2s;
+  }
+  .broadcast-card textarea:focus { border-color: var(--link); }
+  .char-count { font-size: 11px; color: var(--hint); text-align: right; margin: 5px 2px 10px; }
+  .primary-btn {
+    width: 100%; border: none; border-radius: 14px; padding: 13px;
+    font-size: 14px; font-weight: 700;
+    background: linear-gradient(90deg, var(--purple), var(--link));
+    color: #fff; box-shadow: 0 3px 10px rgba(36,129,204,0.25);
+  }
+  .primary-btn:disabled { opacity: 0.5; box-shadow: none; }
+  .primary-btn:active { opacity: 0.88; }
+  .broadcast-hint {
+    font-size: 11.5px; color: var(--hint); margin-top: 10px; line-height: 1.5;
+  }
+
+  /* ── Action log ── */
+  .log-list { display: flex; flex-direction: column; gap: 8px; }
+  .log-item {
+    background: var(--secondary-bg);
+    border-radius: 16px; padding: 12px 14px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 12px; align-items: flex-start;
+  }
+  .log-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    margin-top: 5px;
+  }
+  .log-dot.settings { background: var(--link); }
+  .log-dot.broadcast { background: var(--purple); }
+  .log-dot.other { background: var(--hint); }
+  .log-body { flex: 1; min-width: 0; }
+  .log-top {
+    display: flex; justify-content: space-between; align-items: baseline;
+    gap: 8px; margin-bottom: 3px;
+  }
+  .log-action { font-size: 13px; font-weight: 700; }
+  .log-time { font-size: 11px; color: var(--hint); flex-shrink: 0; }
+  .log-admin { font-size: 11.5px; color: var(--link); margin-bottom: 2px; }
+  .log-details { font-size: 11.5px; color: var(--hint); word-break: break-word; }
+
+  /* ── Messages / Pager ── */
+  .message-item {
+    background: var(--secondary-bg);
+    border-radius: 16px; padding: 12px 14px; margin-bottom: 8px;
+    box-shadow: var(--shadow);
+  }
+  .message-top {
+    display: flex; justify-content: space-between; gap: 8px;
+    font-size: 12.5px; font-weight: 700; margin-bottom: 4px;
+  }
+  .message-time { font-size: 10.5px; color: var(--hint); font-weight: 500; }
+  .message-text { font-size: 13.5px; white-space: pre-wrap; word-break: break-word; line-height: 1.45; }
+  .message-flags { margin-top: 6px; display: flex; gap: 5px; }
+  .m-flag {
+    font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 7px;
+    background: rgba(120,120,128,0.12); color: var(--hint);
+  }
+  .m-flag.edited  { background: rgba(255,159,10,0.14); color: var(--orange); }
+  .m-flag.deleted { background: rgba(255,59,48,0.14);  color: var(--danger); }
+
+  .pager {
+    display: flex; justify-content: space-between;
+    align-items: center; margin: 14px 0 4px;
+  }
+  .pager-btn {
+    border: none; border-radius: 12px; padding: 9px 16px;
+    font-size: 13px; font-weight: 700;
+    background: var(--secondary-bg); color: var(--link);
+    box-shadow: var(--shadow);
+  }
+  .pager-btn:disabled { opacity: 0.35; }
+  .pager span { font-size: 12.5px; color: var(--hint); font-weight: 500; }
+
+  /* ── Back link ── */
+  .back-link {
+    display: inline-flex; align-items: center; gap: 4px;
+    color: var(--link); font-size: 13.5px; font-weight: 600;
+    margin-bottom: 14px; padding: 4px 0;
+  }
+
+  /* ── Bottom sheet ── */
+  .sheet-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+    z-index: 20; opacity: 0; pointer-events: none;
+    transition: opacity 0.22s ease;
+  }
+  .sheet-overlay.show { opacity: 1; pointer-events: auto; }
+  .sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; max-height: 85vh;
+    background: var(--bg); border-radius: 24px 24px 0 0; z-index: 21;
+    transform: translateY(100%); transition: transform 0.26s cubic-bezier(.2,.8,.2,1);
+    display: flex; flex-direction: column;
+    box-shadow: 0 -6px 30px rgba(0,0,0,0.18);
+  }
+  .sheet.show { transform: translateY(0); }
+  .sheet-handle {
+    width: 38px; height: 4px; background: rgba(120,120,128,0.28);
+    border-radius: 3px; margin: 12px auto 0; flex-shrink: 0; cursor: pointer;
+  }
+  .sheet-header { padding: 14px 16px 10px; flex-shrink: 0; }
+  .sheet-header h2 { margin: 0 0 3px; font-size: 17px; font-weight: 700; }
+  .sheet-header p  { margin: 0; color: var(--hint); font-size: 12.5px; }
+  .sheet-divider { height: 1px; background: rgba(120,120,128,0.12); flex-shrink: 0; }
+  .sheet-body { overflow-y: auto; padding: 14px 14px 28px; }
+
+  /* ── Chat cards (in sheet) ── */
+  .chat-card {
+    background: var(--secondary-bg);
+    border-radius: 16px; padding: 12px 14px; margin-bottom: 10px;
+    box-shadow: var(--shadow); cursor: pointer;
+    transition: background 0.12s;
+  }
+  .chat-card:active { background: rgba(120,120,128,0.07); }
+  .chat-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .chat-name { font-size: 14px; font-weight: 700; }
+  .chat-sub  { font-size: 11px; color: var(--hint); margin-top: 2px; }
+  .chat-chips { display: flex; gap: 4px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+  .chat-chip {
+    font-size: 10px; font-weight: 700; padding: 3px 7px; border-radius: 7px;
+    background: rgba(120,120,128,0.12); color: var(--hint); white-space: nowrap;
+  }
+  .chat-chip.streak { background: rgba(255,159,10,0.15); color: var(--orange); }
+  .chat-chip.mutual { background: rgba(52,199,89,0.15);  color: var(--green); }
+  .chat-stats {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 0; margin-top: 10px;
+    background: rgba(120,120,128,0.07); border-radius: 12px; overflow: hidden;
+  }
+  .chat-stats .stat { padding: 7px 2px; border-right: 1px solid rgba(120,120,128,0.1); }
+  .chat-stats .stat:last-child { border-right: none; }
+  .chat-stats .stat .n { font-size: 14px; }
+
+  /* ── Empty / Error / Toast ── */
   .empty, .error {
-    text-align: center; padding: 48px 20px; color: var(--hint); font-size: 14px; line-height: 1.5;
+    text-align: center; padding: 44px 20px; color: var(--hint);
+    font-size: 14px; line-height: 1.55;
     background: var(--secondary-bg); border-radius: var(--card-radius);
   }
   .empty .big-emoji, .error .big-emoji { font-size: 42px; display: block; margin-bottom: 12px; }
 
   .toast {
-    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px);
-    background: rgba(20,20,22,0.92); color: #fff; padding: 10px 18px; border-radius: 30px;
-    font-size: 13px; font-weight: 600; opacity: 0; transition: all 0.25s ease; pointer-events: none;
-    z-index: 10;
+    position: fixed; left: 50%; bottom: 24px;
+    transform: translateX(-50%) translateY(20px);
+    background: rgba(20,20,22,0.92); color: #fff;
+    padding: 10px 18px; border-radius: 30px;
+    font-size: 13px; font-weight: 600;
+    opacity: 0; transition: all 0.25s ease; pointer-events: none; z-index: 30;
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-  .sheet-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 20;
-    opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
-  }
-  .sheet-overlay.show { opacity: 1; pointer-events: auto; }
-  .sheet {
-    position: fixed; left: 0; right: 0; bottom: 0; max-height: 82vh;
-    background: var(--bg); border-radius: 20px 20px 0 0; z-index: 21;
-    transform: translateY(100%); transition: transform 0.25s ease;
-    display: flex; flex-direction: column; box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
-  }
-  .sheet.show { transform: translateY(0); }
-  .sheet-handle { width: 36px; height: 4px; background: rgba(120,120,128,0.3); border-radius: 3px; margin: 10px auto; flex-shrink: 0; }
-  .sheet-header { padding: 0 16px 10px; flex-shrink: 0; }
-  .sheet-header h2 { margin: 0 0 2px; font-size: 17px; font-weight: 700; }
-  .sheet-header p { margin: 0; color: var(--hint); font-size: 12.5px; }
-  .sheet-body { overflow-y: auto; padding: 4px 14px 24px; }
-
-  .chat-card {
-    background: var(--secondary-bg); border-radius: 16px; padding: 12px 14px; margin-bottom: 10px;
-    box-shadow: var(--shadow);
-  }
-  .chat-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
-  .chat-name { font-size: 14px; font-weight: 700; }
-  .chat-sub { font-size: 11px; color: var(--hint); margin-top: 2px; }
-  .chat-badges { display: flex; gap: 4px; flex-shrink: 0; }
-  .chat-badge {
-    font-size: 10px; font-weight: 700; padding: 3px 7px; border-radius: 7px;
-    background: rgba(120,120,128,0.12); color: var(--hint); white-space: nowrap;
-  }
-  .chat-badge.streak { background: rgba(255,159,10,0.15); color: var(--accent-3); }
-  .chat-badge.mutual { background: rgba(52,199,89,0.15); color: var(--accent-2); }
-  .chat-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
-  .chat-stats .stat { padding: 6px 2px; }
-  .chat-stats .stat .n { font-size: 14px; }
-
-  .tab-row { display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 2px; }
-  .tab-chip {
-    flex-shrink: 0; border: none; background: rgba(120,120,128,0.12); color: var(--hint);
-    font-size: 12.5px; font-weight: 700; padding: 8px 14px; border-radius: 20px;
-  }
-  .tab-chip.active { background: var(--link); color: #fff; }
-
-  .growth-chart {
-    background: var(--secondary-bg); border-radius: var(--card-radius); padding: 16px 14px;
-    box-shadow: var(--shadow); margin-bottom: 16px;
-  }
-  .growth-bars {
-    display: flex; align-items: flex-end; gap: 2px; height: 120px; margin-top: 10px;
-  }
-  .growth-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
-  .growth-bar { width: 100%; max-width: 8px; border-radius: 2px 2px 0 0; background: var(--link); min-height: 2px; }
-  .growth-legend { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--hint); margin-top: 6px; }
-
-  .broadcast-box {
-    background: var(--secondary-bg); border-radius: var(--card-radius); padding: 16px;
-    box-shadow: var(--shadow); margin-bottom: 16px;
-  }
-  .broadcast-box textarea {
-    width: 100%; min-height: 100px; border: 1px solid rgba(120,120,128,0.25); border-radius: 12px;
-    padding: 10px 12px; font-size: 14px; font-family: inherit; color: var(--text); background: var(--bg);
-    resize: vertical; margin-bottom: 10px;
-  }
-  .primary-btn {
-    width: 100%; border: none; border-radius: 12px; padding: 12px; font-size: 14px; font-weight: 700;
-    background: var(--link); color: #fff;
-  }
-  .primary-btn:disabled { opacity: 0.5; }
-  .broadcast-hint { font-size: 11.5px; color: var(--hint); margin-top: 8px; }
-
-  .log-item {
-    background: var(--secondary-bg); border-radius: 14px; padding: 12px 14px; margin-bottom: 8px;
-    box-shadow: var(--shadow); font-size: 12.5px;
-  }
-  .log-top { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; }
-  .log-time { font-size: 11px; color: var(--hint); font-weight: 500; }
-  .log-details { margin-top: 4px; color: var(--hint); word-break: break-word; }
-
-  .message-item {
-    background: var(--secondary-bg); border-radius: 14px; padding: 12px 14px; margin-bottom: 8px; box-shadow: var(--shadow);
-  }
-  .message-top { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 700; }
-  .message-time { font-size: 10.5px; color: var(--hint); font-weight: 500; }
-  .message-text { font-size: 13px; margin-top: 4px; white-space: pre-wrap; word-break: break-word; }
-  .message-flags { margin-top: 4px; display: flex; gap: 4px; }
-
-  .pager { display: flex; justify-content: space-between; align-items: center; margin: 12px 0 4px; }
-  .pager button {
-    border: none; border-radius: 10px; padding: 8px 14px; font-size: 12.5px; font-weight: 700;
-    background: rgba(120,120,128,0.12); color: var(--text);
-  }
-  .pager button:disabled { opacity: 0.4; }
-  .pager span { font-size: 12px; color: var(--hint); }
-
-  .back-link { display: inline-block; margin-bottom: 10px; color: var(--link); font-size: 13px; font-weight: 600; }
-
+  /* ── Skeleton ── */
   .skeleton { animation: pulse 1.2s ease-in-out infinite; }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
-  @keyframes riseIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  /* ── Keyframes ── */
+  @keyframes fadeDown { from{opacity:0;transform:translateY(-7px)} to{opacity:1;transform:none} }
+  @keyframes riseIn   { from{opacity:0;transform:translateY(9px)}  to{opacity:1;transform:none} }
+  @keyframes pulse    { 0%,100%{opacity:1} 50%{opacity:0.45} }
 </style>
 </head>
 <body>
@@ -246,16 +447,17 @@
 
   <div class="tab-row" id="mainTabs">
     <button class="tab-chip active" data-tab="users">👥 Пользователи</button>
-    <button class="tab-chip" data-tab="growth">📈 Рост</button>
+    <button class="tab-chip" data-tab="growth">📈 Аналитика</button>
     <button class="tab-chip" data-tab="broadcast">📢 Рассылка</button>
     <button class="tab-chip" data-tab="log">📜 Журнал</button>
   </div>
 
   <div id="content">
     <div class="cards skeleton">
-      <div class="card"><div class="value">—</div><div class="label">Пользователей</div></div>
-      <div class="card"><div class="value">—</div><div class="label">Активных</div></div>
-      <div class="card"><div class="value">—</div><div class="label">Заблокир.</div></div>
+      <div class="card"><span class="c-icon">👥</span><div class="c-val">—</div><div class="c-lbl">Пользователей</div></div>
+      <div class="card"><span class="c-icon">✅</span><div class="c-val">—</div><div class="c-lbl">Активных</div></div>
+      <div class="card"><span class="c-icon">🚫</span><div class="c-val">—</div><div class="c-lbl">Заблокировано</div></div>
+      <div class="card"><span class="c-icon">💬</span><div class="c-val">—</div><div class="c-lbl">Сообщений</div></div>
     </div>
   </div>
 
@@ -268,15 +470,13 @@
       <h2 id="sheetTitle">Чаты</h2>
       <p id="sheetSubtitle">Загружаем…</p>
     </div>
+    <div class="sheet-divider"></div>
     <div class="sheet-body" id="sheetBody"></div>
   </div>
 
   <script>
     const tg = window.Telegram && window.Telegram.WebApp;
-    if (tg) {
-      tg.ready();
-      tg.expand();
-    }
+    if (tg) { tg.ready(); tg.expand(); }
 
     const initData = tg ? tg.initData : "";
     let overview = null;
@@ -292,17 +492,17 @@
     let messagesPage = 1;
     let currentChatId = null;
 
-    const AVATAR_COLORS = ["#FF6B6B", "#4ECDC4", "#45AAF2", "#F7B731", "#A55EEA", "#26DE81", "#FD9644", "#2BCBBA"];
+    const AVATAR_COLORS = ["#FF6B6B","#4ECDC4","#45AAF2","#F7B731","#A55EEA","#26DE81","#FD9644","#2BCBBA"];
 
     function colorFor(seed) {
-      let hash = 0;
-      for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-      return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+      let h = 0;
+      for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+      return AVATAR_COLORS[h % AVATAR_COLORS.length];
     }
 
     function initials(name) {
       const parts = name.trim().split(/\s+/).filter(Boolean);
-      if (parts.length === 0) return "?";
+      if (!parts.length) return "?";
       if (parts.length === 1) return parts[0][0].toUpperCase();
       return (parts[0][0] + parts[1][0]).toUpperCase();
     }
@@ -310,17 +510,17 @@
     function fmtDate(iso) {
       if (!iso) return "нет данных";
       const d = new Date(iso);
-      return d.toLocaleDateString("ru-RU") + " " + d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+      return d.toLocaleDateString("ru-RU") + " " + d.toLocaleTimeString("ru-RU", {hour:"2-digit", minute:"2-digit"});
     }
 
     function timeAgo(iso) {
       if (!iso) return "нет активности";
-      const diffMs = Date.now() - new Date(iso).getTime();
-      const min = Math.floor(diffMs / 60000);
-      if (min < 1) return "только что";
+      const diff = Date.now() - new Date(iso).getTime();
+      const min = Math.floor(diff / 60000);
+      if (min < 1)  return "только что";
       if (min < 60) return `${min} мин назад`;
       const hr = Math.floor(min / 60);
-      if (hr < 24) return `${hr} ч назад`;
+      if (hr < 24)  return `${hr} ч назад`;
       const days = Math.floor(hr / 24);
       if (days < 30) return `${days} дн назад`;
       return new Date(iso).toLocaleDateString("ru-RU");
@@ -332,27 +532,23 @@
     }
 
     function confirmAction(message) {
-      return new Promise((resolve) => {
-        if (tg && tg.showConfirm) {
-          tg.showConfirm(message, (ok) => resolve(!!ok));
-        } else {
-          resolve(window.confirm(message));
-        }
+      return new Promise(resolve => {
+        if (tg && tg.showConfirm) tg.showConfirm(message, ok => resolve(!!ok));
+        else resolve(window.confirm(message));
       });
     }
 
     function showToast(msg) {
-      const toast = document.getElementById("toast");
-      toast.textContent = msg;
-      toast.classList.add("show");
-      setTimeout(() => toast.classList.remove("show"), 2200);
+      const t = document.getElementById("toast");
+      t.textContent = msg; t.classList.add("show");
+      setTimeout(() => t.classList.remove("show"), 2400);
     }
 
     function getFilteredSorted() {
       let list = overview.users.slice();
-      if (filterMode === "active") list = list.filter(u => !u.is_blocked);
+      if (filterMode === "active")  list = list.filter(u => !u.is_blocked);
       if (filterMode === "blocked") list = list.filter(u => u.is_blocked);
-      if (filterMode === "muted") list = list.filter(u => !u.notifications_enabled);
+      if (filterMode === "muted")   list = list.filter(u => !u.notifications_enabled);
       if (searchQuery) {
         list = list.filter(u =>
           displayName(u).toLowerCase().includes(searchQuery) ||
@@ -361,51 +557,75 @@
         );
       }
       const sorters = {
-        messages: (a, b) => b.total_messages - a.total_messages,
-        recent: (a, b) => new Date(b.last_activity_at || 0) - new Date(a.last_activity_at || 0),
-        newest: (a, b) => new Date(b.connected_at || 0) - new Date(a.connected_at || 0),
+        messages: (a,b) => b.total_messages - a.total_messages,
+        recent:   (a,b) => new Date(b.last_activity_at||0) - new Date(a.last_activity_at||0),
+        newest:   (a,b) => new Date(b.connected_at||0) - new Date(a.connected_at||0),
       };
       return list.sort(sorters[sortMode] || sorters.messages);
     }
 
+    function userStatusClass(u) {
+      if (u.is_blocked) return "blocked";
+      if (!u.notifications_enabled) return "muted";
+      return "active";
+    }
+    function userStatusLabel(u) {
+      if (u.is_blocked) return "🚫 Заблок.";
+      if (!u.notifications_enabled) return "🔕 Без увед.";
+      return "✓ Активен";
+    }
+
     function renderUser(u) {
-      const sub = u.username ? "@" + u.username + " · ID " + u.owner_telegram_id : "ID " + u.owner_telegram_id;
       const isOpen = expandedIds.has(u.owner_telegram_id);
+      const statusCls = userStatusClass(u);
+      const sub = u.username ? "@" + u.username : "ID " + u.owner_telegram_id;
       return `
         <div class="user-card" data-owner="${u.owner_telegram_id}">
           <div class="user-top">
-            <div class="avatar" style="background:${colorFor(displayName(u))}">${initials(displayName(u))}</div>
+            <div class="avatar-wrap">
+              <div class="avatar" style="background:${colorFor(displayName(u))}">${initials(displayName(u))}</div>
+              <div class="status-dot ${statusCls}"></div>
+            </div>
             <div class="user-main">
               <div class="user-name">${displayName(u)}</div>
-              <div class="user-sub">${sub}</div>
+              <div class="user-meta">
+                <span class="user-sub">${sub}</span>
+                <span class="user-badge ${statusCls}">${userStatusLabel(u)}</span>
+              </div>
             </div>
-            ${u.is_blocked ? '<span class="badge blocked">🚫 Блок</span>' : '<span class="badge">✓ Активен</span>'}
+            <div class="user-last">
+              <div style="font-size:11px;color:var(--hint)">активен</div>
+              <div style="font-size:12px;font-weight:600">${timeAgo(u.last_activity_at)}</div>
+            </div>
           </div>
+
           <div class="user-stats">
             <div class="stat"><div class="n">${u.total_messages}</div><div class="l">Сообщ.</div></div>
             <div class="stat"><div class="n">${u.total_chats}</div><div class="l">Чаты</div></div>
             <div class="stat"><div class="n">${u.edited_messages}</div><div class="l">Правки</div></div>
             <div class="stat"><div class="n">${u.deleted_messages}</div><div class="l">Удал.</div></div>
           </div>
+
           <div class="actions">
-            <button class="toggle-btn ${u.notifications_enabled ? "active" : ""}" data-action="notifications" data-value="${!u.notifications_enabled}">
-              🔔 ${u.notifications_enabled ? "Вкл" : "Выкл"}
+            <button class="action-btn ${u.notifications_enabled ? "on" : ""}" data-action="notifications" data-value="${!u.notifications_enabled}">
+              ${u.notifications_enabled ? "🔔 Увед. вкл" : "🔕 Увед. выкл"}
             </button>
-            <button class="toggle-btn danger ${u.is_blocked ? "active" : ""}" data-action="block" data-value="${!u.is_blocked}">
-              ${u.is_blocked ? "🚫 Разблокировать" : "🚫 Заблокировать"}
+            <button class="action-btn danger ${u.is_blocked ? "on" : ""}" data-action="block" data-value="${!u.is_blocked}">
+              ${u.is_blocked ? "✅ Разблокировать" : "🚫 Заблокировать"}
             </button>
           </div>
-          <div class="actions secondary">
-            <button class="toggle-btn" data-action="chats">💬 Чаты</button>
-            ${u.username ? `<button class="toggle-btn" data-action="message" data-username="${u.username}">✉️ Написать</button>` : ""}
-            <button class="toggle-btn" data-action="copy-id" data-copy="${u.owner_telegram_id}">📋 Копировать ID</button>
+          <div class="actions" style="margin-top:7px">
+            <button class="action-btn" data-action="chats">💬 Чаты</button>
+            ${u.username ? `<button class="action-btn" data-action="message" data-username="${u.username}">✉️ Написать</button>` : ""}
+            <button class="action-btn" data-action="copy-id" data-copy="${u.owner_telegram_id}">📋 ID</button>
           </div>
-          <button class="expand-btn" data-toggle-details>${isOpen ? "Скрыть детали ▲" : "Подробнее ▼"}</button>
+
+          <button class="expand-btn" data-toggle-details>${isOpen ? "Скрыть ▲" : "Подробнее ▼"}</button>
           <div class="details ${isOpen ? "open" : ""}">
-            <div>Подключён: <b>${fmtDate(u.connected_at)}</b></div>
-            <div>Последняя активность: <b>${timeAgo(u.last_activity_at)}</b></div>
-            <div>Может отвечать: <b>${u.can_reply ? "да" : "нет"}</b></div>
-            <div>Подключение включено (Telegram): <b>${u.is_enabled ? "да" : "нет"}</b></div>
+            <div class="detail-row"><span class="dl">Подключён</span><span class="dv">${fmtDate(u.connected_at)}</span></div>
+            <div class="detail-row"><span class="dl">Последняя активность</span><span class="dv">${timeAgo(u.last_activity_at)}</span></div>
+            <div class="detail-row"><span class="dl">Может отвечать</span><span class="dv">${u.can_reply ? "✓ Да" : "— Нет"}</span></div>
+            <div class="detail-row"><span class="dl">Подключение (TG)</span><span class="dv">${u.is_enabled ? "✓ Включено" : "— Выключено"}</span></div>
           </div>
         </div>
       `;
@@ -413,31 +633,31 @@
 
     function switchTab(tab) {
       currentTab = tab;
-      document.querySelectorAll("#mainTabs .tab-chip").forEach((btn) => {
+      document.querySelectorAll("#mainTabs .tab-chip").forEach(btn => {
         btn.classList.toggle("active", btn.dataset.tab === tab);
       });
-      if (tab === "users") render();
-      else if (tab === "growth") loadGrowth();
+      if (tab === "users")     render();
+      else if (tab === "growth")    loadGrowth();
       else if (tab === "broadcast") renderBroadcastTab();
-      else if (tab === "log") loadActionLog(1);
+      else if (tab === "log")       loadActionLog(1);
     }
 
     function render() {
       if (currentTab !== "users") return;
-      const content = document.getElementById("content");
+      const content  = document.getElementById("content");
       const subtitle = document.getElementById("subtitle");
       subtitle.textContent = "Все подключённые пользователи бота";
 
-      const activeCount = overview.users.filter(u => !u.is_blocked).length;
-      const blockedCount = overview.users.filter(u => u.is_blocked).length;
-      const totalMessages = overview.users.reduce((sum, u) => sum + u.total_messages, 0);
+      const activeCount   = overview.users.filter(u => !u.is_blocked).length;
+      const blockedCount  = overview.users.filter(u => u.is_blocked).length;
+      const totalMessages = overview.users.reduce((s, u) => s + u.total_messages, 0);
 
       const cards = `
-        <div class="cards cards-4">
-          <div class="card"><div class="value">${overview.total_users}</div><div class="label">Пользователей</div></div>
-          <div class="card"><div class="value">${activeCount}</div><div class="label">Активных</div></div>
-          <div class="card"><div class="value">${blockedCount}</div><div class="label">Заблокир.</div></div>
-          <div class="card"><div class="value">${totalMessages}</div><div class="label">Сообщений всего</div></div>
+        <div class="cards">
+          <div class="card c-users"><span class="c-icon">👥</span><div class="c-val">${overview.total_users}</div><div class="c-lbl">Пользователей</div></div>
+          <div class="card c-active"><span class="c-icon">✅</span><div class="c-val">${activeCount}</div><div class="c-lbl">Активных</div></div>
+          <div class="card c-block"><span class="c-icon">🚫</span><div class="c-val">${blockedCount}</div><div class="c-lbl">Заблокировано</div></div>
+          <div class="card c-msgs"><span class="c-icon">💬</span><div class="c-val">${totalMessages}</div><div class="c-lbl">Сообщений всего</div></div>
         </div>
       `;
 
@@ -452,15 +672,15 @@
           <input id="searchInput" type="text" placeholder="Поиск по имени, юзернейму, ID…" value="${searchQuery}" />
         </div>
         <div class="segmented" id="filterTabs">
-          <button data-filter="all" class="${filterMode === "all" ? "active" : ""}">Все</button>
-          <button data-filter="active" class="${filterMode === "active" ? "active" : ""}">Активные</button>
-          <button data-filter="blocked" class="${filterMode === "blocked" ? "active" : ""}">Заблок.</button>
-          <button data-filter="muted" class="${filterMode === "muted" ? "active" : ""}">Без увед.</button>
+          <button data-filter="all"     class="${filterMode==="all"     ?"active":""}">Все</button>
+          <button data-filter="active"  class="${filterMode==="active"  ?"active":""}">Активные</button>
+          <button data-filter="blocked" class="${filterMode==="blocked" ?"active":""}">Заблок.</button>
+          <button data-filter="muted"   class="${filterMode==="muted"   ?"active":""}">Без увед.</button>
         </div>
         <div class="sort-row" id="sortTabs">
-          <button class="sort-chip ${sortMode === "messages" ? "active" : ""}" data-sort="messages">По сообщениям</button>
-          <button class="sort-chip ${sortMode === "recent" ? "active" : ""}" data-sort="recent">По активности</button>
-          <button class="sort-chip ${sortMode === "newest" ? "active" : ""}" data-sort="newest">По дате подключения</button>
+          <button class="sort-chip ${sortMode==="messages"?"active":""}" data-sort="messages">По сообщениям</button>
+          <button class="sort-chip ${sortMode==="recent"  ?"active":""}" data-sort="recent">По активности</button>
+          <button class="sort-chip ${sortMode==="newest"  ?"active":""}" data-sort="newest">По дате</button>
         </div>
       `;
 
@@ -480,134 +700,146 @@
           searchQuery = e.target.value.toLowerCase();
           const caret = e.target.selectionStart;
           render();
-          const newInput = document.getElementById("searchInput");
-          if (newInput) { newInput.focus(); newInput.setSelectionRange(caret, caret); }
+          const ni = document.getElementById("searchInput");
+          if (ni) { ni.focus(); ni.setSelectionRange(caret, caret); }
         });
       }
-
-      document.querySelectorAll("#filterTabs button").forEach((btn) => {
+      document.querySelectorAll("#filterTabs button").forEach(btn => {
         btn.addEventListener("click", () => { filterMode = btn.dataset.filter; render(); });
       });
-
-      document.querySelectorAll("#sortTabs button").forEach((btn) => {
+      document.querySelectorAll("#sortTabs button").forEach(btn => {
         btn.addEventListener("click", () => { sortMode = btn.dataset.sort; render(); });
       });
-
-      document.querySelectorAll("[data-toggle-details]").forEach((btn) => {
+      document.querySelectorAll("[data-toggle-details]").forEach(btn => {
         btn.addEventListener("click", () => {
-          const card = btn.closest(".user-card");
-          const ownerTelegramId = Number(card.dataset.owner);
-          if (expandedIds.has(ownerTelegramId)) expandedIds.delete(ownerTelegramId);
-          else expandedIds.add(ownerTelegramId);
+          const id = Number(btn.closest(".user-card").dataset.owner);
+          if (expandedIds.has(id)) expandedIds.delete(id);
+          else expandedIds.add(id);
           render();
         });
       });
-
-      document.querySelectorAll(".toggle-btn[data-action='notifications'], .toggle-btn[data-action='block']").forEach((btn) => {
+      document.querySelectorAll(".action-btn[data-action='notifications'], .action-btn[data-action='block']").forEach(btn => {
         btn.addEventListener("click", () => onToggle(btn));
       });
-
-      document.querySelectorAll(".toggle-btn[data-action='message']").forEach((btn) => {
+      document.querySelectorAll(".action-btn[data-action='message']").forEach(btn => {
         btn.addEventListener("click", () => {
           const username = btn.dataset.username;
-          if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
-          if (tg && tg.openTelegramLink) tg.openTelegramLink(`https://t.me/${username}`);
+          if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
+          if (tg?.openTelegramLink) tg.openTelegramLink(`https://t.me/${username}`);
           else window.open(`https://t.me/${username}`, "_blank");
         });
       });
-
-      document.querySelectorAll(".toggle-btn[data-action='copy-id']").forEach((btn) => {
+      document.querySelectorAll(".action-btn[data-action='copy-id']").forEach(btn => {
         btn.addEventListener("click", async () => {
           const id = btn.dataset.copy;
           try {
             await navigator.clipboard.writeText(id);
-            if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+            if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
             showToast("ID скопирован: " + id);
-          } catch (e) {
-            if (tg) tg.showAlert("ID: " + id);
-          }
+          } catch { if (tg) tg.showAlert("ID: " + id); }
         });
       });
-
-      document.querySelectorAll(".toggle-btn[data-action='chats']").forEach((btn) => {
+      document.querySelectorAll(".action-btn[data-action='chats']").forEach(btn => {
         btn.addEventListener("click", () => {
-          const card = btn.closest(".user-card");
-          const ownerTelegramId = Number(card.dataset.owner);
-          const user = overview.users.find(u => u.owner_telegram_id === ownerTelegramId);
-          if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
+          const id = Number(btn.closest(".user-card").dataset.owner);
+          const user = overview.users.find(u => u.owner_telegram_id === id);
+          if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
           openChatsSheet(user);
         });
       });
     }
 
+    /* ── Growth ── */
     async function loadGrowth() {
-      const content = document.getElementById("content");
+      const content  = document.getElementById("content");
       const subtitle = document.getElementById("subtitle");
-      subtitle.textContent = "Динамика роста за 30 дней";
-      content.innerHTML = `<div class="empty skeleton"><span class="big-emoji">📈</span>Загружаем данные…</div>`;
+      subtitle.textContent = "Динамика за 30 дней";
+      content.innerHTML = `<div class="empty skeleton"><span class="big-emoji">📈</span>Загружаем аналитику…</div>`;
       try {
         const res = await fetch("/app/api/admin/growth", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ initData })
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData})
         });
-        if (!res.ok) throw new Error("bad_status");
+        if (!res.ok) throw new Error();
         growthData = await res.json();
         if (currentTab !== "growth") return;
         content.innerHTML = renderGrowth(growthData);
-      } catch (e) {
+      } catch {
         if (currentTab !== "growth") return;
-        content.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить аналитику роста.</div>`;
+        content.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить аналитику.</div>`;
       }
     }
 
     function renderGrowth(data) {
-      const newConn = data.new_connections || [];
-      const msgs = data.messages || [];
-      const totalNew = newConn.reduce((s, d) => s + d.count, 0);
-      const totalMsgs = msgs.reduce((s, d) => s + d.count, 0);
+      // data.connections_by_day / data.messages_by_day are {date: count} dicts
+      const connMap = data.connections_by_day || {};
+      const msgMap  = data.messages_by_day   || {};
 
-      function bars(series) {
+      // Build last 30 days series
+      const days = 30;
+      const today = new Date(); today.setHours(0,0,0,0);
+      const dates = [];
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(today); d.setDate(d.getDate() - i);
+        dates.push(d.toISOString().slice(0,10));
+      }
+
+      const connSeries = dates.map(d => ({ date: d, count: connMap[d] || 0 }));
+      const msgSeries  = dates.map(d => ({ date: d, count: msgMap[d]  || 0 }));
+
+      const totalNew  = connSeries.reduce((s, d) => s + d.count, 0);
+      const totalMsgs = msgSeries.reduce((s, d) => s + d.count, 0);
+
+      function bars(series, type) {
         const max = Math.max(...series.map(d => d.count), 1);
         return series.map(d => {
           const pct = Math.max(2, Math.round((d.count / max) * 100));
-          return `<div class="growth-bar-col"><div class="growth-bar" style="height:${pct}%" title="${d.date}: ${d.count}"></div></div>`;
+          return `<div class="growth-bar-col"><div class="growth-bar type-${type}" style="height:${pct}%" title="${d.date}: ${d.count}"></div></div>`;
         }).join("");
       }
 
-      const firstDate = newConn.length ? newConn[0].date : "";
-      const lastDate = newConn.length ? newConn[newConn.length - 1].date : "";
+      const firstDate = dates[0]     ? new Date(dates[0]).toLocaleDateString("ru-RU",{day:"numeric",month:"short"}) : "";
+      const lastDate  = dates.at(-1) ? new Date(dates.at(-1)).toLocaleDateString("ru-RU",{day:"numeric",month:"short"}) : "";
 
       return `
-        <div class="cards cards-4">
-          <div class="card"><div class="value">${totalNew}</div><div class="label">Новых польз. (30д)</div></div>
-          <div class="card"><div class="value">${totalMsgs}</div><div class="label">Сообщений (30д)</div></div>
-          <div class="card"><div class="value">${overview ? overview.total_users : "—"}</div><div class="label">Всего пользователей</div></div>
+        <div class="cards cols-3">
+          <div class="card c-users"><span class="c-icon">👤</span><div class="c-val">${totalNew}</div><div class="c-lbl">Новых (30 дн)</div></div>
+          <div class="card c-msgs"><span class="c-icon">💬</span><div class="c-val">${totalMsgs}</div><div class="c-lbl">Сообщений (30 дн)</div></div>
+          <div class="card c-active"><span class="c-icon">👥</span><div class="c-val">${overview ? overview.total_users : "—"}</div><div class="c-lbl">Всего польз.</div></div>
         </div>
-        <div class="growth-chart">
-          <div class="section-title">👤 Новые подключения<span class="sub">по дням</span></div>
-          <div class="growth-bars">${bars(newConn)}</div>
+        <div class="growth-card">
+          <div class="section-title">👤 Новые подключения <span class="sub">по дням</span></div>
+          <div class="growth-bars">${bars(connSeries, "conn")}</div>
           <div class="growth-legend"><span>${firstDate}</span><span>${lastDate}</span></div>
         </div>
-        <div class="growth-chart">
-          <div class="section-title">💬 Сообщений<span class="sub">по дням</span></div>
-          <div class="growth-bars">${bars(msgs)}</div>
+        <div class="growth-card">
+          <div class="section-title">💬 Сообщений <span class="sub">по дням</span></div>
+          <div class="growth-bars">${bars(msgSeries, "msg")}</div>
           <div class="growth-legend"><span>${firstDate}</span><span>${lastDate}</span></div>
         </div>
       `;
     }
 
+    /* ── Broadcast ── */
     function renderBroadcastTab() {
-      const content = document.getElementById("content");
+      const content  = document.getElementById("content");
       const subtitle = document.getElementById("subtitle");
-      subtitle.textContent = "Отправить сообщение всем активным пользователям";
+      subtitle.textContent = "Рассылка активным пользователям";
+      const activeCount = overview ? overview.users.filter(u => !u.is_blocked).length : "—";
       content.innerHTML = `
-        <div class="broadcast-box">
-          <textarea id="broadcastText" placeholder="Текст сообщения для рассылки…"></textarea>
-          <button class="primary-btn" id="broadcastSendBtn">📢 Отправить рассылку</button>
-          <div class="broadcast-hint">Сообщение получат все активные (не заблокированные) пользователи, подключившие бота. Действие необратимо.</div>
+        <div class="broadcast-card">
+          <div class="broadcast-label">📢 Текст сообщения</div>
+          <textarea id="broadcastText" placeholder="Введи текст рассылки…" maxlength="4096"></textarea>
+          <div class="char-count" id="charCount">0 / 4096</div>
+          <button class="primary-btn" id="broadcastSendBtn">Отправить всем (${activeCount} польз.)</button>
+          <div class="broadcast-hint">Сообщение получат все активные пользователи, не заблокированные в боте. Действие необратимо.</div>
         </div>
       `;
+      const textarea = document.getElementById("broadcastText");
+      const counter  = document.getElementById("charCount");
+      textarea.addEventListener("input", () => {
+        counter.textContent = textarea.value.length + " / 4096";
+      });
       document.getElementById("broadcastSendBtn").addEventListener("click", sendBroadcast);
     }
 
@@ -615,111 +847,114 @@
       const textarea = document.getElementById("broadcastText");
       const btn = document.getElementById("broadcastSendBtn");
       const text = textarea.value.trim();
-      if (!text) {
-        if (tg) tg.showAlert("Введите текст сообщения.");
-        return;
-      }
-      const confirmed = await confirmAction(`Отправить это сообщение всем активным пользователям?\n\n"${text}"`);
+      if (!text) { if (tg) tg.showAlert("Введи текст сообщения."); return; }
+      const confirmed = await confirmAction(`Отправить это сообщение всем активным пользователям?\n\n"${text.slice(0,200)}${text.length > 200 ? "…" : ""}"`);
       if (!confirmed) return;
-
-      btn.disabled = true;
-      btn.textContent = "Отправляем…";
+      btn.disabled = true; btn.textContent = "⏳ Отправляем…";
       try {
         const res = await fetch("/app/api/admin/broadcast", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ initData, text })
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData, text})
         });
-        if (!res.ok) throw new Error("bad_status");
+        if (!res.ok) throw new Error();
         const data = await res.json();
-        showToast(`Отправлено: ${data.sent} из ${data.total_recipients}`);
-        if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+        showToast(`✅ Отправлено: ${data.sent} из ${data.total_recipients}`);
+        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
         textarea.value = "";
-      } catch (e) {
-        if (tg) tg.showAlert("Не удалось отправить рассылку. Попробуйте ещё раз.");
-      } finally {
+        document.getElementById("charCount").textContent = "0 / 4096";
+      } catch { if (tg) tg.showAlert("Не удалось отправить. Попробуй ещё раз."); }
+      finally {
         btn.disabled = false;
-        btn.textContent = "📢 Отправить рассылку";
+        const activeCount = overview ? overview.users.filter(u => !u.is_blocked).length : "—";
+        btn.textContent = `Отправить всем (${activeCount} польз.)`;
       }
     }
 
+    /* ── Action log ── */
     async function loadActionLog(page) {
       actionLogPage = page;
-      const content = document.getElementById("content");
+      const content  = document.getElementById("content");
       const subtitle = document.getElementById("subtitle");
-      subtitle.textContent = "История действий администраторов";
+      subtitle.textContent = "История действий администратора";
       content.innerHTML = `<div class="empty skeleton"><span class="big-emoji">📜</span>Загружаем журнал…</div>`;
       try {
         const res = await fetch("/app/api/admin/action_log", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ initData, page })
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData, page})
         });
-        if (!res.ok) throw new Error("bad_status");
+        if (!res.ok) throw new Error();
         actionLogData = await res.json();
         if (currentTab !== "log") return;
         content.innerHTML = renderActionLog(actionLogData);
         attachLogPagerHandlers();
-      } catch (e) {
+      } catch {
         if (currentTab !== "log") return;
-        content.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить журнал действий.</div>`;
+        content.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить журнал.</div>`;
       }
     }
 
-    const ACTION_LABELS = {
-      update_settings: "⚙️ Изменение настроек",
-      broadcast: "📢 Рассылка",
+    const ACTION_META = {
+      update_settings: { label: "Изменение настроек", dot: "settings" },
+      broadcast:       { label: "Рассылка",            dot: "broadcast" },
     };
 
     function renderActionLog(data) {
       if (!data.entries.length) {
-        return `<div class="empty"><span class="big-emoji">📜</span>Журнал действий пока пуст.</div>`;
+        return `<div class="empty"><span class="big-emoji">📜</span>Журнал пока пуст.</div>`;
       }
-      const items = data.entries.map(e => `
-        <div class="log-item">
-          <div class="log-top">
-            <span>${ACTION_LABELS[e.action] || e.action} ${e.admin_username ? "· @" + e.admin_username : ""}</span>
-            <span class="log-time">${fmtDate(e.created_at)}</span>
+      const items = data.entries.map(e => {
+        const meta = ACTION_META[e.action] || { label: e.action, dot: "other" };
+        return `
+          <div class="log-item">
+            <div class="log-dot ${meta.dot}"></div>
+            <div class="log-body">
+              <div class="log-top">
+                <span class="log-action">${meta.label}</span>
+                <span class="log-time">${fmtDate(e.created_at)}</span>
+              </div>
+              ${e.admin_username ? `<div class="log-admin">@${e.admin_username}</div>` : ""}
+              ${e.target_owner_telegram_id ? `<div class="log-details">Пользователь ID: ${e.target_owner_telegram_id}</div>` : ""}
+              ${e.details ? `<div class="log-details">${e.details}</div>` : ""}
+            </div>
           </div>
-          ${e.target_owner_telegram_id ? `<div class="log-details">Пользователь ID: ${e.target_owner_telegram_id}</div>` : ""}
-          ${e.details ? `<div class="log-details">${e.details}</div>` : ""}
-        </div>
-      `).join("");
+        `;
+      }).join("");
       const totalPages = Math.max(1, Math.ceil(data.total / data.page_size));
-      return `<div class="list">${items}</div>` + renderPager(data.page, totalPages, "log");
+      return `<div class="log-list">${items}</div>` + renderPager(data.page, totalPages, "log");
     }
 
     function renderPager(page, totalPages, kind) {
       return `
         <div class="pager">
-          <button data-pager="${kind}" data-page="${page - 1}" ${page <= 1 ? "disabled" : ""}>← Назад</button>
+          <button class="pager-btn" data-pager="${kind}" data-page="${page-1}" ${page<=1?"disabled":""}>← Назад</button>
           <span>Стр. ${page} из ${totalPages}</span>
-          <button data-pager="${kind}" data-page="${page + 1}" ${page >= totalPages ? "disabled" : ""}>Вперёд →</button>
+          <button class="pager-btn" data-pager="${kind}" data-page="${page+1}" ${page>=totalPages?"disabled":""}>Вперёд →</button>
         </div>
       `;
     }
 
     function attachLogPagerHandlers() {
-      document.querySelectorAll("[data-pager='log']").forEach((btn) => {
+      document.querySelectorAll("[data-pager='log']").forEach(btn => {
         btn.addEventListener("click", () => loadActionLog(Number(btn.dataset.page)));
       });
     }
 
+    /* ── Chats sheet ── */
     function renderChat(c) {
-      const badges = [
-        c.streak_days > 0 ? `<span class="chat-badge streak">🔥 ${c.streak_days} дн</span>` : "",
-        c.mutual_connected ? `<span class="chat-badge mutual">🎮 Взаимный</span>` : "",
+      const chips = [
+        c.streak_days > 0 ? `<span class="chat-chip streak">🔥 ${c.streak_days} дн</span>` : "",
+        c.mutual_connected ? `<span class="chat-chip mutual">🤝 взаимный</span>` : "",
       ].join("");
       return `
-        <div class="chat-card" data-chat-id="${c.chat_id}" data-chat-name="${displayNameEscaped(c.display_name)}" style="cursor:pointer">
+        <div class="chat-card" data-chat-id="${c.chat_id}" data-chat-name="${displayNameEscaped(c.display_name)}">
           <div class="chat-top">
             <div>
               <div class="chat-name">${c.display_name}</div>
-              <div class="chat-sub">${c.username ? "@" + c.username + " · " : ""}ID ${c.chat_id} · ${timeAgo(c.last_message_at)}</div>
+              <div class="chat-sub">${c.username ? "@" + c.username + " · " : ""}${timeAgo(c.last_message_at)}</div>
             </div>
-            <div class="chat-badges">${badges}</div>
+            <div class="chat-chips">${chips}</div>
           </div>
-          <div class="chat-stats user-stats">
+          <div class="chat-stats">
             <div class="stat"><div class="n">${c.message_count}</div><div class="l">Сообщ.</div></div>
             <div class="stat"><div class="n">${c.edited_count}</div><div class="l">Правки</div></div>
             <div class="stat"><div class="n">${c.deleted_count}</div><div class="l">Удал.</div></div>
@@ -739,51 +974,48 @@
 
     async function openChatsSheet(user) {
       currentSheetUser = user;
-      const overlay = document.getElementById("sheetOverlay");
-      const sheet = document.getElementById("chatsSheet");
-      const title = document.getElementById("sheetTitle");
+      const overlay  = document.getElementById("sheetOverlay");
+      const sheet    = document.getElementById("chatsSheet");
+      const title    = document.getElementById("sheetTitle");
       const subtitle = document.getElementById("sheetSubtitle");
-      const body = document.getElementById("sheetBody");
+      const body     = document.getElementById("sheetBody");
 
-      title.textContent = "Чаты — " + displayName(user);
-      subtitle.textContent = "Загружаем…";
+      title.textContent    = displayName(user);
+      subtitle.textContent = "Загружаем чаты…";
       body.innerHTML = "";
       overlay.classList.add("show");
       sheet.classList.add("show");
 
       try {
         const res = await fetch("/app/api/admin/user_stats", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ initData, ownerTelegramId: user.owner_telegram_id })
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData, ownerTelegramId: user.owner_telegram_id})
         });
-        if (!res.ok) throw new Error("bad_status");
-
+        if (!res.ok) throw new Error();
         const data = await res.json();
-        subtitle.textContent = `${data.total_chats} чатов · ${data.total_messages} сообщений всего`;
-
+        subtitle.textContent = `${data.total_chats} чатов · ${data.total_messages} сообщений`;
         body.innerHTML = data.chats.length
           ? data.chats.map(renderChat).join("")
-          : `<div class="empty"><span class="big-emoji">💬</span>У пользователя пока нет сообщений.</div>`;
-
-        document.querySelectorAll(".chat-card").forEach((card) => {
+          : `<div class="empty"><span class="big-emoji">💬</span>Пока нет сообщений.</div>`;
+        document.querySelectorAll(".chat-card").forEach(card => {
           card.addEventListener("click", () => {
             openChatMessages(user, Number(card.dataset.chatId), card.dataset.chatName);
           });
         });
-      } catch (e) {
-        subtitle.textContent = "Ошибка загрузки";
-        body.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не получилось загрузить чаты. Попробуй ещё раз.</div>`;
+      } catch {
+        subtitle.textContent = "Ошибка";
+        body.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить чаты.</div>`;
       }
     }
 
     function renderMessage(m) {
-      const sender = [m.sender_first_name, m.sender_last_name].filter(Boolean).join(" ") || (m.sender_username ? "@" + m.sender_username : "ID " + m.sender_telegram_id);
-      const flags = [
-        m.is_edited ? `<span class="chat-badge streak">✏️ ${m.edit_count}</span>` : "",
-        m.is_deleted ? `<span class="chat-badge">🗑 удалено</span>` : "",
-      ].join("");
+      const sender = [m.sender_first_name, m.sender_last_name].filter(Boolean).join(" ")
+        || (m.sender_username ? "@" + m.sender_username : "ID " + m.sender_telegram_id);
       const text = m.text || m.caption || (m.media_type && m.media_type !== "text" ? `[${m.media_type}]` : "(без текста)");
+      const flags = [
+        m.is_edited  ? `<span class="m-flag edited">✏️ ред. ${m.edit_count}</span>` : "",
+        m.is_deleted ? `<span class="m-flag deleted">🗑 удалено</span>` : "",
+      ].join("");
       return `
         <div class="message-item">
           <div class="message-top">
@@ -798,119 +1030,111 @@
 
     async function openChatMessages(user, chatId, chatName, page) {
       currentChatId = chatId;
-      messagesPage = page || 1;
-      const title = document.getElementById("sheetTitle");
+      messagesPage  = page || 1;
+      const title    = document.getElementById("sheetTitle");
       const subtitle = document.getElementById("sheetSubtitle");
-      const body = document.getElementById("sheetBody");
+      const body     = document.getElementById("sheetBody");
 
-      title.textContent = "Сообщения — " + chatName;
+      title.textContent    = chatName;
       subtitle.textContent = "Загружаем…";
-      body.innerHTML = `<a class="back-link" id="backToChats">← Назад к чатам</a>`;
+      body.innerHTML = `<a class="back-link" id="backToChats">← Чаты</a>`;
 
       try {
         const res = await fetch("/app/api/admin/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ initData, ownerTelegramId: user.owner_telegram_id, chatId, page: messagesPage })
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData, ownerTelegramId: user.owner_telegram_id, chatId, page: messagesPage})
         });
-        if (!res.ok) throw new Error("bad_status");
+        if (!res.ok) throw new Error();
         const data = await res.json();
         subtitle.textContent = `${data.total} сообщений`;
-
         const totalPages = Math.max(1, Math.ceil(data.total / data.page_size));
         const listHtml = data.messages.length
           ? data.messages.map(renderMessage).join("")
-          : `<div class="empty"><span class="big-emoji">💬</span>Сообщений не найдено.</div>`;
-
-        body.innerHTML = `<a class="back-link" id="backToChats">← Назад к чатам</a>${listHtml}` + renderPager(data.page, totalPages, "messages");
-
+          : `<div class="empty"><span class="big-emoji">💬</span>Сообщений нет.</div>`;
+        body.innerHTML = `<a class="back-link" id="backToChats">← Чаты</a>${listHtml}` + renderPager(data.page, totalPages, "messages");
         document.getElementById("backToChats").addEventListener("click", () => openChatsSheet(user));
-        document.querySelectorAll("[data-pager='messages']").forEach((btn) => {
+        document.querySelectorAll("[data-pager='messages']").forEach(btn => {
           btn.addEventListener("click", () => openChatMessages(user, chatId, chatName, Number(btn.dataset.page)));
         });
-      } catch (e) {
-        subtitle.textContent = "Ошибка загрузки";
-        body.innerHTML = `<a class="back-link" id="backToChats">← Назад к чатам</a><div class="error"><span class="big-emoji">⚠️</span>Не получилось загрузить сообщения.</div>`;
+      } catch {
+        subtitle.textContent = "Ошибка";
+        body.innerHTML = `<a class="back-link" id="backToChats">← Чаты</a><div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить сообщения.</div>`;
         document.getElementById("backToChats").addEventListener("click", () => openChatsSheet(user));
       }
     }
 
+    /* ── Toggle settings ── */
     async function onToggle(btn) {
       const card = btn.closest(".user-card");
       const ownerTelegramId = Number(card.dataset.owner);
       const action = btn.dataset.action;
-      const value = btn.dataset.value === "true";
+      const value  = btn.dataset.value === "true";
 
       if (action === "block" && value) {
-        const confirmed = await confirmAction("Заблокировать этого пользователя? Он перестанет получать уведомления и будет исключён из активной статистики.");
+        const confirmed = await confirmAction("Заблокировать пользователя?\nОн перестанет получать уведомления и не будет виден в статистике.");
         if (!confirmed) return;
       }
 
-      const allButtons = card.querySelectorAll(".toggle-btn");
-      allButtons.forEach(b => b.disabled = true);
-
+      card.querySelectorAll(".action-btn").forEach(b => b.disabled = true);
       const body = { initData, ownerTelegramId };
       if (action === "notifications") body.notificationsEnabled = value;
       if (action === "block") body.isBlocked = value;
 
       try {
         const res = await fetch("/app/api/admin/settings", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method: "POST", headers: {"Content-Type":"application/json"},
           body: JSON.stringify(body)
         });
-        if (!res.ok) throw new Error("bad_status");
-
+        if (!res.ok) throw new Error();
         const user = overview.users.find(u => u.owner_telegram_id === ownerTelegramId);
         if (user) {
           if (action === "notifications") user.notifications_enabled = value;
           if (action === "block") user.is_blocked = value;
         }
+        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+        showToast(
+          action === "block"
+            ? (value ? "🚫 Пользователь заблокирован" : "✅ Пользователь разблокирован")
+            : (value ? "🔔 Уведомления включены" : "🔕 Уведомления отключены")
+        );
         render();
-        showToast(action === "block" ? (value ? "Пользователь заблокирован" : "Пользователь разблокирован") : (value ? "Уведомления включены" : "Уведомления отключены"));
-        if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
-      } catch (e) {
-        allButtons.forEach(b => b.disabled = false);
-        if (tg) tg.showAlert("Не удалось сохранить изменения. Попробуй ещё раз.");
+      } catch {
+        card.querySelectorAll(".action-btn").forEach(b => b.disabled = false);
+        if (tg) tg.showAlert("Не удалось сохранить. Попробуй ещё раз.");
       }
     }
 
+    /* ── Bootstrap ── */
     async function loadOverview() {
       const subtitle = document.getElementById("subtitle");
-      const content = document.getElementById("content");
-
+      const content  = document.getElementById("content");
       if (!initData) {
         subtitle.textContent = "Открыто вне Telegram";
-        content.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Открой это приложение через кнопку в Telegram-боте.</div>`;
+        content.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Открой через кнопку в Telegram-боте.</div>`;
         return;
       }
-
       try {
         const res = await fetch("/app/api/admin/overview", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ initData })
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData})
         });
-
         if (res.status === 403) {
           subtitle.textContent = "Доступ запрещён";
           content.innerHTML = `<div class="error"><span class="big-emoji">🔒</span>У тебя нет доступа к админ-панели.</div>`;
           return;
         }
-        if (!res.ok) throw new Error("bad_status");
-
+        if (!res.ok) throw new Error();
         overview = await res.json();
         render();
-      } catch (e) {
+      } catch {
         subtitle.textContent = "Не удалось загрузить данные";
-        content.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не получилось загрузить данные. Попробуй закрыть и открыть приложение ещё раз.</div>`;
+        content.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не получилось загрузить данные. Попробуй ещё раз.</div>`;
       }
     }
 
     document.getElementById("sheetOverlay").addEventListener("click", closeChatsSheet);
     document.querySelector("#chatsSheet .sheet-handle").addEventListener("click", closeChatsSheet);
-
-    document.querySelectorAll("#mainTabs .tab-chip").forEach((btn) => {
+    document.querySelectorAll("#mainTabs .tab-chip").forEach(btn => {
       btn.addEventListener("click", () => switchTab(btn.dataset.tab));
     });
 

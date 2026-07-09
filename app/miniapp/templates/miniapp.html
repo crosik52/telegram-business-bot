@@ -273,14 +273,23 @@
   .chip.mutual  { color: var(--green);  background: rgba(52,199,89,0.13); }
   .chip.at-risk { color: var(--orange); background: rgba(255,159,10,0.13); animation: pulse 1.5s ease-in-out infinite; }
 
-  /* ── Game button ── */
-  .game-btn {
-    margin-top: 7px; border: none; border-radius: 10px;
+  /* ── Row action buttons ── */
+  .row-action-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+  .game-btn, .remind-btn {
+    border: none; border-radius: 10px;
     padding: 5px 11px; font-size: 12px; font-weight: 700;
-    background: linear-gradient(90deg, var(--link), var(--green));
-    color: #fff; display: inline-block;
+    display: inline-block; flex-shrink: 0;
   }
-  .game-btn:active { opacity: 0.8; }
+  .game-btn {
+    background: linear-gradient(90deg, var(--link), var(--green));
+    color: #fff;
+  }
+  .remind-btn {
+    background: linear-gradient(90deg, #ff6b00, #ff3b30);
+    color: #fff;
+  }
+  .game-btn:active, .remind-btn:active { opacity: 0.78; }
+  .remind-btn.sent { background: rgba(120,120,128,0.15); color: var(--hint); }
   .game-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.45);
     display: flex; align-items: flex-end; z-index: 1000;
@@ -639,6 +648,9 @@
         const gameBtn = s.mutual_connected
           ? `<button class="game-btn" data-game-chat="${s.chat_id}" data-game-name="${s.display_name}">🎮 Игра</button>`
           : "";
+        const remindBtn = (s.mutual_connected && s.streak_days >= 2)
+          ? `<button class="remind-btn" data-remind-chat="${s.chat_id}" data-remind-streak="${s.streak_days}" data-remind-name="${s.display_name}">🔥 Напомнить о серии</button>`
+          : "";
 
         return `
           <div class="row${s.username ? " clickable" : ""}"${s.username ? ` data-username="${s.username}"` : ""}>
@@ -653,7 +665,9 @@
                 ${longestNote}
               </div>
               <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
-              ${gameBtn}
+              <div class="row-action-btns">
+                ${gameBtn}${remindBtn}
+              </div>
             </div>
             <div class="row-right">
               <div class="row-count">${s.message_count}</div>
@@ -703,6 +717,18 @@
         btn.addEventListener("click", (e) => {
           e.stopPropagation();
           openGamePicker(btn.dataset.gameChat, btn.dataset.gameName);
+        });
+      });
+      document.querySelectorAll(".remind-btn").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          if (btn.disabled) return;
+          await sendStreakRemind(
+            btn.dataset.remindChat,
+            Number(btn.dataset.remindStreak),
+            btn.dataset.remindName,
+            btn
+          );
         });
       });
       const shareBtn = document.getElementById("shareBtn");
@@ -835,6 +861,29 @@
         if (tg && tg.showAlert) tg.showAlert(`${emoji} Игра отправлена в чат!`);
       } catch {
         if (tg && tg.showAlert) tg.showAlert("Не удалось отправить игру.");
+      }
+    }
+
+    // ── Streak remind ──
+    async function sendStreakRemind(chatId, streakDays, name, btn) {
+      btn.disabled = true;
+      btn.textContent = "⏳ Отправляю…";
+      try {
+        if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred("medium");
+        const res = await fetch("/app/api/streak/remind", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData: currentInitData, chatId: Number(chatId), streakDays}),
+        });
+        if (!res.ok) throw new Error("failed");
+        btn.textContent = "✅ Отправлено!";
+        btn.classList.add("sent");
+        if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+        toastMessage(`🔥 Напоминание отправлено ${name}!`);
+      } catch {
+        btn.disabled = false;
+        btn.textContent = "🔥 Напомнить о серии";
+        if (tg && tg.showAlert) tg.showAlert("Не удалось отправить напоминание. Попробуй ещё раз.");
       }
     }
 

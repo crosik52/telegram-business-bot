@@ -364,6 +364,254 @@
   @keyframes riseIn    { from{opacity:0;transform:translateY(9px)}  to{opacity:1;transform:none} }
   @keyframes spin      { from{transform:rotate(0)} to{transform:rotate(360deg)} }
   @keyframes pulse     { 0%,100%{opacity:1} 50%{opacity:0.45} }
+
+  /* ══════════════════════════════════════════
+     MAIN TAB BAR
+  ══════════════════════════════════════════ */
+  .main-tabs {
+    display: flex; gap: 6px; margin-bottom: 18px;
+    overflow-x: auto; padding-bottom: 2px;
+  }
+  .main-tabs::-webkit-scrollbar { display: none; }
+  .main-tab {
+    flex-shrink: 0; border: none;
+    background: var(--secondary-bg);
+    color: var(--hint); font-size: 13px; font-weight: 600;
+    padding: 9px 18px; border-radius: 14px; box-shadow: var(--shadow);
+    transition: all 0.18s ease;
+  }
+  .main-tab.active {
+    background: var(--link); color: #fff;
+    box-shadow: 0 3px 10px rgba(36,129,204,0.3);
+  }
+  .main-tab.active.tab-casino { background: linear-gradient(90deg,#7c3aed,#a855f7); box-shadow: 0 3px 10px rgba(124,58,237,0.3); }
+  .main-tab.active.tab-donate { background: linear-gradient(90deg,#f59e0b,#ef4444); box-shadow: 0 3px 10px rgba(245,158,11,0.3); }
+
+  /* ══════════════════════════════════════════
+     WALLET CARD
+  ══════════════════════════════════════════ */
+  .wallet-card {
+    background: linear-gradient(135deg,#1e1b4b 0%,#312e81 50%,#1e3a5f 100%);
+    border-radius: var(--card-radius); padding: 20px 18px 16px;
+    margin-bottom: 14px; box-shadow: 0 6px 24px rgba(124,58,237,0.28);
+    animation: riseIn 0.35s ease backwards;
+    position: relative; overflow: hidden;
+  }
+  .wallet-card::before {
+    content: ""; position: absolute; top: -30px; right: -20px;
+    width: 120px; height: 120px; border-radius: 50%;
+    background: rgba(255,255,255,0.05);
+  }
+  .wallet-balance-row {
+    display: flex; align-items: baseline; gap: 8px; margin-bottom: 14px;
+  }
+  .wallet-coin-icon { font-size: 28px; }
+  .wallet-balance {
+    font-size: 42px; font-weight: 900; color: #fff; letter-spacing: -1px;
+    line-height: 1; transition: transform 0.2s ease, color 0.2s ease;
+  }
+  .wallet-balance.pop { color: #fbbf24; transform: scale(1.08); }
+  .wallet-coin-label { font-size: 16px; color: rgba(255,255,255,0.55); font-weight: 500; }
+  .wallet-meta-row {
+    display: grid; grid-template-columns: repeat(3,1fr);
+    gap: 0; margin-bottom: 16px;
+    background: rgba(255,255,255,0.08); border-radius: 12px; overflow: hidden;
+  }
+  .wallet-meta-cell {
+    text-align: center; padding: 9px 4px;
+    border-right: 1px solid rgba(255,255,255,0.1);
+  }
+  .wallet-meta-cell:last-child { border-right: none; }
+  .wallet-meta-val { font-size: 15px; font-weight: 800; color: #fff; }
+  .wallet-meta-lbl { font-size: 9.5px; color: rgba(255,255,255,0.5); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .claim-btn {
+    width: 100%; border: none; border-radius: 13px; padding: 13px;
+    font-size: 14px; font-weight: 800; cursor: pointer;
+    background: linear-gradient(90deg,#fbbf24,#f59e0b);
+    color: #1a1a1a; box-shadow: 0 3px 10px rgba(251,191,36,0.4);
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .claim-btn:active { transform: scale(0.97); }
+  .claim-btn:disabled { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.45); box-shadow: none; cursor: default; }
+  .claim-btn.claiming { opacity: 0.7; }
+
+  /* ══════════════════════════════════════════
+     CASINO CARDS (game wrappers)
+  ══════════════════════════════════════════ */
+  .casino-card {
+    background: var(--secondary-bg); border-radius: var(--card-radius);
+    padding: 18px 16px; margin-bottom: 14px; box-shadow: var(--shadow);
+    animation: riseIn 0.4s ease backwards;
+  }
+  .casino-card-title { font-size: 17px; font-weight: 800; margin-bottom: 2px; }
+  .casino-card-sub   { font-size: 12px; color: var(--hint); margin-bottom: 16px; }
+
+  /* ── Slots machine ── */
+  .slots-machine { margin-bottom: 14px; }
+  .slots-reels {
+    display: flex; gap: 8px; justify-content: center;
+    margin-bottom: 12px;
+  }
+  .slot-reel {
+    width: 72px; height: 80px; border-radius: 16px;
+    background: linear-gradient(145deg,#1e1b4b,#312e81);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 38px; box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+    transition: transform 0.15s ease;
+    position: relative; overflow: hidden;
+    user-select: none;
+  }
+  .slot-reel.spinning {
+    animation: reelSpin 0.18s linear infinite;
+    filter: blur(1.5px);
+  }
+  .slot-reel.stop-anim {
+    animation: reelStop 0.3s cubic-bezier(.22,1,.36,1) forwards;
+    filter: none;
+  }
+  @keyframes reelSpin {
+    0%   { transform: translateY(-4px); }
+    50%  { transform: translateY(4px);  }
+    100% { transform: translateY(-4px); }
+  }
+  @keyframes reelStop {
+    0%   { transform: scale(1.18); }
+    60%  { transform: scale(0.94); }
+    100% { transform: scale(1);    }
+  }
+  .slots-result {
+    text-align: center; font-size: 15px; font-weight: 800; min-height: 24px;
+  }
+  .slots-win   { color: var(--green); animation: popIn 0.4s ease; }
+  .slots-lose  { color: var(--hint);  }
+  .slots-jackpot { color: #f59e0b; font-size: 18px; animation: popIn 0.4s ease; }
+  @keyframes popIn { 0%{transform:scale(0.7);opacity:0} 70%{transform:scale(1.1)} 100%{transform:scale(1);opacity:1} }
+
+  .casino-spin-btn {
+    width: 100%; border: none; border-radius: 13px; padding: 13px;
+    font-size: 14px; font-weight: 800;
+    background: linear-gradient(90deg,#7c3aed,#a855f7);
+    color: #fff; box-shadow: 0 3px 12px rgba(124,58,237,0.35);
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .casino-spin-btn:active { transform: scale(0.97); }
+  .casino-spin-btn:disabled { opacity: 0.45; box-shadow: none; }
+
+  /* paytable */
+  .paytable { margin: 12px 0 0; }
+  .paytable-row {
+    display: flex; justify-content: space-between; padding: 4px 0;
+    font-size: 12px; border-bottom: 1px solid rgba(120,120,128,0.08);
+  }
+  .paytable-row:last-child { border-bottom: none; }
+  .paytable-sym { font-size: 14px; }
+  .paytable-pay { color: var(--green); font-weight: 700; }
+
+  /* ── Coin flip ── */
+  .flip-coin-display {
+    font-size: 60px; text-align: center; margin-bottom: 14px;
+    transition: transform 0.6s ease;
+    line-height: 1;
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2));
+  }
+  .flip-coin-display.flipping {
+    animation: coinFlip 0.7s linear;
+  }
+  @keyframes coinFlip {
+    0%   { transform: rotateY(0deg)   scale(1);    }
+    50%  { transform: rotateY(900deg) scale(0.7);  }
+    100% { transform: rotateY(1800deg) scale(1);   }
+  }
+  .flip-bet-row {
+    display: flex; align-items: center; gap: 8px;
+    justify-content: center; margin-bottom: 14px;
+  }
+  .flip-bet-label { font-size: 14px; color: var(--hint); font-weight: 500; }
+  .flip-bet-input {
+    width: 90px; text-align: center; border: 1.5px solid rgba(120,120,128,0.2);
+    border-radius: 10px; padding: 8px 10px; font-size: 16px; font-weight: 700;
+    background: var(--bg); color: var(--text); outline: none;
+  }
+  .flip-bet-input:focus { border-color: var(--link); }
+  .flip-presets { display: flex; gap: 5px; justify-content: center; margin-bottom: 14px; }
+  .flip-preset-btn {
+    border: 1px solid rgba(120,120,128,0.2); border-radius: 8px;
+    padding: 5px 10px; font-size: 11.5px; font-weight: 700;
+    background: var(--bg); color: var(--hint);
+  }
+  .flip-preset-btn:active { background: var(--link); color: #fff; border-color: var(--link); }
+  .flip-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .flip-choice-btn {
+    border: 2px solid rgba(120,120,128,0.18); border-radius: 13px;
+    padding: 13px 8px; font-size: 15px; font-weight: 800;
+    background: var(--bg); color: var(--text);
+    transition: all 0.18s ease;
+  }
+  .flip-choice-btn:active { transform: scale(0.96); }
+  .flip-choice-btn:disabled { opacity: 0.4; }
+  .flip-choice-btn.heads-btn { border-color: rgba(36,129,204,0.35); }
+  .flip-choice-btn.tails-btn { border-color: rgba(52,199,89,0.35); }
+  .flip-result {
+    text-align: center; font-size: 16px; font-weight: 800; min-height: 26px;
+    margin-top: 4px;
+  }
+  .flip-won  { color: var(--green); animation: popIn 0.4s ease; }
+  .flip-lost { color: var(--red);   animation: popIn 0.4s ease; }
+
+  /* ══════════════════════════════════════════
+     DONATE / SUPPORT
+  ══════════════════════════════════════════ */
+  .donate-header {
+    text-align: center; padding: 10px 0 20px;
+    animation: fadeDown 0.4s ease;
+  }
+  .donate-icon { font-size: 48px; margin-bottom: 10px; }
+  .donate-title { font-size: 20px; font-weight: 800; margin-bottom: 6px; }
+  .donate-sub   { font-size: 13px; color: var(--hint); line-height: 1.5; }
+
+  .tiers-grid { display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px; }
+  .tier-card {
+    background: var(--secondary-bg); border-radius: var(--card-radius);
+    padding: 18px 16px; box-shadow: var(--shadow);
+    position: relative; overflow: hidden;
+    animation: riseIn 0.35s ease backwards;
+    border: 1.5px solid transparent;
+  }
+  .tier-card.popular {
+    border-color: rgba(124,58,237,0.5);
+    box-shadow: 0 4px 20px rgba(124,58,237,0.18);
+  }
+  .tier-popular-badge {
+    position: absolute; top: 0; right: 0;
+    background: linear-gradient(90deg,#7c3aed,#a855f7);
+    color: #fff; font-size: 11px; font-weight: 800;
+    padding: 4px 12px; border-bottom-left-radius: 12px;
+  }
+  .tier-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .tier-emoji { font-size: 32px; }
+  .tier-info {}
+  .tier-name  { font-size: 17px; font-weight: 800; }
+  .tier-price { font-size: 13px; color: var(--hint); margin-top: 2px; font-weight: 500; }
+  .tier-perks { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+  .tier-perk  { font-size: 13px; color: var(--text); display: flex; align-items: center; gap: 6px; }
+  .tier-perk::before { content: "✓"; color: var(--green); font-weight: 800; flex-shrink: 0; }
+  .tier-btn {
+    width: 100%; border: none; border-radius: 12px; padding: 11px;
+    font-size: 13.5px; font-weight: 800;
+    background: rgba(120,120,128,0.1); color: var(--hint);
+    cursor: default;
+  }
+  .donate-stars-note {
+    background: var(--secondary-bg); border-radius: var(--card-radius);
+    padding: 16px; text-align: center; font-size: 12.5px; color: var(--hint);
+    line-height: 1.6; box-shadow: var(--shadow);
+  }
+  .donate-stars-note strong { color: var(--text); }
+  .donate-coming-soon {
+    display: inline-block; margin-top: 8px;
+    background: rgba(245,158,11,0.15); color: #f59e0b;
+    font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 8px;
+  }
 </style>
 </head>
 <body>
@@ -371,6 +619,12 @@
     <div class="avatar-ring">📊</div>
     <h1 id="greeting">Моя статистика</h1>
     <p id="subtitle">Загружаем данные…</p>
+  </div>
+
+  <div class="main-tabs" id="mainTabBar">
+    <button class="main-tab active" data-tab="stats">📊 Стата</button>
+    <button class="main-tab tab-casino" data-tab="casino">🎰 Казино</button>
+    <button class="main-tab tab-donate" data-tab="donate">💎 Поддержать</button>
   </div>
 
   <div id="content">
@@ -381,6 +635,9 @@
       <div class="card"><span class="icon">🗑</span><div class="value">—</div><div class="label">Удалений</div></div>
     </div>
   </div>
+
+  <div id="casinoContent" style="display:none"></div>
+  <div id="donateContent" style="display:none"></div>
 
   <button class="refresh-fab" id="refreshBtn" title="Обновить">↻</button>
 
@@ -393,6 +650,10 @@
     let sortMode = "messages";
     let searchQuery = "";
     let currentInitData = "";
+    let currentTab = "stats";
+    let walletData = null;
+    let casinoLoaded = false;
+    const SPIN_SYMBOLS = ["🍒","🍋","🍊","🍇","⭐","💎"];
 
     const AVATAR_COLORS = ["#FF6B6B","#4ECDC4","#45AAF2","#F7B731","#A55EEA","#26DE81","#FD9644","#2BCBBA"];
 
@@ -983,6 +1244,403 @@
       } finally {
         if (fab) setTimeout(() => fab.classList.remove("spinning"), 450);
       }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // MAIN TAB SWITCHING
+    // ══════════════════════════════════════════════════════════════════
+    function switchMainTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll(".main-tab").forEach(btn =>
+        btn.classList.toggle("active", btn.dataset.tab === tab)
+      );
+      document.getElementById("content").style.display       = tab === "stats"  ? "" : "none";
+      document.getElementById("casinoContent").style.display = tab === "casino" ? "" : "none";
+      document.getElementById("donateContent").style.display = tab === "donate" ? "" : "none";
+      document.getElementById("refreshBtn").style.display    = tab === "stats"  ? "" : "none";
+
+      if (tab === "casino") {
+        if (!casinoLoaded && currentInitData) loadWallet();
+        else if (casinoLoaded) renderCasino();
+      }
+      if (tab === "donate") renderDonate();
+      if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+    }
+
+    document.querySelectorAll(".main-tab").forEach(btn =>
+      btn.addEventListener("click", () => switchMainTab(btn.dataset.tab))
+    );
+
+    // ══════════════════════════════════════════════════════════════════
+    // WALLET / CASINO
+    // ══════════════════════════════════════════════════════════════════
+    async function loadWallet() {
+      const el = document.getElementById("casinoContent");
+      el.innerHTML = `<div class="empty skeleton"><span class="big-emoji">🎰</span>Загружаем кошелёк…</div>`;
+      try {
+        const res = await fetch("/app/api/wallet/info", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData: currentInitData}),
+        });
+        if (!res.ok) throw new Error();
+        walletData = await res.json();
+        casinoLoaded = true;
+        renderCasino();
+      } catch {
+        el.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить кошелёк.<br>Попробуй обновить.</div>`;
+      }
+    }
+
+    function renderCasino() {
+      if (!walletData) return;
+      const el = document.getElementById("casinoContent");
+      el.innerHTML = renderWalletCard() + renderSlotsCard() + renderFlipCard();
+      attachCasinoHandlers();
+    }
+
+    function renderWalletCard() {
+      const { balance, total_earned, total_spent, can_claim_daily, seconds_until_next_claim } = walletData;
+      const streak = lastStats?.best_streak || 0;
+      const streakBonus = Math.min(streak * 2, 50);
+      const claimTotal = 50 + streakBonus;
+
+      let claimBtnContent;
+      if (can_claim_daily) {
+        claimBtnContent = `🎁 Получить ${claimTotal} монет${streakBonus > 0 ? ` (+${streakBonus} бонус 🔥)` : ""}`;
+      } else {
+        const hrs  = Math.floor(seconds_until_next_claim / 3600);
+        const mins = Math.floor((seconds_until_next_claim % 3600) / 60);
+        claimBtnContent = `⏰ Через ${hrs > 0 ? hrs + " ч " : ""}${mins} мин`;
+      }
+
+      return `
+        <div class="wallet-card">
+          <div class="wallet-balance-row">
+            <span class="wallet-coin-icon">🪙</span>
+            <span class="wallet-balance" id="walletBalanceEl">${balance.toLocaleString("ru-RU")}</span>
+            <span class="wallet-coin-label">монет</span>
+          </div>
+          <div class="wallet-meta-row">
+            <div class="wallet-meta-cell">
+              <div class="wallet-meta-val">+${total_earned.toLocaleString("ru-RU")}</div>
+              <div class="wallet-meta-lbl">Заработано</div>
+            </div>
+            <div class="wallet-meta-cell">
+              <div class="wallet-meta-val">${total_spent.toLocaleString("ru-RU")}</div>
+              <div class="wallet-meta-lbl">Потрачено</div>
+            </div>
+            <div class="wallet-meta-cell">
+              <div class="wallet-meta-val">${streakBonus > 0 ? "+" + streakBonus : "—"}</div>
+              <div class="wallet-meta-lbl">Бонус серии</div>
+            </div>
+          </div>
+          <button class="claim-btn" id="claimDailyBtn" ${can_claim_daily ? "" : "disabled"}>
+            ${claimBtnContent}
+          </button>
+        </div>
+      `;
+    }
+
+    function renderSlotsCard() {
+      const paytable = [
+        ["💎💎💎", "500 🪙 Джекпот!"],
+        ["⭐⭐⭐", "80 🪙"],
+        ["🍇🍇🍇", "30 🪙"],
+        ["🍊🍊🍊", "15 🪙"],
+        ["🍋🍋🍋", "10 🪙"],
+        ["🍒🍒🍒", "5 🪙"],
+        ["Пара",   "5 🪙"],
+        ["Ничего", "0 🪙"],
+      ].map(([s, p]) => `<div class="paytable-row"><span class="paytable-sym">${s}</span><span class="paytable-pay">${p}</span></div>`).join("");
+
+      return `
+        <div class="casino-card">
+          <div class="casino-card-title">🎰 Слоты</div>
+          <div class="casino-card-sub">Ставка 10 монет — выиграй до 500!</div>
+          <div class="slots-machine">
+            <div class="slots-reels">
+              <div class="slot-reel" id="reel0">🍒</div>
+              <div class="slot-reel" id="reel1">🍒</div>
+              <div class="slot-reel" id="reel2">🍒</div>
+            </div>
+            <div class="slots-result" id="slotsResult"></div>
+          </div>
+          <button class="casino-spin-btn" id="spinBtn">🎰 Крутить (10 🪙)</button>
+          <details style="margin-top:12px">
+            <summary style="font-size:12px;color:var(--hint);cursor:pointer;font-weight:600">Таблица выплат</summary>
+            <div class="paytable" style="margin-top:8px">${paytable}</div>
+          </details>
+        </div>
+      `;
+    }
+
+    function renderFlipCard() {
+      const balance = walletData?.balance || 0;
+      const maxBet  = Math.min(500, balance);
+      return `
+        <div class="casino-card">
+          <div class="casino-card-title">🪙 Монетка</div>
+          <div class="casino-card-sub">Угадай сторону — удвой ставку</div>
+          <div class="flip-coin-display" id="flipCoin">🪙</div>
+          <div class="flip-bet-row">
+            <span class="flip-bet-label">Ставка</span>
+            <input type="number" id="flipBet" class="flip-bet-input"
+              min="10" max="${maxBet}" value="${Math.min(50, maxBet)}" />
+            <span class="flip-bet-label">🪙</span>
+          </div>
+          <div class="flip-presets">
+            ${[10,50,100,200].filter(v => v <= maxBet).map(v =>
+              `<button class="flip-preset-btn" data-preset="${v}">${v}</button>`
+            ).join("")}
+            ${maxBet >= 10 ? `<button class="flip-preset-btn" data-preset="${maxBet}">Всё</button>` : ""}
+          </div>
+          <div class="flip-buttons">
+            <button class="flip-choice-btn heads-btn" id="flipHeadsBtn" data-choice="heads">🦅 Орёл</button>
+            <button class="flip-choice-btn tails-btn" id="flipTailsBtn" data-choice="tails">🪙 Решка</button>
+          </div>
+          <div class="flip-result" id="flipResult"></div>
+        </div>
+      `;
+    }
+
+    function attachCasinoHandlers() {
+      // Daily claim
+      const claimBtn = document.getElementById("claimDailyBtn");
+      if (claimBtn && !claimBtn.disabled) {
+        claimBtn.addEventListener("click", claimDaily);
+      }
+      // Slots spin
+      const spinBtn = document.getElementById("spinBtn");
+      if (spinBtn) spinBtn.addEventListener("click", spinSlots);
+      // Flip presets
+      document.querySelectorAll(".flip-preset-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const inp = document.getElementById("flipBet");
+          if (inp) inp.value = btn.dataset.preset;
+        });
+      });
+      // Flip buttons
+      ["flipHeadsBtn","flipTailsBtn"].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.addEventListener("click", () => doFlip(btn.dataset.choice));
+      });
+    }
+
+    function updateBalanceDisplay(newBalance) {
+      walletData.balance = newBalance;
+      const el = document.getElementById("walletBalanceEl");
+      if (el) {
+        el.textContent = newBalance.toLocaleString("ru-RU");
+        el.classList.add("pop");
+        setTimeout(() => el.classList.remove("pop"), 500);
+      }
+    }
+
+    async function claimDaily() {
+      const btn = document.getElementById("claimDailyBtn");
+      if (!btn || btn.disabled) return;
+      btn.disabled = true; btn.textContent = "⏳ Получаем…";
+      try {
+        const streak = lastStats?.best_streak || 0;
+        const res = await fetch("/app/api/wallet/claim_daily", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData: currentInitData, streakDays: streak}),
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        walletData.can_claim_daily = false;
+        walletData.seconds_until_next_claim = 20 * 3600;
+        walletData.total_earned += data.earned;
+        updateBalanceDisplay(data.new_balance);
+        btn.textContent = `✅ Получено ${data.earned} монет!`;
+        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+        toastMessage(`🎁 +${data.earned} монет${data.streak_bonus > 0 ? ` (включая +${data.streak_bonus} за серию 🔥)` : ""}!`);
+      } catch {
+        btn.disabled = false;
+        btn.textContent = "🎁 Получить награду";
+        toastMessage("Не удалось получить награду.");
+      }
+    }
+
+    async function spinSlots() {
+      const btn = document.getElementById("spinBtn");
+      const resultEl = document.getElementById("slotsResult");
+      if (!btn || btn.disabled) return;
+
+      if ((walletData?.balance || 0) < 10) {
+        toastMessage("Недостаточно монет! Получи ежедневную награду 🎁");
+        return;
+      }
+
+      btn.disabled = true;
+      if (resultEl) resultEl.innerHTML = "";
+      const reels = [0,1,2].map(i => document.getElementById(`reel${i}`));
+      const randomSym = () => SPIN_SYMBOLS[Math.floor(Math.random() * SPIN_SYMBOLS.length)];
+
+      // Start spinning all reels
+      reels.forEach(r => { r.classList.add("spinning"); r.textContent = randomSym(); });
+      // Shuffle symbols during spin
+      const shuffleInterval = setInterval(() => {
+        reels.forEach(r => { if (r.classList.contains("spinning")) r.textContent = randomSym(); });
+      }, 120);
+
+      try {
+        const res = await fetch("/app/api/wallet/slots", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData: currentInitData}),
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+
+        // Stop reels left → middle → right
+        const stopReel = (idx, delay) => setTimeout(() => {
+          clearInterval(shuffleInterval);
+          const reel = reels[idx];
+          reel.classList.remove("spinning");
+          reel.classList.add("stop-anim");
+          reel.textContent = data.reels[idx];
+          if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
+          setTimeout(() => reel.classList.remove("stop-anim"), 350);
+        }, delay);
+
+        stopReel(0, 400);
+        stopReel(1, 800);
+        stopReel(2, 1200);
+
+        setTimeout(() => {
+          walletData.total_spent = (walletData.total_spent || 0) + 10;
+          if (data.payout > 0) walletData.total_earned = (walletData.total_earned || 0) + data.payout;
+          updateBalanceDisplay(data.new_balance);
+
+          if (data.is_jackpot) {
+            resultEl.innerHTML = `<span class="slots-jackpot">💎 ДЖЕКПОТ! +${data.payout} 🪙</span>`;
+            if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+          } else if (data.payout > 0) {
+            resultEl.innerHTML = `<span class="slots-win">🎉 +${data.payout} 🪙 (итого ${data.net >= 0 ? "+" : ""}${data.net})</span>`;
+            if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+          } else {
+            resultEl.innerHTML = `<span class="slots-lose">Не повезло. -10 🪙</span>`;
+            if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
+          }
+          btn.disabled = false;
+        }, 1600);
+
+      } catch {
+        clearInterval(shuffleInterval);
+        reels.forEach(r => { r.classList.remove("spinning"); r.textContent = "❓"; });
+        if (resultEl) resultEl.textContent = "Ошибка. Попробуй ещё раз.";
+        btn.disabled = false;
+      }
+    }
+
+    async function doFlip(choice) {
+      const betInput = document.getElementById("flipBet");
+      const coinEl   = document.getElementById("flipCoin");
+      const resultEl = document.getElementById("flipResult");
+      const headsBtn = document.getElementById("flipHeadsBtn");
+      const tailsBtn = document.getElementById("flipTailsBtn");
+      const bet = Math.max(10, Math.min(Number(betInput?.value) || 50, walletData?.balance || 0));
+
+      if ((walletData?.balance || 0) < bet) {
+        toastMessage("Недостаточно монет!");
+        return;
+      }
+
+      [headsBtn, tailsBtn].forEach(b => { if (b) b.disabled = true; });
+      if (resultEl) resultEl.innerHTML = "";
+      if (coinEl) { coinEl.classList.add("flipping"); coinEl.textContent = "🪙"; }
+
+      try {
+        const res = await fetch("/app/api/wallet/flip", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData: currentInitData, bet, choice}),
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+
+        setTimeout(() => {
+          if (coinEl) {
+            coinEl.classList.remove("flipping");
+            coinEl.textContent = data.server_side === "heads" ? "🦅" : "🪙";
+          }
+          if (data.won) {
+            walletData.total_earned = (walletData.total_earned || 0) + bet;
+            resultEl.innerHTML = `<span class="flip-won">🎉 Угадал! +${bet} 🪙</span>`;
+            if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+          } else {
+            walletData.total_spent = (walletData.total_spent || 0) + bet;
+            resultEl.innerHTML = `<span class="flip-lost">😔 Не угадал. -${bet} 🪙</span>`;
+            if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
+          }
+          updateBalanceDisplay(data.new_balance);
+          [headsBtn, tailsBtn].forEach(b => { if (b) b.disabled = false; });
+          // Update max bet in input
+          const maxBet = Math.min(500, data.new_balance);
+          if (betInput) {
+            betInput.max = maxBet;
+            if (Number(betInput.value) > maxBet) betInput.value = maxBet;
+          }
+        }, 750);
+      } catch {
+        if (coinEl) { coinEl.classList.remove("flipping"); coinEl.textContent = "🪙"; }
+        if (resultEl) resultEl.textContent = "Ошибка. Попробуй ещё раз.";
+        [headsBtn, tailsBtn].forEach(b => { if (b) b.disabled = false; });
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // DONATE / SUPPORT SECTION
+    // ══════════════════════════════════════════════════════════════════
+    function renderDonate() {
+      const el = document.getElementById("donateContent");
+      el.innerHTML = `
+        <div class="donate-header">
+          <div class="donate-icon">💎</div>
+          <div class="donate-title">Поддержать проект</div>
+          <div class="donate-sub">Помоги нам развиваться и получи эксклюзивные возможности для своего аккаунта</div>
+        </div>
+        <div class="tiers-grid">
+          ${renderTier("☕","Кофе","50 ⭐ / месяц",[
+            "Значок поддержателя в профиле",
+            "Наша искренняя благодарность",
+          ], false)}
+          ${renderTier("🚀","Энтузиаст","250 ⭐ / месяц",[
+            "Всё из «Кофе»",
+            "+100 монет к ежедневной награде",
+            "Приоритет в поддержке",
+            "Специальный бейдж 🚀",
+          ], true)}
+          ${renderTier("💎","Спонсор","1000 ⭐ / месяц",[
+            "Всё из «Энтузиаст»",
+            "+500 монет к ежедневной награде",
+            "Эксклюзивные игровые режимы",
+            "Имя в Credits приложения",
+            "Прямой контакт с разработчиком",
+          ], false)}
+        </div>
+        <div class="donate-stars-note">
+          <strong>⭐ Telegram Stars</strong> — встроенная платёжная система Telegram.<br>
+          Покупаются прямо в приложении, безопасно и мгновенно.<br>
+          <span class="donate-coming-soon">🚧 Оплата в разработке</span>
+        </div>
+      `;
+    }
+
+    function renderTier(emoji, name, price, perks, isPopular) {
+      return `
+        <div class="tier-card${isPopular ? " popular" : ""}">
+          ${isPopular ? '<div class="tier-popular-badge">⭐ Хит</div>' : ""}
+          <div class="tier-top">
+            <div class="tier-emoji">${emoji}</div>
+            <div class="tier-info">
+              <div class="tier-name">${name}</div>
+              <div class="tier-price">${price}</div>
+            </div>
+          </div>
+          <div class="tier-perks">${perks.map(p => `<div class="tier-perk">${p}</div>`).join("")}</div>
+          <button class="tier-btn" disabled>Скоро доступно</button>
+        </div>
+      `;
     }
 
     document.getElementById("refreshBtn").addEventListener("click", () => loadStats(true));

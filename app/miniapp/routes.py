@@ -18,6 +18,7 @@ from app.miniapp.auth import verify_init_data
 from app.models.admin_action_log import AdminActionLog
 from app.models.business_connection import BusinessConnection
 from app.repositories.message_repository import MessageFilters, MessageRepository
+from app.repositories.wallet_repository import WalletRepository
 from app.services.stats_service import StatsService
 
 logger = get_logger(__name__)
@@ -117,6 +118,33 @@ class StreakRemindRequest(BaseModel):
     init_data: str = Field(alias="initData")
     chat_id: int = Field(alias="chatId")
     streak_days: int = Field(alias="streakDays")
+
+
+class WalletRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    init_data: str = Field(alias="initData")
+
+
+class ClaimDailyRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    init_data: str = Field(alias="initData")
+    streak_days: int = Field(default=0, alias="streakDays")
+
+
+class SlotSpinRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    init_data: str = Field(alias="initData")
+
+
+class FlipRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    init_data: str = Field(alias="initData")
+    bet: int
+    choice: str  # "heads" or "tails"
 
 
 def _require_admin(init_data: str) -> dict:
@@ -411,6 +439,99 @@ def _build_streak_remind_text(streak_days: int) -> str:
             "Напоминаю о себе — держим серию? 🔥"
         )
     return "👋 Привет! Просто напоминаю о себе 😊"
+
+
+@router.post("/app/api/wallet/info")
+async def wallet_info(
+    payload: WalletRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid init data")
+    owner_id = int(user["id"])
+    repo = WalletRepository(session)
+    wallet = await repo.get_or_create(owner_id)
+    can_claim, secs = repo.daily_claim_status(wallet)
+    return {
+        "balance": wallet.balance,
+        "total_earned": wallet.total_earned,
+        "total_spent": wallet.total_spent,
+        "can_claim_daily": can_claim,
+        "seconds_until_next_claim": secs,
+    }
+
+
+@router.post("/app/api/wallet/claim_daily")
+async def wallet_claim_daily(
+    payload: ClaimDailyRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid init data")
+    owner_id = int(user["id"])
+    repo = WalletRepository(session)
+    wallet = await repo.get_or_create(owner_id)
+    try:
+        result = await repo.claim_daily(wallet, streak_days=payload.streak_days)
+    except ValueError as e:
+        raise HTTPException(status_code=429, detail=str(e)) from e
+    return {
+        "earned": result.earned,
+        "base": result.base,
+        "streak_bonus": result.streak_bonus,
+        "new_balance": result.new_balance,
+    }
+
+
+@router.post("/app/api/wallet/slots")
+async def wallet_slots(
+    payload: SlotSpinRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid init data")
+    owner_id = int(user["id"])
+    repo = WalletRepository(session)
+    wallet = await repo.get_or_create(owner_id)
+    try:
+        result = await repo.spin_slots(wallet)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return {
+        "reels": result.reels,
+        "payout": result.payout,
+        "net": result.net,
+        "is_jackpot": result.is_jackpot,
+        "new_balance": result.new_balance,
+    }
+
+
+@router.post("/app/api/wallet/flip")
+async def wallet_flip(
+    payload: FlipRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid init data")
+    if payload.choice not in ("heads", "tails"):
+        raise HTTPException(status_code=400, detail="choice must be heads or tails")
+    owner_id = int(user["id"])
+    repo = WalletRepository(session)
+    wallet = await repo.get_or_create(owner_id)
+    try:
+        result = await repo.flip_coin(wallet, payload.bet, payload.choice)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return {
+        "server_side": result.server_side,
+        "won": result.won,
+        "amount_change": result.amount_change,
+        "new_balance": result.new_balance,
+    }
 
 
 @router.post("/app/api/admin/overview")

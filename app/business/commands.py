@@ -25,13 +25,15 @@ import re
 
 from aiogram import Bot
 from aiogram.methods import DeleteMessage
-from sqlalchemy import func, select
+from aiogram.types import BufferedInputFile
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.logging_config import get_logger
 from app.models.message import Message
 from app.repositories.chat_settings_repository import ChatSettingsRepository
 from app.repositories.contact_note_repository import ContactNoteRepository
+from app.services.chart_service import InfoStats, render_info_image
 
 logger = get_logger(__name__)
 
@@ -118,71 +120,135 @@ async def _cmd_info(
     session: AsyncSession,
     **_: object,
 ) -> None:
-    # --- Message counts ---
     base = [
         Message.business_connection_id == business_connection_id,
         Message.chat_id == chat_id,
     ]
-    total = (
-        await session.execute(
-            select(func.count()).select_from(Message).where(*base)
-        )
-    ).scalar_one()
-    deleted = (
-        await session.execute(
-            select(func.count())
-            .select_from(Message)
-            .where(*base, Message.is_deleted.is_(True))
-        )
-    ).scalar_one()
-    edited = (
-        await session.execute(
-            select(func.count())
-            .select_from(Message)
-            .where(*base, Message.is_edited.is_(True))
-        )
-    ).scalar_one()
-    first_seen = (
-        await session.execute(
-            select(func.min(Message.sent_at)).where(*base)
-        )
-    ).scalar_one()
-    last_seen = (
-        await session.execute(
-            select(func.max(Message.sent_at)).where(*base)
-        )
-    ).scalar_one()
+    now = dt.datetime.now(dt.UTC)
 
-    del_pct = round(deleted / total * 100) if total else 0
+    # --- Aggregate counts in one query ---
+    agg = (
+        await session.execute(
+            select(
+                func.count().label("total"),
+                func.sum(case((Message.is_deleted.is_(True), 1), else_=0)).label("deleted"),
+                func.sum(case((Message.is_edited.is_(True), 1), else_=0)).label("edited"),
+                func.sum(case((Message.sender_telegram_id != owner_id, 1), else_=0)).label("incoming"),
+                func.sum(case((Message.sender_telegram_id == owner_id, 1), else_=0)).label("outgoing"),
+                func.min(Message.sent_at).label("first_seen"),
+                func.max(Message.sent_at).label("last_seen"),
+            ).select_from(Message).where(*base)
+        )
+    ).one()
 
-    # --- Mute status ---
+    total    = agg.total    or 0
+    deleted  = agg.deleted  or 0
+    edited   = agg.edited   or 0
+    incoming = agg.incoming or 0
+    outgoing = agg.outgoing or 0
+
+    # --- Daily breakdown (last 30 days, non-deleted) ---
+    thirty_days_ago = now - dt.timedelta(days=30)
+    daily_rows = (
+        await session.execute(
+            select(
+                func.date_trunc("day", Message.sent_at).label("day"),
+                func.sum(case((Message.sender_telegram_id != owner_id, 1), else_=0)).label("inbound"),
+                func.sum(case((Message.sender_telegram_id == owner_id, 1), else_=0)).label("outbound"),
+            )
+            .where(
+                *base,
+                Message.sent_at >= thirty_days_ago,
+                Message.is_deleted.is_(False),
+            )
+            .group_by("day")
+            .order_by("day")
+        )
+    ).all()
+
+    daily: list[tuple[str, int, int]] = [
+        (r.day.strftime("%d.%m"), int(r.inbound or 0), int(r.outbound or 0))
+        for r in daily_rows
+    ]
+
+    # --- Contact display name (most recent message from the interlocutor) ---
+    name_row = (
+        await session.execute(
+            select(
+                Message.sender_first_name,
+                Message.sender_last_name,
+                Message.sender_username,
+            )
+            .where(
+                *base,
+                Message.sender_telegram_id != owner_id,
+                Message.sender_telegram_id.is_not(None),
+                Message.is_deleted.is_(False),
+            )
+            .order_by(Message.sent_at.desc())
+            .limit(1)
+        )
+    ).first()
+
+    if name_row:
+        parts = [p for p in (name_row[0], name_row[1]) if p]
+        contact_name = " ".join(parts) if parts else (
+            f"@{name_row[2]}" if name_row[2] else f"Собеседник {chat_id}"
+        )
+    else:
+        contact_name = f"Собеседник {chat_id}"
+
+    # --- Mute status + notes ---
     chat_repo = ChatSettingsRepository(session)
-    settings = await chat_repo.get(business_connection_id, chat_id)
-    muted_line = ""
-    if settings and settings.muted_until and settings.muted_until > dt.datetime.now(dt.UTC):
-        until_str = settings.muted_until.strftime("%d.%m %H:%M UTC")
-        muted_line = f"\n🔕 Уведомления отключены до {until_str}"
-
-    # --- Notes count ---
-    note_repo = ContactNoteRepository(session)
-    note_count = len(await note_repo.get_for_chat(business_connection_id, chat_id))
-    notes_line = f"\n📝 Заметок: {note_count}" if note_count else ""
-
-    first_str = first_seen.strftime("%d.%m.%Y") if first_seen else "—"
-    last_str = last_seen.strftime("%d.%m %H:%M") if last_seen else "—"
-
-    text = (
-        "📊 <b>Статистика чата</b>\n\n"
-        f"💬 Сообщений: <b>{total}</b>\n"
-        f"🗑 Удалено: <b>{deleted}</b> ({del_pct}%)\n"
-        f"✏️ Отредактировано: <b>{edited}</b>\n"
-        f"📅 Первое: {first_str}\n"
-        f"🕐 Последнее: {last_str}"
-        f"{notes_line}"
-        f"{muted_line}"
-        "\n\n<i>Учитываются только сообщения с момента подключения бота.</i>"
+    settings  = await chat_repo.get(business_connection_id, chat_id)
+    muted_until = (
+        settings.muted_until
+        if settings and settings.muted_until and settings.muted_until > now
+        else None
     )
-    await _reply(bot, owner_id, text)
+
+    note_repo  = ContactNoteRepository(session)
+    note_count = len(await note_repo.get_for_chat(business_connection_id, chat_id))
+
+    # --- Render image ---
+    info = InfoStats(
+        contact_name=contact_name,
+        total=total,
+        incoming=incoming,
+        outgoing=outgoing,
+        deleted=deleted,
+        edited=edited,
+        first_seen=agg.first_seen,
+        last_seen=agg.last_seen,
+        note_count=note_count,
+        muted_until=muted_until,
+        daily=daily,
+    )
+
+    try:
+        buf = render_info_image(info)
+        photo = BufferedInputFile(buf.getvalue(), filename="stats.png")
+        await bot.send_photo(chat_id=owner_id, photo=photo)
+    except Exception:
+        logger.exception("Failed to render !info image; falling back to text")
+        del_pct   = round(deleted / total * 100) if total else 0
+        first_str = agg.first_seen.strftime("%d.%m.%Y") if agg.first_seen else "—"
+        last_str  = agg.last_seen.strftime("%d.%m %H:%M")  if agg.last_seen  else "—"
+        notes_line = f"\n📝 Заметок: {note_count}" if note_count else ""
+        muted_line = (
+            f"\n🔕 до {muted_until.strftime('%d.%m %H:%M UTC')}" if muted_until else ""
+        )
+        await _reply(
+            bot, owner_id,
+            "📊 <b>Статистика чата</b>\n\n"
+            f"💬 Сообщений: <b>{total}</b>\n"
+            f"🗑 Удалено: <b>{deleted}</b> ({del_pct}%)\n"
+            f"✏️ Отредактировано: <b>{edited}</b>\n"
+            f"📅 Первое: {first_str}\n"
+            f"🕐 Последнее: {last_str}"
+            f"{notes_line}{muted_line}\n\n"
+            "<i>Учитываются только сообщения с момента подключения бота.</i>",
+        )
 
 
 async def _cmd_note(

@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "KOX7pSDh10ePjb8T4FnTR"
+uri = "file://attached_assets/stats_preview.png"
+type = "image"
+title = "Превью карточки !info"

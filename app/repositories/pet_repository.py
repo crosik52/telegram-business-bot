@@ -325,6 +325,66 @@ class PetRepository:
             await self._session.rollback()
             raise ValueError("pet_exists")
 
+        # ── Mirror pet for partner (B) ────────────────────────────────────
+        # Derive owner's display name as seen from B's side
+        mirror_created = False
+        b_conn_ids = await self._get_conn_ids(chat_id)
+        owner_name_row = None
+        if b_conn_ids:
+            owner_name_row = (
+                await self._session.execute(
+                    select(
+                        Message.sender_first_name,
+                        Message.sender_last_name,
+                        Message.sender_username,
+                    )
+                    .where(
+                        Message.business_connection_id.in_(b_conn_ids),
+                        Message.chat_id == owner_telegram_id,
+                        Message.sender_telegram_id == owner_telegram_id,
+                        Message.is_deleted.is_(False),
+                    )
+                    .order_by(Message.sent_at.desc())
+                    .limit(1)
+                )
+            ).first()
+
+        owner_display_name = (
+            _display_name(owner_name_row[0], owner_name_row[1], owner_name_row[2], owner_telegram_id)
+            if owner_name_row
+            else f"Собеседник {owner_telegram_id}"
+        )
+
+        # Only create mirror if B has no alive pet with A already
+        b_existing = (
+            await self._session.execute(
+                select(ChatPet).where(
+                    ChatPet.owner_telegram_id == chat_id,
+                    ChatPet.chat_id == owner_telegram_id,
+                    ChatPet.is_alive.is_(True),
+                )
+            )
+        ).scalar_one_or_none()
+
+        if not b_existing:
+            mirror = ChatPet(
+                owner_telegram_id=chat_id,
+                chat_id=owner_telegram_id,
+                pet_name=pet_name,
+                species=species,
+                interlocutor_name=owner_display_name,
+                is_alive=True,
+                born_at=now,
+            )
+            try:
+                async with self._session.begin_nested():   # SAVEPOINT
+                    self._session.add(mirror)
+                    await self._session.flush()
+                mirror_created = True
+            except IntegrityError:
+                # Race: B already has a pet — savepoint auto-rolled back, main pet intact
+                pass
+
         return {
             "id": pet.id,
             "pet_name": pet.pet_name,
@@ -334,6 +394,7 @@ class PetRepository:
             "is_alive": True,
             "interlocutor_name": interlocutor_name,
             "days_alive": 0,
+            "mirror_created": mirror_created,
         }
 
     async def feed(self, owner_telegram_id: int, pet_id: int) -> dict:

@@ -883,6 +883,36 @@ async def miniapp_pet_adopt(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     await session.commit()
+
+    # ── Notify partner (B) about the new shared pet ───────────────────────
+    try:
+        from app.business.dispatcher import get_bot
+        from app.repositories.pet_repository import SPECIES as _SPECIES
+
+        owner_first = user.get("first_name", "")
+        owner_last  = user.get("last_name", "")
+        owner_name  = (owner_first + " " + owner_last).strip() or (
+            f"@{user['username']}" if user.get("username") else "Пользователь"
+        )
+        species_info = _SPECIES.get(pet["species"], {})
+        species_label = species_info.get("label", pet["species"])
+        pet_emoji = (species_info.get("stages") or ["🐾"])[-1]  # adult emoji
+
+        action = "завёл" if pet.get("mirror_created") else "тоже завёл"
+        bot = get_bot(settings)
+        await bot.send_message(
+            chat_id=payload.chat_id,
+            text=(
+                f"🐾 <b>{owner_name}</b> {action} с тобой питомца!\n\n"
+                f"{pet_emoji} <b>{pet['pet_name']}</b> — {species_label}\n\n"
+                f"Питомец появился в твоём приложении. "
+                f"Не забывай кормить его, чтобы он не умер с голоду 🍖"
+            ),
+            parse_mode="HTML",
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Pet adopt notify failed for chat_id=%s: %s", payload.chat_id, exc)
+
     return {"ok": True, "pet": pet}
 
 

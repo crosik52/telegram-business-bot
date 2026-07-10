@@ -307,22 +307,26 @@ async def on_business_message(message: Message, bot: Bot) -> None:
         return
 
     async with session_scope() as session:
+        # Always load the connection so we know the owner's ID for is_outgoing.
+        conn_result = await session.execute(
+            select(BCModel).where(
+                BCModel.business_connection_id == message.business_connection_id
+            )
+        )
+        connection = conn_result.scalar_one_or_none()
+        owner_telegram_id = connection.user_telegram_id if connection else None
+
         service = MessageService(session)
         await service.ingest_new_message(
-            message, business_connection_id=message.business_connection_id
+            message,
+            business_connection_id=message.business_connection_id,
+            owner_telegram_id=owner_telegram_id,
         )
 
         # --- Owner command detection ---
         sender = message.from_user
-        if sender is not None and message.text and message.text.startswith("!"):
-            result = await session.execute(
-                select(BCModel).where(
-                    BCModel.business_connection_id == message.business_connection_id
-                )
-            )
-            connection = result.scalar_one_or_none()
-
-            if connection and sender.id == connection.user_telegram_id:
+        if connection and sender is not None and message.text and message.text.startswith("!"):
+            if sender.id == connection.user_telegram_id:
                 parsed = commands.parse_command(message.text)
                 if parsed:
                     cmd, args = parsed

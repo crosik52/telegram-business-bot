@@ -122,6 +122,7 @@ class PetRepository:
                         select(Message.chat_id.distinct()).where(
                             Message.business_connection_id.in_(conn_ids),
                             Message.chat_id.in_(alive_chat_ids),
+                            Message.chat_id != owner_telegram_id,
                             Message.sent_at >= two_days_ago,
                             Message.is_deleted.is_(False),
                         )
@@ -182,6 +183,7 @@ class PetRepository:
                     select(Message.chat_id, func.count(Message.id).label("cnt"))
                     .where(
                         Message.business_connection_id.in_(conn_ids),
+                        Message.chat_id != owner_telegram_id,  # exclude self-chat
                         Message.sent_at >= two_days_ago,
                         Message.is_deleted.is_(False),
                     )
@@ -194,7 +196,9 @@ class PetRepository:
             counts = {r[0]: r[1] for r in activity_rows}
 
             if candidate_ids:
-                # Get display name from most recent inbound message per chat
+                # Get display name from the most recent message sent BY the
+                # interlocutor (sender_telegram_id != owner) — works correctly
+                # even for rows where is_outgoing was incorrectly stored as False.
                 name_rows = (
                     await self._session.execute(
                         select(
@@ -206,7 +210,8 @@ class PetRepository:
                         .where(
                             Message.business_connection_id.in_(conn_ids),
                             Message.chat_id.in_(candidate_ids),
-                            Message.is_outgoing.is_(False),
+                            Message.sender_telegram_id != owner_telegram_id,
+                            Message.sender_telegram_id.is_not(None),
                             Message.is_deleted.is_(False),
                         )
                         .distinct(Message.chat_id)

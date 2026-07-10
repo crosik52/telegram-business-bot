@@ -89,7 +89,11 @@ class MessageService:
         self._users = UserRepository(session)
 
     async def ingest_new_message(
-        self, message: AiogramMessage, *, business_connection_id: str
+        self,
+        message: AiogramMessage,
+        *,
+        business_connection_id: str,
+        owner_telegram_id: int | None = None,
     ) -> Message:
         sender = message.from_user
         media_type, file_id, file_unique_id = _resolve_media(message)
@@ -119,7 +123,11 @@ class MessageService:
             sender_username=sender.username if sender else None,
             sender_first_name=sender.first_name if sender else None,
             sender_last_name=sender.last_name if sender else None,
-            is_outgoing=bool(sender and getattr(sender, "is_bot", False) is False and False),
+            is_outgoing=bool(
+                sender
+                and owner_telegram_id is not None
+                and sender.id == owner_telegram_id
+            ),
             text=message.text,
             caption=message.caption,
             original_text=message.text,

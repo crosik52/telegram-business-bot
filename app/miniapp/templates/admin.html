@@ -521,6 +521,112 @@
     transition: background 0.15s, color 0.15s;
   }
   .balance-mode-btn.active { border-color: transparent; }
+
+  /* ── Subscription admin tab ── */
+  .sub-admin-card {
+    background: var(--secondary-bg); border-radius: var(--card-radius);
+    padding: 16px; box-shadow: var(--shadow); margin-bottom: 14px;
+  }
+  .sub-admin-title {
+    font-size: 14px; font-weight: 700; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .sub-field { margin-bottom: 12px; }
+  .sub-field label { font-size: 12px; color: var(--hint); font-weight: 600; display: block; margin-bottom: 5px; }
+  .sub-field input[type="text"],
+  .sub-field input[type="number"],
+  .sub-field textarea {
+    width: 100%; border: 1.5px solid rgba(120,120,128,0.2);
+    border-radius: 12px; padding: 10px 12px;
+    font-size: 14px; font-family: inherit; color: var(--text);
+    background: var(--bg); outline: none; transition: border-color .2s;
+    box-sizing: border-box;
+  }
+  .sub-field input:focus,
+  .sub-field textarea:focus { border-color: var(--link); }
+  .sub-toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 0; border-bottom: 1px solid rgba(120,120,128,.09); margin-bottom: 12px;
+  }
+  .sub-toggle-lbl { font-size: 14px; font-weight: 700; }
+  .sub-toggle-sub { font-size: 12px; color: var(--hint); }
+  .toggle-switch {
+    position: relative; width: 46px; height: 26px; flex-shrink: 0;
+  }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute; cursor: pointer; inset: 0;
+    background: rgba(120,120,128,0.25); border-radius: 13px; transition: .3s;
+  }
+  .toggle-slider::before {
+    content: ""; position: absolute; height: 20px; width: 20px;
+    left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .3s;
+    box-shadow: 0 1px 3px rgba(0,0,0,.25);
+  }
+  .toggle-switch input:checked + .toggle-slider { background: var(--green); }
+  .toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); }
+  .benefit-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 0; border-bottom: 1px solid rgba(120,120,128,.07);
+  }
+  .benefit-row:last-child { border-bottom: none; }
+  .benefit-name { font-size: 13px; font-weight: 600; }
+  .benefit-hint { font-size: 11px; color: var(--hint); }
+  .benefit-input {
+    border: 1.5px solid rgba(120,120,128,0.2); border-radius: 10px;
+    padding: 5px 8px; font-size: 13px; font-weight: 700;
+    background: var(--bg); color: var(--text); width: 70px; text-align: center;
+  }
+  .sub-save-btn {
+    width: 100%; border: none; border-radius: 14px; padding: 13px;
+    font-size: 14px; font-weight: 700;
+    background: linear-gradient(90deg, #5856d6, var(--link));
+    color: #fff; box-shadow: 0 3px 10px rgba(36,129,204,.25);
+    touch-action: manipulation;
+  }
+  .sub-save-btn:disabled { opacity: .5; }
+  .sub-subscriber-card {
+    background: var(--bg); border-radius: 14px;
+    padding: 13px 14px; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 12px;
+    border: 1px solid rgba(120,120,128,.09);
+  }
+  .sub-sub-avatar {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: linear-gradient(135deg, #5856d6, var(--link));
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 18px; flex-shrink: 0;
+  }
+  .sub-sub-info { flex: 1; min-width: 0; }
+  .sub-sub-id   { font-size: 13px; font-weight: 700; }
+  .sub-sub-meta { font-size: 11.5px; color: var(--hint); margin-top: 2px; }
+  .sub-revoke-btn {
+    border: none; border-radius: 9px; padding: 6px 11px;
+    font-size: 12px; font-weight: 700;
+    background: rgba(255,59,48,.12); color: var(--danger);
+    touch-action: manipulation;
+  }
+  .sub-grant-form {
+    display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;
+  }
+  .sub-grant-form input {
+    flex: 1; min-width: 120px; border: 1.5px solid rgba(120,120,128,0.2);
+    border-radius: 11px; padding: 9px 12px;
+    font-size: 13px; background: var(--bg); color: var(--text); outline: none;
+    box-sizing: border-box;
+  }
+  .sub-grant-btn {
+    border: none; border-radius: 11px; padding: 9px 14px;
+    font-size: 13px; font-weight: 700;
+    background: rgba(52,199,89,.13); color: var(--green);
+    touch-action: manipulation; white-space: nowrap;
+  }
+  .sub-status-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 8px;
+  }
+  .sub-status-pill.on  { background: rgba(52,199,89,.14);  color: var(--green); }
+  .sub-status-pill.off { background: rgba(255,59,48,.14);  color: var(--danger); }
 </style>
 </head>
 <body>
@@ -535,6 +641,7 @@
     <button class="tab-chip" data-tab="growth">📈 Аналитика</button>
     <button class="tab-chip" data-tab="broadcast">📢 Рассылка</button>
     <button class="tab-chip" data-tab="log">📜 Журнал</button>
+    <button class="tab-chip" data-tab="subscription">⭐ Подписка</button>
     <button class="tab-chip" id="btnInfographic" onclick="downloadInfographic(this)">📊 Инфографика</button>
   </div>
 
@@ -736,10 +843,11 @@
       document.querySelectorAll("#mainTabs .tab-chip").forEach(btn => {
         btn.classList.toggle("active", btn.dataset.tab === tab);
       });
-      if (tab === "users")     render();
+      if (tab === "users")          render();
       else if (tab === "growth")    loadGrowth();
       else if (tab === "broadcast") renderBroadcastTab();
       else if (tab === "log")       loadActionLog(1);
+      else if (tab === "subscription") loadSubscriptionTab();
     }
 
     function render() {
@@ -1448,6 +1556,258 @@
         btn.disabled = false;
         btn.innerHTML = orig;
       }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // SUBSCRIPTION TAB
+    // ══════════════════════════════════════════════════════════════════
+
+    let subConfig = null;
+
+    async function loadSubscriptionTab() {
+      const content = document.getElementById("content");
+      document.getElementById("subtitle").textContent = "⭐ Управление подпиской";
+      content.innerHTML = `<div style="padding:20px;text-align:center;color:var(--hint)">Загружаем…</div>`;
+      content.style.display = "";
+      document.getElementById("casinoContent") && (document.getElementById("casinoContent").style.display = "none");
+      document.getElementById("questContent")  && (document.getElementById("questContent").style.display  = "none");
+      document.getElementById("donateContent") && (document.getElementById("donateContent").style.display = "none");
+
+      try {
+        const res = await fetch("/app/api/admin/subscription/config", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData}),
+        });
+        if (!res.ok) throw new Error();
+        subConfig = await res.json();
+
+        const subsRes = await fetch("/app/api/admin/subscription/subscribers", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData, page: 1}),
+        });
+        const subsData = subsRes.ok ? await subsRes.json() : {total: 0, subscribers: []};
+
+        content.innerHTML = renderSubscriptionTab(subConfig, subsData);
+        attachSubscriptionTabHandlers();
+      } catch {
+        content.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить данные подписки.</div>`;
+      }
+    }
+
+    function renderSubscriptionTab(cfg, subsData) {
+      const b = cfg.benefits || {};
+      const isOn = cfg.is_enabled;
+      const pill = isOn
+        ? `<span class="sub-status-pill on">✓ Включена</span>`
+        : `<span class="sub-status-pill off">✗ Выключена</span>`;
+
+      return `
+        <!-- Status header -->
+        <div class="sub-admin-card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div>
+            <div style="font-size:16px;font-weight:800;margin-bottom:4px">⭐ Premium подписка</div>
+            <div style="font-size:12px;color:var(--hint)">${subsData.total} активных подписчиков</div>
+          </div>
+          ${pill}
+        </div>
+
+        <!-- Config form -->
+        <div class="sub-admin-card">
+          <div class="sub-admin-title">⚙️ Настройки подписки</div>
+
+          <div class="sub-toggle-row">
+            <div>
+              <div class="sub-toggle-lbl">Включить подписку</div>
+              <div class="sub-toggle-sub">Показывать пользователям возможность купить подписку</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="subEnabled" ${isOn ? "checked" : ""}>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="sub-field">
+            <label>Цена (Stars ⭐)</label>
+            <input type="number" id="subPrice" value="${cfg.price_stars}" min="1" max="10000" step="1">
+          </div>
+          <div class="sub-field">
+            <label>Длительность (дней)</label>
+            <input type="number" id="subDuration" value="${cfg.duration_days}" min="1" max="365" step="1">
+          </div>
+          <div class="sub-field">
+            <label>Заголовок</label>
+            <input type="text" id="subTitle" value="${esc(cfg.title)}">
+          </div>
+          <div class="sub-field">
+            <label>Описание</label>
+            <textarea id="subDesc" rows="2" style="resize:none">${esc(cfg.description)}</textarea>
+          </div>
+        </div>
+
+        <!-- Benefits -->
+        <div class="sub-admin-card">
+          <div class="sub-admin-title">🎁 Бонусы подписки</div>
+
+          <div class="benefit-row">
+            <div>
+              <div class="benefit-name">🎁 Множитель монет (ежедневно)</div>
+              <div class="benefit-hint">×N к ежедневной награде</div>
+            </div>
+            <input class="benefit-input" type="number" id="bDailyMult" value="${b.daily_multiplier ?? 1}" min="1" max="10" step="0.5">
+          </div>
+
+          <div class="benefit-row">
+            <div>
+              <div class="benefit-name">💰 Бонус монет (ежедневно)</div>
+              <div class="benefit-hint">Дополнительно к базовым наградам</div>
+            </div>
+            <input class="benefit-input" type="number" id="bDailyBonus" value="${b.daily_bonus_coins ?? 0}" min="0" max="9999" step="5">
+          </div>
+
+          <div class="benefit-row">
+            <div>
+              <div class="benefit-name">🍖 Бесплатное кормление питомца</div>
+              <div class="benefit-hint">Кормление не тратит монеты</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="bFeedFree" ${b.pet_feed_free ? "checked" : ""}>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="benefit-row">
+            <div>
+              <div class="benefit-name">⭐ Множитель XP питомца</div>
+              <div class="benefit-hint">×N к опыту за все действия</div>
+            </div>
+            <input class="benefit-input" type="number" id="bXpMult" value="${b.xp_multiplier ?? 1}" min="1" max="5" step="0.25">
+          </div>
+
+          <div class="benefit-row">
+            <div>
+              <div class="benefit-name">🐾 Бонус слотов питомцев</div>
+              <div class="benefit-hint">+N дополнительных питомцев</div>
+            </div>
+            <input class="benefit-input" type="number" id="bMaxPets" value="${b.max_pets_bonus ?? 0}" min="0" max="20" step="1">
+          </div>
+        </div>
+
+        <button class="sub-save-btn" id="subSaveBtn">💾 Сохранить настройки</button>
+
+        <!-- Grant subscription -->
+        <div class="sub-admin-card" style="margin-top:14px">
+          <div class="sub-admin-title">🎁 Выдать подписку</div>
+          <div class="sub-grant-form">
+            <input type="number" id="grantUserId" placeholder="Telegram ID пользователя" min="1">
+            <input type="number" id="grantDays" placeholder="Дней" value="30" min="1" max="365" style="max-width:90px">
+            <button class="sub-grant-btn" id="subGrantBtn">✓ Выдать</button>
+          </div>
+        </div>
+
+        <!-- Subscribers list -->
+        <div class="sub-admin-card">
+          <div class="sub-admin-title">👥 Активные подписчики (${subsData.total})</div>
+          ${subsData.subscribers.length === 0
+            ? `<div style="text-align:center;color:var(--hint);padding:20px 0">Нет активных подписчиков</div>`
+            : subsData.subscribers.map(s => renderSubscriberCard(s)).join("")
+          }
+        </div>`;
+    }
+
+    function renderSubscriberCard(s) {
+      const badge = s.granted_by_admin
+        ? `<span style="background:rgba(255,204,0,.15);color:#c9920a;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px">👑 Выдана</span>`
+        : `<span style="background:rgba(36,129,204,.12);color:var(--link);font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px">⭐ Куплена</span>`;
+      return `
+        <div class="sub-subscriber-card">
+          <div class="sub-sub-avatar">⭐</div>
+          <div class="sub-sub-info">
+            <div class="sub-sub-id">${s.user_telegram_id} ${badge}</div>
+            <div class="sub-sub-meta">Ещё ${s.days_left} дн. · до ${s.expires_at.slice(0,10)}${s.stars_paid > 0 ? ` · ${s.stars_paid}⭐` : ""}</div>
+          </div>
+          <button class="sub-revoke-btn" data-user-id="${s.user_telegram_id}">✗ Отозвать</button>
+        </div>`;
+    }
+
+    function attachSubscriptionTabHandlers() {
+      // Save config
+      document.getElementById("subSaveBtn")?.addEventListener("click", async (e) => {
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        btn.textContent = "Сохраняем…";
+        try {
+          const res = await fetch("/app/api/admin/subscription/update", {
+            method: "POST", headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({
+              initData,
+              isEnabled:    document.getElementById("subEnabled").checked,
+              priceStars:   parseInt(document.getElementById("subPrice").value),
+              durationDays: parseInt(document.getElementById("subDuration").value),
+              title:        document.getElementById("subTitle").value.trim(),
+              description:  document.getElementById("subDesc").value.trim(),
+              benefits: {
+                daily_multiplier:  parseFloat(document.getElementById("bDailyMult").value)  || 1,
+                daily_bonus_coins: parseInt(document.getElementById("bDailyBonus").value)   || 0,
+                pet_feed_free:     document.getElementById("bFeedFree").checked,
+                xp_multiplier:     parseFloat(document.getElementById("bXpMult").value)     || 1,
+                max_pets_bonus:    parseInt(document.getElementById("bMaxPets").value)       || 0,
+              },
+            }),
+          });
+          if (!res.ok) throw new Error();
+          subConfig = await res.json();
+          showToast("✅ Настройки подписки сохранены");
+        } catch {
+          showToast("❌ Ошибка при сохранении");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "💾 Сохранить настройки";
+        }
+      });
+
+      // Grant subscription
+      document.getElementById("subGrantBtn")?.addEventListener("click", async (e) => {
+        const btn = e.currentTarget;
+        const userId = parseInt(document.getElementById("grantUserId").value);
+        const days   = parseInt(document.getElementById("grantDays").value) || 30;
+        if (!userId) { showToast("⚠️ Введи Telegram ID"); return; }
+        btn.disabled = true;
+        try {
+          const res = await fetch("/app/api/admin/subscription/grant", {
+            method: "POST", headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({initData, ownerTelegramId: userId, durationDays: days}),
+          });
+          if (!res.ok) throw new Error();
+          showToast(`✅ Подписка выдана пользователю ${userId} на ${days} дн.`);
+          document.getElementById("grantUserId").value = "";
+          // Reload the tab
+          await loadSubscriptionTab();
+        } catch {
+          showToast("❌ Ошибка при выдаче подписки");
+          btn.disabled = false;
+        }
+      });
+
+      // Revoke buttons
+      document.querySelectorAll(".sub-revoke-btn").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+          const userId = parseInt(e.currentTarget.dataset.userId);
+          if (!confirm(`Отозвать подписку у пользователя ${userId}?`)) return;
+          e.currentTarget.disabled = true;
+          try {
+            const res = await fetch("/app/api/admin/subscription/revoke", {
+              method: "POST", headers: {"Content-Type":"application/json"},
+              body: JSON.stringify({initData, ownerTelegramId: userId}),
+            });
+            if (!res.ok) throw new Error();
+            showToast(`✅ Подписка отозвана у ${userId}`);
+            await loadSubscriptionTab();
+          } catch {
+            showToast("❌ Ошибка при отзыве подписки");
+            e.currentTarget.disabled = false;
+          }
+        });
+      });
     }
   </script>
 </body>

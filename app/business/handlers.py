@@ -33,8 +33,8 @@ from __future__ import annotations
 import asyncio
 from html import escape as html_escape
 
-from aiogram import Bot, Router
-from aiogram.types import BusinessConnection, BusinessMessagesDeleted, Message
+from aiogram import Bot, F, Router
+from aiogram.types import BusinessConnection, BusinessMessagesDeleted, Message, PreCheckoutQuery
 from sqlalchemy import select
 
 from app.business import commands
@@ -44,6 +44,7 @@ from app.logging_config import get_logger
 from app.models.business_connection import BusinessConnection as BCModel
 from app.models.message import MediaType, Message as DBMessage
 from app.repositories.chat_settings_repository import ChatSettingsRepository
+from app.repositories.subscription_repository import SubscriptionRepository
 from app.services.message_service import MessageService
 from app.services.video_service import extract_video_url, handle_video_link
 
@@ -590,3 +591,50 @@ async def on_deleted_business_messages(deleted: BusinessMessagesDeleted, bot: Bo
         # Cross-event panic: additional summary alert.
         if is_cross_event_panic:
             await _send_cross_event_panic(bot, owner_id, counterpart, total_in_window)
+
+
+# ── Telegram Stars payment handlers ──────────────────────────────────────────
+
+
+@router.pre_checkout_query()
+async def on_pre_checkout_query(query: PreCheckoutQuery) -> None:
+    """Validate and accept subscription pre-checkout queries."""
+    if query.invoice_payload.startswith("subscription_"):
+        await query.answer(ok=True)
+    else:
+        await query.answer(ok=False, error_message="Unknown product")
+
+
+@router.message(F.successful_payment)
+async def on_successful_payment(message: Message, bot: Bot) -> None:
+    """Activate subscription after a successful Stars payment."""
+    payment = message.successful_payment
+    if payment is None or not payment.invoice_payload.startswith("subscription_"):
+        return
+
+    user_id   = message.from_user.id
+    charge_id = payment.telegram_payment_charge_id
+    stars_paid = payment.total_amount          # Stars amount (integer)
+
+    async with session_scope() as session:
+        sub_repo = SubscriptionRepository(session)
+        config   = await sub_repo.get_config()
+        await sub_repo.activate(user_id, charge_id, stars_paid, config.duration_days)
+        await session.commit()
+
+    logger.info(
+        "Subscription activated: user=%s stars=%s charge=%s duration=%sd",
+        user_id, stars_paid, charge_id, config.duration_days,
+    )
+
+    try:
+        await bot.send_message(
+            chat_id=user_id,
+            text=(
+                f"⭐ <b>Подписка активирована!</b>\n\n"
+                f"Спасибо за поддержку! Подписка действует <b>{config.duration_days} дней</b>.\n\n"
+                f"🎁 Все бонусы уже активны — открой мини-приложение, чтобы увидеть их."
+            ),
+        )
+    except Exception:
+        logger.exception("Failed to send subscription confirmation to user %s", user_id)

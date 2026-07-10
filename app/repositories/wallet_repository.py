@@ -86,6 +86,8 @@ class DailyClaimResult:
     base: int
     streak_bonus: int
     new_balance: int
+    premium_multiplier: float = 1.0
+    premium_bonus: int = 0
 
 
 # ── Repository ──────────────────────────────────────────────────────────────
@@ -151,10 +153,15 @@ class WalletRepository:
 
     # ── Daily claim (mutation) ─────────────────────────────────────────────
     async def claim_daily(
-        self, owner_telegram_id: int, streak_days: int = 0
+        self,
+        owner_telegram_id: int,
+        streak_days: int = 0,
+        premium_multiplier: float = 1.0,
+        premium_bonus: int = 0,
     ) -> DailyClaimResult:
         """Claim the daily reward.  streak_days MUST be server-derived by the
-        caller — never pass a client-supplied value directly."""
+        caller — never pass a client-supplied value directly.
+        premium_multiplier and premium_bonus are applied after streak calculation."""
         streak_days = max(0, streak_days)   # defensive clamp
         wallet = await self._get_for_update(owner_telegram_id)
 
@@ -162,8 +169,9 @@ class WalletRepository:
         if not can_claim:
             raise ValueError(f"not_yet:{wait}")
 
-        bonus  = min(streak_days * DAILY_STREAK_BONUS_PER_DAY, DAILY_STREAK_BONUS_MAX)
-        earned = DAILY_BASE + bonus
+        bonus        = min(streak_days * DAILY_STREAK_BONUS_PER_DAY, DAILY_STREAK_BONUS_MAX)
+        base_earned  = DAILY_BASE + bonus
+        earned       = round(base_earned * max(1.0, premium_multiplier)) + max(0, premium_bonus)
 
         wallet.balance      += earned
         wallet.total_earned += earned
@@ -172,8 +180,12 @@ class WalletRepository:
         await self.session.flush()
 
         return DailyClaimResult(
-            earned=earned, base=DAILY_BASE,
-            streak_bonus=bonus, new_balance=wallet.balance,
+            earned=earned,
+            base=DAILY_BASE,
+            streak_bonus=bonus,
+            new_balance=wallet.balance,
+            premium_multiplier=premium_multiplier,
+            premium_bonus=premium_bonus,
         )
 
     # ── Slots spin (mutation) ──────────────────────────────────────────────

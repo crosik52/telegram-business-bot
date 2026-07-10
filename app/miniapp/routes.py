@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.business.dispatcher import get_bot
 from app.config import get_settings
 from app.database.session import get_db_session
 from app.logging_config import get_logger
@@ -21,6 +22,7 @@ from app.models.message import MediaType, Message
 from app.repositories.message_repository import MessageFilters, MessageRepository
 from app.repositories.pet_repository import FEED_COST, RENAME_COST, SPECIES as PET_SPECIES_CATALOGUE, PetRepository
 from app.repositories.quest_repository import QUESTS, QuestRepository
+from app.repositories.subscription_repository import SubscriptionRepository
 from app.repositories.wallet_repository import WalletRepository
 from app.services.admin_chart_service import AdminStats, render_admin_image
 from app.services.stats_service import StatsService
@@ -209,6 +211,63 @@ class PetRenameRequest(BaseModel):
     init_data: str = Field(alias="initData")
     pet_id: int = Field(alias="petId")
     new_name: str = Field(alias="newName", max_length=30)
+
+
+class SubscriptionStatusRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    init_data: str = Field(alias="initData")
+
+
+class SubscriptionInvoiceRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    init_data: str = Field(alias="initData")
+
+
+class AdminSubUpdateRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    init_data: str = Field(alias="initData")
+    is_enabled: bool | None = Field(default=None, alias="isEnabled")
+    price_stars: int | None = Field(default=None, alias="priceStars", ge=1, le=10000)
+    duration_days: int | None = Field(default=None, alias="durationDays", ge=1, le=365)
+    title: str | None = Field(default=None, max_length=100)
+    description: str | None = Field(default=None, max_length=255)
+    benefits: dict | None = Field(default=None)
+
+
+class AdminSubSubscribersRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    init_data: str = Field(alias="initData")
+    page: int = Field(default=1, ge=1)
+
+
+class AdminSubGrantRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    init_data: str = Field(alias="initData")
+    owner_telegram_id: int = Field(alias="ownerTelegramId")
+    duration_days: int = Field(alias="durationDays", ge=1, le=365, default=30)
+
+
+class AdminSubRevokeRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    init_data: str = Field(alias="initData")
+    owner_telegram_id: int = Field(alias="ownerTelegramId")
+
+
+def _sub_status_dict(sub, config) -> dict:
+    """Serialise subscription status for API responses."""
+    import datetime as _dt
+    now = _dt.datetime.now(_dt.timezone.utc)
+    return {
+        "is_enabled":    config.is_enabled,
+        "price_stars":   config.price_stars,
+        "duration_days": config.duration_days,
+        "title":         config.title,
+        "description":   config.description,
+        "benefits":      config.benefits or {},
+        "is_active":     sub is not None and sub.expires_at > now if sub else False,
+        "expires_at":    sub.expires_at.isoformat() if sub else None,
+        "days_left":     max(0, (sub.expires_at - now).days) if sub else 0,
+    }
 
 
 def _require_admin(init_data: str) -> dict:
@@ -539,12 +598,17 @@ async def wallet_info(
     repo = WalletRepository(session)
     wallet = await repo.get_or_create(owner_id)
     can_claim, secs = repo.daily_claim_status(wallet)
+
+    sub_repo = SubscriptionRepository(session)
+    config   = await sub_repo.get_config()
+    sub      = await sub_repo.get_active_subscription(owner_id)
     return {
         "balance": wallet.balance,
         "total_earned": wallet.total_earned,
         "total_spent": wallet.total_spent,
         "can_claim_daily": can_claim,
         "seconds_until_next_claim": secs,
+        "subscription": _sub_status_dict(sub, config),
     }
 
 
@@ -577,9 +641,25 @@ async def wallet_claim_daily(
         )
         streak_days = max(0, owner_stats.best_streak or 0)
 
+    # Apply subscription premium benefits (server-side only)
+    sub_repo           = SubscriptionRepository(session)
+    config             = await sub_repo.get_config()
+    sub                = await sub_repo.get_active_subscription(owner_id)
+    premium_multiplier = 1.0
+    premium_bonus      = 0
+    if sub and config.is_enabled:
+        b                  = config.benefits or {}
+        premium_multiplier = float(b.get("daily_multiplier", 1.0))
+        premium_bonus      = int(b.get("daily_bonus_coins", 0))
+
     repo = WalletRepository(session)
     try:
-        result = await repo.claim_daily(owner_id, streak_days=streak_days)
+        result = await repo.claim_daily(
+            owner_id,
+            streak_days=streak_days,
+            premium_multiplier=premium_multiplier,
+            premium_bonus=premium_bonus,
+        )
     except ValueError as e:
         raise HTTPException(status_code=429, detail=str(e)) from e
     return {
@@ -587,6 +667,9 @@ async def wallet_claim_daily(
         "base": result.base,
         "streak_bonus": result.streak_bonus,
         "new_balance": result.new_balance,
+        "is_premium": sub is not None,
+        "premium_multiplier": result.premium_multiplier,
+        "premium_bonus": result.premium_bonus,
     }
 
 
@@ -938,20 +1021,39 @@ async def miniapp_pet_adopt(
     return {"ok": True, "pet": pet}
 
 
+async def _get_pet_sub_benefits(session: AsyncSession, user_id: int) -> dict:
+    """Return pet-related subscription benefits for user, or defaults."""
+    sub_repo = SubscriptionRepository(session)
+    config   = await sub_repo.get_config()
+    sub      = await sub_repo.get_active_subscription(user_id)
+    if sub and config.is_enabled:
+        b = config.benefits or {}
+        return {
+            "feed_free":     bool(b.get("pet_feed_free", False)),
+            "xp_multiplier": float(b.get("xp_multiplier", 1.0)),
+        }
+    return {"feed_free": False, "xp_multiplier": 1.0}
+
+
 @router.post("/app/api/pet/feed")
 async def miniapp_pet_feed(
     payload: PetFeedRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
-    """Feed a pet, deducting FEED_COST coins."""
+    """Feed a pet, deducting FEED_COST coins (free for Premium subscribers)."""
     settings = get_settings()
     user = verify_init_data(payload.init_data, settings.telegram_bot_token)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid Telegram init data")
 
     owner_id = int(user["id"])
+    benefits = await _get_pet_sub_benefits(session, owner_id)
     repo = PetRepository(session)
     try:
-        result = await repo.feed(owner_id, payload.pet_id)
+        result = await repo.feed(
+            owner_id, payload.pet_id,
+            feed_free=benefits["feed_free"],
+            xp_multiplier=benefits["xp_multiplier"],
+        )
     except ValueError as exc:
         code = str(exc)
         status = 409 if code == "already_fed" else 400
@@ -972,9 +1074,10 @@ async def miniapp_pet_play(
         raise HTTPException(status_code=401, detail="Invalid Telegram init data")
 
     owner_id = int(user["id"])
+    benefits = await _get_pet_sub_benefits(session, owner_id)
     repo = PetRepository(session)
     try:
-        result = await repo.play(owner_id, payload.pet_id)
+        result = await repo.play(owner_id, payload.pet_id, xp_multiplier=benefits["xp_multiplier"])
     except ValueError as exc:
         code = str(exc)
         status = 409 if code == "play_cooldown" else 400
@@ -995,9 +1098,10 @@ async def miniapp_pet_cuddle(
         raise HTTPException(status_code=401, detail="Invalid Telegram init data")
 
     owner_id = int(user["id"])
+    benefits = await _get_pet_sub_benefits(session, owner_id)
     repo = PetRepository(session)
     try:
-        result = await repo.cuddle(owner_id, payload.pet_id)
+        result = await repo.cuddle(owner_id, payload.pet_id, xp_multiplier=benefits["xp_multiplier"])
     except ValueError as exc:
         code = str(exc)
         status = 409 if code == "cuddle_cooldown" else 400
@@ -1026,6 +1130,166 @@ async def miniapp_pet_rename(
 
     await session.commit()
     return {"ok": True, **result}
+
+
+# ── Subscription endpoints ────────────────────────────────────────────────────
+
+
+@router.post("/app/api/subscription/status")
+async def subscription_status(
+    payload: SubscriptionStatusRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Return subscription config + caller's current status."""
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid init data")
+    owner_id = int(user["id"])
+    sub_repo = SubscriptionRepository(session)
+    config   = await sub_repo.get_config()
+    sub      = await sub_repo.get_active_subscription(owner_id)
+    return _sub_status_dict(sub, config)
+
+
+@router.post("/app/api/subscription/invoice")
+async def subscription_invoice(
+    payload: SubscriptionInvoiceRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Send a Telegram Stars invoice to the caller's DM.
+
+    The bot sends the invoice and the client handles the native Telegram
+    payment sheet — no redirect needed.
+    """
+    from aiogram.types import LabeledPrice
+
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid init data")
+    owner_id = int(user["id"])
+
+    sub_repo = SubscriptionRepository(session)
+    config   = await sub_repo.get_config()
+    if not config.is_enabled:
+        raise HTTPException(status_code=403, detail="subscription_disabled")
+
+    # Check for existing active sub
+    existing = await sub_repo.get_active_subscription(owner_id)
+    if existing:
+        raise HTTPException(status_code=409, detail="already_subscribed")
+
+    bot = get_bot(settings)
+    try:
+        invoice_link = await bot.create_invoice_link(
+            title=config.title,
+            description=config.description,
+            payload=f"subscription_{owner_id}",
+            provider_token="",          # empty string = Telegram Stars (XTR)
+            currency="XTR",
+            prices=[LabeledPrice(label=config.title, amount=config.price_stars)],
+        )
+    except Exception as exc:
+        logger.exception("Failed to create invoice link for user %s", owner_id)
+        raise HTTPException(status_code=502, detail="invoice_send_failed") from exc
+
+    return {"ok": True, "price_stars": config.price_stars, "invoice_link": invoice_link}
+
+
+# ── Admin subscription endpoints ──────────────────────────────────────────────
+
+
+@router.post("/app/api/admin/subscription/config")
+async def admin_subscription_config(
+    payload: StatsRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Get the current subscription config."""
+    _require_admin(payload.init_data)
+    sub_repo = SubscriptionRepository(session)
+    config   = await sub_repo.get_config()
+    return {
+        "is_enabled":    config.is_enabled,
+        "price_stars":   config.price_stars,
+        "duration_days": config.duration_days,
+        "title":         config.title,
+        "description":   config.description,
+        "benefits":      config.benefits or {},
+        "updated_at":    config.updated_at.isoformat() if config.updated_at else None,
+    }
+
+
+@router.post("/app/api/admin/subscription/update")
+async def admin_subscription_update(
+    payload: AdminSubUpdateRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Update subscription config (partial update — only provided fields change)."""
+    _require_admin(payload.init_data)
+    fields: dict = {}
+    if payload.is_enabled is not None:
+        fields["is_enabled"] = payload.is_enabled
+    if payload.price_stars is not None:
+        fields["price_stars"] = payload.price_stars
+    if payload.duration_days is not None:
+        fields["duration_days"] = payload.duration_days
+    if payload.title is not None:
+        fields["title"] = payload.title.strip()
+    if payload.description is not None:
+        fields["description"] = payload.description.strip()
+    if payload.benefits is not None:
+        # Validate keys against allowed set
+        allowed_keys = {"daily_multiplier", "daily_bonus_coins", "pet_feed_free", "xp_multiplier", "max_pets_bonus"}
+        clean = {k: v for k, v in payload.benefits.items() if k in allowed_keys}
+        fields["benefits"] = clean
+
+    sub_repo = SubscriptionRepository(session)
+    config   = await sub_repo.update_config(**fields)
+    await session.commit()
+    return {
+        "ok": True,
+        "is_enabled":    config.is_enabled,
+        "price_stars":   config.price_stars,
+        "duration_days": config.duration_days,
+        "title":         config.title,
+        "description":   config.description,
+        "benefits":      config.benefits or {},
+    }
+
+
+@router.post("/app/api/admin/subscription/subscribers")
+async def admin_subscription_subscribers(
+    payload: AdminSubSubscribersRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """List active subscribers (paginated)."""
+    _require_admin(payload.init_data)
+    sub_repo = SubscriptionRepository(session)
+    return await sub_repo.list_subscribers(page=payload.page)
+
+
+@router.post("/app/api/admin/subscription/grant")
+async def admin_subscription_grant(
+    payload: AdminSubGrantRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Manually grant a subscription to a user."""
+    _require_admin(payload.init_data)
+    sub_repo = SubscriptionRepository(session)
+    sub = await sub_repo.grant(payload.owner_telegram_id, payload.duration_days)
+    await session.commit()
+    return {
+        "ok": True,
+        "expires_at": sub.expires_at.isoformat(),
+        "days_left": payload.duration_days,
+    }
+
+
+@router.post("/app/api/admin/subscription/revoke")
+async def admin_subscription_revoke(
+    payload: AdminSubRevokeRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Revoke a user's active subscription."""
+    _require_admin(payload.init_data)
+    sub_repo = SubscriptionRepository(session)
+    await sub_repo.revoke(payload.owner_telegram_id)
+    await session.commit()
+    return {"ok": True}
 
 
 @router.post("/app/api/admin/overview")

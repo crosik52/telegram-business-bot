@@ -499,7 +499,14 @@ class PetRepository:
 
         return {**_pet_dict(pet, now), "mirror_created": mirror_created}
 
-    async def feed(self, owner_telegram_id: int, pet_id: int) -> dict:
+    async def feed(
+        self,
+        owner_telegram_id: int,
+        pet_id: int,
+        *,
+        feed_free: bool = False,
+        xp_multiplier: float = 1.0,
+    ) -> dict:
         now = dt.datetime.now(dt.timezone.utc)
         pet = await self._get_alive_pet(owner_telegram_id, pet_id)
 
@@ -509,13 +516,16 @@ class PetRepository:
             if hours_since < cooldown:
                 raise ValueError("already_fed")
 
-        cost = _personality_feed_cost(pet.personality)
+        cost = 0 if feed_free else _personality_feed_cost(pet.personality)
         wallet = await self._lock_wallet(owner_telegram_id)
-        if wallet is None or wallet.balance < cost:
+        if wallet is None:
+            raise ValueError("insufficient_coins")
+        if cost > 0 and wallet.balance < cost:
             raise ValueError("insufficient_coins")
 
-        wallet.balance    = max(0, wallet.balance - cost)
-        wallet.total_spent = max(0, wallet.total_spent + cost)
+        if cost > 0:
+            wallet.balance    = max(0, wallet.balance - cost)
+            wallet.total_spent = max(0, wallet.total_spent + cost)
 
         # Compute feed streak BEFORE updating last_fed_at
         prev_fed = pet.last_fed_at
@@ -526,7 +536,7 @@ class PetRepository:
 
         pet.last_fed_at    = now
         pet.total_feedings += 1
-        pet.xp             += FEED_XP
+        pet.xp             += round(FEED_XP * max(1.0, xp_multiplier))
         pet.level          = _compute_level(pet.xp)
 
         await self._session.flush()
@@ -540,7 +550,7 @@ class PetRepository:
             "feed_cost":   cost,
         }
 
-    async def play(self, owner_telegram_id: int, pet_id: int) -> dict:
+    async def play(self, owner_telegram_id: int, pet_id: int, *, xp_multiplier: float = 1.0) -> dict:
         now = dt.datetime.now(dt.timezone.utc)
         pet = await self._get_alive_pet(owner_telegram_id, pet_id)
 
@@ -562,7 +572,7 @@ class PetRepository:
         pet.last_cuddled_at = now
 
         pet.total_plays += 1
-        pet.xp          += PLAY_XP
+        pet.xp          += round(PLAY_XP * max(1.0, xp_multiplier))
         pet.level        = _compute_level(pet.xp)
 
         play_msg = random.choice(PLAY_MESSAGES).format(name=pet.pet_name)
@@ -574,7 +584,7 @@ class PetRepository:
             "play_msg": play_msg,
         }
 
-    async def cuddle(self, owner_telegram_id: int, pet_id: int) -> dict:
+    async def cuddle(self, owner_telegram_id: int, pet_id: int, *, xp_multiplier: float = 1.0) -> dict:
         now = dt.datetime.now(dt.timezone.utc)
         pet = await self._get_alive_pet(owner_telegram_id, pet_id)
 
@@ -593,7 +603,7 @@ class PetRepository:
         pet.last_cuddled_at = now   # real time — used for cooldown + mood decay ref
 
         pet.total_cuddles += 1
-        pet.xp            += CUDDLE_XP
+        pet.xp            += round(CUDDLE_XP * max(1.0, xp_multiplier))
         pet.level          = _compute_level(pet.xp)
 
         await self._session.flush()

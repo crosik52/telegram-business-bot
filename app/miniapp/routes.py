@@ -1083,13 +1083,6 @@ async def admin_wallet_set(
     admin_user = _require_admin(payload.init_data)
     repo = WalletRepository(session)
     new_balance = await repo.admin_set_balance(payload.owner_telegram_id, payload.new_balance)
-    await session.commit()
-    logger.info(
-        "Admin %s set wallet balance for user_id=%s → %s",
-        admin_user.get("username", "?"),
-        payload.owner_telegram_id,
-        new_balance,
-    )
     session.add(AdminActionLog(
         admin_username=admin_user.get("username", "?"),
         action="wallet_set",
@@ -1097,6 +1090,25 @@ async def admin_wallet_set(
         details=f"balance → {new_balance}",
     ))
     await session.commit()
+    logger.info(
+        "Admin %s set wallet balance for user_id=%s → %s",
+        admin_user.get("username", "?"),
+        payload.owner_telegram_id,
+        new_balance,
+    )
+    try:
+        from app.business.dispatcher import get_bot
+        bot = get_bot(get_settings())
+        await bot.send_message(
+            chat_id=payload.owner_telegram_id,
+            text=(
+                f"💰 Ваш баланс изменён администратором.\n"
+                f"Новый баланс: <b>{new_balance:,} 🪙</b>"
+            ).replace(",", "\u202f"),
+            parse_mode="HTML",
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Wallet-set notify failed for user_id=%s: %s", payload.owner_telegram_id, exc)
     return {"ok": True, "new_balance": new_balance}
 
 
@@ -1109,13 +1121,6 @@ async def admin_wallet_adjust(
     repo = WalletRepository(session)
     new_balance = await repo.admin_adjust_balance(payload.owner_telegram_id, payload.delta)
     sign = "+" if payload.delta >= 0 else ""
-    logger.info(
-        "Admin %s adjusted wallet for user_id=%s delta=%s%s → %s",
-        admin_user.get("username", "?"),
-        payload.owner_telegram_id,
-        sign, payload.delta,
-        new_balance,
-    )
     session.add(AdminActionLog(
         admin_username=admin_user.get("username", "?"),
         action="wallet_adjust",
@@ -1123,6 +1128,31 @@ async def admin_wallet_adjust(
         details=f"delta {sign}{payload.delta} → balance {new_balance}",
     ))
     await session.commit()
+    logger.info(
+        "Admin %s adjusted wallet for user_id=%s delta=%s%s → %s",
+        admin_user.get("username", "?"),
+        payload.owner_telegram_id,
+        sign, payload.delta,
+        new_balance,
+    )
+    try:
+        from app.business.dispatcher import get_bot
+        bot = get_bot(get_settings())
+        if payload.delta >= 0:
+            delta_line = f"Начислено: <b>+{payload.delta:,} 🪙</b>".replace(",", "\u202f")
+        else:
+            delta_line = f"Списано: <b>{payload.delta:,} 🪙</b>".replace(",", "\u202f")
+        await bot.send_message(
+            chat_id=payload.owner_telegram_id,
+            text=(
+                f"💰 Ваш баланс изменён администратором.\n"
+                f"{delta_line}\n"
+                f"Новый баланс: <b>{new_balance:,} 🪙</b>"
+            ).replace(",", "\u202f"),
+            parse_mode="HTML",
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Wallet-adjust notify failed for user_id=%s: %s", payload.owner_telegram_id, exc)
     return {"ok": True, "new_balance": new_balance, "delta": payload.delta}
 
 

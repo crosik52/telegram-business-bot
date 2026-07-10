@@ -1,7 +1,7 @@
 """pet_system_v2: add mood, xp, level, personality, play/cuddle tracking
 
 Revision ID: g1h2i3j4k5l6
-Revises: f2a3b4c5d6e7
+Revises: 9a8b7c6d5e4f
 Create Date: 2026-07-10
 """
 

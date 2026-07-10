@@ -125,11 +125,11 @@ def _personality_play_cooldown(p: str) -> float:
 
 
 def _personality_play_mood(p: str) -> int:
-    return 45 if p == "playful" else PLAY_MOOD_GAIN
+    return PLAY_MOOD_GAIN * 2 if p == "playful" else PLAY_MOOD_GAIN
 
 
 def _personality_cuddle_mood(p: str) -> int:
-    return 22 if p == "shy" else CUDDLE_MOOD_GAIN
+    return CUDDLE_MOOD_GAIN * 2 if p == "shy" else CUDDLE_MOOD_GAIN
 
 
 def _compute_hunger(pet: ChatPet, now: dt.datetime) -> int:
@@ -140,10 +140,16 @@ def _compute_hunger(pet: ChatPet, now: dt.datetime) -> int:
 
 
 def _compute_mood(pet: ChatPet, now: dt.datetime) -> int:
+    """Decay from the stored mood value since the last interaction timestamp.
+
+    pet.mood stores the mood at the time of the last action.
+    last_cuddled_at / last_played_at are REAL timestamps (not backdated),
+    so cooldown checks remain independent and trustworthy.
+    """
     ref = pet.last_cuddled_at or pet.last_played_at or pet.born_at
     hours = max(0.0, (now - ref).total_seconds() / 3600)
     decay_h = _personality_mood_hours(pet.personality)
-    return max(0, round(100 - hours / decay_h * 100))
+    return max(0, round(pet.mood - hours / decay_h * 100))
 
 
 def _compute_stage(born_at: dt.datetime, now: dt.datetime) -> int:
@@ -538,66 +544,53 @@ class PetRepository:
         now = dt.datetime.now(dt.timezone.utc)
         pet = await self._get_alive_pet(owner_telegram_id, pet_id)
 
+        # Cooldown checked against REAL last_played_at (never backdated)
         cooldown = _personality_play_cooldown(pet.personality)
         if pet.last_played_at:
             hours_since = (now - pet.last_played_at).total_seconds() / 3600
             if hours_since < cooldown:
                 raise ValueError("play_cooldown")
 
-        mood_gain = _personality_play_mood(pet.personality)
+        mood_gain   = _personality_play_mood(pet.personality)
         current_mood = _compute_mood(pet, now)
-        new_mood = min(100, current_mood + mood_gain)
+        new_mood    = min(100, current_mood + mood_gain)
 
-        pet.last_played_at = now
-        # Mood is stored implicitly via last_played_at/last_cuddled_at
-        # We use last_cuddled_at as the primary mood reference; update it too
-        # only if the resulting mood would be higher than current cuddled-at
-        # — just set last_played_at and compute dynamically.
+        # Store new mood value and REAL timestamp (decoupled from mood math)
+        pet.mood           = new_mood
+        pet.last_played_at = now   # real time — used for cooldown only
+        # Also update cuddle ref so mood decays from this moment forward
+        pet.last_cuddled_at = now
+
         pet.total_plays += 1
         pet.xp          += PLAY_XP
         pet.level        = _compute_level(pet.xp)
 
-        # If new_mood would be > what play alone provides (because of recent cuddle),
-        # we store the effective reset point so mood reads correctly.
-        # We persist mood as an offset from "now minus the equivalent decay fraction".
-        if new_mood >= 100:
-            # Full mood — set reference to now (both played and cuddled = now)
-            pet.last_played_at  = now
-            pet.last_cuddled_at = now
-        else:
-            # Set last_played_at to a time that produces exactly new_mood on read
-            decay_h = _personality_mood_hours(pet.personality)
-            fraction_gone = 1.0 - new_mood / 100.0
-            hours_offset = fraction_gone * decay_h
-            pet.last_played_at  = now - dt.timedelta(hours=hours_offset)
-            pet.last_cuddled_at = pet.last_played_at  # cuddle was earlier, use play ref
-
         play_msg = random.choice(PLAY_MESSAGES).format(name=pet.pet_name)
         await self._session.flush()
         return {
-            "mood":      new_mood,
-            "xp":        pet.xp,
-            "level":     pet.level,
-            "play_msg":  play_msg,
+            "mood":     new_mood,
+            "xp":       pet.xp,
+            "level":    pet.level,
+            "play_msg": play_msg,
         }
 
     async def cuddle(self, owner_telegram_id: int, pet_id: int) -> dict:
         now = dt.datetime.now(dt.timezone.utc)
         pet = await self._get_alive_pet(owner_telegram_id, pet_id)
 
+        # Cooldown checked against REAL last_cuddled_at (never backdated)
         if pet.last_cuddled_at:
             hours_since = (now - pet.last_cuddled_at).total_seconds() / 3600
             if hours_since < CUDDLE_COOLDOWN_HOURS:
                 raise ValueError("cuddle_cooldown")
 
-        mood_gain = _personality_cuddle_mood(pet.personality)
+        mood_gain    = _personality_cuddle_mood(pet.personality)
         current_mood = _compute_mood(pet, now)
-        new_mood = min(100, current_mood + mood_gain)
+        new_mood     = min(100, current_mood + mood_gain)
 
-        decay_h = _personality_mood_hours(pet.personality)
-        fraction_gone = 1.0 - new_mood / 100.0
-        hours_offset = fraction_gone * decay_h
-        pet.last_cuddled_at = now - dt.timedelta(hours=hours_offset)
+        # Store new mood value and REAL timestamp
+        pet.mood            = new_mood
+        pet.last_cuddled_at = now   # real time — used for cooldown + mood decay ref
 
         pet.total_cuddles += 1
         pet.xp            += CUDDLE_XP

@@ -1067,6 +1067,15 @@
 
     const AVATAR_COLORS = ["#FF6B6B","#4ECDC4","#45AAF2","#F7B731","#A55EEA","#26DE81","#FD9644","#2BCBBA"];
 
+    function esc(str) {
+      return String(str ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
     function colorFor(seed) {
       let h = 0;
       for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
@@ -2236,11 +2245,11 @@
             </div>
             <div class="pet-info">
               <div class="pet-name-row">
-                <span class="pet-name">${p.pet_name}</span>
-                <span class="pet-personality">${p.personality_emoji} ${p.personality_label}</span>
+                <span class="pet-name">${esc(p.pet_name)}</span>
+                <span class="pet-personality">${esc(p.personality_emoji)} ${esc(p.personality_label)}</span>
               </div>
-              <div class="pet-meta">${STAGE_LABELS[p.stage] || ""} · ${daysLabel(p.days_alive)}</div>
-              <div class="pet-with">с ${p.interlocutor_name}</div>
+              <div class="pet-meta">${esc(STAGE_LABELS[p.stage] || "")} · ${daysLabel(p.days_alive)}</div>
+              <div class="pet-with">с ${esc(p.interlocutor_name)}</div>
             </div>
           </div>
 
@@ -2287,11 +2296,11 @@
             <div class="pet-avatar-wrap"><span class="pet-avatar">💀</span></div>
             <div class="pet-dead-body">
               <div class="pet-name-row">
-                <span class="pet-name">${p.pet_name}</span>
-                <span class="pet-personality">${p.personality_emoji} ${p.personality_label}</span>
+                <span class="pet-name">${esc(p.pet_name)}</span>
+                <span class="pet-personality">${esc(p.personality_emoji)} ${esc(p.personality_label)}</span>
               </div>
-              <div class="pet-meta">${daysLabel(p.days_alive)} жизни · ${(PET_SPECIES[p.species]||{}).label||""}</div>
-              <div class="pet-dead-cause">с ${p.interlocutor_name} · ${
+              <div class="pet-meta">${daysLabel(p.days_alive)} жизни · ${esc((PET_SPECIES[p.species]||{}).label||"")}</div>
+              <div class="pet-dead-cause">с ${esc(p.interlocutor_name)} · ${
                 p.death_cause === "starvation" ? "😵 умер от голода" : "💔 серия оборвалась"
               }</div>
             </div>
@@ -2425,9 +2434,9 @@
             <div style="font-size:13px;color:var(--hint);margin-bottom:11px;text-align:center">Выбери собеседника</div>
             <div class="adopt-chats">
               ${chats.map(c => `
-                <button class="adopt-chat-btn" data-chat-id="${c.chat_id}" data-name="${(c.display_name||"").replace(/"/g,"&quot;")}">
+                <button class="adopt-chat-btn" data-chat-id="${c.chat_id}" data-name="${esc(c.display_name)}">
                   <div class="adopt-chat-avatar" style="background:${colorFor(c.display_name)}">${initials(c.display_name)}</div>
-                  <div class="adopt-chat-name">${c.display_name}</div>
+                  <div class="adopt-chat-name">${esc(c.display_name)}</div>
                   <div class="adopt-chat-msgs">${c.message_count} сообщ.</div>
                 </button>`).join("")}
             </div>

@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
@@ -22,6 +22,7 @@ from app.repositories.message_repository import MessageFilters, MessageRepositor
 from app.repositories.pet_repository import FEED_COST, PetRepository
 from app.repositories.quest_repository import QUESTS, QuestRepository
 from app.repositories.wallet_repository import WalletRepository
+from app.services.admin_chart_service import AdminStats, render_admin_image
 from app.services.stats_service import StatsService
 
 logger = get_logger(__name__)
@@ -1225,3 +1226,66 @@ async def admin_action_log(
             for r in rows
         ],
     }
+
+
+@router.post("/app/api/admin/infographic")
+async def admin_infographic(
+    payload: StatsRequest,
+    session: AsyncSession = Depends(get_db_session),
+) -> StreamingResponse:
+    """Generate and return the admin overview infographic as a PNG image."""
+    _require_admin(payload.init_data)
+
+    svc    = StatsService(session)
+    overview  = await svc.get_admin_overview()
+    dash      = await svc.get_dashboard_stats()
+    growth_raw = await svc.get_admin_growth(days=30)
+
+    # Build 30-day daily series aligned to calendar days
+    now   = dt.datetime.now(dt.UTC)
+    days  = [(now - dt.timedelta(days=i)).date() for i in range(29, -1, -1)]
+    msgs_by_day  = growth_raw.get("messages_by_day", {})
+    conns_by_day = growth_raw.get("connections_by_day", {})
+    growth: list[tuple[str, int, int]] = [
+        (
+            d.strftime("%d.%m"),
+            int(msgs_by_day.get(str(d), 0)),
+            int(conns_by_day.get(str(d), 0)),
+        )
+        for d in days
+    ]
+
+    active_users  = sum(1 for u in overview.users if u.is_enabled and not u.is_blocked)
+    blocked_users = sum(1 for u in overview.users if u.is_blocked)
+    total_coins   = sum(u.wallet_balance for u in overview.users)
+    avg_messages  = (
+        dash.total_messages / max(1, overview.total_users)
+    )
+    media_pct = round(dash.media_messages / max(1, dash.total_messages) * 100)
+
+    top_users: list[tuple[str, int, int, int]] = []
+    for u in overview.users[:5]:
+        parts = [p for p in (u.first_name, u.last_name) if p]
+        name  = " ".join(parts) if parts else (f"@{u.username}" if u.username else str(u.owner_telegram_id))
+        top_users.append((name, u.total_messages, u.total_chats, u.wallet_balance))
+
+    stats = AdminStats(
+        generated_at=now,
+        total_users=overview.total_users,
+        active_users=active_users,
+        blocked_users=blocked_users,
+        total_messages=dash.total_messages,
+        avg_messages=avg_messages,
+        total_coins=total_coins,
+        media_pct=media_pct,
+        growth=growth,
+        top_users=top_users,
+    )
+
+    buf = render_admin_image(stats)
+    filename = f"bot_stats_{now.strftime('%Y%m%d_%H%M')}.png"
+    return StreamingResponse(
+        buf,
+        media_type="image/png",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

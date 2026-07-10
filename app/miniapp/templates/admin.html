@@ -525,6 +525,7 @@
     <button class="tab-chip" data-tab="growth">📈 Аналитика</button>
     <button class="tab-chip" data-tab="broadcast">📢 Рассылка</button>
     <button class="tab-chip" data-tab="log">📜 Журнал</button>
+    <button class="tab-chip" id="btnInfographic" onclick="downloadInfographic(this)">📊 Инфографика</button>
   </div>
 
   <div id="content">
@@ -1357,11 +1358,40 @@
 
     document.getElementById("sheetOverlay").addEventListener("click", closeChatsSheet);
     document.querySelector("#chatsSheet .sheet-handle").addEventListener("click", closeChatsSheet);
-    document.querySelectorAll("#mainTabs .tab-chip").forEach(btn => {
+    document.querySelectorAll("#mainTabs .tab-chip[data-tab]").forEach(btn => {
       btn.addEventListener("click", () => switchTab(btn.dataset.tab));
     });
 
     loadOverview();
+
+    async function downloadInfographic(btn) {
+      const orig = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = "⏳ Генерация…";
+      try {
+        const resp = await fetch("/app/api/admin/infographic", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ init_data: initData }),
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+        const blob = await resp.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement("a");
+        a.href     = url;
+        const ts   = new Date().toISOString().slice(0, 16).replace("T", "_").replace(":", "-");
+        a.download = `bot_stats_${ts}.png`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+        showToast("📊 Инфографика загружена!");
+      } catch (e) {
+        showToast("❌ Не удалось сгенерировать: " + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = orig;
+      }
+    }
   </script>
 </body>
 </html>

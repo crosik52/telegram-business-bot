@@ -53,9 +53,11 @@ _download_tasks: set[asyncio.Task] = set()
 # Global semaphore: at most 3 video downloads run concurrently across all chats.
 _download_semaphore = asyncio.Semaphore(3)
 
-# Per-chat dedup: tracks URLs currently being downloaded to avoid re-queuing
-# the same link if the same message arrives twice or is echoed.
-_in_flight: set[tuple[int, str]] = set()  # (chat_id, url)
+# Conversation-level dedup: prevents both bots from downloading the same link
+# when both participants have the bot connected.
+# Key: (min(owner_id, chat_id), max(owner_id, chat_id), url) — symmetric,
+# so A↔B and B↔A produce the same key regardless of who detected the link.
+_in_flight: set[tuple[int, int, str]] = set()  # (lo_id, hi_id, url)
 
 logger = get_logger(__name__)
 router = Router(name="business")
@@ -358,21 +360,26 @@ async def on_business_message(message: Message, bot: Bot) -> None:
 
         # --- Video link detection (Reels / TikTok / YouTube Shorts) ---
         text_to_scan = message.text or message.caption or ""
-        if text_to_scan:
+        if text_to_scan and owner_telegram_id:
             video_match = extract_video_url(text_to_scan)
             if video_match:
                 url, platform = video_match
-                key = (message.chat.id, url)
+                chat_id = message.chat.id
+                # Symmetric key: same regardless of which side's bot fires first.
+                # Ensures only one download happens even when both participants
+                # have the bot connected to their accounts.
+                lo, hi = sorted((owner_telegram_id, chat_id))
+                key = (lo, hi, url)
                 if key not in _in_flight:
                     _in_flight.add(key)
                     logger.info(
                         "Video link detected (%s) in chat=%s, scheduling download",
-                        platform, message.chat.id,
+                        platform, chat_id,
                     )
 
                     async def _guarded_download(
                         _bot=bot,
-                        _chat_id=message.chat.id,
+                        _chat_id=chat_id,
                         _conn_id=message.business_connection_id,
                         _url=url,
                         _platform=platform,

@@ -30,6 +30,7 @@ having captured each message via ``business_message`` first.
 
 from __future__ import annotations
 
+import asyncio
 from html import escape as html_escape
 
 from aiogram import Bot, Router
@@ -45,6 +46,16 @@ from app.models.message import MediaType, Message as DBMessage
 from app.repositories.chat_settings_repository import ChatSettingsRepository
 from app.services.message_service import MessageService
 from app.services.video_service import extract_video_url, handle_video_link
+
+# Strong references to background download tasks — prevents GC before completion.
+_download_tasks: set[asyncio.Task] = set()
+
+# Global semaphore: at most 3 video downloads run concurrently across all chats.
+_download_semaphore = asyncio.Semaphore(3)
+
+# Per-chat dedup: tracks URLs currently being downloaded to avoid re-queuing
+# the same link if the same message arrives twice or is echoed.
+_in_flight: set[tuple[int, str]] = set()  # (chat_id, url)
 
 logger = get_logger(__name__)
 router = Router(name="business")
@@ -351,20 +362,37 @@ async def on_business_message(message: Message, bot: Bot) -> None:
             video_match = extract_video_url(text_to_scan)
             if video_match:
                 url, platform = video_match
-                logger.info(
-                    "Video link detected (%s) in chat=%s, scheduling download",
-                    platform, message.chat.id,
-                )
-                import asyncio
-                asyncio.create_task(
-                    handle_video_link(
-                        bot=bot,
-                        chat_id=message.chat.id,
-                        business_connection_id=message.business_connection_id,
-                        url=url,
-                        platform=platform,
+                key = (message.chat.id, url)
+                if key not in _in_flight:
+                    _in_flight.add(key)
+                    logger.info(
+                        "Video link detected (%s) in chat=%s, scheduling download",
+                        platform, message.chat.id,
                     )
-                )
+
+                    async def _guarded_download(
+                        _bot=bot,
+                        _chat_id=message.chat.id,
+                        _conn_id=message.business_connection_id,
+                        _url=url,
+                        _platform=platform,
+                        _key=key,
+                    ) -> None:
+                        async with _download_semaphore:
+                            try:
+                                await handle_video_link(
+                                    bot=_bot,
+                                    chat_id=_chat_id,
+                                    business_connection_id=_conn_id,
+                                    url=_url,
+                                    platform=_platform,
+                                )
+                            finally:
+                                _in_flight.discard(_key)
+
+                    task = asyncio.create_task(_guarded_download())
+                    _download_tasks.add(task)
+                    task.add_done_callback(_download_tasks.discard)
 
 
 # ── Edit handler ──────────────────────────────────────────────────────────────

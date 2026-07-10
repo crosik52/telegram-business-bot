@@ -318,9 +318,15 @@ async def miniapp_stats(
     )
     connection_ids = [row[0] for row in result.all()]
 
+    _sub_repo   = SubscriptionRepository(session)
+    _sub_config = await _sub_repo.get_config()
+    _active_sub = await _sub_repo.get_active_subscription(owner_telegram_id)
+    is_premium  = _active_sub is not None and _sub_config.is_enabled
+
     if not connection_ids:
         return {
             "connected": False,
+            "is_premium": is_premium,
             "total_messages": 0,
             "total_chats": 0,
             "edited_messages": 0,
@@ -357,6 +363,7 @@ async def miniapp_stats(
 
         return {
             "connected": True,
+            "is_premium": is_premium,
             "total_messages": stats.total_messages,
             "total_chats": stats.total_chats,
             "edited_messages": stats.edited_messages,
@@ -410,15 +417,20 @@ async def miniapp_activity(
     )
     connection_ids = [row[0] for row in result.all()]
 
+    _sub_repo2   = SubscriptionRepository(session)
+    _sub_config2 = await _sub_repo2.get_config()
+    _active_sub2 = await _sub_repo2.get_active_subscription(owner_telegram_id)
+    is_premium2  = _active_sub2 is not None and _sub_config2.is_enabled
+
     if not connection_ids:
-        return {"days": 90, "activity": {}}
+        return {"days": 90, "activity": {}, "is_premium": is_premium2}
 
     try:
         stats_service = StatsService(session)
         activity = await stats_service.get_owner_activity(
             connection_ids=connection_ids, days=90
         )
-        return {"days": 90, "activity": activity}
+        return {"days": 90, "activity": activity, "is_premium": is_premium2}
     except Exception:
         logger.exception(
             "Failed to build activity for owner_telegram_id=%s", owner_telegram_id

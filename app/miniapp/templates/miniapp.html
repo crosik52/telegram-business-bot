@@ -1992,11 +1992,16 @@
       const maxPets   = parseInt(b.max_pets_bonus || 0);
 
       const benefitItems = [
-        mult > 1    ? { icon: "🎁", text: `×${mult} монет в день` }    : null,
-        bonusCoins > 0 ? { icon: "💰", text: `+${bonusCoins} каждый день` } : null,
-        feedFree    ? { icon: "🍖", text: "Кормление бесплатно" }      : null,
-        xpMult > 1  ? { icon: "⭐", text: `×${xpMult} XP питомцу` }    : null,
-        maxPets > 0 ? { icon: "🐾", text: `+${maxPets} слота питомца` } : null,
+        // Stats features — always shown as core premium value
+        { icon: "🗓", text: "История активности — 90 дней" },
+        { icon: "📊", text: "Анализ здоровья переписки" },
+        { icon: "👥", text: "Полный список собеседников" },
+        // Coin / pet bonuses from config
+        mult > 1    ? { icon: "🎁", text: `×${mult} монет в ежедневном бонусе` }  : null,
+        bonusCoins > 0 ? { icon: "💰", text: `+${bonusCoins} монет каждый день` } : null,
+        feedFree    ? { icon: "🍖", text: "Кормление питомца бесплатно" }          : null,
+        xpMult > 1  ? { icon: "⭐", text: `×${xpMult} XP питомцу` }               : null,
+        maxPets > 0 ? { icon: "🐾", text: `+${maxPets} слота питомца` }            : null,
       ].filter(Boolean);
 
       if (s.is_active) {

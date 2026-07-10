@@ -19,7 +19,7 @@ class SubscriptionRepository:
         result = await self._session.execute(select(SubscriptionConfig).limit(1))
         config = result.scalar_one_or_none()
         if config is None:
-            config = SubscriptionConfig(benefits=dict(DEFAULT_BENEFITS))
+            config = SubscriptionConfig(is_enabled=True, benefits=dict(DEFAULT_BENEFITS))
             self._session.add(config)
             await self._session.flush()
         return config

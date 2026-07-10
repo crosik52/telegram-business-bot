@@ -28,7 +28,7 @@ class SubscriptionConfig(Base):
     __tablename__ = "subscription_config"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     price_stars: Mapped[int] = mapped_column(Integer, nullable=False, default=99)
     duration_days: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
     title: Mapped[str] = mapped_column(

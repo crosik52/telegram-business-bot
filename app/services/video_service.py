@@ -124,14 +124,21 @@ def _download_sync(url: str, out_dir: str, progress_hook: Callable | None = None
 
     # TikTok requires auth cookies for age-sensitive / region-locked videos.
     # Store the Netscape-format cookie file content in TIKTOK_COOKIES secret.
-    tiktok_cookie_path: str | None = None
     if "tiktok.com" in url.lower():
         cookies_content = os.environ.get("TIKTOK_COOKIES", "").strip()
-        if cookies_content:
-            tiktok_cookie_path = os.path.join(out_dir, "_cookies.txt")
-            with open(tiktok_cookie_path, "w", encoding="utf-8") as fh:
+        # Only use cookies if content looks like a valid Netscape cookie file:
+        # must contain tab-separated lines with 7 fields (domain, flag, path,
+        # secure, expiry, name, value).
+        is_netscape = cookies_content and any(
+            len(line.split("\t")) == 7
+            for line in cookies_content.splitlines()
+            if line and not line.startswith("#")
+        )
+        if is_netscape:
+            cookie_path = os.path.join(out_dir, "_cookies.txt")
+            with open(cookie_path, "w", encoding="utf-8") as fh:
                 fh.write(cookies_content)
-            ydl_opts["cookiefile"] = tiktok_cookie_path
+            ydl_opts["cookiefile"] = cookie_path
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])

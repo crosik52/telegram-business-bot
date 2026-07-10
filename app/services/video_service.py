@@ -125,23 +125,56 @@ def _download_sync(url: str, out_dir: str, progress_hook: Callable | None = None
     # TikTok requires auth cookies for age-sensitive / region-locked videos.
     # Store the Netscape-format cookie file content in TIKTOK_COOKIES secret.
     if "tiktok.com" in url.lower():
+        import logging as _logging
+        _tlog = _logging.getLogger(__name__)
         cookies_content = os.environ.get("TIKTOK_COOKIES", "").strip()
-        # Only use cookies if content looks like a valid Netscape cookie file:
-        # must contain tab-separated lines with 7 fields (domain, flag, path,
-        # secure, expiry, name, value).
-        is_netscape = cookies_content and any(
-            len(line.split("\t")) == 7
-            for line in cookies_content.splitlines()
-            if line and not line.startswith("#")
-        )
-        if is_netscape:
-            cookie_path = os.path.join(out_dir, "_cookies.txt")
-            with open(cookie_path, "w", encoding="utf-8") as fh:
-                fh.write(cookies_content)
-            ydl_opts["cookiefile"] = cookie_path
+        if not cookies_content:
+            _tlog.warning("TikTok: TIKTOK_COOKIES env var is empty or not set")
+        else:
+            # Validate: ALL non-empty, non-comment lines must have exactly 7
+            # tab-separated fields (Netscape cookie file format).
+            data_lines = [
+                line for line in cookies_content.splitlines()
+                if line.strip() and not line.strip().startswith("#")
+            ]
+            bad_lines = [len(l.split("\t")) for l in data_lines if len(l.split("\t")) != 7]
+            is_netscape = bool(data_lines) and not bad_lines
+            _tlog.info(
+                "TikTok cookies: %d data lines, %d malformed — valid=%s",
+                len(data_lines), len(bad_lines), is_netscape,
+            )
+            if is_netscape:
+                cookie_path = os.path.join(out_dir, "_cookies.txt")
+                with open(cookie_path, "w", encoding="utf-8") as fh:
+                    fh.write(cookies_content)
+                ydl_opts["cookiefile"] = cookie_path
+                _tlog.info("TikTok: cookiefile set (%d bytes)", len(cookies_content))
+            else:
+                _tlog.warning(
+                    "TikTok: cookies present but invalid Netscape format "
+                    "(malformed field counts: %s) — downloading without auth",
+                    [len(l.split("\t")) for l in data_lines if len(l.split("\t")) != 7][:5],
+                )
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
+    def _run_download(opts: dict) -> None:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            ydl.download([url])
+
+    try:
+        _run_download(ydl_opts)
+    except yt_dlp.utils.DownloadError as exc:
+        # If we used cookies and the download still failed, retry once without
+        # them — some errors are caused by stale/invalid cookie data, and a
+        # cookieless attempt may succeed for publicly-available videos.
+        if "cookiefile" in ydl_opts:
+            import logging as _logging
+            _logging.getLogger(__name__).warning(
+                "TikTok: download failed with cookies (%s), retrying without auth", exc
+            )
+            opts_no_cookie = {k: v for k, v in ydl_opts.items() if k != "cookiefile"}
+            _run_download(opts_no_cookie)
+        else:
+            raise
 
     # Scan the directory — more reliable than prepare_filename() which can
     # return ".NA" when the format/extension is resolved at download time.

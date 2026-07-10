@@ -1,0 +1,49 @@
+2026-07-10T11:22:19+0000 | INFO | app.business.handlers | Обнаружена ссылка на видео (TikTok) в чате=7955055695, планируется загрузка
+2026-07-10T11:22:19+0000 | INFO | aiogram.event | Обновление id=745828369 обработано. Длительность 28 мс ботом id=1162707887
+2026-07-10T11:22:19+0000 | INFO | http | POST /webhook -> 200 (29.5ms)
+2026-07-10T11:22:20+0000 | INFO | app.services.video_service | Загрузка видео из TikTok: https://vt.tiktok.com/ZSXeASgGg/
+ПРЕДУПРЕЖДЕНИЕ: пропуск записи в файле cookie из-за недопустимой длины 1: 'gerashchenko22041986@outlook.com|L2I14372Yi|divine_titan443|lurglR!84|M.C512_BAY.0.U.-CrGXPGyZY1pzihZqZyd52KRttJhlFDzrMCP4UHnK3MD3*xPWYgWNp1EfPkertXE1a3wJUPaK1CvUepXHHUAtsZfF2I7d2DAm7rTA3aQRbXFHlJFx1pylXF2G3gg5sAHxBpvkv7!OnBtky2mb7kLQFLkso9g9IF7C!dev7F0ib0yvJNYuWqv6sfgaNWsqb uw2*XT9*8!CerdCfHFgQ8Yb*1Qq6VeCs0KUfDX5TmL0b0HItxF*dP2cQ5IArWAoQKHZPc1eZewnJiOw6bQjdW0P0FzgBvz2PdlTjE6Nd2yrRmOLfnSU4DAwcfFtodul2CmjKbiVu99!iXKb0g59cLtYjsQ1ZvaXwCn5EHMgCw2dK4wRChklMLczAHkPDu2DSLW9zyEr9kukTNU2H2BVHonQpGFAIj16OnOHmjrOtWT6Ysbz|8b4ba9dd-3ea5-4e5f-86f1-ddba2230dcf2'
+ОШИБКА: '/tmp/vidbot_6d5xra1c/_cookies.txt' не соответствует формату файла cookie Netscape.
+ПРЕДУПРЕЖДЕНИЕ: пропуск записи в файле cookie из-за недопустимой длины 1: 'gerashchenko22041986@outlook.com|L2I14372Yi|divine_titan443|lurglR!84|M.C512_BAY.0.U.-CrGXPGyZY1pzihZqZyd52KRttJhlFDzrMCP4UHnK3MD3*xPWYgWNp1EfPkertXE1a3wJUPaK1CvUepXHHUAtsZfF2I7d2DAm7rTA3aQRbXFHlJFx1pylXF2G3gg5sAHxBpvkv7!OnBtky2mb7kLQFLkso9g9IF7C!dev7F0ib0yvJNYuWqv6sfgaNWsqb uw2*XT9*8!CerdCfHFgQ8Yb*1Qq6VeCs0KUfDX5TmL0b0HItxF*dP2cQ5IArWAoQKHZPc1eZewnJiOw6bQjdW0P0FzgBvz2PdlTjE6Nd2yrRmOLfnSU4DAwcfFtodul2CmjKbiVu99!iXKb0g59cLtYjsQ1ZvaXwCn5EHMgCw2dK4wRChklMLczAHkPDu2DSLW9zyEr9kukTNU2H2BVHonQpGFAIj16OnOHmjrOtWT6Ysbz|8b4ba9dd-3ea5-4e5f-86f1-ddba2230dcf2'
+ОШИБКА: '/tmp/vidbot_6d5xra1c/_cookies.txt' не соответствует формату файла cookie Netscape.
+2026-07-10T11:22:20+0000 | ПРЕДУПРЕЖДЕНИЕ | app.services.video_service | Сбой загрузки/отправки видео для https://vt.tiktok.com/ZSXeASgGg/ (TikTok): ОШИБКА: '/tmp/vidbot_6d5xra1c/_cookies.txt' не соответствует формату файла cookie Netscape.
+2026-07-10T11:22:21+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745828370
+2026-07-10T11:22:21+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=338362770 message_id=1392272 media=sticker
+2026-07-10T11:22:21+0000 | INFO | aiogram.event | Обновление id=745828370 обработано. Длительность 28 мс ботом id=1162707887
+2026-07-10T11:22:21+0000 | INFO | http | POST /webhook -> 200 (29.7ms)
+2026-07-10T11:22:22+0000 | INFO | app.services.message_service | Зарегистрировано изменение для chat_id=6996135336 message_id=1001410 (изменение #1)
+2026-07-10T11:22:22+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745828371
+2026-07-10T11:22:22+0000 | INFO | aiogram.event | Обновление id=745828371 обработано. Длительность 271 мс ботом id=1162707887
+2026-07-10T11:22:22+0000 | INFO | http | POST /webhook -> 200 (273.8ms)
+2026-07-10T11:22:25+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745828372
+2026-07-10T11:22:25+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=6996135336 message_id=1001413 media=text
+2026-07-10T11:22:25+0000 | INFO | aiogram.event | Обновление id=745828372 обработано. Длительность 37 мс ботом id=1162707887
+2026-07-10T11:22:25+0000 | INFO | http | POST /webhook -> 200 (38.0ms)
+2026-07-10T11:22:29+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745828373
+2026-07-10T11:22:29+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=6996135336 message_id=1001414 media=text
+2026-07-10T11:22:29+0000 | INFO | aiogram.event | Обновление id=745828373 обработано. Длительность 35 мс ботом id=1162707887
+2026-07-10T11:22:29+0000 | INFO | http | POST /webhook -> 200 (36.8ms)
+2026-07-10T11:22:30+0000 | INFO | http | POST /webhook -> 200 (34.3ms)
+2026-07-10T11:22:30+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745828374
+2026-07-10T11:22:30+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=6996135336 message_id=1001415 media=sticker
+2026-07-10T11:22:30+0000 | INFO | aiogram.event | Обновление id=745828374 обработано. Длительность 32 мс ботом id=1162707887
+2026-07-10T11:22:33+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745828375
+2026-07-10T11:22:33+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=6996135336 message_id=1001416 media=text
+2026-07-10T11:22:33+0000 | INFO | aiogram.event | Обновление id=745828375 обработано. Длительность 32 мс ботом id=1162707887
+2026-07-10T11:22:33+0000 | INFO | http | POST /webhook -> 200 (35.0ms)
+2026-07-10T11:22:34+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745828376
+2026-07-10T11:22:34+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=6996135336 message_id=1001417 media=text
+2026-07-10T11:22:34+0000 | INFO | aiogram.event | Обновление id=745828376 обработано. Длительность 30 мс ботом id=1162707887
+2026-07-10T11:22:34+0000 | INFO | http | POST /webhook -> 200 (32.2ms)
+2026-07-10T11:22:35+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745828377
+2026-07-10T11:22:35+0000 | INFO | aiogram.event | Обновление id=745828377 обработано. Длительность 28 мс ботом id=1162707887
+2026-07-10T11:22:35+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=6996135336 message_id=1001418 media=text
+2026-07-10T11:22:35+0000 | INFO | http | POST /webhook -> 200 (30.7ms)
+2026-07-10T11:22:41+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745828378
+2026-07-10T11:22:41+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=6996135336 message_id=1001419 media=text
+2026-07-10T11:22:41+0000 | INFO | aiogram.event | Обновление id=745828378 обработано. Длительность 32 мс ботом id=1162707887
+2026-07-10T11:22:41+0000 | INFO | http | POST /webhook -> 200 (34.3ms)
+2026-07-10T11:22:51+0000 | INFO | http | GET /app -> 200 (21.1ms)
+2026-07-10T11:22:53+0000 | INFO | http | POST /app/api/activity -> 200 (61.3ms)
+2026-07-10T11:22:53+0000 | INFO | http | POST /app/api/stats -> 200 (134.5ms)
+2026-07-10T11:22:53+0000 | INFO | http | GET /favicon.ico -> 404 (0.5ms)

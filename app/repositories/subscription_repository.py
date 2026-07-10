@@ -57,7 +57,22 @@ class SubscriptionRepository:
         stars_paid: int,
         duration_days: int,
     ) -> UserSubscription:
-        """Activate a Stars-purchased subscription (deactivates any existing one)."""
+        """Activate a Stars-purchased subscription (deactivates any existing one).
+
+        Idempotent: if *charge_id* was already recorded, returns the existing
+        subscription without creating a duplicate (guards against Telegram
+        retransmitting successful_payment).
+        """
+        # Idempotency check — same charge already processed → return it
+        existing_charge = await self._session.execute(
+            select(UserSubscription).where(
+                UserSubscription.payment_charge_id == charge_id
+            )
+        )
+        found = existing_charge.scalar_one_or_none()
+        if found is not None:
+            return found
+
         await self._deactivate_user_subs(user_telegram_id)
         now = dt.datetime.now(dt.timezone.utc)
         sub = UserSubscription(

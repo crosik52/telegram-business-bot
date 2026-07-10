@@ -90,6 +90,32 @@
 </div>
 
 {# ── Edit history ── #}
+{# ── Mute status + Contact notes ── #}
+{% set now_ts = message.sent_at %}
+{% if chat_settings and chat_settings.muted_until %}
+<div class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4 mb-6 flex items-center gap-3">
+  <span class="text-lg">🔕</span>
+  <div>
+    <p class="text-sm font-medium text-amber-700 dark:text-amber-300">Notifications muted for this chat</p>
+    <p class="text-xs text-amber-600 dark:text-amber-400">Until {{ chat_settings.muted_until.strftime('%Y-%m-%d %H:%M UTC') }} — use <code>!unmute</code> in chat to lift early.</p>
+  </div>
+</div>
+{% endif %}
+
+{% if contact_notes %}
+<h2 class="text-lg font-semibold mb-3">📝 Contact notes
+  <span class="text-base font-normal text-slate-400 ml-1">({{ contact_notes | length }})</span>
+</h2>
+<div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800 mb-6">
+  {% for note in contact_notes %}
+  <div class="px-5 py-3 flex gap-3">
+    <span class="text-slate-300 dark:text-slate-600 text-xs shrink-0 mt-0.5 tabular-nums">{{ note.created_at.strftime('%b %d, %H:%M') }}</span>
+    <p class="text-sm whitespace-pre-wrap">{{ note.text }}</p>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
 {% if message.edit_history %}
 <h2 class="text-lg font-semibold mb-3">Edit history
   <span class="text-base font-normal text-slate-400 ml-1">({{ message.edit_history | length }} revision{{ 's' if message.edit_history | length != 1 }})</span>

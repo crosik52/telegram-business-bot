@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dashboard.security import require_login
 from app.database.session import get_db_session
+from app.repositories.chat_settings_repository import ChatSettingsRepository
+from app.repositories.contact_note_repository import ContactNoteRepository
 from app.repositories.message_repository import MessageFilters, MessageRepository
 from app.utils.pagination import Page
 
@@ -123,8 +125,25 @@ async def message_detail(
     if message is None:
         raise HTTPException(status_code=404, detail="Message not found")
 
+    # Load contact notes and mute status for this chat.
+    note_repo = ContactNoteRepository(session)
+    notes = await note_repo.get_for_chat(
+        message.business_connection_id, message.chat_id
+    )
+
+    chat_repo = ChatSettingsRepository(session)
+    chat_settings = await chat_repo.get(
+        message.business_connection_id, message.chat_id
+    )
+
     return templates.TemplateResponse(
         request,
         "message_detail.html",
-        {"authenticated": True, "active_nav": "messages", "message": message},
+        {
+            "authenticated": True,
+            "active_nav": "messages",
+            "message": message,
+            "contact_notes": notes,
+            "chat_settings": chat_settings,
+        },
     )

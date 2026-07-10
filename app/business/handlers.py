@@ -2,25 +2,30 @@
 
 Covers every officially supported Business API update type:
 
-- `business_connection`   -> connection lifecycle (created/updated/revoked)
-- `business_message`      -> new incoming/outgoing message in a connected chat
-- `edited_business_message` -> a business message was edited
-- `deleted_business_messages` -> one or more business messages were deleted
+- ``business_connection``        -> connection lifecycle (created/updated/revoked)
+- ``business_message``           -> new incoming/outgoing message in a connected chat
+- ``edited_business_message``    -> a business message was edited
+- ``deleted_business_messages``  -> one or more business messages were deleted
+
+Owner commands
+--------------
+If the *owner* (the account that connected the bot) types a message beginning
+with ``!`` in a business chat, the bot treats it as a command, executes it,
+DMs the result back to the owner, and attempts to delete the command message
+so the contact never sees it.  See ``app.business.commands`` for the full
+command reference.
+
+Panic-delete detection
+----------------------
+When a contact deletes 3 or more messages in a single event (simultaneously)
+the bot sends ONE grouped ⚠️ notification instead of N individual ones.
+Rapid sequential deletions across events are also tracked; a cross-event panic
+alert fires once the rolling 60-second window crosses the threshold.
 
 Telegram Business API limitation (documented, not worked around):
-Telegram does NOT send the deleted message's content in the
-`deleted_business_messages` update — only chat_id + message_ids. This bot
-therefore relies entirely on having captured the message beforehand via
-`business_message` in order to preserve its content after deletion. If a
-message was sent before this bot was connected, its content cannot be
-recovered when later deleted. This is a Telegram platform limitation, not
-a bug in this implementation.
-
-Owner notifications: this bot is designed to be connected by *any* user
-(multi-tenant "commercial" mode). Whenever the *counterparty* in a
-connected chat edits or deletes a message, the bot DMs the connection
-owner (the account that connected it) a formatted notification showing
-the previous/new content, similar to Telegram's own edit-history UI.
+Telegram does NOT send deleted-message content in ``deleted_business_messages``
+updates — only chat_id + message_ids.  This bot therefore relies entirely on
+having captured each message via ``business_message`` first.
 """
 
 from __future__ import annotations
@@ -31,14 +36,20 @@ from aiogram import Bot, Router
 from aiogram.types import BusinessConnection, BusinessMessagesDeleted, Message
 from sqlalchemy import select
 
+from app.business import commands
+from app.business.panic_tracker import PanicTracker
 from app.database.session import session_scope
 from app.logging_config import get_logger
 from app.models.business_connection import BusinessConnection as BCModel
-from app.models.message import MediaType
+from app.models.message import MediaType, Message as DBMessage
+from app.repositories.chat_settings_repository import ChatSettingsRepository
 from app.services.message_service import MessageService
 
 logger = get_logger(__name__)
 router = Router(name="business")
+
+# One shared panic tracker for the lifetime of the process.
+_panic_tracker = PanicTracker()
 
 _PREVIEW_LIMIT = 500
 
@@ -57,6 +68,12 @@ _MEDIA_LABELS: dict[MediaType, str] = {
     MediaType.POLL:       "опрос",
 }
 
+# Panic threshold is intentionally the same as PanicTracker.THRESHOLD so both
+# the bulk-event check and the cross-event check use a consistent value.
+_PANIC_THRESHOLD = 3
+
+
+# ── Small helpers ─────────────────────────────────────────────────────────────
 
 def _preview(text: str | None) -> str:
     if not text:
@@ -69,6 +86,19 @@ def _media_label(media_type: MediaType) -> str:
     return _MEDIA_LABELS.get(media_type, "медиа")
 
 
+def _counterpart_label(chat: object, owner_telegram_id: int) -> str:
+    """Human-readable label for the other side of the chat."""
+    if getattr(chat, "id", None) == owner_telegram_id:
+        return "себя"
+    parts = [p for p in (getattr(chat, "first_name", None), getattr(chat, "last_name", None)) if p]
+    name = " ".join(parts) or (getattr(chat, "title", None) or "собеседником")
+    label = html_escape(name)
+    username = getattr(chat, "username", None)
+    if username:
+        label += f" (@{html_escape(username)})"
+    return label
+
+
 async def _try_send_media(
     bot: Bot,
     chat_id: int,
@@ -78,9 +108,9 @@ async def _try_send_media(
 ) -> bool:
     """Resend a Telegram media file to *chat_id* using its stored file_id.
 
-    Returns True on success, False if Telegram rejects the file_id (e.g. it
-    has expired or the file is no longer accessible). Callers should fall
-    back gracefully — the text notification has already been sent.
+    Returns True on success, False if Telegram rejects the file_id.
+    Callers should fall back gracefully — the text notification has already
+    been sent.
     """
     kw: dict = {"chat_id": chat_id}
     if caption:
@@ -120,28 +150,103 @@ async def _try_send_media(
         return False
 
 
-def _counterpart_label(chat, owner_telegram_id: int) -> str:
-    """A human-readable label for the other side of the chat."""
+# ── Notification builders ─────────────────────────────────────────────────────
 
-    if getattr(chat, "id", None) == owner_telegram_id:
-        return "себя"
-    parts = [p for p in (chat.first_name, chat.last_name) if p]
-    name = " ".join(parts) or (chat.title or "собеседником")
-    label = html_escape(name)
-    if chat.username:
-        label += f" (@{html_escape(chat.username)})"
-    return label
+async def _send_single_delete_notification(
+    bot: Bot,
+    owner_id: int,
+    counterpart: str,
+    removed: DBMessage,
+) -> None:
+    """Send one delete notification for a single removed message."""
+    has_media = removed.file_id is not None
+    media_lbl = _media_label(removed.media_type) if has_media else None
+    text_part = _preview(removed.text or removed.caption)
 
+    if has_media and text_part:
+        notification = f"🗑 {counterpart} удалил(а) {media_lbl}:\n\n«{text_part}»"
+    elif has_media:
+        notification = f"🗑 {counterpart} удалил(а) {media_lbl}."
+    elif text_part:
+        notification = f"🗑 {counterpart} удалил(а) сообщение:\n\n«{text_part}»"
+    else:
+        notification = f"🗑 {counterpart} удалил(а) сообщение."
 
-async def _get_business_connection(business_connection_id: str) -> BCModel | None:
-    async with session_scope() as session:
-        result = await session.execute(
-            select(BCModel).where(
-                BCModel.business_connection_id == business_connection_id
+    try:
+        await bot.send_message(chat_id=owner_id, text=notification, parse_mode="HTML")
+        if has_media and removed.file_id:
+            await _try_send_media(
+                bot, owner_id, removed.media_type, removed.file_id,
+                caption=text_part or None,
             )
+    except Exception:
+        logger.exception(
+            "Failed to send delete notification to owner %s", owner_id
         )
-        return result.scalar_one_or_none()
 
+
+async def _send_panic_bulk(
+    bot: Bot,
+    owner_id: int,
+    counterpart: str,
+    messages: list[DBMessage],
+) -> None:
+    """One grouped panic notification for a simultaneous bulk-delete event."""
+    n = len(messages)
+    lines: list[str] = [
+        f"⚠️ <b>Паник-удаление!</b>\n\n"
+        f"{counterpart} удалил(а) <b>{n} сообщений</b> разом:\n"
+    ]
+    media_to_resend: list[tuple[MediaType, str, str | None]] = []
+
+    for i, msg in enumerate(messages, 1):
+        has_media = msg.file_id is not None
+        text_part = _preview(msg.text or msg.caption)
+
+        if has_media and text_part:
+            lines.append(f"{i}. {_media_label(msg.media_type)} — «{text_part}»")
+        elif has_media:
+            lines.append(f"{i}. {_media_label(msg.media_type)}")
+        elif text_part:
+            lines.append(f"{i}. «{text_part}»")
+        else:
+            lines.append(f"{i}. <i>(нет содержимого)</i>")
+
+        if has_media and msg.file_id:
+            media_to_resend.append((msg.media_type, msg.file_id, text_part or None))
+
+    try:
+        await bot.send_message(
+            chat_id=owner_id, text="\n".join(lines), parse_mode="HTML"
+        )
+        for media_type, file_id, caption in media_to_resend:
+            await _try_send_media(bot, owner_id, media_type, file_id, caption=caption)
+    except Exception:
+        logger.exception(
+            "Failed to send panic-bulk notification to owner %s", owner_id
+        )
+
+
+async def _send_cross_event_panic(
+    bot: Bot,
+    owner_id: int,
+    counterpart: str,
+    total: int,
+) -> None:
+    """Additional alert when rapid sequential deletions cross the threshold."""
+    text = (
+        f"⚠️ <b>Паник-детект:</b> {counterpart} удалил(а) уже "
+        f"<b>{total} сообщений</b> за последнюю минуту."
+    )
+    try:
+        await bot.send_message(chat_id=owner_id, text=text, parse_mode="HTML")
+    except Exception:
+        logger.exception(
+            "Failed to send cross-event panic alert to owner %s", owner_id
+        )
+
+
+# ── Connection handler ────────────────────────────────────────────────────────
 
 @router.business_connection()
 async def on_business_connection(connection: BusinessConnection) -> None:
@@ -149,9 +254,7 @@ async def on_business_connection(connection: BusinessConnection) -> None:
 
     async with session_scope() as session:
         result = await session.execute(
-            select(BCModel).where(
-                BCModel.business_connection_id == connection.id
-            )
+            select(BCModel).where(BCModel.business_connection_id == connection.id)
         )
         record = result.scalar_one_or_none()
 
@@ -173,18 +276,32 @@ async def on_business_connection(connection: BusinessConnection) -> None:
             record.user_last_name = connection.user.last_name
             record.user_username = connection.user.username
 
+        # When a connection is disabled/revoked, wipe all per-chat panic state
+        # for that connection.  Keys use the format "connection_id:chat_id", so
+        # we match by prefix rather than an exact key.
+        if not connection.is_enabled:
+            keys_to_clear = [
+                k for k in list(_panic_tracker._state)
+                if k.startswith(f"{connection.id}:")
+            ]
+            for k in keys_to_clear:
+                _panic_tracker.clear(k)
+
     logger.info(
         "Business connection %s enabled=%s can_reply=%s",
-        connection.id,
-        connection.is_enabled,
-        connection.can_reply,
+        connection.id, connection.is_enabled, connection.can_reply,
     )
 
 
-@router.business_message()
-async def on_business_message(message: Message) -> None:
-    """Store every incoming/outgoing business message immediately."""
+# ── New message handler ───────────────────────────────────────────────────────
 
+@router.business_message()
+async def on_business_message(message: Message, bot: Bot) -> None:
+    """Store every incoming/outgoing business message.
+
+    If the *owner* types a message starting with ``!``, treat it as a command,
+    dispatch it, and delete the message from the chat (best-effort).
+    """
     if not message.business_connection_id:
         logger.warning("Received business_message without a connection id")
         return
@@ -195,14 +312,49 @@ async def on_business_message(message: Message) -> None:
             message, business_connection_id=message.business_connection_id
         )
 
+        # --- Owner command detection ---
+        sender = message.from_user
+        if sender is not None and message.text and message.text.startswith("!"):
+            result = await session.execute(
+                select(BCModel).where(
+                    BCModel.business_connection_id == message.business_connection_id
+                )
+            )
+            connection = result.scalar_one_or_none()
+
+            if connection and sender.id == connection.user_telegram_id:
+                parsed = commands.parse_command(message.text)
+                if parsed:
+                    cmd, args = parsed
+                    logger.info(
+                        "Owner command !%s from user=%s in chat=%s",
+                        cmd, sender.id, message.chat.id,
+                    )
+                    await commands.dispatch(
+                        cmd, args,
+                        bot=bot,
+                        owner_id=connection.user_telegram_id,
+                        chat_id=message.chat.id,
+                        business_connection_id=message.business_connection_id,
+                        message_id=message.message_id,
+                        session=session,
+                    )
+
+
+# ── Edit handler ──────────────────────────────────────────────────────────────
 
 @router.edited_business_message()
 async def on_edited_business_message(message: Message, bot: Bot) -> None:
-    """Preserve the original version, append the edited version, and notify the owner."""
+    """Preserve the original version, append the edited version, notify owner."""
 
     if not message.business_connection_id:
         logger.warning("Received edited_business_message without a connection id")
         return
+
+    # Everything that touches the DB happens in one session.
+    outcome = None
+    connection = None
+    is_muted = False
 
     async with session_scope() as session:
         service = MessageService(session)
@@ -210,44 +362,53 @@ async def on_edited_business_message(message: Message, bot: Bot) -> None:
             message, business_connection_id=message.business_connection_id
         )
 
-    if outcome.is_first_capture:
-        # We never saw the pre-edit content, so there's nothing meaningful
-        # to compare/notify about yet.
-        return
+        if outcome.is_first_capture:
+            return
 
-    connection = await _get_business_connection(message.business_connection_id)
-    if connection is None:
-        logger.warning(
-            "No stored BusinessConnection for id=%s; skipping owner notification",
-            message.business_connection_id,
+        result = await session.execute(
+            select(BCModel).where(
+                BCModel.business_connection_id == message.business_connection_id
+            )
         )
-        return
+        connection = result.scalar_one_or_none()
 
-    sender = message.from_user
-    if sender is not None and sender.id == connection.user_telegram_id:
-        # The owner edited their own outgoing message — not what the
-        # "notify me when the other side edits" feature is for.
-        return
+        if connection is None:
+            logger.warning(
+                "No stored BusinessConnection for id=%s; skipping edit notification",
+                message.business_connection_id,
+            )
+            return
 
-    if connection.is_blocked or not connection.notifications_enabled:
+        sender = message.from_user
+        if sender is not None and sender.id == connection.user_telegram_id:
+            return  # Owner edited their own outgoing message.
+
+        if connection.is_blocked or not connection.notifications_enabled:
+            return
+
+        # Check per-chat mute.
+        chat_repo = ChatSettingsRepository(session)
+        is_muted = await chat_repo.is_muted(
+            message.business_connection_id, message.chat.id
+        )
+
+    if is_muted:
         logger.info(
-            "Owner notifications disabled for connection_id=%s; skipping edit notification",
-            connection.business_connection_id,
+            "Chat %s is muted; skipping edit notification", message.chat.id
         )
         return
 
+    # --- Build and send notification ---
     counterpart = _counterpart_label(message.chat, connection.user_telegram_id)
     owner_id = connection.user_telegram_id
 
     has_media = outcome.previous_file_id is not None
     media_lbl = _media_label(outcome.previous_media_type) if has_media else None
 
-    # Build text part: show caption/text diff; mention media type if present.
     prev_text_part = _preview(outcome.previous_text or outcome.previous_caption)
     new_text_part  = _preview(message.text or message.caption)
 
     if has_media and not prev_text_part and not new_text_part:
-        # Pure media edit with no captions — rare; just say what was touched.
         notification = (
             f"✏️ {counterpart} отредактировал(а) {media_lbl}.\n"
             f"<i>(подпись не изменилась)</i>"
@@ -267,37 +428,50 @@ async def on_edited_business_message(message: Message, bot: Bot) -> None:
 
     try:
         await bot.send_message(chat_id=owner_id, text=notification, parse_mode="HTML")
-        # If the edited message has media, resend the file so the owner
-        # can see what was changed (Telegram doesn't include it in edits).
         if has_media and outcome.previous_file_id:
             await _try_send_media(
-                bot,
-                owner_id,
-                outcome.previous_media_type,
-                outcome.previous_file_id,
+                bot, owner_id,
+                outcome.previous_media_type, outcome.previous_file_id,
             )
     except Exception:
         logger.exception(
-            "Failed to notify owner user_telegram_id=%s about edit",
-            owner_id,
+            "Failed to notify owner user_telegram_id=%s about edit", owner_id
         )
 
 
+# ── Delete handler ────────────────────────────────────────────────────────────
+
 @router.deleted_business_messages()
 async def on_deleted_business_messages(deleted: BusinessMessagesDeleted, bot: Bot) -> None:
-    """Mark previously-stored messages as deleted and notify the owner.
+    """Mark messages deleted, run panic detection, notify owner.
 
     See module docstring: Telegram does not resend deleted content, so this
     only works for messages the bot had already captured.
-    """
 
+    Panic logic
+    -----------
+    - Single event with ≥ 3 messages: ONE grouped ⚠️ notification (no individual ones).
+    - Single event with < 3 messages: individual notifications as usual.
+    - Cross-event: if the rolling 60-second window total crosses the threshold,
+      an ADDITIONAL ⚠️ alert fires (individual notifications for that event are
+      still sent because they carry the media).
+    """
     if not deleted.business_connection_id:
         logger.warning("Received deleted_business_messages without a connection id")
         return
 
-    connection = await _get_business_connection(deleted.business_connection_id)
+    to_notify: list[DBMessage] = []
+    connection: BCModel | None = None
 
     async with session_scope() as session:
+        # Fetch connection once for the whole event.
+        result = await session.execute(
+            select(BCModel).where(
+                BCModel.business_connection_id == deleted.business_connection_id
+            )
+        )
+        connection = result.scalar_one_or_none()
+
         service = MessageService(session)
         for message_id in deleted.message_ids:
             removed = await service.mark_deleted(
@@ -313,49 +487,45 @@ async def on_deleted_business_messages(deleted: BusinessMessagesDeleted, bot: Bo
                 or connection.is_blocked
                 or not connection.notifications_enabled
             ):
-                # Unknown connection, untracked message, the owner deleted
-                # their own message, or notifications are disabled for this
-                # connection — nothing to notify about.
                 continue
 
-            counterpart = _counterpart_label(deleted.chat, connection.user_telegram_id)
-            owner_id = connection.user_telegram_id
+            to_notify.append(removed)
 
-            has_media = removed.file_id is not None
-            media_lbl = _media_label(removed.media_type) if has_media else None
-            text_part  = _preview(removed.text or removed.caption)
+        # Check per-chat mute (same chat for the whole event).
+        if to_notify:
+            chat_repo = ChatSettingsRepository(session)
+            if await chat_repo.is_muted(
+                deleted.business_connection_id, deleted.chat.id
+            ):
+                logger.info(
+                    "Chat %s is muted; skipping delete notifications", deleted.chat.id
+                )
+                to_notify.clear()
 
-            if has_media and text_part:
-                notification = (
-                    f"🗑 {counterpart} удалил(а) {media_lbl}:\n\n"
-                    f"«{text_part}»"
-                )
-            elif has_media:
-                notification = f"🗑 {counterpart} удалил(а) {media_lbl}."
-            elif text_part:
-                notification = (
-                    f"🗑 {counterpart} удалил(а) сообщение:\n\n"
-                    f"«{text_part}»"
-                )
-            else:
-                # Edge case: we captured the message but have no content at all.
-                notification = f"🗑 {counterpart} удалил(а) сообщение."
+    if not to_notify or connection is None:
+        return
 
-            try:
-                await bot.send_message(
-                    chat_id=owner_id, text=notification, parse_mode="HTML"
-                )
-                # Resend the actual media file so the owner sees what was deleted.
-                if has_media and removed.file_id:
-                    await _try_send_media(
-                        bot,
-                        owner_id,
-                        removed.media_type,
-                        removed.file_id,
-                        caption=text_part or None,
-                    )
-            except Exception:
-                logger.exception(
-                    "Failed to notify owner user_telegram_id=%s about deletion",
-                    owner_id,
-                )
+    counterpart = _counterpart_label(deleted.chat, connection.user_telegram_id)
+    owner_id = connection.user_telegram_id
+
+    # ── Panic detection ──────────────────────────────────────────────────────
+    chat_key = f"{deleted.business_connection_id}:{deleted.chat.id}"
+    is_bulk = len(to_notify) >= _PANIC_THRESHOLD
+
+    # Record all deletions; get cross-event panic status.
+    # (If it's a bulk event, cross-event alert would be redundant — suppress it.)
+    is_cross_event_panic, total_in_window = _panic_tracker.record(
+        chat_key, len(to_notify)
+    )
+
+    if is_bulk:
+        # Large single event: one grouped notification.
+        await _send_panic_bulk(bot, owner_id, counterpart, to_notify)
+    else:
+        # Small event: individual notifications with media.
+        for removed in to_notify:
+            await _send_single_delete_notification(bot, owner_id, counterpart, removed)
+
+        # Cross-event panic: additional summary alert.
+        if is_cross_event_panic:
+            await _send_cross_event_panic(bot, owner_id, counterpart, total_in_window)

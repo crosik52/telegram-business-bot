@@ -1,0 +1,22 @@
+ERROR: [TikTok] 7655756851010604319: This post may not be comfortable for some audiences. Log in for access. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies
+2026-07-10T17:24:34+0000 | WARNING  | app.services.video_service | Video download/send failed for https://vt.tiktok.com/ZSXeASgGg/ (TikTok): ERROR: [TikTok] 7655756851010604319: This post may not be comfortable for some audiences. Log in for access. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies
+2026-07-10T17:24:35+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745830034
+2026-07-10T17:24:35+0000 | INFO     | app.services.message_service | Stored new business message chat_id=658504783 message_id=551157 media=text
+2026-07-10T17:24:35+0000 | INFO     | aiogram.event | Update id=745830034 is handled. Duration 9 ms by bot id=1162707887
+2026-07-10T17:24:35+0000 | INFO     | http | POST /webhook -> 200 (11.4ms)
+2026-07-10T17:24:42+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745830035
+2026-07-10T17:24:42+0000 | INFO     | app.services.message_service | Stored new business message chat_id=6530706077 message_id=1001966 media=text
+2026-07-10T17:24:42+0000 | INFO     | aiogram.event | Update id=745830035 is handled. Duration 9 ms by bot id=1162707887
+2026-07-10T17:24:42+0000 | INFO     | http | POST /webhook -> 200 (11.6ms)
+2026-07-10T17:24:48+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745830036
+2026-07-10T17:24:48+0000 | INFO     | aiogram.event | Update id=745830036 is handled. Duration 13 ms by bot id=1162707887
+2026-07-10T17:24:48+0000 | INFO     | http | POST /webhook -> 200 (14.0ms)
+2026-07-10T17:24:48+0000 | INFO     | app.services.message_service | Stored new business message chat_id=6530706077 message_id=1001967 media=text
+2026-07-10T17:25:27+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745830037
+2026-07-10T17:25:27+0000 | INFO     | app.services.message_service | Stored new business message chat_id=6530706077 message_id=1001968 media=text
+2026-07-10T17:25:27+0000 | INFO     | aiogram.event | Update id=745830037 is handled. Duration 9 ms by bot id=1162707887
+2026-07-10T17:25:27+0000 | INFO     | http | POST /webhook -> 200 (11.1ms)
+2026-07-10T17:25:29+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745830038
+2026-07-10T17:25:29+0000 | INFO     | app.services.message_service | Stored new business message chat_id=6530706077 message_id=1001969 media=sticker
+2026-07-10T17:25:29+0000 | INFO     | aiogram.event | Update id=745830038 is handled. Duration 9 ms by bot id=1162707887
+2026-07-10T17:25:29+0000 | INFO     | http | POST /webhook -> 200 (10.7ms)

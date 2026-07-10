@@ -165,6 +165,14 @@ class AdminWalletSetRequest(BaseModel):
     new_balance: int = Field(alias="newBalance", ge=0, le=10_000_000)
 
 
+class AdminWalletAdjustRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    init_data: str = Field(alias="initData")
+    owner_telegram_id: int = Field(alias="ownerTelegramId")
+    delta: int = Field(alias="delta", ge=-10_000_000, le=10_000_000)
+
+
 class PetAdoptRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -1082,7 +1090,40 @@ async def admin_wallet_set(
         payload.owner_telegram_id,
         new_balance,
     )
+    session.add(AdminActionLog(
+        admin_username=admin_user.get("username", "?"),
+        action="wallet_set",
+        target_owner_telegram_id=payload.owner_telegram_id,
+        details=f"balance → {new_balance}",
+    ))
+    await session.commit()
     return {"ok": True, "new_balance": new_balance}
+
+
+@router.post("/app/api/admin/wallet/adjust")
+async def admin_wallet_adjust(
+    payload: AdminWalletAdjustRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Admin: add or subtract coins from a user's balance."""
+    admin_user = _require_admin(payload.init_data)
+    repo = WalletRepository(session)
+    new_balance = await repo.admin_adjust_balance(payload.owner_telegram_id, payload.delta)
+    sign = "+" if payload.delta >= 0 else ""
+    logger.info(
+        "Admin %s adjusted wallet for user_id=%s delta=%s%s → %s",
+        admin_user.get("username", "?"),
+        payload.owner_telegram_id,
+        sign, payload.delta,
+        new_balance,
+    )
+    session.add(AdminActionLog(
+        admin_username=admin_user.get("username", "?"),
+        action="wallet_adjust",
+        target_owner_telegram_id=payload.owner_telegram_id,
+        details=f"delta {sign}{payload.delta} → balance {new_balance}",
+    ))
+    await session.commit()
+    return {"ok": True, "new_balance": new_balance, "delta": payload.delta}
 
 
 @router.post("/app/api/admin/messages")

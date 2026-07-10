@@ -511,6 +511,16 @@
     display: block; width: 100%; text-align: center; padding: 10px;
     font-size: 14px; color: var(--hint); border: none; background: none;
   }
+  .balance-mode-row {
+    display: flex; gap: 8px; margin-bottom: 14px;
+  }
+  .balance-mode-btn {
+    flex: 1; border: 1.5px solid rgba(120,120,128,0.22); border-radius: 11px;
+    padding: 8px 4px; font-size: 12px; font-weight: 700;
+    background: var(--bg); color: var(--text); touch-action: manipulation;
+    transition: background 0.15s, color 0.15s;
+  }
+  .balance-mode-btn.active { border-color: transparent; }
 </style>
 </head>
 <body>
@@ -849,67 +859,114 @@
     }
 
     function openBalanceEditor(ownerId, currentBalance, triggerBtn) {
+      let mode = "set"; // "set" | "add" | "sub"
+
+      const PRESETS = {
+        set: [0, 100, 500, 1000, 5000, 10000],
+        add: [10, 50, 100, 500, 1000, 5000],
+        sub: [10, 50, 100, 500, 1000, "всё"],
+      };
+      const MODE_LABELS = { set: "Задать", add: "Добавить", sub: "Вычесть" };
+      const MODE_COLORS = { set: "var(--purple)", add: "#4ADE80", sub: "#EF4444" };
+
       const overlay = document.createElement("div");
       overlay.className = "balance-overlay";
-      overlay.innerHTML = `
-        <div class="balance-sheet">
-          <div class="balance-sheet-title">💰 Изменить баланс</div>
-          <div class="balance-current">${currentBalance.toLocaleString("ru-RU")} 🪙</div>
-          <div class="balance-current-lbl">Текущий баланс</div>
-          <div class="balance-presets">
-            ${[0, 100, 500, 1000, 5000].map(v =>
-              `<button class="balance-preset" data-val="${v}">${v.toLocaleString("ru-RU")}</button>`
-            ).join("")}
-          </div>
-          <div class="balance-input-row">
-            <input type="number" class="balance-number-input" id="balanceInput"
-              min="0" max="10000000" value="${currentBalance}" />
-            <button class="balance-set-btn" id="balanceSetBtn">Задать</button>
-          </div>
-          <button class="balance-cancel-btn" id="balanceCancelBtn">Отмена</button>
-        </div>
-      `;
       document.body.appendChild(overlay);
 
-      overlay.querySelectorAll(".balance-preset").forEach(b => {
-        b.addEventListener("click", () => {
-          const inp = overlay.querySelector("#balanceInput");
-          if (inp) inp.value = b.dataset.val;
+      function render() {
+        const presets = PRESETS[mode];
+        const defVal  = mode === "set" ? currentBalance : (mode === "add" ? 100 : 50);
+        overlay.innerHTML = `
+          <div class="balance-sheet">
+            <div class="balance-sheet-title">💰 Баланс пользователя</div>
+            <div class="balance-current" style="color:${MODE_COLORS[mode]}">${currentBalance.toLocaleString("ru-RU")} 🪙</div>
+            <div class="balance-current-lbl">Текущий баланс</div>
+
+            <div class="balance-mode-row">
+              ${["set","add","sub"].map(m => `
+                <button class="balance-mode-btn ${mode===m?"active":""}" data-mode="${m}"
+                  style="${mode===m ? `background:${MODE_COLORS[m]};color:#fff` : ""}">
+                  ${m==="set"?"✏️ Задать":m==="add"?"➕ Добавить":"➖ Вычесть"}
+                </button>`).join("")}
+            </div>
+
+            <div class="balance-presets">
+              ${presets.map(v =>
+                `<button class="balance-preset" data-val="${v === "всё" ? currentBalance : v}">
+                  ${mode==="add"?"+":""}${typeof v==="number"?v.toLocaleString("ru-RU"):v}
+                </button>`
+              ).join("")}
+            </div>
+
+            <div class="balance-input-row">
+              <input type="number" class="balance-number-input" id="balanceInput"
+                min="${mode==="set"?0:1}" max="10000000" value="${defVal}"
+                placeholder="${mode==="set"?"Новый баланс":mode==="add"?"Сколько добавить":"Сколько вычесть"}" />
+              <button class="balance-set-btn" id="balanceSetBtn"
+                style="background:${MODE_COLORS[mode]}">${MODE_LABELS[mode]}</button>
+            </div>
+
+            <button class="balance-cancel-btn" id="balanceCancelBtn">Отмена</button>
+          </div>
+        `;
+
+        overlay.querySelectorAll(".balance-mode-btn").forEach(b => {
+          b.addEventListener("click", () => { mode = b.dataset.mode; render(); });
         });
-      });
-
-      overlay.querySelector("#balanceCancelBtn").addEventListener("click", () => overlay.remove());
-      overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
-
-      overlay.querySelector("#balanceSetBtn").addEventListener("click", async () => {
-        const inp = overlay.querySelector("#balanceInput");
-        const newBalance = Math.max(0, Math.min(10_000_000, Number(inp?.value) || 0));
-        const setBtn = overlay.querySelector("#balanceSetBtn");
-        setBtn.disabled = true;
-        setBtn.textContent = "…";
-        try {
-          const res = await fetch("/app/api/admin/wallet/set", {
-            method: "POST",
-            headers: {"Content-Type":"application/json"},
-            body: JSON.stringify({initData: initData, ownerTelegramId: ownerId, newBalance}),
+        overlay.querySelectorAll(".balance-preset").forEach(b => {
+          b.addEventListener("click", () => {
+            const inp = overlay.querySelector("#balanceInput");
+            if (inp) inp.value = b.dataset.val;
           });
-          if (!res.ok) throw new Error((await res.json().catch(()=>({}))).detail || "error");
-          const data = await res.json();
-          if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
-          // Update local overview data so re-render shows new balance
-          const u = overview.users.find(u => u.owner_telegram_id === ownerId);
-          if (u) u.wallet_balance = data.new_balance;
-          // Update trigger button's data-balance
-          if (triggerBtn) triggerBtn.dataset.balance = data.new_balance;
-          overlay.remove();
-          showToast(`✅ Баланс: ${data.new_balance.toLocaleString("ru-RU")} 🪙`);
-          render();
-        } catch(e) {
-          setBtn.disabled = false;
-          setBtn.textContent = "Задать";
-          showToast("Ошибка: " + e.message);
-        }
-      });
+        });
+        overlay.querySelector("#balanceCancelBtn").addEventListener("click", () => overlay.remove());
+
+        overlay.querySelector("#balanceSetBtn").addEventListener("click", async () => {
+          const inp     = overlay.querySelector("#balanceInput");
+          const rawVal  = Math.max(0, Math.min(10_000_000, Number(inp?.value) || 0));
+          const setBtn  = overlay.querySelector("#balanceSetBtn");
+          setBtn.disabled = true;
+          setBtn.textContent = "…";
+
+          try {
+            let endpoint, body;
+            if (mode === "set") {
+              endpoint = "/app/api/admin/wallet/set";
+              body = { initData, ownerTelegramId: ownerId, newBalance: rawVal };
+            } else {
+              endpoint = "/app/api/admin/wallet/adjust";
+              body = { initData, ownerTelegramId: ownerId, delta: mode === "add" ? rawVal : -rawVal };
+            }
+
+            const res = await fetch(endpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            });
+            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || "ошибка");
+            const data = await res.json();
+            if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+
+            // Update local data
+            const u = overview?.users?.find(u => u.owner_telegram_id === ownerId);
+            if (u) u.wallet_balance = data.new_balance;
+            if (triggerBtn) triggerBtn.dataset.balance = data.new_balance;
+            currentBalance = data.new_balance;
+
+            overlay.remove();
+            const sign = mode === "add" ? `+${rawVal} → ` : mode === "sub" ? `-${rawVal} → ` : "";
+            showToast(`✅ ${sign}${data.new_balance.toLocaleString("ru-RU")} 🪙`);
+            render();
+          } catch(e) {
+            setBtn.disabled = false;
+            setBtn.textContent = MODE_LABELS[mode];
+            showToast("Ошибка: " + e.message);
+          }
+        });
+      }
+
+      render();
+      overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
     }
 
     /* ── Growth / Analytics ── */

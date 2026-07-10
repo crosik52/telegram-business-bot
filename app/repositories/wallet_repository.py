@@ -206,6 +206,27 @@ class WalletRepository:
             new_balance=wallet.balance,
         )
 
+    # ── Admin: adjust balance (add / subtract) ────────────────────────────
+    async def admin_adjust_balance(
+        self, owner_telegram_id: int, delta: int
+    ) -> int:
+        """Add (delta > 0) or subtract (delta < 0) coins from a user's wallet.
+
+        Balance is clamped to [0, 10_000_000].  Keeps total_earned / total_spent
+        accounting consistent.  Returns the resulting balance.
+        """
+        wallet = await self._get_for_update(owner_telegram_id)
+        new_balance = max(0, min(wallet.balance + delta, 10_000_000))
+        diff = new_balance - wallet.balance
+        wallet.balance = new_balance
+        if diff > 0:
+            wallet.total_earned += diff
+        elif diff < 0:
+            wallet.total_spent += abs(diff)
+        _clamp_wallet(wallet)
+        await self.session.flush()
+        return wallet.balance
+
     # ── Admin: set balance (mutation) ─────────────────────────────────────
     async def admin_set_balance(
         self, owner_telegram_id: int, new_balance: int

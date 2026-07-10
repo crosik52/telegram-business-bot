@@ -511,15 +511,17 @@ class PetRepository:
         wallet.balance    = max(0, wallet.balance - cost)
         wallet.total_spent = max(0, wallet.total_spent + cost)
 
-        pet.last_fed_at   = now
-        pet.total_feedings += 1
-        pet.xp            += FEED_XP
-        pet.level         = _compute_level(pet.xp)
-        # Feed streak: if fed within 26 h of previous feeding
-        if pet.last_fed_at and (now - pet.last_fed_at).total_seconds() < 26 * 3600:
+        # Compute feed streak BEFORE updating last_fed_at
+        prev_fed = pet.last_fed_at
+        if prev_fed and (now - prev_fed).total_seconds() < 26 * 3600:
             pet.feed_streak += 1
         else:
             pet.feed_streak = 1
+
+        pet.last_fed_at    = now
+        pet.total_feedings += 1
+        pet.xp             += FEED_XP
+        pet.level          = _compute_level(pet.xp)
 
         await self._session.flush()
         return {

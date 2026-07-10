@@ -19,7 +19,7 @@ from app.models.admin_action_log import AdminActionLog
 from app.models.business_connection import BusinessConnection
 from app.models.message import MediaType, Message
 from app.repositories.message_repository import MessageFilters, MessageRepository
-from app.repositories.pet_repository import FEED_COST, PetRepository
+from app.repositories.pet_repository import FEED_COST, RENAME_COST, SPECIES as PET_SPECIES_CATALOGUE, PetRepository
 from app.repositories.quest_repository import QUESTS, QuestRepository
 from app.repositories.wallet_repository import WalletRepository
 from app.services.admin_chart_service import AdminStats, render_admin_image
@@ -187,6 +187,28 @@ class PetFeedRequest(BaseModel):
 
     init_data: str = Field(alias="initData")
     pet_id: int = Field(alias="petId")
+
+
+class PetPlayRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    init_data: str = Field(alias="initData")
+    pet_id: int = Field(alias="petId")
+
+
+class PetCuddleRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    init_data: str = Field(alias="initData")
+    pet_id: int = Field(alias="petId")
+
+
+class PetRenameRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    init_data: str = Field(alias="initData")
+    pet_id: int = Field(alias="petId")
+    new_name: str = Field(alias="newName", max_length=30)
 
 
 def _require_admin(init_data: str) -> dict:
@@ -932,10 +954,75 @@ async def miniapp_pet_feed(
         result = await repo.feed(owner_id, payload.pet_id)
     except ValueError as exc:
         code = str(exc)
-        status = 400
-        if code == "already_fed":
-            status = 409
+        status = 409 if code == "already_fed" else 400
         raise HTTPException(status_code=status, detail=code) from exc
+
+    await session.commit()
+    return {"ok": True, **result}
+
+
+@router.post("/app/api/pet/play")
+async def miniapp_pet_play(
+    payload: PetPlayRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Play with a pet (free action, cooldown-based). Boosts mood + awards XP."""
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid Telegram init data")
+
+    owner_id = int(user["id"])
+    repo = PetRepository(session)
+    try:
+        result = await repo.play(owner_id, payload.pet_id)
+    except ValueError as exc:
+        code = str(exc)
+        status = 409 if code == "play_cooldown" else 400
+        raise HTTPException(status_code=status, detail=code) from exc
+
+    await session.commit()
+    return {"ok": True, **result}
+
+
+@router.post("/app/api/pet/cuddle")
+async def miniapp_pet_cuddle(
+    payload: PetCuddleRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Cuddle a pet (free, 1 h cooldown). Boosts mood + awards XP."""
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid Telegram init data")
+
+    owner_id = int(user["id"])
+    repo = PetRepository(session)
+    try:
+        result = await repo.cuddle(owner_id, payload.pet_id)
+    except ValueError as exc:
+        code = str(exc)
+        status = 409 if code == "cuddle_cooldown" else 400
+        raise HTTPException(status_code=status, detail=code) from exc
+
+    await session.commit()
+    return {"ok": True, **result}
+
+
+@router.post("/app/api/pet/rename")
+async def miniapp_pet_rename(
+    payload: PetRenameRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Rename a pet (costs RENAME_COST coins)."""
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid Telegram init data")
+
+    owner_id = int(user["id"])
+    repo = PetRepository(session)
+    try:
+        result = await repo.rename(owner_id, payload.pet_id, payload.new_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     await session.commit()
     return {"ok": True, **result}

@@ -878,31 +878,55 @@
   /* ── Pet section ── */
   .pet-section { margin-bottom: 16px; }
   .pet-card {
-    display: flex; align-items: center; gap: 12px;
     background: var(--secondary-bg); border-radius: var(--card-radius);
-    padding: 13px 14px; margin-bottom: 10px; box-shadow: var(--shadow);
+    padding: 14px 14px 12px; margin-bottom: 10px; box-shadow: var(--shadow);
     animation: riseIn 0.3s ease backwards;
   }
-  .pet-card.dead { opacity: 0.42; }
-  .pet-avatar  { font-size: 34px; flex-shrink: 0; line-height: 1; }
-  .pet-body    { flex: 1; min-width: 0; }
-  .pet-name-row{ display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
-  .pet-name    { font-size: 15px; font-weight: 700; }
-  .pet-stage   { font-size: 11px; color: var(--hint); }
-  .pet-with    { font-size: 12px; color: var(--hint); margin-top: 2px; }
-  .pet-hunger-wrap { display: flex; align-items: center; gap: 7px; margin-top: 7px; }
-  .pet-hunger-track{ flex: 1; height: 5px; border-radius: 3px; background: rgba(120,120,128,0.13); overflow: hidden; }
-  .pet-hunger-fill { height: 100%; border-radius: 3px; transition: width 0.55s ease; }
-  .pet-hunger-lbl  { font-size: 11px; font-weight: 700; flex-shrink: 0; }
-  .pet-hunger-status { font-size: 11.5px; color: var(--hint); margin-top: 3px; }
-  .pet-feed-btn {
-    flex-shrink: 0; border: none; border-radius: 11px; padding: 7px 11px;
-    font-size: 12.5px; font-weight: 700;
-    background: rgba(255,149,0,0.13); color: var(--orange);
+  .pet-card.dead { opacity: 0.45; }
+  .pet-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+  .pet-avatar-wrap { position: relative; flex-shrink: 0; }
+  .pet-avatar  { font-size: 38px; line-height: 1; display: block; }
+  .pet-level-badge {
+    position: absolute; bottom: -4px; right: -6px;
+    background: var(--link); color: #fff;
+    font-size: 9px; font-weight: 800; border-radius: 8px; padding: 1px 5px;
+    border: 1.5px solid var(--secondary-bg);
+  }
+  .pet-info { flex: 1; min-width: 0; }
+  .pet-name-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .pet-name  { font-size: 15px; font-weight: 700; }
+  .pet-personality { font-size: 11px; background: rgba(120,120,128,0.12); border-radius: 7px; padding: 1px 6px; }
+  .pet-meta  { font-size: 11.5px; color: var(--hint); margin-top: 2px; }
+  .pet-with  { font-size: 12px; color: var(--hint); margin-top: 1px; }
+
+  /* stat bars */
+  .pet-stats { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+  .pet-stat-row { display: flex; align-items: center; gap: 7px; }
+  .pet-stat-icon { font-size: 12px; width: 14px; flex-shrink: 0; }
+  .pet-stat-track { flex: 1; height: 5px; border-radius: 3px; background: rgba(120,120,128,0.13); overflow: hidden; }
+  .pet-stat-fill  { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+  .pet-stat-lbl   { font-size: 11px; font-weight: 700; flex-shrink: 0; width: 30px; text-align: right; }
+
+  /* xp bar */
+  .pet-xp-row { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+  .pet-xp-track { flex: 1; height: 3px; border-radius: 2px; background: rgba(120,120,128,0.13); overflow: hidden; }
+  .pet-xp-fill  { height: 100%; border-radius: 2px; background: linear-gradient(90deg, #5856d6, var(--link)); transition: width 0.6s ease; }
+  .pet-xp-lbl   { font-size: 10px; color: var(--hint); flex-shrink: 0; }
+
+  /* action buttons */
+  .pet-actions { display: flex; gap: 7px; }
+  .pet-action-btn {
+    flex: 1; border: none; border-radius: 11px; padding: 7px 4px;
+    font-size: 12px; font-weight: 700;
     transition: transform 0.1s, opacity 0.2s; touch-action: manipulation;
   }
-  .pet-feed-btn:active   { transform: scale(0.92); }
-  .pet-feed-btn:disabled { opacity: 0.35; background: rgba(120,120,128,0.1); color: var(--hint); }
+  .pet-action-btn:active   { transform: scale(0.93); }
+  .pet-action-btn:disabled { opacity: 0.35; background: rgba(120,120,128,0.1) !important; color: var(--hint) !important; }
+  .pet-btn-feed   { background: rgba(255,149,0,0.14); color: var(--orange); }
+  .pet-btn-play   { background: rgba(52,199,89,0.13); color: var(--green); }
+  .pet-btn-cuddle { background: rgba(191,90,242,0.13); color: #bf5af2; }
+  .pet-btn-rename { background: rgba(36,129,204,0.13); color: var(--link); font-size: 11px; flex: none; padding: 7px 10px; }
+
   .pet-empty       { text-align: center; padding: 18px 8px 22px; }
   .pet-empty-emoji { font-size: 46px; margin-bottom: 10px; }
   .pet-empty-title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
@@ -917,6 +941,11 @@
     font-size: 12px; font-weight: 600; margin-left: auto;
     background: rgba(52,199,89,0.13); color: var(--green); touch-action: manipulation;
   }
+  /* death card */
+  .pet-dead-row { display: flex; align-items: center; gap: 12px; }
+  .pet-dead-body { flex: 1; min-width: 0; }
+  .pet-dead-cause { font-size: 11.5px; color: var(--hint); margin-top: 2px; }
+
   /* ── Bottom-sheet overlay (used by adopt modal) ── */
   .balance-overlay {
     position: fixed; inset: 0;
@@ -950,7 +979,7 @@
   }
 
   /* Adopt modal */
-  .adopt-chats { display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto; margin-bottom: 12px; }
+  .adopt-chats { display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; margin-bottom: 12px; }
   .adopt-chat-btn {
     display: flex; align-items: center; gap: 10px;
     border: none; border-radius: 13px; padding: 10px 12px;
@@ -959,7 +988,7 @@
   .adopt-chat-avatar { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #fff; flex-shrink: 0; }
   .adopt-chat-name { flex: 1; font-size: 14px; font-weight: 600; text-align: left; }
   .adopt-chat-msgs { font-size: 12px; color: var(--hint); flex-shrink: 0; }
-  .adopt-species-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; margin-bottom: 14px; }
+  .adopt-species-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 14px; }
   .adopt-species-btn {
     display: flex; flex-direction: column; align-items: center; gap: 4px;
     border: 2px solid transparent; border-radius: 12px; padding: 9px 4px;
@@ -2125,7 +2154,7 @@
     }
 
     // ══════════════════════════════════════════════════════════════════
-    // PETS
+    // PETS v2
     // ══════════════════════════════════════════════════════════════════
     const PET_SPECIES = {
       cat:     { stages: ["🥚","🐱","🐱","🐱","😺"], label: "Котик"   },
@@ -2133,19 +2162,25 @@
       rabbit:  { stages: ["🥚","🐰","🐰","🐇","🐇"], label: "Зайка"   },
       hamster: { stages: ["🥚","🐹","🐹","🐹","🐹"], label: "Хомяк"   },
       fox:     { stages: ["🥚","🦊","🦊","🦊","🦊"], label: "Лисёнок" },
+      dragon:  { stages: ["🥚","🐣","🐲","🐲","🐉"], label: "Дракон"  },
+      penguin: { stages: ["🥚","🐧","🐧","🐧","🐧"], label: "Пингвин" },
+      bear:    { stages: ["🥚","🐻","🐻","🐻","🐻"], label: "Медведь" },
     };
-    const STAGE_LABELS = ["", "Яйцо", "Малыш", "Детёныш", "Подросток", "Взрослый"];
+    const STAGE_LABELS = ["","Яйцо","Малыш","Детёныш","Подросток","Взрослый"];
 
     function petEmoji(pet) {
       if (!pet.is_alive) return "💀";
       const sp = PET_SPECIES[pet.species];
       return sp ? sp.stages[Math.max(0, Math.min(pet.stage - 1, 4))] : "🐾";
     }
-    function hungerColor(h) {
-      return h >= 70 ? "var(--green)" : h >= 30 ? "#f59e0b" : "var(--danger)";
+    function statColor(v) {
+      return v >= 60 ? "var(--green)" : v >= 30 ? "#f59e0b" : "var(--red)";
     }
-    function hungerStatus(h) {
-      return h >= 70 ? "😊 Сытый" : h >= 30 ? "😐 Голодный" : "😰 Очень голодный!";
+    function moodEmoji(m) {
+      return m >= 70 ? "😊" : m >= 40 ? "😐" : "😢";
+    }
+    function hungerEmoji(h) {
+      return h >= 70 ? "🍖" : h >= 30 ? "🍽️" : "😰";
     }
     function daysLabel(n) {
       if (n === 0) return "только родился";
@@ -2153,10 +2188,17 @@
       if (n < 5)   return `${n} дня`;
       return `${n} дней`;
     }
+    function fmtCooldown(secs) {
+      if (secs <= 0) return null;
+      const h = Math.floor(secs / 3600);
+      const m = Math.floor((secs % 3600) / 60);
+      if (h > 0) return `${h}ч ${m}м`;
+      return `${m}м`;
+    }
 
     function renderPetsSection() {
       if (!petData) return "";
-      const { pets = [], available_chats = [], feed_cost = 20 } = petData;
+      const { pets = [], available_chats = [] } = petData;
       const alive = pets.filter(p => p.is_alive);
       const dead  = pets.filter(p => !p.is_alive);
 
@@ -2169,7 +2211,7 @@
         return `
           <div class="pet-section">
             <div class="section-title">🐾 Питомцы ${adoptBtn}</div>
-            <div class="pet-empty">
+            <div class="card pet-empty">
               <div class="pet-empty-emoji">🥚</div>
               <div class="pet-empty-title">Нет питомцев</div>
               <div class="pet-empty-sub">Заведи питомца с кем-то из активных чатов.<br>Питомец живёт, пока живёт ваша переписка.</div>
@@ -2180,37 +2222,79 @@
           </div>`;
       }
 
-      const aliveCards = alive.map((p, i) => `
-        <div class="pet-card" style="animation-delay:${i * 0.06}s">
-          <div class="pet-avatar">${petEmoji(p)}</div>
-          <div class="pet-body">
-            <div class="pet-name-row">
-              <span class="pet-name">${p.pet_name}</span>
-              <span class="pet-stage">${STAGE_LABELS[p.stage] || ""} · ${daysLabel(p.days_alive)}</span>
+      const aliveCards = alive.map((p, i) => {
+        const feedCd   = fmtCooldown(p.feed_cooldown_secs);
+        const playCd   = fmtCooldown(p.play_cooldown_secs);
+        const cuddleCd = fmtCooldown(p.cuddle_cooldown_secs);
+        const xpPct    = Math.min(100, Math.round((p.xp - (p.level-1)**2*8) / Math.max(1, p.level**2*8 - (p.level-1)**2*8) * 100));
+        return `
+        <div class="pet-card" style="animation-delay:${i * 0.07}s">
+          <div class="pet-header">
+            <div class="pet-avatar-wrap">
+              <span class="pet-avatar">${petEmoji(p)}</span>
+              <span class="pet-level-badge">Lv${p.level}</span>
             </div>
-            <div class="pet-with">с ${p.interlocutor_name}</div>
-            <div class="pet-hunger-wrap">
-              <div class="pet-hunger-track">
-                <div class="pet-hunger-fill" style="width:${p.hunger}%;background:${hungerColor(p.hunger)}"></div>
+            <div class="pet-info">
+              <div class="pet-name-row">
+                <span class="pet-name">${p.pet_name}</span>
+                <span class="pet-personality">${p.personality_emoji} ${p.personality_label}</span>
               </div>
-              <span class="pet-hunger-lbl" style="color:${hungerColor(p.hunger)}">${p.hunger}%</span>
+              <div class="pet-meta">${STAGE_LABELS[p.stage] || ""} · ${daysLabel(p.days_alive)}</div>
+              <div class="pet-with">с ${p.interlocutor_name}</div>
             </div>
-            <div class="pet-hunger-status">${hungerStatus(p.hunger)}</div>
           </div>
-          <button class="pet-feed-btn" data-pet-id="${p.id}" ${p.hunger >= 100 ? "disabled" : ""}>
-            🍖 ${feed_cost} 🪙
-          </button>
-        </div>`).join("");
+
+          <div class="pet-stats">
+            <div class="pet-stat-row">
+              <span class="pet-stat-icon">${hungerEmoji(p.hunger)}</span>
+              <div class="pet-stat-track"><div class="pet-stat-fill" style="width:${p.hunger}%;background:${statColor(p.hunger)}"></div></div>
+              <span class="pet-stat-lbl" style="color:${statColor(p.hunger)}">${p.hunger}%</span>
+            </div>
+            <div class="pet-stat-row">
+              <span class="pet-stat-icon">${moodEmoji(p.mood)}</span>
+              <div class="pet-stat-track"><div class="pet-stat-fill" style="width:${p.mood}%;background:${statColor(p.mood)}"></div></div>
+              <span class="pet-stat-lbl" style="color:${statColor(p.mood)}">${p.mood}%</span>
+            </div>
+          </div>
+
+          <div class="pet-xp-row">
+            <div class="pet-xp-track"><div class="pet-xp-fill" style="width:${xpPct}%"></div></div>
+            <span class="pet-xp-lbl">${p.xp} XP</span>
+          </div>
+
+          <div class="pet-actions">
+            <button class="pet-action-btn pet-btn-feed" data-pet-id="${p.id}" data-action="feed"
+              ${feedCd ? "disabled" : ""}>
+              🍖 ${p.feed_cost}🪙${feedCd ? ` · ${feedCd}` : ""}
+            </button>
+            <button class="pet-action-btn pet-btn-play" data-pet-id="${p.id}" data-action="play"
+              ${playCd ? "disabled" : ""}>
+              🎮 Играть${playCd ? ` · ${playCd}` : ""}
+            </button>
+            <button class="pet-action-btn pet-btn-cuddle" data-pet-id="${p.id}" data-action="cuddle"
+              ${cuddleCd ? "disabled" : ""}>
+              🤗${cuddleCd ? ` ${cuddleCd}` : ""}
+            </button>
+            <button class="pet-action-btn pet-btn-rename" data-pet-id="${p.id}" data-action="rename"
+              title="Переименовать (50🪙)">✏️</button>
+          </div>
+        </div>`;
+      }).join("");
 
       const deadCards = dead.slice(0, 2).map(p => `
         <div class="pet-card dead">
-          <div class="pet-avatar">💀</div>
-          <div class="pet-body">
-            <div class="pet-name-row">
-              <span class="pet-name">${p.pet_name}</span>
-              <span class="pet-stage">${daysLabel(p.days_alive)} жизни</span>
+          <div class="pet-dead-row">
+            <div class="pet-avatar-wrap"><span class="pet-avatar">💀</span></div>
+            <div class="pet-dead-body">
+              <div class="pet-name-row">
+                <span class="pet-name">${p.pet_name}</span>
+                <span class="pet-personality">${p.personality_emoji} ${p.personality_label}</span>
+              </div>
+              <div class="pet-meta">${daysLabel(p.days_alive)} жизни · ${(PET_SPECIES[p.species]||{}).label||""}</div>
+              <div class="pet-dead-cause">с ${p.interlocutor_name} · ${
+                p.death_cause === "starvation" ? "😵 умер от голода" : "💔 серия оборвалась"
+              }</div>
             </div>
-            <div class="pet-with">с ${p.interlocutor_name} · ${p.death_cause === "starvation" ? "умер от голода" : "серия оборвалась"}</div>
           </div>
         </div>`).join("");
 
@@ -2222,37 +2306,48 @@
     }
 
     function attachPetHandlers() {
-      document.querySelectorAll(".pet-feed-btn:not([disabled])").forEach(btn => {
+      document.querySelectorAll(".pet-action-btn:not([disabled])").forEach(btn => {
         btn.addEventListener("click", async () => {
-          const petId = Number(btn.dataset.petId);
+          const petId  = Number(btn.dataset.petId);
+          const action = btn.dataset.action;
+          if (action === "rename") { openRenameModal(petId, btn); return; }
+          const origText = btn.textContent;
           btn.disabled = true;
           btn.textContent = "⏳";
+          if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("medium");
           try {
-            if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("medium");
-            const res = await fetch("/app/api/pet/feed", {
+            const endpoint = `/app/api/pet/${action}`;
+            const res = await fetch(endpoint, {
               method: "POST", headers: {"Content-Type":"application/json"},
               body: JSON.stringify({initData: currentInitData, petId}),
             });
             if (!res.ok) {
               const err = await res.json().catch(() => ({}));
-              const msg = {
-                already_fed: "Питомец уже сыт сегодня 😊",
-                insufficient_coins: "Недостаточно монет!",
-                pet_is_dead: "Питомец уже умер 💀",
-              }[err.detail] || "Ошибка кормления.";
-              toastMessage(msg);
+              const MSGS = {
+                already_fed:        "Питомец уже сыт 😊",
+                play_cooldown:      "Питомец устал — дай отдохнуть! 😴",
+                cuddle_cooldown:    "Не так часто — через час снова 🌸",
+                insufficient_coins: "Недостаточно монет 🪙",
+                pet_is_dead:        "Питомец уже умер 💀",
+              };
+              toastMessage(MSGS[err.detail] || "Ошибка. Попробуй ещё раз.");
               btn.disabled = false;
-              btn.textContent = `🍖 ${petData?.feed_cost ?? 20} 🪙`;
+              btn.textContent = origText;
               return;
             }
             const data = await res.json();
             if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
-            updateBalanceDisplay(data.new_balance);
-            toastMessage("🍖 Питомец накормлен! Сытость: 100%");
+            if (data.new_balance !== undefined) updateBalanceDisplay(data.new_balance);
+            const TOASTS = {
+              feed:   `🍖 Накормлен! Сытость 100%`,
+              play:   data.play_msg || `🎮 Поиграли! +${data.mood ? "" : ""}настроение`,
+              cuddle: `🤗 Обнял питомца! Настроение растёт ❤️`,
+            };
+            toastMessage(TOASTS[action] || "✅ Готово!");
             await _refreshPets();
           } catch {
             btn.disabled = false;
-            btn.textContent = `🍖 ${petData?.feed_cost ?? 20} 🪙`;
+            btn.textContent = origText;
             toastMessage("Ошибка. Попробуй ещё раз.");
           }
         });
@@ -2260,6 +2355,50 @@
       document.querySelectorAll("#openAdoptBtn").forEach(btn =>
         btn.addEventListener("click", openAdoptModal)
       );
+    }
+
+    function openRenameModal(petId, triggerBtn) {
+      const overlay = document.createElement("div");
+      overlay.className = "balance-overlay";
+      overlay.innerHTML = `
+        <div class="balance-sheet">
+          <div class="balance-sheet-title">✏️ Переименовать питомца</div>
+          <div style="font-size:12.5px;color:var(--hint);text-align:center;margin-bottom:12px">Стоимость: 50 🪙</div>
+          <input type="text" class="balance-number-input" id="renameInput"
+            placeholder="Новое имя" maxlength="30"
+            style="text-align:left;font-size:14px;width:100%;box-sizing:border-box;margin-bottom:10px"/>
+          <button class="balance-set-btn" id="renameConfirm" style="width:100%">Переименовать</button>
+          <button class="balance-cancel-btn" id="renameCancel">Отмена</button>
+        </div>`;
+      document.body.appendChild(overlay);
+      overlay.querySelector("#renameCancel").addEventListener("click", () => overlay.remove());
+      overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
+      overlay.querySelector("#renameInput").focus();
+      overlay.querySelector("#renameConfirm").addEventListener("click", async () => {
+        const newName = overlay.querySelector("#renameInput").value.trim();
+        if (!newName) { toastMessage("Введи имя!"); return; }
+        const btn = overlay.querySelector("#renameConfirm");
+        btn.disabled = true; btn.textContent = "⏳";
+        try {
+          const res = await fetch("/app/api/pet/rename", {
+            method: "POST", headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({initData: currentInitData, petId, newName}),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(()=>({}));
+            throw new Error({insufficient_coins:"Недостаточно монет!",invalid_name:"Некорректное имя."}[err.detail]||"Ошибка.");
+          }
+          const data = await res.json();
+          if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+          updateBalanceDisplay(data.new_balance);
+          overlay.remove();
+          toastMessage(`✅ Питомец переименован в «${data.pet_name}»!`);
+          await _refreshPets();
+        } catch(e) {
+          btn.disabled = false; btn.textContent = "Переименовать";
+          toastMessage(e.message);
+        }
+      });
     }
 
     async function _refreshPets() {
@@ -2296,6 +2435,7 @@
           </div>
           <div id="adoptStep2" style="display:none">
             <div id="adoptForLabel" style="font-size:13px;color:var(--hint);margin-bottom:11px;text-align:center"></div>
+            <div style="font-size:11.5px;color:var(--hint);margin-bottom:8px;text-align:center">🎲 Личность питомца случайная — у каждого своя!</div>
             <div class="adopt-species-grid">
               ${Object.entries(PET_SPECIES).map(([key, sp]) => `
                 <button class="adopt-species-btn" data-species="${key}">
@@ -2305,7 +2445,7 @@
             </div>
             <div style="margin-bottom:10px">
               <input type="text" class="balance-number-input" id="adoptNameInput"
-                placeholder="Имя (необязательно)" maxlength="20"
+                placeholder="Имя (необязательно)" maxlength="30"
                 style="text-align:left;font-size:14px;width:100%;box-sizing:border-box" />
             </div>
             <button class="balance-set-btn" id="adoptConfirmBtn" style="width:100%">Завести питомца 🥚</button>
@@ -2341,8 +2481,8 @@
         });
       });
       overlay.querySelector("#adoptConfirmBtn").addEventListener("click", async () => {
-        if (!selChatId)   { toastMessage("Выбери собеседника!"); return; }
-        if (!selSpecies)  { toastMessage("Выбери вид питомца!"); return; }
+        if (!selChatId)  { toastMessage("Выбери собеседника!"); return; }
+        if (!selSpecies) { toastMessage("Выбери вид питомца!"); return; }
         const petName = (overlay.querySelector("#adoptNameInput").value || "").trim();
         const confirmBtn = overlay.querySelector("#adoptConfirmBtn");
         confirmBtn.disabled = true; confirmBtn.textContent = "⏳";
@@ -2360,9 +2500,11 @@
             }[detail] || "Ошибка: " + detail;
             throw new Error(msg);
           }
+          const data = await res.json();
           if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
           overlay.remove();
-          toastMessage("🥚 Питомец заведён! Корми его каждый день.");
+          const pInfo = data.pet?.personality_label ? ` · ${data.pet.personality_emoji} ${data.pet.personality_label}` : "";
+          toastMessage(`🥚 Питомец заведён${pInfo}! Корми и играй с ним каждый день.`);
           await _refreshPets();
         } catch(e) {
           confirmBtn.disabled = false; confirmBtn.textContent = "Завести питомца 🥚";

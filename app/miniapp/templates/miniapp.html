@@ -917,6 +917,38 @@
     font-size: 12px; font-weight: 600; margin-left: auto;
     background: rgba(52,199,89,0.13); color: var(--green); touch-action: manipulation;
   }
+  /* ── Bottom-sheet overlay (used by adopt modal) ── */
+  .balance-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex; align-items: flex-end; justify-content: center;
+    z-index: 2000;
+  }
+  .balance-sheet {
+    background: var(--secondary-bg);
+    border-radius: 20px 20px 0 0;
+    padding: 22px 18px 32px;
+    width: 100%; max-width: 440px;
+    box-shadow: 0 -4px 28px rgba(0,0,0,0.2);
+    animation: riseIn 0.22s ease;
+  }
+  .balance-sheet-title { font-size: 15px; font-weight: 700; text-align: center; margin-bottom: 14px; }
+  .balance-number-input {
+    width: 100%; box-sizing: border-box;
+    border: 1.5px solid rgba(120,120,128,0.28); border-radius: 11px;
+    padding: 10px 14px; font-size: 15px; font-weight: 600;
+    background: var(--bg); color: var(--text);
+  }
+  .balance-set-btn {
+    border: none; border-radius: 11px; padding: 11px 16px;
+    font-size: 14px; font-weight: 700; background: var(--link); color: #fff;
+    touch-action: manipulation; width: 100%;
+  }
+  .balance-cancel-btn {
+    display: block; width: 100%; text-align: center; padding: 10px;
+    font-size: 14px; color: var(--hint); border: none; background: none;
+  }
+
   /* Adopt modal */
   .adopt-chats { display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto; margin-bottom: 12px; }
   .adopt-chat-btn {

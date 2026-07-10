@@ -12,3 +12,4 @@ python-multipart==0.0.20
 itsdangerous==2.2.0
 matplotlib
 Pillow
+yt-dlp

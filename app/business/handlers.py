@@ -44,6 +44,7 @@ from app.models.business_connection import BusinessConnection as BCModel
 from app.models.message import MediaType, Message as DBMessage
 from app.repositories.chat_settings_repository import ChatSettingsRepository
 from app.services.message_service import MessageService
+from app.services.video_service import extract_video_url, handle_video_link
 
 logger = get_logger(__name__)
 router = Router(name="business")
@@ -343,6 +344,27 @@ async def on_business_message(message: Message, bot: Bot) -> None:
                         message_id=message.message_id,
                         session=session,
                     )
+
+        # --- Video link detection (Reels / TikTok / YouTube Shorts) ---
+        text_to_scan = message.text or message.caption or ""
+        if text_to_scan:
+            video_match = extract_video_url(text_to_scan)
+            if video_match:
+                url, platform = video_match
+                logger.info(
+                    "Video link detected (%s) in chat=%s, scheduling download",
+                    platform, message.chat.id,
+                )
+                import asyncio
+                asyncio.create_task(
+                    handle_video_link(
+                        bot=bot,
+                        chat_id=message.chat.id,
+                        business_connection_id=message.business_connection_id,
+                        url=url,
+                        platform=platform,
+                    )
+                )
 
 
 # ── Edit handler ──────────────────────────────────────────────────────────────

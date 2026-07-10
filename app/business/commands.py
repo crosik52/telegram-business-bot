@@ -180,6 +180,7 @@ async def _cmd_info(
         f"🕐 Последнее: {last_str}"
         f"{notes_line}"
         f"{muted_line}"
+        "\n\n<i>Учитываются только сообщения с момента подключения бота.</i>"
     )
     await _reply(bot, owner_id, text)
 

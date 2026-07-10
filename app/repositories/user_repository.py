@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import TelegramUser
@@ -53,7 +53,5 @@ class UserRepository:
         return user
 
     async def count(self) -> int:
-        from sqlalchemy import func
-
         result = await self._session.execute(select(func.count(TelegramUser.id)))
         return int(result.scalar_one())

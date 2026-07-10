@@ -83,6 +83,7 @@ class MessageRepository:
             base_stmt.order_by(Message.sent_at.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
+            .options(selectinload(Message.sender))
         )
         result = await self._session.execute(stmt)
         return list(result.scalars().all()), int(total)

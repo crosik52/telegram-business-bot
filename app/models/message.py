@@ -54,6 +54,7 @@ class Message(Base):
     __tablename__ = "messages"
     __table_args__ = (
         Index("ix_messages_chat_sent", "chat_id", "sent_at"),
+        Index("ix_messages_conn_sent", "business_connection_id", "sent_at"),
         Index("ix_messages_search_text", "text"),
     )
 

@@ -379,26 +379,50 @@ class StatsRepository:
         for conn in connections:
             by_owner.setdefault(conn.user_telegram_id, []).append(conn)
 
+        # One batched aggregate query instead of one query per owner.
+        all_conn_ids = [c.business_connection_id for c in connections]
+        stats_by_conn: dict[str, tuple[int, int, int, int, dt.datetime | None]] = {}
+        if all_conn_ids:
+            agg_stmt = (
+                select(
+                    Message.business_connection_id,
+                    func.count(Message.id).label("total"),
+                    func.count(Message.id).filter(
+                        Message.is_edited.is_(True)
+                    ).label("edited"),
+                    func.count(Message.id).filter(
+                        Message.is_deleted.is_(True)
+                    ).label("deleted"),
+                    func.count(Message.chat_id.distinct()).label("chats"),
+                    func.max(Message.sent_at).label("last_at"),
+                )
+                .where(Message.business_connection_id.in_(all_conn_ids))
+                .group_by(Message.business_connection_id)
+            )
+            for row in (await self._session.execute(agg_stmt)).all():
+                stats_by_conn[row.business_connection_id] = (
+                    row.total,
+                    row.edited,
+                    row.deleted,
+                    row.chats,
+                    row.last_at,
+                )
+
         users: list[AdminUserRow] = []
         for owner_telegram_id, conns in by_owner.items():
-            connection_ids = [c.business_connection_id for c in conns]
             latest = max(conns, key=lambda c: c.connected_at)
 
-            stmt = select(
-                Message.is_edited,
-                Message.is_deleted,
-                Message.chat_id,
-                Message.sent_at,
-            ).where(Message.business_connection_id.in_(connection_ids))
-            rows = (await self._session.execute(stmt)).all()
-
-            total_messages = len(rows)
-            edited_messages = sum(1 for r in rows if r.is_edited)
-            deleted_messages = sum(1 for r in rows if r.is_deleted)
-            total_chats = len({r.chat_id for r in rows})
-            last_activity_at = max(
-                (r.sent_at for r in rows if r.sent_at is not None), default=None
-            )
+            total_messages = edited_messages = deleted_messages = total_chats = 0
+            last_activity_at: dt.datetime | None = None
+            for conn in conns:
+                s = stats_by_conn.get(conn.business_connection_id)
+                if s:
+                    total_messages += s[0]
+                    edited_messages += s[1]
+                    deleted_messages += s[2]
+                    total_chats += s[3]
+                    if s[4] and (last_activity_at is None or s[4] > last_activity_at):
+                        last_activity_at = s[4]
 
             users.append(
                 AdminUserRow(

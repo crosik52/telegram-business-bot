@@ -825,6 +825,55 @@
     background: rgba(245,158,11,0.15); color: #f59e0b;
     font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 8px;
   }
+  /* ── Quest tab colours ── */
+  .tab-item.tab-quests.active { color: var(--green); }
+  .tab-item.tab-quests.active .tab-icon-wrap { background: rgba(52,199,89,0.12); }
+
+  /* ── Quest card ── */
+  .quest-card {
+    background: var(--secondary-bg); border-radius: var(--card-radius);
+    padding: 14px 15px; box-shadow: var(--shadow); margin-bottom: 11px;
+    display: flex; align-items: center; gap: 13px;
+    animation: riseIn 0.32s ease backwards;
+    border: 1px solid transparent;
+  }
+  .quest-card.claimed { opacity: 0.5; }
+  .quest-card.ready   { border-color: rgba(52,199,89,0.4); }
+  .quest-emoji  { font-size: 28px; flex-shrink: 0; }
+  .quest-body   { flex: 1; min-width: 0; }
+  .quest-title  { font-size: 14px; font-weight: 700; }
+  .quest-desc   { font-size: 11.5px; color: var(--hint); margin-top: 2px; line-height: 1.35; }
+  .quest-prog-wrap { display: flex; align-items: center; gap: 7px; margin-top: 7px; }
+  .quest-prog-track { flex: 1; height: 5px; border-radius: 3px; background: rgba(120,120,128,0.13); overflow: hidden; }
+  .quest-prog-fill  { height: 100%; border-radius: 3px; background: var(--green); transition: width 0.55s ease; }
+  .quest-prog-lbl   { font-size: 10.5px; color: var(--hint); flex-shrink: 0; }
+  .quest-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+  .quest-reward { font-size: 12.5px; font-weight: 700; color: var(--orange); }
+  .quest-claim-btn {
+    border: none; border-radius: 10px; padding: 5px 11px;
+    font-size: 12px; font-weight: 700;
+    background: var(--green); color: #fff;
+    transition: transform 0.1s, opacity 0.2s;
+    touch-action: manipulation;
+  }
+  .quest-claim-btn:active { transform: scale(0.93); }
+  .quest-claim-btn:disabled { opacity: 0.35; background: rgba(120,120,128,0.18); color: var(--hint); }
+  .quest-done-badge { font-size: 20px; }
+
+  /* ── Leaderboard ── */
+  .lb-entry {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    background: var(--secondary-bg); border-radius: 16px;
+    margin-bottom: 8px; box-shadow: var(--shadow);
+    animation: riseIn 0.3s ease backwards;
+  }
+  .lb-entry.me { border: 1.5px solid rgba(36,129,204,0.38); background: rgba(36,129,204,0.05); }
+  .lb-rank   { font-size: 15px; font-weight: 900; width: 26px; text-align: center; flex-shrink: 0; }
+  .lb-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: #fff; flex-shrink: 0; }
+  .lb-name   { flex: 1; font-size: 13.5px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lb-coins  { font-size: 13px; font-weight: 700; color: var(--orange); flex-shrink: 0; }
+  .lb-my-rank-note { text-align: center; font-size: 12.5px; color: var(--hint); margin: 4px 0 12px; }
 </style>
 </head>
 <body>
@@ -850,6 +899,7 @@
 
   <div id="casinoContent" style="display:none"></div>
   <div id="donateContent" style="display:none"></div>
+  <div id="questContent"  style="display:none"></div>
 
   <!-- kept for JS compat, hidden via CSS -->
   <button class="refresh-fab" id="refreshFabLegacy" style="display:none"></button>
@@ -862,6 +912,10 @@
     <button class="tab-item tab-casino" data-tab="casino">
       <div class="tab-icon-wrap">🎰</div>
       <span class="tab-label">Казино</span>
+    </button>
+    <button class="tab-item tab-quests" data-tab="quests">
+      <div class="tab-icon-wrap">🏆</div>
+      <span class="tab-label">Рейтинг</span>
     </button>
     <button class="tab-item tab-donate" data-tab="donate">
       <div class="tab-icon-wrap">💎</div>
@@ -881,6 +935,9 @@
     let currentTab = "stats";
     let walletData = null;
     let casinoLoaded = false;
+    let questsLoaded = false;
+    let questData    = null;
+    let lbData       = null;
     const SPIN_SYMBOLS = ["🍒","🍋","🍊","🍇","⭐","💎"];
 
     const AVATAR_COLORS = ["#FF6B6B","#4ECDC4","#45AAF2","#F7B731","#A55EEA","#26DE81","#FD9644","#2BCBBA"];
@@ -1541,8 +1598,8 @@
     // ══════════════════════════════════════════════════════════════════
     // MAIN TAB SWITCHING
     // ══════════════════════════════════════════════════════════════════
-    const TAB_HEADER_ICONS  = { stats: "📊", casino: "🎰", donate: "💎" };
-    const TAB_HEADER_TITLES = { stats: "Моя статистика", casino: "Казино", donate: "Поддержать" };
+    const TAB_HEADER_ICONS  = { stats: "📊", casino: "🎰", quests: "🏆", donate: "💎" };
+    const TAB_HEADER_TITLES = { stats: "Моя статистика", casino: "Казино", quests: "Задания и рейтинг", donate: "Поддержать" };
 
     function switchMainTab(tab) {
       currentTab = tab;
@@ -1551,6 +1608,7 @@
       );
       document.getElementById("content").style.display       = tab === "stats"  ? "" : "none";
       document.getElementById("casinoContent").style.display = tab === "casino" ? "" : "none";
+      document.getElementById("questContent").style.display  = tab === "quests" ? "" : "none";
       document.getElementById("donateContent").style.display = tab === "donate" ? "" : "none";
 
       // Header refresh button — only on stats
@@ -1564,6 +1622,10 @@
       if (tab === "casino") {
         if (!casinoLoaded && currentInitData) loadWallet();
         else if (casinoLoaded) renderCasino();
+      }
+      if (tab === "quests") {
+        if (!questsLoaded && currentInitData) loadQuestsLeaderboard();
+        else if (questsLoaded) renderQuestsTab();
       }
       if (tab === "donate") renderDonate();
       if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
@@ -1960,6 +2022,133 @@
           <button class="tier-btn" disabled>Скоро доступно</button>
         </div>
       `;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // QUESTS & LEADERBOARD
+    // ══════════════════════════════════════════════════════════════════
+    async function loadQuestsLeaderboard() {
+      const el = document.getElementById("questContent");
+      el.innerHTML = `<div class="empty skeleton"><span class="big-emoji">🏆</span>Загружаем…</div>`;
+      try {
+        const opts = { method: "POST", headers: {"Content-Type":"application/json"},
+                       body: JSON.stringify({initData: currentInitData}) };
+        const [qRes, lbRes] = await Promise.all([
+          fetch("/app/api/quests",      opts),
+          fetch("/app/api/leaderboard", opts),
+        ]);
+        if (!qRes.ok || !lbRes.ok) throw new Error("api");
+        questData    = await qRes.json();
+        lbData       = await lbRes.json();
+        questsLoaded = true;
+        renderQuestsTab();
+      } catch {
+        el.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить.</div>`;
+      }
+    }
+
+    function renderQuestsTab() {
+      const el = document.getElementById("questContent");
+      if (!questData || !lbData) return;
+      el.innerHTML = renderQuestsSection() + renderLeaderboardSection();
+      attachQuestHandlers();
+    }
+
+    function renderQuestsSection() {
+      const earned = questData.quests.filter(q => q.claimed).reduce((s, q) => s + q.reward, 0);
+      const total  = questData.quests.reduce((s, q) => s + q.reward, 0);
+
+      const cards = questData.quests.map((q, i) => {
+        const pct      = q.target > 0 ? Math.round(q.progress / q.target * 100) : 0;
+        const canClaim = !q.claimed && q.progress >= q.target;
+        const cls      = q.claimed ? "claimed" : canClaim ? "ready" : "";
+        return `
+          <div class="quest-card ${cls}" style="animation-delay:${i * 0.07}s">
+            <div class="quest-emoji">${q.emoji}</div>
+            <div class="quest-body">
+              <div class="quest-title">${q.title}</div>
+              <div class="quest-desc">${q.desc}</div>
+              <div class="quest-prog-wrap">
+                <div class="quest-prog-track">
+                  <div class="quest-prog-fill" style="width:${pct}%"></div>
+                </div>
+                <span class="quest-prog-lbl">${q.progress}/${q.target}</span>
+              </div>
+            </div>
+            <div class="quest-right">
+              <span class="quest-reward">+${q.reward} 🪙</span>
+              ${q.claimed
+                ? `<span class="quest-done-badge">✅</span>`
+                : `<button class="quest-claim-btn" data-quest-id="${q.id}" ${canClaim ? "" : "disabled"}>
+                     ${canClaim ? "Забрать" : "В процессе"}
+                   </button>`}
+            </div>
+          </div>`;
+      }).join("");
+
+      return `
+        <div class="section-title">🎯 Задания дня
+          <span class="sub">${earned}/${total} 🪙</span>
+        </div>
+        ${cards}`;
+    }
+
+    function renderLeaderboardSection() {
+      const entries = lbData?.entries || [];
+      const myRank  = lbData?.my_rank;
+      const medals  = ["🥇","🥈","🥉"];
+
+      const rows = entries.map((e, i) => `
+        <div class="lb-entry${e.is_self ? " me" : ""}" style="animation-delay:${0.05 + i * 0.04}s">
+          <div class="lb-rank">${medals[i] || ("#" + e.rank)}</div>
+          <div class="lb-avatar" style="background:${colorFor(e.display_name)}">${initials(e.display_name)}</div>
+          <div class="lb-name">${e.is_self ? "👤 Ты" : e.display_name}</div>
+          <div class="lb-coins">${e.total_earned.toLocaleString("ru-RU")} 🪙</div>
+        </div>`).join("");
+
+      const myNote = (myRank && !entries.find(e => e.is_self))
+        ? `<div class="lb-my-rank-note">Твоё место: #${myRank}</div>` : "";
+
+      return `
+        <div class="section-title" style="margin-top:8px">🏆 Рейтинг монет</div>
+        ${rows || `<div class="empty" style="padding:20px 0"><span class="big-emoji">🪙</span>Пока никто не зарабатывал монеты.</div>`}
+        ${myNote}`;
+    }
+
+    function attachQuestHandlers() {
+      document.querySelectorAll(".quest-claim-btn:not([disabled])").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const questId = btn.dataset.questId;
+          btn.disabled  = true;
+          btn.textContent = "⏳";
+          try {
+            if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("medium");
+            const res = await fetch("/app/api/quests/claim", {
+              method: "POST", headers: {"Content-Type":"application/json"},
+              body: JSON.stringify({initData: currentInitData, questId}),
+            });
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({}));
+              if (err.detail === "already_claimed") {
+                toastMessage("Задание уже выполнено ✅");
+                await loadQuestsLeaderboard();
+                return;
+              }
+              throw new Error(err.detail || "error");
+            }
+            const data = await res.json();
+            if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+            updateBalanceDisplay(data.new_balance);
+            toastMessage(`🎉 +${data.reward} монет получено!`);
+            // Refresh quests & lb to show claimed state
+            await loadQuestsLeaderboard();
+          } catch {
+            btn.disabled    = false;
+            btn.textContent = "Забрать";
+            toastMessage("Ошибка. Попробуй позже.");
+          }
+        });
+      });
     }
 
     document.getElementById("refreshBtn").addEventListener("click", () => loadStats(true));

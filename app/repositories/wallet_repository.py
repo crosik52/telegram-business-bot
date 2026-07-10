@@ -206,6 +206,27 @@ class WalletRepository:
             new_balance=wallet.balance,
         )
 
+    # ── Admin: set balance (mutation) ─────────────────────────────────────
+    async def admin_set_balance(
+        self, owner_telegram_id: int, new_balance: int
+    ) -> int:
+        """Set a user's coin balance directly (admin action).
+
+        Adjusts total_earned / total_spent to keep accounting consistent.
+        Returns the resulting balance.
+        """
+        new_balance = max(0, min(new_balance, 10_000_000))
+        wallet = await self._get_for_update(owner_telegram_id)
+        diff = new_balance - wallet.balance
+        wallet.balance = new_balance
+        if diff > 0:
+            wallet.total_earned += diff
+        elif diff < 0:
+            wallet.total_spent += abs(diff)
+        _clamp_wallet(wallet)
+        await self.session.flush()
+        return wallet.balance
+
     # ── Coin flip (mutation) ───────────────────────────────────────────────
     async def flip_coin(
         self, owner_telegram_id: int, bet: int, choice: str

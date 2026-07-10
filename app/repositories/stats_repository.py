@@ -79,6 +79,7 @@ class AdminUserRow:
     edited_messages: int
     deleted_messages: int
     last_activity_at: dt.datetime | None
+    wallet_balance: int = 0
 
 
 @dataclass
@@ -408,6 +409,21 @@ class StatsRepository:
                     row.last_at,
                 )
 
+        # Batch-load wallet balances for all owners (one query, not N).
+        from app.models.wallet import UserWallet  # local import avoids circular dep
+
+        wallet_owner_ids = list(by_owner.keys())
+        wallets_by_owner: dict[int, int] = {}
+        if wallet_owner_ids:
+            wallet_rows = (
+                await self._session.execute(
+                    select(UserWallet.owner_telegram_id, UserWallet.balance).where(
+                        UserWallet.owner_telegram_id.in_(wallet_owner_ids)
+                    )
+                )
+            ).all()
+            wallets_by_owner = {row[0]: row[1] for row in wallet_rows}
+
         users: list[AdminUserRow] = []
         for owner_telegram_id, conns in by_owner.items():
             latest = max(conns, key=lambda c: c.connected_at)
@@ -440,6 +456,7 @@ class StatsRepository:
                     edited_messages=edited_messages,
                     deleted_messages=deleted_messages,
                     last_activity_at=last_activity_at,
+                    wallet_balance=wallets_by_owner.get(owner_telegram_id, 0),
                 )
             )
 

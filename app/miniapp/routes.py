@@ -19,6 +19,7 @@ from app.models.admin_action_log import AdminActionLog
 from app.models.business_connection import BusinessConnection
 from app.models.message import MediaType, Message
 from app.repositories.message_repository import MessageFilters, MessageRepository
+from app.repositories.quest_repository import QUESTS, QuestRepository
 from app.repositories.wallet_repository import WalletRepository
 from app.services.stats_service import StatsService
 
@@ -145,6 +146,21 @@ class FlipRequest(BaseModel):
     init_data: str = Field(alias="initData")
     bet: int
     choice: str  # "heads" or "tails"
+
+
+class QuestClaimRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    init_data: str = Field(alias="initData")
+    quest_id: str = Field(alias="questId")
+
+
+class AdminWalletSetRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    init_data: str = Field(alias="initData")
+    owner_telegram_id: int = Field(alias="ownerTelegramId")
+    new_balance: int = Field(alias="newBalance", ge=0, le=10_000_000)
 
 
 def _require_admin(init_data: str) -> dict:
@@ -573,6 +589,235 @@ async def wallet_flip(
     }
 
 
+# ── Quests ────────────────────────────────────────────────────────────────────
+
+def _today_utc() -> dt.datetime:
+    return dt.datetime.now(dt.timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+async def _today_activity(
+    connection_ids: list[str], session
+) -> tuple[int, int, bool]:
+    """Return (today_messages, today_chats, has_streak).
+
+    Streak = at least one message both yesterday and today (server-derived).
+    """
+    if not connection_ids:
+        return 0, 0, False
+
+    today_start = _today_utc()
+    yesterday_start = today_start - dt.timedelta(days=1)
+
+    act_row = (
+        await session.execute(
+            select(
+                func.count(Message.id).label("m"),
+                func.count(Message.chat_id.distinct()).label("c"),
+            ).where(
+                Message.business_connection_id.in_(connection_ids),
+                Message.sent_at >= today_start,
+                Message.is_deleted.is_(False),
+            )
+        )
+    ).one()
+    today_messages: int = act_row.m
+    today_chats: int = act_row.c
+
+    yest_count = (
+        await session.execute(
+            select(func.count(Message.id)).where(
+                Message.business_connection_id.in_(connection_ids),
+                Message.sent_at >= yesterday_start,
+                Message.sent_at < today_start,
+                Message.is_deleted.is_(False),
+            )
+        )
+    ).scalar_one()
+    has_streak = yest_count > 0 and today_messages > 0
+    return today_messages, today_chats, has_streak
+
+
+@router.post("/app/api/quests")
+async def miniapp_quests(
+    payload: StatsRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Return today's quest list with per-user progress (all server-side)."""
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid Telegram init data")
+
+    owner_id = int(user["id"])
+    conn_ids = [
+        r[0]
+        for r in (
+            await session.execute(
+                select(BusinessConnection.business_connection_id).where(
+                    BusinessConnection.user_telegram_id == owner_id
+                )
+            )
+        ).all()
+    ]
+
+    today_messages, today_chats, has_streak = await _today_activity(conn_ids, session)
+
+    quest_repo = QuestRepository(session)
+    claimed = await quest_repo.get_today_completions(owner_id)
+
+    quests_out = []
+    for q in QUESTS:
+        if q["id"] == "MSG_5":
+            progress, target = today_messages, 5
+        elif q["id"] == "CHAT_2":
+            progress, target = today_chats, 2
+        else:  # STREAK
+            progress, target = (1 if has_streak else 0), 1
+
+        quests_out.append(
+            {
+                "id": q["id"],
+                "emoji": q["emoji"],
+                "title": q["title"],
+                "desc": q["desc"],
+                "reward": q["reward"],
+                "progress": min(progress, target),
+                "target": target,
+                "claimed": q["id"] in claimed,
+            }
+        )
+
+    return {
+        "quests": quests_out,
+        "today_messages": today_messages,
+        "today_chats": today_chats,
+    }
+
+
+@router.post("/app/api/quests/claim")
+async def miniapp_quest_claim(
+    payload: QuestClaimRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Verify and claim a completed daily quest. Progress is always recomputed
+    server-side — the client only supplies quest_id."""
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid Telegram init data")
+
+    owner_id = int(user["id"])
+    conn_ids = [
+        r[0]
+        for r in (
+            await session.execute(
+                select(BusinessConnection.business_connection_id).where(
+                    BusinessConnection.user_telegram_id == owner_id
+                )
+            )
+        ).all()
+    ]
+
+    today_messages, today_chats, has_streak = await _today_activity(conn_ids, session)
+
+    quest_repo = QuestRepository(session)
+    try:
+        reward = await quest_repo.claim_quest(
+            owner_id,
+            payload.quest_id,
+            today_messages=today_messages,
+            today_chats=today_chats,
+            has_streak=has_streak,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        status = 409 if code == "already_claimed" else 400
+        raise HTTPException(status_code=status, detail=code) from exc
+
+    await session.commit()
+
+    repo = WalletRepository(session)
+    wallet = await repo.get_or_create(owner_id)
+    return {"ok": True, "reward": reward, "new_balance": wallet.balance}
+
+
+@router.post("/app/api/leaderboard")
+async def miniapp_leaderboard(
+    payload: StatsRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Top 15 users by total_earned coins + the current user's rank."""
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid Telegram init data")
+
+    owner_id = int(user["id"])
+
+    from app.models.wallet import UserWallet  # local to avoid circular dep
+
+    top_rows = (
+        await session.execute(
+            select(UserWallet.owner_telegram_id, UserWallet.balance, UserWallet.total_earned)
+            .order_by(UserWallet.total_earned.desc())
+            .limit(15)
+        )
+    ).all()
+
+    top_ids = [r[0] for r in top_rows]
+    names_map: dict[int, tuple] = {}
+    if top_ids:
+        name_rows = (
+            await session.execute(
+                select(
+                    BusinessConnection.user_telegram_id,
+                    BusinessConnection.user_first_name,
+                    BusinessConnection.user_last_name,
+                    BusinessConnection.user_username,
+                )
+                .where(BusinessConnection.user_telegram_id.in_(top_ids))
+                .distinct(BusinessConnection.user_telegram_id)
+            )
+        ).all()
+        names_map = {r[0]: (r[1], r[2], r[3]) for r in name_rows}
+
+    entries = []
+    my_rank: int | None = None
+    for i, row in enumerate(top_rows):
+        fn, ln, un = names_map.get(row[0], (None, None, None))
+        name_parts = [p for p in (fn, ln) if p]
+        display = " ".join(name_parts) if name_parts else (f"@{un}" if un else "Аноним")
+        is_self = row[0] == owner_id
+        if is_self:
+            my_rank = i + 1
+        entries.append(
+            {
+                "rank": i + 1,
+                "display_name": display,
+                "is_self": is_self,
+                "balance": row[1],
+                "total_earned": row[2],
+            }
+        )
+
+    if my_rank is None:
+        own_earned = (
+            await session.execute(
+                select(UserWallet.total_earned).where(
+                    UserWallet.owner_telegram_id == owner_id
+                )
+            )
+        ).scalar_one_or_none()
+        if own_earned is not None:
+            higher = (
+                await session.execute(
+                    select(func.count(UserWallet.id)).where(
+                        UserWallet.total_earned > own_earned
+                    )
+                )
+            ).scalar_one()
+            my_rank = higher + 1
+
+    return {"entries": entries, "my_rank": my_rank}
+
+
 @router.post("/app/api/admin/overview")
 async def admin_overview(
     payload: StatsRequest, session: AsyncSession = Depends(get_db_session)
@@ -602,6 +847,7 @@ async def admin_overview(
                 "last_activity_at": (
                     u.last_activity_at.isoformat() if u.last_activity_at else None
                 ),
+                "wallet_balance": u.wallet_balance,
             }
             for u in overview.users
         ],
@@ -734,6 +980,24 @@ async def admin_dashboard_stats(
             for item in stats.media_breakdown
         ],
     }
+
+
+@router.post("/app/api/admin/wallet/set")
+async def admin_wallet_set(
+    payload: AdminWalletSetRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Admin: directly set a user's coin balance."""
+    admin_user = _require_admin(payload.init_data)
+    repo = WalletRepository(session)
+    new_balance = await repo.admin_set_balance(payload.owner_telegram_id, payload.new_balance)
+    await session.commit()
+    logger.info(
+        "Admin %s set wallet balance for user_id=%s → %s",
+        admin_user.get("username", "?"),
+        payload.owner_telegram_id,
+        new_balance,
+    )
+    return {"ok": True, "new_balance": new_balance}
 
 
 @router.post("/app/api/admin/messages")

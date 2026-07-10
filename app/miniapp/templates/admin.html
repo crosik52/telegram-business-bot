@@ -476,6 +476,41 @@
   @keyframes fadeDown { from{opacity:0;transform:translateY(-7px)} to{opacity:1;transform:none} }
   @keyframes riseIn   { from{opacity:0;transform:translateY(9px)}  to{opacity:1;transform:none} }
   @keyframes pulse    { 0%,100%{opacity:1} 50%{opacity:0.45} }
+  /* ── Balance edit modal ── */
+  .balance-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex; align-items: flex-end; justify-content: center;
+    z-index: 2000;
+  }
+  .balance-sheet {
+    background: var(--secondary-bg);
+    border-radius: 20px 20px 0 0;
+    padding: 22px 18px 32px;
+    width: 100%; max-width: 440px;
+    box-shadow: 0 -4px 28px rgba(0,0,0,0.2);
+    animation: riseIn 0.22s ease;
+  }
+  .balance-sheet-title { font-size: 15px; font-weight: 700; text-align: center; margin-bottom: 12px; }
+  .balance-current { text-align: center; font-size: 30px; font-weight: 900; color: var(--purple); margin-bottom: 3px; }
+  .balance-current-lbl { text-align: center; font-size: 12px; color: var(--hint); margin-bottom: 16px; }
+  .balance-presets { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 12px; justify-content: center; }
+  .balance-preset { border: none; border-radius: 9px; padding: 5px 12px; font-size: 12px; font-weight: 600; background: rgba(120,120,128,0.12); color: var(--text); touch-action: manipulation; }
+  .balance-input-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .balance-number-input {
+    flex: 1; border: 1.5px solid rgba(120,120,128,0.28); border-radius: 11px;
+    padding: 10px 14px; font-size: 17px; font-weight: 700;
+    background: var(--bg); color: var(--text); text-align: center;
+  }
+  .balance-set-btn {
+    border: none; border-radius: 11px; padding: 10px 16px;
+    font-size: 14px; font-weight: 700; background: var(--link); color: #fff;
+    touch-action: manipulation;
+  }
+  .balance-cancel-btn {
+    display: block; width: 100%; text-align: center; padding: 10px;
+    font-size: 14px; color: var(--hint); border: none; background: none;
+  }
 </style>
 </head>
 <body>
@@ -610,6 +645,7 @@
         messages: (a,b) => b.total_messages - a.total_messages,
         recent:   (a,b) => new Date(b.last_activity_at||0) - new Date(a.last_activity_at||0),
         newest:   (a,b) => new Date(b.connected_at||0) - new Date(a.connected_at||0),
+        coins:    (a,b) => (b.wallet_balance||0) - (a.wallet_balance||0),
       };
       return list.sort(sorters[sortMode] || sorters.messages);
     }
@@ -655,6 +691,7 @@
             <div class="stat"><div class="n">${esc(u.total_chats)}</div><div class="l">Чаты</div></div>
             <div class="stat"><div class="n">${esc(u.edited_messages)}</div><div class="l">Правки</div></div>
             <div class="stat"><div class="n">${esc(u.deleted_messages)}</div><div class="l">Удал.</div></div>
+            <div class="stat"><div class="n" style="color:var(--purple)">${u.wallet_balance != null ? u.wallet_balance.toLocaleString("ru-RU") : "—"}</div><div class="l">🪙 Монеты</div></div>
           </div>
 
           <div class="actions">
@@ -669,6 +706,7 @@
             <button class="action-btn" data-action="chats">💬 Чаты</button>
             ${u.username ? `<button class="action-btn" data-action="message" data-username="${esc(u.username)}">✉️ Написать</button>` : ""}
             <button class="action-btn" data-action="copy-id" data-copy="${esc(u.owner_telegram_id)}">📋 ID</button>
+            <button class="action-btn" data-action="edit-balance" data-owner-id="${esc(u.owner_telegram_id)}" data-balance="${u.wallet_balance ?? 0}">💰 Баланс</button>
           </div>
 
           <button class="expand-btn" data-toggle-details>${isOpen ? "Скрыть ▲" : "Подробнее ▼"}</button>
@@ -732,6 +770,7 @@
           <button class="sort-chip ${sortMode==="messages"?"active":""}" data-sort="messages">По сообщениям</button>
           <button class="sort-chip ${sortMode==="recent"  ?"active":""}" data-sort="recent">По активности</button>
           <button class="sort-chip ${sortMode==="newest"  ?"active":""}" data-sort="newest">По дате</button>
+          <button class="sort-chip ${sortMode==="coins"   ?"active":""}" data-sort="coins">По монетам 🪙</button>
         </div>
       `;
 
@@ -797,6 +836,78 @@
           if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
           openChatsSheet(user);
         });
+      });
+      document.querySelectorAll(".action-btn[data-action='edit-balance']").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const ownerId  = Number(btn.dataset.ownerId);
+          const curBal   = Number(btn.dataset.balance) || 0;
+          if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("medium");
+          openBalanceEditor(ownerId, curBal, btn);
+        });
+      });
+    }
+
+    function openBalanceEditor(ownerId, currentBalance, triggerBtn) {
+      const overlay = document.createElement("div");
+      overlay.className = "balance-overlay";
+      overlay.innerHTML = `
+        <div class="balance-sheet">
+          <div class="balance-sheet-title">💰 Изменить баланс</div>
+          <div class="balance-current">${currentBalance.toLocaleString("ru-RU")} 🪙</div>
+          <div class="balance-current-lbl">Текущий баланс</div>
+          <div class="balance-presets">
+            ${[0, 100, 500, 1000, 5000].map(v =>
+              `<button class="balance-preset" data-val="${v}">${v.toLocaleString("ru-RU")}</button>`
+            ).join("")}
+          </div>
+          <div class="balance-input-row">
+            <input type="number" class="balance-number-input" id="balanceInput"
+              min="0" max="10000000" value="${currentBalance}" />
+            <button class="balance-set-btn" id="balanceSetBtn">Задать</button>
+          </div>
+          <button class="balance-cancel-btn" id="balanceCancelBtn">Отмена</button>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+
+      overlay.querySelectorAll(".balance-preset").forEach(b => {
+        b.addEventListener("click", () => {
+          const inp = overlay.querySelector("#balanceInput");
+          if (inp) inp.value = b.dataset.val;
+        });
+      });
+
+      overlay.querySelector("#balanceCancelBtn").addEventListener("click", () => overlay.remove());
+      overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
+
+      overlay.querySelector("#balanceSetBtn").addEventListener("click", async () => {
+        const inp = overlay.querySelector("#balanceInput");
+        const newBalance = Math.max(0, Math.min(10_000_000, Number(inp?.value) || 0));
+        const setBtn = overlay.querySelector("#balanceSetBtn");
+        setBtn.disabled = true;
+        setBtn.textContent = "…";
+        try {
+          const res = await fetch("/app/api/admin/wallet/set", {
+            method: "POST",
+            headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({initData: initData, ownerTelegramId: ownerId, newBalance}),
+          });
+          if (!res.ok) throw new Error((await res.json().catch(()=>({}))).detail || "error");
+          const data = await res.json();
+          if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+          // Update local overview data so re-render shows new balance
+          const u = overview.users.find(u => u.owner_telegram_id === ownerId);
+          if (u) u.wallet_balance = data.new_balance;
+          // Update trigger button's data-balance
+          if (triggerBtn) triggerBtn.dataset.balance = data.new_balance;
+          overlay.remove();
+          showToast(`✅ Баланс: ${data.new_balance.toLocaleString("ru-RU")} 🪙`);
+          render();
+        } catch(e) {
+          setBtn.disabled = false;
+          setBtn.textContent = "Задать";
+          showToast("Ошибка: " + e.message);
+        }
       });
     }
 

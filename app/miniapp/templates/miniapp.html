@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>Моя статистика</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;900&display=swap">
 <style>
   :root {
     --bg: var(--tg-theme-bg-color, #f2f2f7);
@@ -440,77 +442,141 @@
   .tab-item.tab-donate.active .tab-icon-wrap  { background: rgba(245,158,11,0.12); }
 
   /* ══════════════════════════════════════════
-     WALLET CARD
+     CASINO – DARK MINIMAL THEME
   ══════════════════════════════════════════ */
+  #casinoContent {
+    --ci-accent:  #7c6cff;
+    --ci-accent2: #ff6b6b;
+    --ci-s1:      #0d0d0d;
+    --ci-s2:      #161616;
+    --ci-s3:      #1f1f1f;
+    --ci-border:  rgba(255,255,255,0.07);
+    --ci-text:    #f5f5f5;
+    --ci-muted:   rgba(245,245,245,0.35);
+    background: #000;
+    margin: 0 -14px;
+    padding: 0 16px calc(env(safe-area-inset-bottom, 0px) + 86px);
+    min-height: 100%;
+    font-family: 'Geist', -apple-system, system-ui, sans-serif;
+  }
+
+  /* ── Casino header ── */
+  .casino-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 20px 0 18px;
+    border-bottom: 1px solid var(--ci-border);
+    margin-bottom: 20px;
+  }
+  .casino-page-title {
+    font-size: 24px; font-weight: 700; letter-spacing: -0.5px; color: var(--ci-text);
+  }
+  .casino-page-sub { font-size: 13px; color: var(--ci-muted); margin-top: 2px; }
+  .casino-header-badge {
+    background: rgba(124,108,255,0.12);
+    border: 1px solid rgba(124,108,255,0.25);
+    border-radius: 20px; padding: 6px 14px;
+    font-size: 12px; font-weight: 500; color: var(--ci-accent);
+    letter-spacing: 0.3px;
+  }
+
+  /* ── Wallet card ── */
   .wallet-card {
-    background: linear-gradient(135deg,#1e1b4b 0%,#312e81 50%,#1e3a5f 100%);
-    border-radius: var(--card-radius); padding: 20px 18px 16px;
-    margin-bottom: 14px; box-shadow: 0 6px 24px rgba(124,58,237,0.28);
-    animation: riseIn 0.35s ease backwards;
-    position: relative; overflow: hidden;
+    background: var(--ci-s1);
+    border: 1px solid var(--ci-border);
+    border-radius: 20px;
+    padding: 20px;
+    margin-bottom: 12px;
+    box-shadow: none;
+    animation: none;
+    position: static; overflow: visible;
   }
-  .wallet-card::before {
-    content: ""; position: absolute; top: -30px; right: -20px;
-    width: 120px; height: 120px; border-radius: 50%;
-    background: rgba(255,255,255,0.05);
-  }
-  .wallet-balance-row {
-    display: flex; align-items: baseline; gap: 8px; margin-bottom: 14px;
-  }
-  .wallet-coin-icon { font-size: 28px; }
+  .wallet-card::before { display: none; }
+  .wal-label { font-size: 12px; color: var(--ci-muted); font-weight: 400; margin-bottom: 8px; }
+  .wal-balance-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px; }
   .wallet-balance {
-    font-size: 42px; font-weight: 900; color: #fff; letter-spacing: -1px;
-    line-height: 1; transition: transform 0.2s ease, color 0.2s ease;
+    font-size: 52px; font-weight: 700; letter-spacing: -2px; line-height: 1;
+    color: var(--ci-text); transition: transform 0.2s ease, color 0.2s ease;
   }
-  .wallet-balance.pop { color: #fbbf24; transform: scale(1.08); }
-  .wallet-coin-label { font-size: 16px; color: rgba(255,255,255,0.55); font-weight: 500; }
-  .wallet-meta-row {
-    display: grid; grid-template-columns: repeat(3,1fr);
-    gap: 0; margin-bottom: 16px;
-    background: rgba(255,255,255,0.08); border-radius: 12px; overflow: hidden;
+  .wallet-balance.pop { color: #34c759; transform: scale(1.08); }
+  .wal-balance-unit { font-size: 18px; color: var(--ci-muted); font-weight: 400; }
+  .wal-delta {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(52,199,89,0.10);
+    border-radius: 6px; padding: 3px 8px;
+    font-size: 12px; color: #34c759; font-weight: 500;
   }
-  .wallet-meta-cell {
-    text-align: center; padding: 9px 4px;
-    border-right: 1px solid rgba(255,255,255,0.1);
+  .wal-stats-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px;
   }
-  .wallet-meta-cell:last-child { border-right: none; }
-  .wallet-meta-val { font-size: 15px; font-weight: 800; color: #fff; }
-  .wallet-meta-lbl { font-size: 9.5px; color: rgba(255,255,255,0.5); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .wal-stat {
+    background: var(--ci-s2);
+    border-radius: 12px; padding: 12px 14px;
+  }
+  .wal-stat .ws-label { font-size: 11px; color: var(--ci-muted); margin-bottom: 4px; }
+  .wal-stat .ws-val { font-size: 16px; font-weight: 600; color: var(--ci-text); }
   .claim-btn {
-    width: 100%; border: none; border-radius: 13px; padding: 13px;
-    font-size: 14px; font-weight: 800; cursor: pointer;
-    background: linear-gradient(90deg,#fbbf24,#f59e0b);
-    color: #1a1a1a; box-shadow: 0 3px 10px rgba(251,191,36,0.4);
-    transition: opacity 0.15s, transform 0.1s;
+    width: 100%;
+    background: var(--ci-accent);
+    border: none; border-radius: 14px; padding: 15px;
+    color: #fff; font-family: 'Geist', system-ui, sans-serif;
+    font-size: 15px; font-weight: 600;
+    cursor: pointer; transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
   }
+  .claim-btn:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(124,108,255,0.3); }
   .claim-btn:active { transform: scale(0.97); }
-  .claim-btn:disabled { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.45); box-shadow: none; cursor: default; }
+  .claim-btn:disabled {
+    background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.30);
+    box-shadow: none; cursor: default; transform: none; opacity: 1;
+  }
   .claim-btn.claiming { opacity: 0.7; }
 
-  /* ══════════════════════════════════════════
-     CASINO CARDS (game wrappers)
-  ══════════════════════════════════════════ */
+  /* ── Casino cards (game wrappers) ── */
   .casino-card {
-    background: var(--secondary-bg); border-radius: var(--card-radius);
-    padding: 18px 16px; margin-bottom: 14px; box-shadow: var(--shadow);
-    animation: riseIn 0.4s ease backwards;
-  }
-  .casino-card-title { font-size: 17px; font-weight: 800; margin-bottom: 2px; }
-  .casino-card-sub   { font-size: 12px; color: var(--hint); margin-bottom: 16px; }
-
-  /* ── Slots machine ── */
-  .slots-machine { margin-bottom: 14px; }
-  .slots-reels {
-    display: flex; gap: 8px; justify-content: center;
+    background: var(--ci-s1);
+    border: 1px solid var(--ci-border);
+    border-radius: 20px;
+    padding: 20px;
     margin-bottom: 12px;
+    box-shadow: none;
+    animation: none;
+  }
+  .casino-card-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 16px;
+  }
+  .casino-card-title { font-size: 17px; font-weight: 600; color: var(--ci-text); margin: 0; }
+  .casino-card-sub   { font-size: 12px; color: var(--ci-muted); margin: 0; }
+
+  /* ── Slots ── */
+  .slots-machine { margin-bottom: 0; }
+  .slots-reels {
+    background: var(--ci-s2);
+    border: 1px solid var(--ci-border);
+    border-radius: 14px;
+    padding: 14px 10px;
+    display: flex; gap: 8px;
+    margin-bottom: 14px;
+    position: relative;
+    justify-content: initial;
+  }
+  .slots-reels::before {
+    content: '';
+    position: absolute; left: 10px; right: 10px;
+    top: 50%; transform: translateY(-50%);
+    height: 1px; background: rgba(124,108,255,0.15);
+    pointer-events: none;
   }
   .slot-reel {
-    width: 72px; height: 80px; border-radius: 16px;
-    background: linear-gradient(145deg,#1e1b4b,#312e81);
+    flex: 1; aspect-ratio: 1;
+    background: var(--ci-s3);
+    border: 1px solid var(--ci-border);
+    border-radius: 10px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 38px; box-shadow: 0 4px 14px rgba(0,0,0,0.18);
-    transition: transform 0.15s ease;
-    position: relative; overflow: hidden;
+    font-size: 30px;
+    width: auto; height: auto;
+    box-shadow: none;
+    transition: none;
     user-select: none;
   }
   .slot-reel.spinning {
@@ -531,84 +597,136 @@
     60%  { transform: scale(0.94); }
     100% { transform: scale(1);    }
   }
-  .slots-result {
-    text-align: center; font-size: 15px; font-weight: 800; min-height: 24px;
+  .slots-footer {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 14px;
   }
-  .slots-win   { color: var(--green); animation: popIn 0.4s ease; }
-  .slots-lose  { color: var(--hint);  }
-  .slots-jackpot { color: #f59e0b; font-size: 18px; animation: popIn 0.4s ease; }
+  .slots-cost { font-size: 12px; color: var(--ci-muted); }
+  .slots-jp { font-size: 12px; color: var(--ci-muted); }
+  .slots-jp strong { color: var(--ci-accent); font-weight: 600; }
+  .slots-result {
+    text-align: center; font-size: 15px; font-weight: 700; min-height: 24px;
+    margin-bottom: 14px;
+  }
+  .slots-win    { color: #34c759; animation: popIn 0.4s ease; }
+  .slots-lose   { color: var(--ci-muted); }
+  .slots-jackpot { color: var(--ci-accent); font-size: 18px; animation: popIn 0.4s ease; }
   @keyframes popIn { 0%{transform:scale(0.7);opacity:0} 70%{transform:scale(1.1)} 100%{transform:scale(1);opacity:1} }
 
   .casino-spin-btn {
-    width: 100%; border: none; border-radius: 13px; padding: 13px;
-    font-size: 14px; font-weight: 800;
-    background: linear-gradient(90deg,#7c3aed,#a855f7);
-    color: #fff; box-shadow: 0 3px 12px rgba(124,58,237,0.35);
-    transition: opacity 0.15s, transform 0.1s;
+    width: 100%;
+    background: rgba(124,108,255,0.10);
+    border: 1px solid rgba(124,108,255,0.25);
+    border-radius: 14px; padding: 14px;
+    color: var(--ci-accent);
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: all 0.2s;
+    box-shadow: none;
   }
+  .casino-spin-btn:hover { background: rgba(124,108,255,0.18); }
   .casino-spin-btn:active { transform: scale(0.97); }
-  .casino-spin-btn:disabled { opacity: 0.45; box-shadow: none; }
+  .casino-spin-btn:disabled { opacity: 0.45; }
 
   /* paytable */
-  .paytable { margin: 12px 0 0; }
+  .paytable { margin: 10px 0 0; }
   .paytable-row {
-    display: flex; justify-content: space-between; padding: 4px 0;
-    font-size: 12px; border-bottom: 1px solid rgba(120,120,128,0.08);
+    display: flex; justify-content: space-between; padding: 5px 0;
+    font-size: 12px; border-bottom: 1px solid var(--ci-border);
+    color: var(--ci-text);
   }
   .paytable-row:last-child { border-bottom: none; }
-  .paytable-sym { font-size: 14px; }
-  .paytable-pay { color: var(--green); font-weight: 700; }
+  .paytable-sym { font-size: 13px; }
+  .paytable-pay { color: var(--ci-accent); font-weight: 600; }
+  #casinoContent details summary {
+    color: var(--ci-muted); font-size: 12px; font-weight: 500; cursor: pointer;
+  }
 
   /* ── Coin flip ── */
+  .flip-coin-row {
+    display: flex; align-items: center; gap: 14px; margin-bottom: 16px;
+  }
   .flip-coin-display {
-    font-size: 60px; text-align: center; margin-bottom: 14px;
+    width: 60px; height: 60px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #ffe580, #c8a800, #6b5800);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; flex-shrink: 0;
+    box-shadow: 0 2px 12px rgba(200,168,0,0.25);
     transition: transform 0.6s ease;
-    line-height: 1;
-    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2));
+    filter: none; text-align: initial; line-height: initial; margin-bottom: 0;
   }
   .flip-coin-display.flipping {
     animation: coinFlip 0.7s linear;
   }
   @keyframes coinFlip {
-    0%   { transform: rotateY(0deg)   scale(1);    }
-    50%  { transform: rotateY(900deg) scale(0.7);  }
+    0%   { transform: rotateY(0deg)    scale(1);   }
+    50%  { transform: rotateY(900deg)  scale(0.7); }
     100% { transform: rotateY(1800deg) scale(1);   }
   }
+  .flip-coin-info { flex: 1; }
+  .flip-coin-info .fci-label { font-size: 11px; color: var(--ci-muted); margin-bottom: 6px; }
+  .flip-coin-info .fci-odds  { display: flex; gap: 8px; }
+  .fci-odd {
+    flex: 1; background: var(--ci-s2); border-radius: 8px; padding: 6px 10px;
+    font-size: 12px; text-align: center;
+  }
+  .fci-odd .fci-val { font-size: 16px; font-weight: 700; color: var(--ci-text); }
+  .fci-odd .fci-lbl { font-size: 10px; color: var(--ci-muted); }
   .flip-bet-row {
-    display: flex; align-items: center; gap: 8px;
-    justify-content: center; margin-bottom: 14px;
+    display: flex; align-items: center;
+    background: var(--ci-s2);
+    border: 1px solid var(--ci-border);
+    border-radius: 12px;
+    overflow: hidden; margin-bottom: 10px;
+    justify-content: initial;
   }
-  .flip-bet-label { font-size: 14px; color: var(--hint); font-weight: 500; }
+  .flip-bet-label { padding: 0 14px; font-size: 12px; color: var(--ci-muted); font-weight: 400; }
+  .flip-bet-sep { width: 1px; height: 44px; background: var(--ci-border); }
   .flip-bet-input {
-    width: 90px; text-align: center; border: 1.5px solid rgba(120,120,128,0.2);
-    border-radius: 10px; padding: 8px 10px; font-size: 16px; font-weight: 700;
-    background: var(--bg); color: var(--text); outline: none;
+    flex: 1; background: transparent; border: none; outline: none;
+    padding: 12px 14px; color: var(--ci-text);
+    font-family: 'Geist', system-ui, sans-serif; font-size: 18px; font-weight: 600;
+    text-align: right; width: auto; border-radius: 0;
   }
-  .flip-bet-input:focus { border-color: var(--link); }
-  .flip-presets { display: flex; gap: 5px; justify-content: center; margin-bottom: 14px; }
+  .flip-presets { display: flex; gap: 6px; margin-bottom: 12px; justify-content: initial; }
   .flip-preset-btn {
-    border: 1px solid rgba(120,120,128,0.2); border-radius: 8px;
-    padding: 5px 10px; font-size: 11.5px; font-weight: 700;
-    background: var(--bg); color: var(--hint);
+    flex: 1; padding: 8px;
+    background: var(--ci-s2); border: 1px solid var(--ci-border); border-radius: 8px;
+    color: var(--ci-muted); font-family: 'Geist', system-ui, sans-serif;
+    font-size: 12px; font-weight: 500;
+    cursor: pointer; transition: all 0.15s;
   }
-  .flip-preset-btn:active { background: var(--link); color: #fff; border-color: var(--link); }
-  .flip-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .flip-preset-btn:hover, .flip-preset-btn:active {
+    color: var(--ci-text); border-color: rgba(255,255,255,0.15);
+    background: var(--ci-s3);
+  }
+  .flip-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
   .flip-choice-btn {
-    border: 2px solid rgba(120,120,128,0.18); border-radius: 13px;
-    padding: 13px 8px; font-size: 15px; font-weight: 800;
-    background: var(--bg); color: var(--text);
-    transition: all 0.18s ease;
+    padding: 14px; border-radius: 14px;
+    font-family: 'Geist', system-ui, sans-serif; font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: all 0.2s;
+    border: 1px solid;
+    background: transparent;
   }
-  .flip-choice-btn:active { transform: scale(0.96); }
-  .flip-choice-btn:disabled { opacity: 0.4; }
-  .flip-choice-btn.heads-btn { border-color: rgba(36,129,204,0.35); }
-  .flip-choice-btn.tails-btn { border-color: rgba(52,199,89,0.35); }
+  .flip-choice-btn:hover  { transform: translateY(-1px); filter: brightness(1.15); }
+  .flip-choice-btn:active { transform: scale(0.97); filter: none; }
+  .flip-choice-btn:disabled { opacity: 0.4; transform: none; }
+  .flip-choice-btn.heads-btn {
+    background: rgba(124,108,255,0.08);
+    border-color: rgba(124,108,255,0.25);
+    color: var(--ci-accent);
+  }
+  .flip-choice-btn.tails-btn {
+    background: rgba(255,107,107,0.08);
+    border-color: rgba(255,107,107,0.25);
+    color: var(--ci-accent2);
+  }
   .flip-result {
-    text-align: center; font-size: 16px; font-weight: 800; min-height: 26px;
-    margin-top: 4px;
+    text-align: center; font-size: 16px; font-weight: 700; min-height: 26px;
+    margin-top: 4px; color: var(--ci-text);
   }
-  .flip-won  { color: var(--green); animation: popIn 0.4s ease; }
-  .flip-lost { color: var(--red);   animation: popIn 0.4s ease; }
+  .flip-won  { color: #34c759;          animation: popIn 0.4s ease; }
+  .flip-lost { color: var(--ci-accent2); animation: popIn 0.4s ease; }
 
   /* ══════════════════════════════════════════
      DONATE / SUPPORT
@@ -1390,32 +1508,33 @@
 
       let claimBtnContent;
       if (can_claim_daily) {
-        claimBtnContent = `🎁 Получить ${claimTotal} монет${streakBonus > 0 ? ` (+${streakBonus} бонус 🔥)` : ""}`;
+        claimBtnContent = `🎁 Получить ${claimTotal} монет${streakBonus > 0 ? ` <span style="opacity:.65;font-size:13px">(+${streakBonus} 🔥)</span>` : ""}`;
       } else {
         const hrs  = Math.floor(seconds_until_next_claim / 3600);
         const mins = Math.floor((seconds_until_next_claim % 3600) / 60);
         claimBtnContent = `⏰ Через ${hrs > 0 ? hrs + " ч " : ""}${mins} мин`;
       }
 
+      const deltaHtml = streakBonus > 0
+        ? `<span class="wal-delta">🔥 +${streakBonus}</span>`
+        : "";
+
       return `
         <div class="wallet-card">
-          <div class="wallet-balance-row">
-            <span class="wallet-coin-icon">🪙</span>
+          <div class="wal-label">Баланс</div>
+          <div class="wal-balance-row">
             <span class="wallet-balance" id="walletBalanceEl">${balance.toLocaleString("ru-RU")}</span>
-            <span class="wallet-coin-label">монет</span>
+            <span class="wal-balance-unit">монет</span>
+            ${deltaHtml}
           </div>
-          <div class="wallet-meta-row">
-            <div class="wallet-meta-cell">
-              <div class="wallet-meta-val">+${total_earned.toLocaleString("ru-RU")}</div>
-              <div class="wallet-meta-lbl">Заработано</div>
+          <div class="wal-stats-grid">
+            <div class="wal-stat">
+              <div class="ws-label">Заработано</div>
+              <div class="ws-val">+${total_earned.toLocaleString("ru-RU")}</div>
             </div>
-            <div class="wallet-meta-cell">
-              <div class="wallet-meta-val">${total_spent.toLocaleString("ru-RU")}</div>
-              <div class="wallet-meta-lbl">Потрачено</div>
-            </div>
-            <div class="wallet-meta-cell">
-              <div class="wallet-meta-val">${streakBonus > 0 ? "+" + streakBonus : "—"}</div>
-              <div class="wallet-meta-lbl">Бонус серии</div>
+            <div class="wal-stat">
+              <div class="ws-label">Потрачено</div>
+              <div class="ws-val">${total_spent.toLocaleString("ru-RU")}</div>
             </div>
           </div>
           <button class="claim-btn" id="claimDailyBtn" ${can_claim_daily ? "" : "disabled"}>
@@ -1439,20 +1558,26 @@
 
       return `
         <div class="casino-card">
-          <div class="casino-card-title">🎰 Слоты</div>
-          <div class="casino-card-sub">Ставка 10 монет — выиграй до 500!</div>
+          <div class="casino-card-header">
+            <span class="casino-card-title">Слоты</span>
+            <span class="casino-card-sub">Джекпот ×500</span>
+          </div>
           <div class="slots-machine">
             <div class="slots-reels">
               <div class="slot-reel" id="reel0">🍒</div>
               <div class="slot-reel" id="reel1">🍒</div>
               <div class="slot-reel" id="reel2">🍒</div>
             </div>
+            <div class="slots-footer">
+              <span class="slots-cost">−10 за спин</span>
+              <span class="slots-jp">Джекпот: <strong>500 монет</strong></span>
+            </div>
             <div class="slots-result" id="slotsResult"></div>
           </div>
-          <button class="casino-spin-btn" id="spinBtn">🎰 Крутить (10 🪙)</button>
+          <button class="casino-spin-btn" id="spinBtn">Крутить — 10 монет</button>
           <details style="margin-top:12px">
-            <summary style="font-size:12px;color:var(--hint);cursor:pointer;font-weight:600">Таблица выплат</summary>
-            <div class="paytable" style="margin-top:8px">${paytable}</div>
+            <summary>Таблица выплат</summary>
+            <div class="paytable">${paytable}</div>
           </details>
         </div>
       `;
@@ -1463,17 +1588,28 @@
       const maxBet  = Math.min(500, balance);
       return `
         <div class="casino-card">
-          <div class="casino-card-title">🪙 Монетка</div>
-          <div class="casino-card-sub">Угадай сторону — удвой ставку</div>
-          <div class="flip-coin-display" id="flipCoin">🪙</div>
+          <div class="casino-card-header">
+            <span class="casino-card-title">Монетка</span>
+            <span class="casino-card-sub">×2 при победе</span>
+          </div>
+          <div class="flip-coin-row">
+            <div class="flip-coin-display" id="flipCoin">🪙</div>
+            <div class="flip-coin-info">
+              <div class="fci-label">Вероятность выигрыша</div>
+              <div class="fci-odds">
+                <div class="fci-odd"><div class="fci-val">50%</div><div class="fci-lbl">Орёл</div></div>
+                <div class="fci-odd"><div class="fci-val">50%</div><div class="fci-lbl">Решка</div></div>
+              </div>
+            </div>
+          </div>
           <div class="flip-bet-row">
             <span class="flip-bet-label">Ставка</span>
+            <div class="flip-bet-sep"></div>
             <input type="number" id="flipBet" class="flip-bet-input"
               min="10" max="${maxBet}" value="${Math.min(50, maxBet)}" />
-            <span class="flip-bet-label">🪙</span>
           </div>
           <div class="flip-presets">
-            ${[10,50,100,200].filter(v => v <= maxBet).map(v =>
+            ${[10,25,50,100].filter(v => v <= maxBet).map(v =>
               `<button class="flip-preset-btn" data-preset="${v}">${v}</button>`
             ).join("")}
             ${maxBet >= 10 ? `<button class="flip-preset-btn" data-preset="${maxBet}">Всё</button>` : ""}

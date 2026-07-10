@@ -1,0 +1,87 @@
+ОШИБКА: [TikTok] 7655756851010604319: Эта публикация может быть неудобна для некоторых пользователей. Для доступа войдите в систему. Используйте --cookies-from-browser или --cookies для аутентификации. См. https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp, как вручную передать cookie.
+2026-07-10T14:17:56+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745829391
+2026-07-10T14:17:56+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=1335699132 message_id=1801253 media=text
+2026-07-10T14:17:56+0000 | INFO | app.business.handlers | Обнаружена ссылка на видео (TikTok) в чате=1335699132, планируется загрузка
+2026-07-10T14:17:56+0000 | INFO | aiogram.event | Обновление id=745829391 обработано. Длительность 9 мс ботом id=1162707887
+2026-07-10T14:17:56+0000 | INFO | http | POST /webhook -> 200 (12.0ms)
+2026-07-10T14:17:56+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745829392
+2026-07-10T14:17:56+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=1056583564 message_id=550816 media=text
+2026-07-10T14:17:56+0000 | INFO | aiogram.event | Обновление id=745829392 обработано. Длительность 16 мс ботом id=1162707887
+2026-07-10T14:17:56+0000 | INFO | http | POST /webhook -> 200 (17.9ms)
+2026-07-10T14:17:58+0000 | ПРЕДУПРЕЖДЕНИЕ | app.services.video_service | Сбой загрузки/отправки видео для https://vt.tiktok.com/ZSXeASgGg/ (TikTok): ОШИБКА: [TikTok] 7655756851010604319: Эта публикация может быть неудобна для некоторых пользователей. Войдите в систему для доступа. Используйте --cookies-from-browser или --cookies для аутентификации. См. https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp, чтобы узнать, как вручную передать cookie.
+2026-07-10T14:19:01+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745829393
+2026-07-10T14:19:01+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=5300762544 message_id=1001864 media=text
+2026-07-10T14:19:01+0000 | INFO | aiogram.event | Обновление id=745829393 обработано. Длительность 18 мс ботом id=1162707887
+2026-07-10T14:19:01+0000 | INFO | http | POST /webhook -> 200 (24.4ms)
+2026-07-10T14:19:01+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745829394
+2026-07-10T14:19:01+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=5300762544 message_id=1001865 media=text
+2026-07-10T14:19:01+0000 | INFO | aiogram.event | Обновление id=745829394 обработано. Длительность 9 мс ботом id=1162707887
+2026-07-10T14:19:01+0000 | INFO | http | POST /webhook -> 200 (10.8ms)
+2026-07-10T14:19:01+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745829395
+2026-07-10T14:19:01+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=5300762544 message_id=1001866 media=text
+2026-07-10T14:19:01+0000 | INFO | aiogram.event | Обновление id=745829395 обработано. Длительность 14 мс ботом id=1162707887
+2026-07-10T14:19:01+0000 | INFO | http | POST /webhook -> 200 (16.2ms)
+2026-07-10T14:19:01+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745829396
+2026-07-10T14:19:01+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=5300762544 message_id=1001867 media=text
+2026-07-10T14:19:01+0000 | INFO | aiogram.event | Обновление id=745829396 обработано. Длительность 14 мс ботом id=1162707887
+2026-07-10T14:19:02+0000 | INFO | http | POST /webhook -> 200 (15.2ms)
+2026-07-10T14:19:01+0000 | INFO | http | POST /webhook -> 200 (15.0ms)
+2026-07-10T14:19:01+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745829397
+2026-07-10T14:19:01+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=5300762544 message_id=1001868 media=text
+2026-07-10T14:19:01+0000 | INFO | aiogram.event | Обновление id=745829397 обработано. Длительность 9 мс ботом id=1162707887
+2026-07-10T14:19:01+0000 | INFO | http | POST /webhook -> 200 (11.5ms)
+2026-07-10T14:19:01+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745829398
+2026-07-10T14:19:01+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=5300762544 message_id=1001869 media=text
+2026-07-10T14:19:01+0000 | INFO | aiogram.event | Обновление id=745829398 обработано. Длительность 10 мс ботом id=1162707887
+2026-07-10T14:19:01+0000 | INFO | http | POST /webhook -> 200 (11.8ms)
+2026-07-10T14:19:02+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745829399
+2026-07-10T14:19:02+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=5300762544 message_id=1001870 media=text
+2026-07-10T14:19:02+0000 | INFO | aiogram.event | Обновление id=745829399 обработано. Длительность 14 мс ботом id=1162707887
+2026-07-10T14:19:02+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=5300762544 message_id=1001874 media=text
+2026-07-10T14:19:02+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745829400
+2026-07-10T14:19:02+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=5300762544 message_id=1001871 media=sticker
+2026-07-10T14:19:02+0000 | INFO | aiogram.event | Обновление id=745829400 обработано. Длительность 13 мс ботом id=1162707887
+2026-07-10T14:19:02+0000 | INFO | http | POST /webhook -> 200 (14.5ms)
+2026-07-10T14:19:02+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745829401
+2026-07-10T14:19:02+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=5300762544 message_id=1001872 media=text
+2026-07-10T14:19:02+0000 | INFO | aiogram.event | Обновление id=745829401 обработано. Длительность 12 мс ботом id=1162707887
+2026-07-10T14:19:02+0000 | INFO | http | POST /webhook -> 200 (13.9ms)
+2026-07-10T14:19:02+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745829402
+2026-07-10T14:19:02+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=5300762544 message_id=1001873 media=text
+2026-07-10T14:19:02+0000 | INFO | aiogram.event | Обновление id=745829402 обработано. Длительность 21 мс ботом id=1162707887
+2026-07-10T14:19:02+0000 | INFO | http | POST /webhook -> 200 (23.4ms)
+2026-07-10T14:19:02+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745829403
+2026-07-10T14:19:02+0000 | INFO | aiogram.event | Обновление id=745829403 обработано. Длительность 9 мс ботом id=1162707887
+2026-07-10T14:19:02+0000 | INFO | http | POST /webhook -> 200 (11.7ms)
+2026-07-10T14:19:02+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745829404
+2026-07-10T14:19:02+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=5300762544 message_id=1001875 media=text
+2026-07-10T14:19:02+0000 | INFO | aiogram.event | Обновление id=745829404 обработано. Длительность 13 мс ботом id=1162707887
+2026-07-10T14:19:02+0000 | INFO | http | POST /webhook -> 200 (14.7ms)
+2026-07-10T14:19:03+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745829405
+2026-07-10T14:19:03+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=5300762544 message_id=1001876 media=text
+2026-07-10T14:19:03+0000 | INFO | aiogram.event | Обновление id=745829405 обработано. Длительность 21 мс ботом id=1162707887
+2026-07-10T14:19:03+0000 | INFO | http | POST /webhook -> 200 (24.3ms)
+2026-07-10T14:19:03+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745829406
+2026-07-10T14:19:03+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=5300762544 message_id=1001877 media=text
+2026-07-10T14:19:03+0000 | INFO | aiogram.event | Обновление id=745829406 обработано. Длительность 14 мс ботом id=1162707887
+2026-07-10T14:19:03+0000 | INFO | http | POST /webhook -> 200 (16.4ms)
+2026-07-10T14:19:03+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745829407
+2026-07-10T14:19:03+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=5300762544 message_id=1001878 media=text
+2026-07-10T14:19:03+0000 | INFO | aiogram.event | Обновление id=745829407 обработано. Длительность 10 мс ботом id=1162707887
+2026-07-10T14:19:03+0000 | INFO | http | POST /webhook -> 200 (13.5ms)
+2026-07-10T14:19:03+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745829408
+2026-07-10T14:19:03+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=5300762544 message_id=1001879 media=text
+2026-07-10T14:19:03+0000 | INFO | aiogram.event | Обновление id=745829408 обработано. Длительность 14 мс ботом id=1162707887
+2026-07-10T14:19:03+0000 | INFO | http | POST /webhook -> 200 (18.0ms)
+2026-07-10T14:19:03+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745829409
+2026-07-10T14:19:03+0000 | INFO | app.services.message_service | Сохранено новое деловое сообщение chat_id=5300762544 message_id=1001880 media=text
+2026-07-10T14:19:03+0000 | INFO | aiogram.event | Обновление id=745829409 обработано. Длительность 14 мс ботом id=1162707887
+2026-07-10T14:19:03+0000 | INFO | http | POST /webhook -> 200 (15.8ms)
+2026-07-10T14:19:03+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745829410
+2026-07-10T14:19:03+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=5300762544 message_id=1001881 media=text
+2026-07-10T14:19:03+0000 | INFO | aiogram.event | Обновление id=745829410 обработано. Длительность 12 мс ботом id=1162707887
+2026-07-10T14:19:03+0000 | INFO | http | POST /webhook -> 200 (13.4ms)
+2026-07-10T14:19:04+0000 | INFO | app.routers.webhook | Получено обновление Telegram update_id=745829411
+2026-07-10T14:19:04+0000 | INFO | app.services.message_service | Сохранено новое бизнес-сообщение chat_id=5300762544 message_id=1001882 media=text
+2026-07-10T14:19:04+0000 | INFO | aiogram.event | Обновление id=745829411 обработано. Длительность 18 мс ботом id=1162707887
+2026-07-10T14:19:04+0000 | INFO | http | POST /webhook -> 200 (21.4ms)

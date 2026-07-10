@@ -385,7 +385,23 @@ def _draw_donut(ax: plt.Axes, stats: InfoStats) -> None:
     ax.set_zorder(3)
     ax.axis("equal")
 
-    total = stats.incoming + stats.outgoing or 1
+    total = stats.incoming + stats.outgoing
+    fd2 = _font(400)
+
+    if total == 0:
+        # Empty state: grey ring + label
+        wedges, _ = ax.pie(
+            [1], colors=[C_BORDER], startangle=90,
+            wedgeprops=dict(width=0.52, edgecolor="white", linewidth=3),
+        )
+        ax.text(0, 0, "—", ha="center", va="center",
+                color=C_HINT, fontsize=28, fontweight=700,
+                fontfamily=_font(700)["fontfamily"])
+        ax.text(0, -0.22, "нет данных", ha="center", va="center",
+                color=C_HINT, fontsize=11, fontfamily=fd2["fontfamily"])
+        ax.set_xlim(-1.4, 1.4)
+        return
+
     sizes  = [max(0, stats.incoming), max(0, stats.outgoing)]
     colors = [C_BLUE, C_PRIMARY]
     labels = ["Входящие", "Исходящие"]

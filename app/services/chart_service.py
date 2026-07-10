@@ -124,8 +124,8 @@ def render_info_image(stats: InfoStats) -> io.BytesIO:
         (stats.outgoing, "Ваших сообщений",    C_BLUE),
         (stats.incoming, "Сообщений контакта", C_GREEN),
         (avg,            "В среднем в день",   C_AMBER),
-        (f"{media_pct}%","Медиа и файлы",      "#6366F1"),
-        (f"{audio_pct}%","Аудио и голосовые",  "#EC4899"),
+        (f"{stats.media_count} · {media_pct}%", "Медиа и файлы",     "#6366F1"),
+        (f"{stats.audio_count} · {audio_pct}%","Аудио и голосовые", "#EC4899"),
     ]
     for row in range(3):
         for col in range(2):
@@ -359,16 +359,19 @@ def _draw_stat_card(fig: plt.Figure,
             color=C_HINT, fontsize=11,
             fontfamily=fd400["fontfamily"], zorder=4)
 
-    # Value (center, large)
+    # Value (center, large) — shrink font for longer strings
     val_str = value if isinstance(value, str) else _fmt_value(value)
+    val_fs = 22 if len(val_str) > 7 else 32
     ax.text(w / 2, h / 2 + 8, val_str,
             ha="center", va="center",
-            color=color, fontsize=32, fontweight=700,
+            color=color, fontsize=val_fs, fontweight=700,
             fontfamily=fd700["fontfamily"], zorder=4)
 
     # Color bar at bottom — fill fraction based on value
-    if isinstance(value, str) and value.endswith("%"):
-        fill_frac = min(1.0, max(0.0, int(value[:-1]) / 100))
+    if isinstance(value, str) and "%" in value:
+        import re as _re
+        m = _re.search(r"(\d+)%", value)
+        fill_frac = min(1.0, max(0.0, int(m.group(1)) / 100)) if m else 0.0
     elif isinstance(value, (int, float)):
         fill_frac = min(1.0, value / max(1, value + 1))
     else:

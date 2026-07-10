@@ -131,6 +131,12 @@ def _download_sync(url: str, out_dir: str, progress_hook: Callable | None = None
         if not cookies_content:
             _tlog.warning("TikTok: TIKTOK_COOKIES env var is empty or not set")
         else:
+            # Railway (and many CI/CD platforms) stores multiline env vars with
+            # literal \n escape sequences instead of real newlines.  Normalise.
+            if "\n" not in cookies_content and "\\n" in cookies_content:
+                cookies_content = cookies_content.replace("\\n", "\n")
+                _tlog.info("TikTok: normalised literal \\\\n → newlines in cookie content")
+
             # Lenient validation: at least one non-comment data line with
             # 7 tab-separated fields (Netscape format).  One bad line in an
             # otherwise valid file shouldn't discard all cookies.

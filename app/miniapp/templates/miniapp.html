@@ -2351,14 +2351,22 @@
             method: "POST", headers: {"Content-Type":"application/json"},
             body: JSON.stringify({initData: currentInitData, chatId: selChatId, species: selSpecies, petName}),
           });
-          if (!res.ok) throw new Error((await res.json().catch(()=>({}))).detail || "error");
+          if (!res.ok) {
+            const detail = (await res.json().catch(()=>({}))).detail || "error";
+            const msg = {
+              partner_not_connected: "Этот собеседник ещё не подключил бота 🤖",
+              pet_exists:            "С этим собеседником уже есть живой питомец!",
+              invalid_species:       "Неверный вид питомца.",
+            }[detail] || "Ошибка: " + detail;
+            throw new Error(msg);
+          }
           if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
           overlay.remove();
           toastMessage("🥚 Питомец заведён! Корми его каждый день.");
           await _refreshPets();
         } catch(e) {
           confirmBtn.disabled = false; confirmBtn.textContent = "Завести питомца 🥚";
-          toastMessage("Ошибка: " + e.message);
+          toastMessage(e.message);
         }
       });
     }

@@ -195,6 +195,18 @@ class PetRepository:
             candidate_ids = [r[0] for r in activity_rows if r[0] not in alive_pet_chats]
             counts = {r[0]: r[1] for r in activity_rows}
 
+            # Keep only partners who have also connected the bot
+            if candidate_ids:
+                mutual_rows = (
+                    await self._session.execute(
+                        select(BusinessConnection.user_telegram_id).where(
+                            BusinessConnection.user_telegram_id.in_(candidate_ids)
+                        )
+                    )
+                ).all()
+                mutual_ids: set[int] = {r[0] for r in mutual_rows}
+                candidate_ids = [cid for cid in candidate_ids if cid in mutual_ids]
+
             if candidate_ids:
                 # Get display name from the most recent message sent BY the
                 # interlocutor (sender_telegram_id != owner) — works correctly
@@ -244,6 +256,17 @@ class PetRepository:
             raise ValueError("invalid_species")
 
         pet_name = pet_name.strip()[:30] or random.choice(PET_NAMES)
+
+        # Verify the chat partner has also connected the bot
+        partner_conn = (
+            await self._session.execute(
+                select(BusinessConnection.business_connection_id).where(
+                    BusinessConnection.user_telegram_id == chat_id
+                ).limit(1)
+            )
+        ).scalar_one_or_none()
+        if not partner_conn:
+            raise ValueError("partner_not_connected")
 
         # Check no alive pet for this chat already
         existing = (
@@ -296,7 +319,11 @@ class PetRepository:
             born_at=now,
         )
         self._session.add(pet)
-        await self._session.flush()
+        try:
+            await self._session.flush()
+        except IntegrityError:
+            await self._session.rollback()
+            raise ValueError("pet_exists")
 
         return {
             "id": pet.id,

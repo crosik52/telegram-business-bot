@@ -131,17 +131,19 @@ def _download_sync(url: str, out_dir: str, progress_hook: Callable | None = None
         if not cookies_content:
             _tlog.warning("TikTok: TIKTOK_COOKIES env var is empty or not set")
         else:
-            # Validate: ALL non-empty, non-comment lines must have exactly 7
-            # tab-separated fields (Netscape cookie file format).
+            # Lenient validation: at least one non-comment data line with
+            # 7 tab-separated fields (Netscape format).  One bad line in an
+            # otherwise valid file shouldn't discard all cookies.
             data_lines = [
                 line for line in cookies_content.splitlines()
                 if line.strip() and not line.strip().startswith("#")
             ]
-            bad_lines = [len(l.split("\t")) for l in data_lines if len(l.split("\t")) != 7]
-            is_netscape = bool(data_lines) and not bad_lines
+            good_lines = [l for l in data_lines if len(l.split("\t")) == 7]
+            bad_lines  = [l for l in data_lines if len(l.split("\t")) != 7]
+            is_netscape = bool(good_lines)
             _tlog.info(
-                "TikTok cookies: %d data lines, %d malformed — valid=%s",
-                len(data_lines), len(bad_lines), is_netscape,
+                "TikTok cookies: %d data lines (%d valid / %d malformed) — using=%s",
+                len(data_lines), len(good_lines), len(bad_lines), is_netscape,
             )
             if is_netscape:
                 cookie_path = os.path.join(out_dir, "_cookies.txt")
@@ -151,10 +153,18 @@ def _download_sync(url: str, out_dir: str, progress_hook: Callable | None = None
                 _tlog.info("TikTok: cookiefile set (%d bytes)", len(cookies_content))
             else:
                 _tlog.warning(
-                    "TikTok: cookies present but invalid Netscape format "
-                    "(malformed field counts: %s) — downloading without auth",
-                    [len(l.split("\t")) for l in data_lines if len(l.split("\t")) != 7][:5],
+                    "TikTok: TIKTOK_COOKIES has %d lines but none have 7 tab-separated "
+                    "fields — not a Netscape cookie file, skipping auth",
+                    len(data_lines),
                 )
+
+        # TikTok blocks yt-dlp without a browser-like User-Agent
+        ydl_opts.setdefault("http_headers", {})
+        ydl_opts["http_headers"]["User-Agent"] = (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/125.0.0.0 Safari/537.36"
+        )
 
     def _run_download(opts: dict) -> None:
         with yt_dlp.YoutubeDL(opts) as ydl:

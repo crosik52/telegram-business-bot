@@ -113,11 +113,21 @@ class MessageRepository:
         return message
 
     async def record_edit(
-        self, message: Message, *, new_text: str | None, new_caption: str | None, edited_at: dt.datetime
+        self,
+        message: Message,
+        *,
+        new_text: str | None,
+        new_caption: str | None,
+        edited_at: dt.datetime,
+        # Snapshot of media at the time of this edit. file_id is the
+        # Telegram-permanent key; we store it so the audit trail is complete
+        # and notifications can resend the file without downloading anything.
+        snapshot_file_id: str | None = None,
+        snapshot_media_type: str | None = None,
     ) -> MessageEditHistory:
         """Append an immutable edit-history row and update current fields.
 
-        The message's `original_text` / `original_caption` are left
+        The message's ``original_text`` / ``original_caption`` are left
         untouched — only the "current" fields move forward.
         """
 
@@ -125,6 +135,8 @@ class MessageRepository:
             message_id=message.id,
             text=new_text,
             caption=new_caption,
+            file_id=snapshot_file_id,
+            media_type=snapshot_media_type,
             edited_at=edited_at,
         )
         self._session.add(history_entry)

@@ -28,6 +28,8 @@ class EditOutcome:
     message: Message
     previous_text: str | None
     previous_caption: str | None
+    previous_file_id: str | None
+    previous_media_type: MediaType
     is_first_capture: bool
 
 
@@ -152,11 +154,15 @@ class MessageService:
                 message=existing,
                 previous_text=None,
                 previous_caption=None,
+                previous_file_id=None,
+                previous_media_type=MediaType.NONE,
                 is_first_capture=True,
             )
 
         previous_text = existing.text
         previous_caption = existing.caption
+        previous_file_id = existing.file_id
+        previous_media_type = existing.media_type
 
         edited_at = (
             dt.datetime.fromtimestamp(message.edit_date, tz=dt.UTC)
@@ -168,6 +174,8 @@ class MessageService:
             new_text=message.text,
             new_caption=message.caption,
             edited_at=edited_at,
+            snapshot_file_id=previous_file_id,
+            snapshot_media_type=previous_media_type.value if previous_media_type else None,
         )
         logger.info(
             "Recorded edit for chat_id=%s message_id=%s (edit #%s)",
@@ -179,6 +187,8 @@ class MessageService:
             message=existing,
             previous_text=previous_text,
             previous_caption=previous_caption,
+            previous_file_id=previous_file_id,
+            previous_media_type=previous_media_type,
             is_first_capture=False,
         )
 

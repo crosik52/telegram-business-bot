@@ -136,6 +136,11 @@ class MessageEditHistory(Base):
     )
     text: Mapped[str | None] = mapped_column(Text, nullable=True)
     caption: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Media snapshot — file_id is the permanent Telegram key for resending.
+    # Media type almost never changes in an edit (only captions do), but
+    # recording it here completes the audit trail.
+    file_id: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    media_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     edited_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )

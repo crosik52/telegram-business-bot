@@ -34,6 +34,7 @@ from sqlalchemy import select
 from app.database.session import session_scope
 from app.logging_config import get_logger
 from app.models.business_connection import BusinessConnection as BCModel
+from app.models.message import MediaType
 from app.services.message_service import MessageService
 
 logger = get_logger(__name__)
@@ -41,12 +42,82 @@ router = Router(name="business")
 
 _PREVIEW_LIMIT = 500
 
+# Human-readable labels for media types shown in notifications.
+_MEDIA_LABELS: dict[MediaType, str] = {
+    MediaType.PHOTO:      "фото",
+    MediaType.VIDEO:      "видео",
+    MediaType.VOICE:      "голосовое сообщение",
+    MediaType.VIDEO_NOTE: "видеосообщение (кружок)",
+    MediaType.AUDIO:      "аудио",
+    MediaType.DOCUMENT:   "документ",
+    MediaType.STICKER:    "стикер",
+    MediaType.ANIMATION:  "анимация (GIF)",
+    MediaType.CONTACT:    "контакт",
+    MediaType.LOCATION:   "геолокация",
+    MediaType.POLL:       "опрос",
+}
+
 
 def _preview(text: str | None) -> str:
     if not text:
-        return "<i>(нет текста / медиа)</i>"
+        return ""
     trimmed = text if len(text) <= _PREVIEW_LIMIT else text[:_PREVIEW_LIMIT] + "…"
     return html_escape(trimmed)
+
+
+def _media_label(media_type: MediaType) -> str:
+    return _MEDIA_LABELS.get(media_type, "медиа")
+
+
+async def _try_send_media(
+    bot: Bot,
+    chat_id: int,
+    media_type: MediaType,
+    file_id: str,
+    caption: str | None = None,
+) -> bool:
+    """Resend a Telegram media file to *chat_id* using its stored file_id.
+
+    Returns True on success, False if Telegram rejects the file_id (e.g. it
+    has expired or the file is no longer accessible). Callers should fall
+    back gracefully — the text notification has already been sent.
+    """
+    kw: dict = {"chat_id": chat_id}
+    if caption:
+        kw["caption"] = caption
+
+    # Telegram does not support captions for stickers or video notes.
+    kw_no_caption: dict = {"chat_id": chat_id}
+
+    try:
+        match media_type:
+            case MediaType.PHOTO:
+                await bot.send_photo(photo=file_id, **kw)
+            case MediaType.VIDEO:
+                await bot.send_video(video=file_id, **kw)
+            case MediaType.VOICE:
+                await bot.send_voice(voice=file_id, **kw)
+            case MediaType.VIDEO_NOTE:
+                await bot.send_video_note(video_note=file_id, **kw_no_caption)
+            case MediaType.AUDIO:
+                await bot.send_audio(audio=file_id, **kw)
+            case MediaType.DOCUMENT:
+                await bot.send_document(document=file_id, **kw)
+            case MediaType.STICKER:
+                await bot.send_sticker(sticker=file_id, **kw_no_caption)
+            case MediaType.ANIMATION:
+                await bot.send_animation(animation=file_id, **kw)
+            case _:
+                # CONTACT, LOCATION, POLL etc. have no file_id; skip silently.
+                return False
+        return True
+    except Exception:
+        logger.warning(
+            "Failed to resend media type=%s to chat_id=%s (file_id may have expired)",
+            media_type.value,
+            chat_id,
+        )
+        return False
 
 
 def _counterpart_label(chat, owner_telegram_id: int) -> str:
@@ -166,18 +237,49 @@ async def on_edited_business_message(message: Message, bot: Bot) -> None:
         return
 
     counterpart = _counterpart_label(message.chat, connection.user_telegram_id)
-    text = (
-        f"✏️ {counterpart} отредактировал(а) сообщение:\n\n"
-        f"🔍 <b>Прошлое значение:</b>\n«{_preview(outcome.previous_text or outcome.previous_caption)}»\n\n"
-        f"📝 <b>Новое значение:</b>\n«{_preview(message.text or message.caption)}»"
-    )
+    owner_id = connection.user_telegram_id
+
+    has_media = outcome.previous_file_id is not None
+    media_lbl = _media_label(outcome.previous_media_type) if has_media else None
+
+    # Build text part: show caption/text diff; mention media type if present.
+    prev_text_part = _preview(outcome.previous_text or outcome.previous_caption)
+    new_text_part  = _preview(message.text or message.caption)
+
+    if has_media and not prev_text_part and not new_text_part:
+        # Pure media edit with no captions — rare; just say what was touched.
+        notification = (
+            f"✏️ {counterpart} отредактировал(а) {media_lbl}.\n"
+            f"<i>(подпись не изменилась)</i>"
+        )
+    elif has_media:
+        notification = (
+            f"✏️ {counterpart} отредактировал(а) {media_lbl}:\n\n"
+            f"🔍 <b>Прошлая подпись:</b>\n«{prev_text_part or '—'}»\n\n"
+            f"📝 <b>Новая подпись:</b>\n«{new_text_part or '—'}»"
+        )
+    else:
+        notification = (
+            f"✏️ {counterpart} отредактировал(а) сообщение:\n\n"
+            f"🔍 <b>Прошлое значение:</b>\n«{prev_text_part or '—'}»\n\n"
+            f"📝 <b>Новое значение:</b>\n«{new_text_part or '—'}»"
+        )
 
     try:
-        await bot.send_message(chat_id=connection.user_telegram_id, text=text)
+        await bot.send_message(chat_id=owner_id, text=notification, parse_mode="HTML")
+        # If the edited message has media, resend the file so the owner
+        # can see what was changed (Telegram doesn't include it in edits).
+        if has_media and outcome.previous_file_id:
+            await _try_send_media(
+                bot,
+                owner_id,
+                outcome.previous_media_type,
+                outcome.previous_file_id,
+            )
     except Exception:
         logger.exception(
             "Failed to notify owner user_telegram_id=%s about edit",
-            connection.user_telegram_id,
+            owner_id,
         )
 
 
@@ -217,14 +319,43 @@ async def on_deleted_business_messages(deleted: BusinessMessagesDeleted, bot: Bo
                 continue
 
             counterpart = _counterpart_label(deleted.chat, connection.user_telegram_id)
-            text = (
-                f"🗑 {counterpart} удалил(а) сообщение:\n\n"
-                f"«{_preview(removed.text or removed.caption)}»"
-            )
+            owner_id = connection.user_telegram_id
+
+            has_media = removed.file_id is not None
+            media_lbl = _media_label(removed.media_type) if has_media else None
+            text_part  = _preview(removed.text or removed.caption)
+
+            if has_media and text_part:
+                notification = (
+                    f"🗑 {counterpart} удалил(а) {media_lbl}:\n\n"
+                    f"«{text_part}»"
+                )
+            elif has_media:
+                notification = f"🗑 {counterpart} удалил(а) {media_lbl}."
+            elif text_part:
+                notification = (
+                    f"🗑 {counterpart} удалил(а) сообщение:\n\n"
+                    f"«{text_part}»"
+                )
+            else:
+                # Edge case: we captured the message but have no content at all.
+                notification = f"🗑 {counterpart} удалил(а) сообщение."
+
             try:
-                await bot.send_message(chat_id=connection.user_telegram_id, text=text)
+                await bot.send_message(
+                    chat_id=owner_id, text=notification, parse_mode="HTML"
+                )
+                # Resend the actual media file so the owner sees what was deleted.
+                if has_media and removed.file_id:
+                    await _try_send_media(
+                        bot,
+                        owner_id,
+                        removed.media_type,
+                        removed.file_id,
+                        caption=text_part or None,
+                    )
             except Exception:
                 logger.exception(
                     "Failed to notify owner user_telegram_id=%s about deletion",
-                    connection.user_telegram_id,
+                    owner_id,
                 )

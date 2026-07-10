@@ -1,0 +1,50 @@
+{#
+  Reusable media-type macros.
+
+  All macros accept a media type string such as "photo", "voice", "none", etc.
+  For Message model objects use `message.media_type.value`; for
+  MessageEditHistory entries use `entry.media_type` (already a string or None).
+#}
+
+{%- macro icon(mt) -%}
+  {%- if mt == 'photo' -%}📷
+  {%- elif mt == 'video' -%}🎬
+  {%- elif mt == 'voice' -%}🎤
+  {%- elif mt == 'video_note' -%}⭕
+  {%- elif mt == 'audio' -%}🎵
+  {%- elif mt == 'document' -%}📎
+  {%- elif mt == 'sticker' -%}🎭
+  {%- elif mt == 'animation' -%}🎞
+  {%- elif mt == 'contact' -%}👤
+  {%- elif mt == 'location' -%}📍
+  {%- elif mt == 'poll' -%}📊
+  {%- endif -%}
+{%- endmacro -%}
+
+{%- macro label(mt) -%}
+  {%- if mt == 'photo' -%}Photo
+  {%- elif mt == 'video' -%}Video
+  {%- elif mt == 'voice' -%}Voice message
+  {%- elif mt == 'video_note' -%}Video note
+  {%- elif mt == 'audio' -%}Audio
+  {%- elif mt == 'document' -%}Document
+  {%- elif mt == 'sticker' -%}Sticker
+  {%- elif mt == 'animation' -%}Animation
+  {%- elif mt == 'contact' -%}Contact
+  {%- elif mt == 'location' -%}Location
+  {%- elif mt == 'poll' -%}Poll
+  {%- else -%}{{ mt | capitalize }}
+  {%- endif -%}
+{%- endmacro -%}
+
+{# Pill badge — use inline next to other content #}
+{%- macro badge(mt) -%}
+  {%- if mt and mt != 'none' -%}
+<span class="inline-flex items-center gap-1 text-xs rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 px-2 py-0.5">{{ icon(mt) }} {{ label(mt) }}</span>
+  {%- endif -%}
+{%- endmacro -%}
+
+{# Short string for message list preview rows #}
+{%- macro preview(mt) -%}
+  {%- if mt and mt != 'none' -%}{{ icon(mt) }} {{ label(mt) }}{%- endif -%}
+{%- endmacro -%}

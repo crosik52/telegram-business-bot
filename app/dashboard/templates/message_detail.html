@@ -1,47 +1,141 @@
 {% extends "base.html" %}
+{% from "partials/media_icon.html" import icon, label, badge, preview %}
 {% block title %}Message detail — Business Inbox{% endblock %}
 {% block content %}
 <a href="/messages" class="text-sm text-brand-600 dark:text-brand-400 hover:underline">&larr; Back to messages</a>
 <h1 class="text-2xl font-semibold mt-3 mb-6">Message detail</h1>
 
 <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 mb-6">
+  {# ── Status badges ── #}
   <div class="flex flex-wrap gap-2 mb-4">
-    {% if message.is_deleted %}<span class="text-xs rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 px-2 py-0.5">Deleted {{ message.deleted_at.strftime('%b %d, %Y %H:%M') if message.deleted_at }}</span>{% endif %}
-    {% if message.is_edited %}<span class="text-xs rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 px-2 py-0.5">Edited {{ message.edit_count }}x</span>{% endif %}
-    <span class="text-xs rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 px-2 py-0.5">{{ message.media_type.value }}</span>
+    {% if message.is_deleted %}
+      <span class="text-xs rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 px-2 py-0.5">
+        🗑 Deleted {{ message.deleted_at.strftime('%b %d, %Y %H:%M') if message.deleted_at }}
+      </span>
+      {% if message.file_id %}
+        <span class="text-xs rounded-full bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300 px-2 py-0.5"
+              title="The bot automatically resent this media to the owner when the message was deleted.">
+          📤 Media forwarded to owner
+        </span>
+      {% endif %}
+    {% endif %}
+    {% if message.is_edited %}
+      <span class="text-xs rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 px-2 py-0.5">
+        ✏️ Edited {{ message.edit_count }}x
+      </span>
+      {% if message.file_id %}
+        <span class="text-xs rounded-full bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300 px-2 py-0.5"
+              title="The bot automatically resent this media to the owner with each edit notification.">
+          📤 Media in edit notifications
+        </span>
+      {% endif %}
+    {% endif %}
+    {{ badge(message.media_type.value) }}
   </div>
 
+  {# ── Metadata grid ── #}
   <dl class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 text-sm mb-6">
-    <div><dt class="text-slate-500 dark:text-slate-400">Sender</dt><dd class="font-medium">{{ message.sender_first_name or '' }} {{ message.sender_last_name or '' }} (@{{ message.sender_username or 'n/a' }})</dd></div>
+    <div>
+      <dt class="text-slate-500 dark:text-slate-400">Sender</dt>
+      <dd class="font-medium">{{ message.sender_first_name or '' }} {{ message.sender_last_name or '' }}
+        {% if message.sender_username %}<span class="text-slate-400 font-normal">@{{ message.sender_username }}</span>{% endif %}
+      </dd>
+    </div>
     <div><dt class="text-slate-500 dark:text-slate-400">Chat ID</dt><dd class="font-medium">{{ message.chat_id }}</dd></div>
     <div><dt class="text-slate-500 dark:text-slate-400">Message ID</dt><dd class="font-medium">{{ message.message_id }}</dd></div>
     <div><dt class="text-slate-500 dark:text-slate-400">Sent at</dt><dd class="font-medium">{{ message.sent_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}</dd></div>
-    {% if message.reply_to_message_id %}<div><dt class="text-slate-500 dark:text-slate-400">Reply to</dt><dd class="font-medium">#{{ message.reply_to_message_id }}</dd></div>{% endif %}
-    {% if message.file_id %}<div><dt class="text-slate-500 dark:text-slate-400">File ID</dt><dd class="font-mono text-xs break-all">{{ message.file_id }}</dd></div>{% endif %}
+    {% if message.reply_to_message_id %}
+      <div><dt class="text-slate-500 dark:text-slate-400">Reply to</dt><dd class="font-medium">#{{ message.reply_to_message_id }}</dd></div>
+    {% endif %}
+    {% if message.file_id %}
+      <div class="md:col-span-2">
+        <dt class="text-slate-500 dark:text-slate-400 mb-0.5">File ID</dt>
+        <dd class="flex items-center gap-2">
+          <code class="font-mono text-xs break-all text-slate-700 dark:text-slate-300">{{ message.file_id }}</code>
+          <button onclick="copyText(this, '{{ message.file_id }}')"
+                  class="shrink-0 text-xs px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"
+                  title="Copy file_id to clipboard">Copy</button>
+        </dd>
+      </div>
+    {% endif %}
   </dl>
 
+  {# ── Current content ── #}
   <div class="border-t border-slate-100 dark:border-slate-800 pt-4">
-    <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Current content</p>
-    <p class="whitespace-pre-wrap text-sm">{{ message.text or message.caption or '(no text)' }}</p>
+    <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">Current content</p>
+    {% set mt = message.media_type.value %}
+    {% if mt and mt != 'none' %}
+      <p class="text-sm font-medium mb-1">{{ icon(mt) }} {{ label(mt) }}</p>
+    {% endif %}
+    {% if message.text or message.caption %}
+      <p class="whitespace-pre-wrap text-sm">{{ message.text or message.caption }}</p>
+    {% elif mt == 'none' %}
+      <p class="text-sm text-slate-400 italic">(no text)</p>
+    {% else %}
+      <p class="text-sm text-slate-400 italic">No caption.</p>
+    {% endif %}
   </div>
 
+  {# ── Original content (only when edited) ── #}
   {% if message.is_edited %}
   <div class="border-t border-slate-100 dark:border-slate-800 pt-4 mt-4">
-    <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Original content (preserved)</p>
-    <p class="whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-400">{{ message.original_text or message.original_caption or '(no text)' }}</p>
+    <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">Original content (preserved)</p>
+    {% if message.original_text or message.original_caption %}
+      <p class="whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-400">{{ message.original_text or message.original_caption }}</p>
+    {% else %}
+      <p class="text-sm text-slate-400 italic">No original text — message was media-only.</p>
+    {% endif %}
   </div>
   {% endif %}
 </div>
 
+{# ── Edit history ── #}
 {% if message.edit_history %}
-<h2 class="text-lg font-semibold mb-3">Edit history</h2>
+<h2 class="text-lg font-semibold mb-3">Edit history
+  <span class="text-base font-normal text-slate-400 ml-1">({{ message.edit_history | length }} revision{{ 's' if message.edit_history | length != 1 }})</span>
+</h2>
 <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
   {% for entry in message.edit_history %}
-  <div class="px-5 py-3">
-    <p class="text-xs text-slate-400 mb-1">Edited {{ entry.edited_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}</p>
-    <p class="whitespace-pre-wrap text-sm">{{ entry.text or entry.caption or '(no text)' }}</p>
+  <div class="px-5 py-4">
+    <div class="flex flex-wrap items-center gap-2 mb-2">
+      <span class="text-xs text-slate-400">✏️ {{ entry.edited_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}</span>
+      {# Media snapshot recorded alongside this edit #}
+      {% if entry.media_type and entry.media_type != 'none' %}
+        {{ badge(entry.media_type) }}
+      {% endif %}
+    </div>
+
+    {# Text / caption at this revision #}
+    {% if entry.text or entry.caption %}
+      <p class="whitespace-pre-wrap text-sm">{{ entry.text or entry.caption }}</p>
+    {% elif entry.media_type and entry.media_type != 'none' %}
+      <p class="text-sm text-slate-400 italic">No caption.</p>
+    {% else %}
+      <p class="text-sm text-slate-400 italic">(no text)</p>
+    {% endif %}
+
+    {# file_id snapshot — only shown when present (new column, older rows may be null) #}
+    {% if entry.file_id %}
+    <div class="mt-2 flex items-center gap-2">
+      <code class="font-mono text-xs text-slate-400 truncate max-w-xs" title="{{ entry.file_id }}">{{ entry.file_id[:48] }}…</code>
+      <button onclick="copyText(this, '{{ entry.file_id }}')"
+              class="shrink-0 text-xs px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"
+              title="Copy file_id">Copy</button>
+    </div>
+    {% endif %}
   </div>
   {% endfor %}
 </div>
 {% endif %}
+
+<script>
+function copyText(btn, text) {
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    btn.classList.add('text-green-600', 'border-green-400');
+    setTimeout(() => { btn.textContent = orig; btn.classList.remove('text-green-600', 'border-green-400'); }, 1500);
+  });
+}
+</script>
 {% endblock %}

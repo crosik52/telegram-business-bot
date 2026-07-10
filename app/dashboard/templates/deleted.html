@@ -1,18 +1,51 @@
 {% extends "base.html" %}
 {% from "partials/pagination.html" import render as render_pagination %}
+{% from "partials/media_icon.html" import icon, label, badge, preview %}
 {% block title %}Deleted messages — Business Inbox{% endblock %}
 {% block content %}
-<h1 class="text-2xl font-semibold mb-6">Deleted messages</h1>
-<p class="text-sm text-slate-500 dark:text-slate-400 mb-6">Content is preserved exactly as it was before deletion. Nothing is ever permanently removed.</p>
+<h1 class="text-2xl font-semibold mb-2">Deleted messages</h1>
+<p class="text-sm text-slate-500 dark:text-slate-400 mb-2">
+  Content is preserved exactly as it was before deletion. Nothing is ever permanently removed.
+</p>
+<p class="text-sm text-sky-600 dark:text-sky-400 mb-6">
+  📤 Media files (voice, photo, video, etc.) are automatically forwarded to the owner by the bot at the moment of deletion.
+</p>
+
 <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
   {% for message in page.items %}
-  <a href="/messages/{{ message.id }}" class="flex items-center justify-between px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
-    <div class="min-w-0">
-      <p class="text-sm font-medium truncate">{{ message.sender_first_name or message.sender_username or 'Unknown' }}
-        <span class="ml-2 text-xs rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 px-2 py-0.5">deleted {{ message.deleted_at.strftime('%b %d, %H:%M') if message.deleted_at }}</span>
-      </p>
-      <p class="text-sm text-slate-500 dark:text-slate-400 truncate">{{ message.text or message.caption or ('[' + message.media_type.value + ']' if message.media_type.value != 'none' else '') }}</p>
+  <a href="/messages/{{ message.id }}"
+     class="flex items-center justify-between px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
+    <div class="min-w-0 flex items-start gap-3">
+      {# Media type icon — prominent for media-only messages #}
+      {% set mt = message.media_type.value %}
+      {% if mt and mt != 'none' %}
+        <span class="text-lg shrink-0 leading-none mt-0.5" title="{{ label(mt) }}">{{ icon(mt) }}</span>
+      {% else %}
+        <span class="text-lg shrink-0 leading-none mt-0.5 text-slate-300 dark:text-slate-600">💬</span>
+      {% endif %}
+
+      <div class="min-w-0">
+        <p class="text-sm font-medium truncate">
+          {{ message.sender_first_name or message.sender_username or 'Unknown' }}
+          <span class="ml-2 text-xs rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 px-2 py-0.5">
+            deleted {{ message.deleted_at.strftime('%b %d, %H:%M') if message.deleted_at }}
+          </span>
+          {% if message.is_edited %}
+            <span class="ml-1 text-xs rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 px-2 py-0.5">✏️ was edited</span>
+          {% endif %}
+        </p>
+        <p class="text-sm text-slate-500 dark:text-slate-400 truncate">
+          {%- if message.text or message.caption -%}
+            {{ message.text or message.caption }}
+          {%- elif mt and mt != 'none' -%}
+            <span class="italic">{{ label(mt) }} — no caption</span>
+          {%- else -%}
+            <span class="italic text-slate-400">no content</span>
+          {%- endif -%}
+        </p>
+      </div>
     </div>
+
     <span class="text-xs text-slate-400 shrink-0 ml-4">{{ message.sent_at.strftime('%b %d, %H:%M') }}</span>
   </a>
   {% else %}

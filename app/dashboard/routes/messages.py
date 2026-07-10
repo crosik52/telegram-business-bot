@@ -44,6 +44,7 @@ def _build_filters(request: Request) -> MessageFilters:
         date_from=date_from,
         date_to=date_to,
         only_edited=params.get("edited") == "1",
+        only_deleted=params.get("deleted") == "1",
         only_media=params.get("media") == "1",
         only_text=params.get("text_only") == "1",
     )

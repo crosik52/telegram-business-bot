@@ -127,6 +127,10 @@ async def _cmd_info(
     now = dt.datetime.now(dt.UTC)
 
     # --- Aggregate counts in one query ---
+    _MEDIA_TYPES = ("photo", "video", "document", "sticker", "animation",
+                    "video_note", "contact", "location", "poll", "other")
+    _AUDIO_TYPES = ("voice", "audio")
+
     agg = (
         await session.execute(
             select(
@@ -135,17 +139,21 @@ async def _cmd_info(
                 func.sum(case((Message.is_edited.is_(True), 1), else_=0)).label("edited"),
                 func.sum(case((Message.sender_telegram_id != owner_id, 1), else_=0)).label("incoming"),
                 func.sum(case((Message.sender_telegram_id == owner_id, 1), else_=0)).label("outgoing"),
+                func.sum(case((Message.media_type.in_(_MEDIA_TYPES), 1), else_=0)).label("media_count"),
+                func.sum(case((Message.media_type.in_(_AUDIO_TYPES), 1), else_=0)).label("audio_count"),
                 func.min(Message.sent_at).label("first_seen"),
                 func.max(Message.sent_at).label("last_seen"),
             ).select_from(Message).where(*base)
         )
     ).one()
 
-    total    = agg.total    or 0
-    deleted  = agg.deleted  or 0
-    edited   = agg.edited   or 0
-    incoming = agg.incoming or 0
-    outgoing = agg.outgoing or 0
+    total       = agg.total       or 0
+    deleted     = agg.deleted     or 0
+    edited      = agg.edited      or 0
+    incoming    = agg.incoming    or 0
+    outgoing    = agg.outgoing    or 0
+    media_count = agg.media_count or 0
+    audio_count = agg.audio_count or 0
 
     # --- Daily breakdown (last 30 days, non-deleted) ---
     thirty_days_ago = now - dt.timedelta(days=30)
@@ -228,6 +236,8 @@ async def _cmd_info(
         outgoing=outgoing,
         deleted=deleted,
         edited=edited,
+        media_count=media_count,
+        audio_count=audio_count,
         first_seen=agg.first_seen,
         last_seen=agg.last_seen,
         note_count=note_count,

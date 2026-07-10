@@ -75,11 +75,13 @@ PAD_TOP = 52        # top page padding
 
 class InfoStats(NamedTuple):
     contact_name: str
-    total:    int
-    incoming: int
-    outgoing: int
-    deleted:  int
-    edited:   int
+    total:       int
+    incoming:    int
+    outgoing:    int
+    deleted:     int
+    edited:      int
+    media_count: int
+    audio_count: int
     first_seen:  dt.datetime | None
     last_seen:   dt.datetime | None
     note_count:  int
@@ -98,50 +100,55 @@ def render_info_image(stats: InfoStats) -> io.BytesIO:
 
     # ── Layout constants (px from top-left) ──────────────────────────────────
     CW = W_PX - PAD_X * 2   # card width = 1008
-    GAP_CARD  = 24
-    GAP_STATS = 16
-    STAT_W = (CW - GAP_STATS) // 2   # 496
-    STAT_H = 185
+    GAP_CARD  = 20
+    GAP_STATS = 14
+    STAT_W = (CW - GAP_STATS) // 2   # 497
+    STAT_H = 162
     R = 0.010   # card corner rounding in figure-fraction units
 
     y = PAD_TOP
 
     # 1. Header card
-    HDR_H = 290
+    HDR_H = 272
     _card(fig, PAD_X, y, CW, HDR_H, R)
     _draw_header(fig, stats, PAD_X, y, CW, HDR_H)
     y += HDR_H + GAP_CARD
 
-    # 2. Stat grid (2 × 2)
+    # 2. Stat grid (3 × 2)
     avg = _avg_per_day(stats)
+    non_del = max(stats.total - stats.deleted, 0)
+    media_pct = round(stats.media_count / non_del * 100) if non_del else 0
+    audio_pct = round(stats.audio_count / non_del * 100) if non_del else 0
     kpis = [
         (stats.total,    "Всего сообщений",    C_PRIMARY),
         (stats.outgoing, "Ваших сообщений",    C_BLUE),
         (stats.incoming, "Сообщений контакта", C_GREEN),
         (avg,            "В среднем в день",   C_AMBER),
+        (f"{media_pct}%","Медиа и файлы",      "#6366F1"),
+        (f"{audio_pct}%","Аудио и голосовые",  "#EC4899"),
     ]
-    for row in range(2):
+    for row in range(3):
         for col in range(2):
             sx = PAD_X + col * (STAT_W + GAP_STATS)
             sy = y + row * (STAT_H + GAP_STATS)
             val, lbl, clr = kpis[row * 2 + col]
             _card(fig, sx, sy, STAT_W, STAT_H, R)
             _draw_stat_card(fig, sx, sy, STAT_W, STAT_H, val, lbl, clr)
-    y += STAT_H * 2 + GAP_STATS + GAP_CARD
+    y += STAT_H * 3 + GAP_STATS * 2 + GAP_CARD
 
     # 3. Donut card
-    DONUT_H = 370
+    DONUT_H = 340
     _card(fig, PAD_X, y, CW, DONUT_H, R)
-    _section_title(fig, PAD_X + 28, y + 28, "Распределение сообщений")
-    ax_d = _add_axes(fig, PAD_X + 32, y + 56, CW - 64, DONUT_H - 70)
+    _section_title(fig, PAD_X + 28, y + 26, "Распределение сообщений")
+    ax_d = _add_axes(fig, PAD_X + 32, y + 52, CW - 64, DONUT_H - 64)
     _draw_donut(ax_d, stats)
     y += DONUT_H + GAP_CARD
 
     # 4. Bar chart card
-    BAR_H = H_PX - y - PAD_TOP - 44   # fill remaining space
+    BAR_H = H_PX - y - PAD_TOP - 40   # fill remaining space
     _card(fig, PAD_X, y, CW, BAR_H, R)
-    _section_title(fig, PAD_X + 28, y + 28, "Активность за 30 дней")
-    ax_b = _add_axes(fig, PAD_X + 32, y + 64, CW - 64, BAR_H - 90)
+    _section_title(fig, PAD_X + 28, y + 26, "Активность за 30 дней")
+    ax_b = _add_axes(fig, PAD_X + 32, y + 60, CW - 64, BAR_H - 84)
     _draw_bars(ax_b, stats)
     y += BAR_H + GAP_CARD
 
@@ -322,7 +329,7 @@ def _draw_header(fig: plt.Figure, stats: InfoStats,
 
 def _draw_stat_card(fig: plt.Figure,
                     x: float, y_top: float, w: float, h: float,
-                    value: float | int, label: str, color: str) -> None:
+                    value: float | int | str, label: str, color: str) -> None:
     ax = _add_axes(fig, x, y_top, w, h)
     ax.set_xlim(0, w)
     ax.set_ylim(0, h)
@@ -353,13 +360,19 @@ def _draw_stat_card(fig: plt.Figure,
             fontfamily=fd400["fontfamily"], zorder=4)
 
     # Value (center, large)
-    val_str = _fmt_value(value)
+    val_str = value if isinstance(value, str) else _fmt_value(value)
     ax.text(w / 2, h / 2 + 8, val_str,
             ha="center", va="center",
             color=color, fontsize=32, fontweight=700,
             fontfamily=fd700["fontfamily"], zorder=4)
 
-    # Color bar at bottom
+    # Color bar at bottom — fill fraction based on value
+    if isinstance(value, str) and value.endswith("%"):
+        fill_frac = min(1.0, max(0.0, int(value[:-1]) / 100))
+    elif isinstance(value, (int, float)):
+        fill_frac = min(1.0, value / max(1, value + 1))
+    else:
+        fill_frac = 0.5
     bar = FancyBboxPatch(
         (24, 18), w - 48, 6,
         boxstyle="round,pad=0,rounding_size=3",
@@ -368,7 +381,7 @@ def _draw_stat_card(fig: plt.Figure,
         edgecolor="none", zorder=4,
     )
     ax.add_patch(bar)
-    filled_w = max(8, (w - 48) * min(1.0, value / max(1, value + 1)))
+    filled_w = max(8, (w - 48) * fill_frac)
     bar2 = FancyBboxPatch(
         (24, 18), filled_w, 6,
         boxstyle="round,pad=0,rounding_size=3",

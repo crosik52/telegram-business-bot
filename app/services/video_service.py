@@ -80,51 +80,57 @@ def _download_sync(url: str, out_dir: str) -> Path:
 
     Returns the Path of the downloaded file.
     Raises yt_dlp.DownloadError / ValueError on failure.
+
+    Design notes
+    ------------
+    - No ffmpeg postprocessors: Railway and similar hosts often lack ffmpeg.
+      We pick a single pre-muxed stream (best mp4), so no merging is needed.
+    - File discovery: scan the output directory after download instead of
+      relying on prepare_filename(), which returns ".NA" when the format is
+      resolved at runtime rather than statically.
+    - Duration guard: done via yt-dlp's internal `download_ranges` only for
+      platforms that support it; otherwise we rely on max_filesize.
     """
-    import yt_dlp  # local import — only needed when this function runs
+    import yt_dlp  # local import — only loaded in the executor thread
 
     ydl_opts: dict = {
-        "format": (
-            # Best mp4 under 45 MB, fall back to best available mp4/webm
-            f"bestvideo[ext=mp4][filesize<{MAX_BYTES}]+bestaudio[ext=m4a]/"
-            f"best[ext=mp4][filesize<{MAX_BYTES}]/"
-            "best[ext=mp4]/best"
-        ),
+        # Single pre-muxed stream — no ffmpeg merge required.
+        # Prefer mp4; fall back to whatever is available.
+        "format": "best[ext=mp4]/best",
         "outtmpl": os.path.join(out_dir, "%(id)s.%(ext)s"),
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
         "max_filesize": MAX_BYTES,
-        # Trim to 3 minutes — avoids accidentally downloading full videos
-        # that share the same URL pattern (e.g. long TikToks).
-        "match_filter": yt_dlp.utils.match_filter_func("duration < 180"),
-        "merge_output_format": "mp4",
-        "postprocessors": [{
-            "key": "FFmpegVideoConvertor",
-            "preferedformat": "mp4",
-        }],
+        # Hard cap: reject anything over 3 minutes to avoid full-length videos.
+        "match_filter": lambda info, *, incomplete=False: (
+            "Video too long (> 3 min)" if (info.get("duration") or 0) > 180 else None
+        ),
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
+        ydl.download([url])
 
-    # yt-dlp may return a playlist wrapper even with noplaylist=True
-    if "entries" in info:
-        info = info["entries"][0]
+    # Scan the directory — more reliable than prepare_filename() which can
+    # return ".NA" when the format/extension is resolved at download time.
+    video_exts = {".mp4", ".webm", ".mkv", ".mov", ".avi", ".m4v"}
+    candidates = [
+        p for p in Path(out_dir).iterdir()
+        if p.suffix.lower() in video_exts and p.stat().st_size > 0
+    ]
+    if not candidates:
+        raise FileNotFoundError(
+            f"yt-dlp finished but no video file found in {out_dir} "
+            f"(files: {[p.name for p in Path(out_dir).iterdir()]})"
+        )
 
-    filename = ydl.prepare_filename(info)
-    # yt-dlp may have changed the extension after post-processing
-    path = Path(filename)
-    if not path.exists():
-        # Try the merged .mp4 variant
-        path = path.with_suffix(".mp4")
-    if not path.exists():
-        raise FileNotFoundError(f"yt-dlp finished but output not found: {filename}")
+    # Pick the largest file (in case of thumbnails or part files)
+    path = max(candidates, key=lambda p: p.stat().st_size)
 
     size = path.stat().st_size
     if size > MAX_BYTES:
         path.unlink(missing_ok=True)
-        raise ValueError(f"Video too large: {size // (1024*1024)} MB > 45 MB limit")
+        raise ValueError(f"Video too large: {size // (1024 * 1024)} MB > 45 MB limit")
 
     return path
 

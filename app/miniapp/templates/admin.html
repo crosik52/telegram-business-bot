@@ -262,6 +262,46 @@
     font-size: 10.5px; color: var(--hint); margin-top: 6px;
   }
 
+  /* ── Analytics Variant B ── */
+  .analytics-pills { display: flex; gap: 10px; margin-bottom: 14px; }
+  .analytics-pill {
+    flex: 1; background: var(--secondary-bg);
+    border-radius: var(--card-radius);
+    padding: 12px 10px; box-shadow: var(--shadow);
+    display: flex; align-items: center; gap: 9px;
+    animation: riseIn 0.3s ease backwards;
+  }
+  .ap-icon { font-size: 20px; flex-shrink: 0; }
+  .ap-val { font-size: 22px; font-weight: 900; letter-spacing: -0.5px; line-height: 1.1; }
+  .ap-lbl { font-size: 10px; color: var(--hint); margin-top: 1px; }
+  .ap-val.c-link   { color: var(--link); }
+  .ap-val.c-green  { color: var(--green); }
+  .ap-val.c-danger { color: var(--danger); }
+  .analytics-chart-card {
+    background: var(--secondary-bg);
+    border-radius: var(--card-radius);
+    padding: 14px 14px 10px; box-shadow: var(--shadow); margin-bottom: 12px;
+  }
+  .chart-legend { display: flex; gap: 14px; margin-top: 6px; justify-content: center; }
+  .chart-legend-item { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--hint); }
+  .chart-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .analytics-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .integrity-card {
+    background: var(--secondary-bg); border-radius: var(--card-radius);
+    padding: 14px 10px; box-shadow: var(--shadow);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .integrity-title { font-size: 12px; font-weight: 700; margin-bottom: 6px; }
+  .integrity-score { font-size: 26px; font-weight: 900; letter-spacing: -0.5px; }
+  .integrity-sub   { font-size: 10px; color: var(--hint); margin-top: 1px; }
+  .media-bk-card { background: var(--secondary-bg); border-radius: var(--card-radius); padding: 14px; box-shadow: var(--shadow); }
+  .media-bk-title { font-size: 12px; font-weight: 700; margin-bottom: 10px; }
+  .media-bk-row { display: flex; align-items: center; gap: 6px; font-size: 11.5px; margin-bottom: 7px; }
+  .media-bk-row:last-child { margin-bottom: 0; }
+  .media-bk-bar-track { flex: 1; height: 5px; border-radius: 3px; background: rgba(120,120,128,0.12); overflow: hidden; }
+  .media-bk-bar-fill  { height: 100%; border-radius: 3px; background: var(--link); }
+  .media-bk-count { font-weight: 700; min-width: 24px; text-align: right; }
+
   /* ── Broadcast ── */
   .broadcast-card {
     background: var(--secondary-bg);
@@ -760,75 +800,134 @@
       });
     }
 
-    /* ── Growth ── */
+    /* ── Growth / Analytics ── */
     async function loadGrowth() {
       const content  = document.getElementById("content");
       const subtitle = document.getElementById("subtitle");
-      subtitle.textContent = "Динамика за 30 дней";
+      subtitle.textContent = "Аналитика и динамика";
       content.innerHTML = `<div class="empty skeleton"><span class="big-emoji">📈</span>Загружаем аналитику…</div>`;
       try {
-        const res = await fetch("/app/api/admin/growth", {
-          method: "POST", headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({initData})
-        });
-        if (!res.ok) throw new Error();
-        growthData = await res.json();
+        const fetchOpts = { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({initData}) };
+        const [growthRes, dashRes] = await Promise.all([
+          fetch("/app/api/admin/growth",          fetchOpts),
+          fetch("/app/api/admin/dashboard_stats", fetchOpts),
+        ]);
+        if (!growthRes.ok || !dashRes.ok) throw new Error();
+        growthData = await growthRes.json();
+        const dashData = await dashRes.json();
         if (currentTab !== "growth") return;
-        content.innerHTML = renderGrowth(growthData);
+        content.innerHTML = renderGrowth(growthData, dashData);
       } catch {
         if (currentTab !== "growth") return;
         content.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить аналитику.</div>`;
       }
     }
 
-    function renderGrowth(data) {
-      // data.connections_by_day / data.messages_by_day are {date: count} dicts
+    // Variant B: hero pills + SVG activity chart + integrity gauge + media breakdown
+    function renderGrowth(data, dashData) {
+      dashData = dashData || {};
+
+      // ── Hero pills ──
+      const totalMsgsAll  = overview ? overview.users.reduce((s,u) => s + u.total_messages, 0) : 0;
+      const totalDelAll   = overview ? overview.users.reduce((s,u) => s + u.deleted_messages, 0) : 0;
+      const delRate = totalMsgsAll ? Math.round(totalDelAll / totalMsgsAll * 100) : 0;
+      const pills = `
+        <div class="analytics-pills">
+          <div class="analytics-pill" style="animation-delay:.02s">
+            <span class="ap-icon">👥</span>
+            <div><div class="ap-val c-link">${overview ? overview.total_users : "—"}</div><div class="ap-lbl">Пользователей</div></div>
+          </div>
+          <div class="analytics-pill" style="animation-delay:.06s">
+            <span class="ap-icon">💬</span>
+            <div><div class="ap-val c-green">${totalMsgsAll.toLocaleString("ru-RU")}</div><div class="ap-lbl">Сообщений всего</div></div>
+          </div>
+          <div class="analytics-pill" style="animation-delay:.10s">
+            <span class="ap-icon">🗑</span>
+            <div><div class="ap-val c-danger">${delRate}%</div><div class="ap-lbl">Удалено</div></div>
+          </div>
+        </div>`;
+
+      // ── SVG activity chart ──
       const connMap = data.connections_by_day || {};
       const msgMap  = data.messages_by_day   || {};
-
-      // Build last 30 days series
-      const days = 30;
+      const DAYS = 30;
       const today = new Date(); today.setHours(0,0,0,0);
       const dates = [];
-      for (let i = days - 1; i >= 0; i--) {
+      for (let i = DAYS - 1; i >= 0; i--) {
         const d = new Date(today); d.setDate(d.getDate() - i);
         dates.push(d.toISOString().slice(0,10));
       }
-
-      const connSeries = dates.map(d => ({ date: d, count: connMap[d] || 0 }));
-      const msgSeries  = dates.map(d => ({ date: d, count: msgMap[d]  || 0 }));
-
-      const totalNew  = connSeries.reduce((s, d) => s + d.count, 0);
-      const totalMsgs = msgSeries.reduce((s, d) => s + d.count, 0);
-
-      function bars(series, type) {
-        const max = Math.max(...series.map(d => d.count), 1);
-        return series.map(d => {
-          const pct = Math.max(2, Math.round((d.count / max) * 100));
-          return `<div class="growth-bar-col"><div class="growth-bar type-${type}" style="height:${pct}%" title="${d.date}: ${d.count}"></div></div>`;
-        }).join("");
-      }
-
+      const msgSeries  = dates.map(d => msgMap[d]  || 0);
+      const connSeries = dates.map(d => connMap[d] || 0);
+      const maxMsg  = Math.max(...msgSeries,  1);
+      const maxConn = Math.max(...connSeries, 1);
+      const svgW = 300, svgH = 90;
+      const slotW = svgW / DAYS;           // each slot = bar + implied gap, exact integer division
+      const barW  = Math.max(1, slotW - 1.5);
+      const msgBars = msgSeries.map((v, i) => {
+        if (!v) return "";
+        const h = Math.max(2, Math.round(v / maxMsg * svgH));
+        const x = (i * slotW).toFixed(2);
+        return `<rect x="${x}" y="${svgH - h}" width="${barW.toFixed(2)}" height="${h}" rx="2" fill="var(--link)" opacity="0.8"><title>${dates[i]}: ${v} сообщ.</title></rect>`;
+      }).join("");
+      const connBars = connSeries.map((v, i) => {
+        if (!v) return "";
+        const h = Math.max(2, Math.round(v / maxConn * 24));
+        const x = (i * slotW).toFixed(2);
+        return `<rect x="${x}" y="${svgH - h}" width="${barW.toFixed(2)}" height="${h}" rx="2" fill="var(--purple)" opacity="0.9"><title>${dates[i]}: ${v} подкл.</title></rect>`;
+      }).join("");
       const firstDate = dates[0]     ? new Date(dates[0]).toLocaleDateString("ru-RU",{day:"numeric",month:"short"}) : "";
       const lastDate  = dates.at(-1) ? new Date(dates.at(-1)).toLocaleDateString("ru-RU",{day:"numeric",month:"short"}) : "";
+      const chart = `
+        <div class="analytics-chart-card">
+          <div class="section-title" style="margin-bottom:10px">📈 Активность за 30 дней</div>
+          <svg viewBox="0 0 ${svgW} ${svgH}" style="width:100%;height:auto;display:block;overflow:visible">${msgBars}${connBars}</svg>
+          <div class="growth-legend" style="margin-top:4px"><span>${firstDate}</span><span>${lastDate}</span></div>
+          <div class="chart-legend">
+            <div class="chart-legend-item"><div class="chart-legend-dot" style="background:var(--link)"></div>Сообщения</div>
+            <div class="chart-legend-item"><div class="chart-legend-dot" style="background:var(--purple)"></div>Подключения</div>
+          </div>
+        </div>`;
 
-      return `
-        <div class="cards cols-3">
-          <div class="card c-users"><span class="c-icon">👤</span><div class="c-val">${totalNew}</div><div class="c-lbl">Новых (30 дн)</div></div>
-          <div class="card c-msgs"><span class="c-icon">💬</span><div class="c-val">${totalMsgs}</div><div class="c-lbl">Сообщений (30 дн)</div></div>
-          <div class="card c-active"><span class="c-icon">👥</span><div class="c-val">${overview ? overview.total_users : "—"}</div><div class="c-lbl">Всего польз.</div></div>
-        </div>
-        <div class="growth-card">
-          <div class="section-title">👤 Новые подключения <span class="sub">по дням</span></div>
-          <div class="growth-bars">${bars(connSeries, "conn")}</div>
-          <div class="growth-legend"><span>${firstDate}</span><span>${lastDate}</span></div>
-        </div>
-        <div class="growth-card">
-          <div class="section-title">💬 Сообщений <span class="sub">по дням</span></div>
-          <div class="growth-bars">${bars(msgSeries, "msg")}</div>
-          <div class="growth-legend"><span>${firstDate}</span><span>${lastDate}</span></div>
-        </div>
-      `;
+      // ── Integrity gauge ──
+      const integrity = Math.max(0, Math.min(100, 100 - delRate * 3));
+      const iColor = integrity > 70 ? "var(--green)" : integrity > 40 ? "var(--orange)" : "var(--danger)";
+      const arcLen = 157.08;
+      const filled = (integrity / 100 * arcLen).toFixed(1);
+      const gauge = `
+        <div class="integrity-card">
+          <div class="integrity-title">🛡 Целостность</div>
+          <svg viewBox="0 0 120 65" style="width:110px;height:60px">
+            <path d="M10,60 A50,50 0 0,1 110,60" fill="none" stroke="rgba(120,120,128,0.15)" stroke-width="12" stroke-linecap="round"/>
+            <path d="M10,60 A50,50 0 0,1 110,60" fill="none" stroke="${iColor}" stroke-width="12" stroke-linecap="round"
+              stroke-dasharray="${filled} ${arcLen}" style="transition:stroke-dasharray 1s ease"/>
+          </svg>
+          <div class="integrity-score" style="color:${iColor}">${integrity}</div>
+          <div class="integrity-sub">из 100</div>
+        </div>`;
+
+      // ── Media breakdown ──
+      const ICONS  = {photo:"🖼",voice:"🎙",video:"🎬",document:"📄",sticker:"🎯",audio:"🎵",animation:"🎞",video_note:"⭕"};
+      const LABELS = {photo:"Фото",voice:"Голос",video:"Видео",document:"Файлы",sticker:"Стикеры",audio:"Аудио",animation:"GIF",video_note:"Кружки"};
+      let mediaBkHtml = "";
+      const bk = dashData.media_breakdown;
+      if (bk && bk.length) {
+        const maxC = Math.max(...bk.map(r => r.count), 1);
+        mediaBkHtml = bk.sort((a,b) => b.count - a.count).slice(0,6).map(r => {
+          const pct = Math.round(r.count / maxC * 100);
+          return `<div class="media-bk-row">
+            <span>${ICONS[r.media_type] || "📁"}</span>
+            <span style="color:var(--hint);min-width:46px">${LABELS[r.media_type] || r.media_type}</span>
+            <div class="media-bk-bar-track"><div class="media-bk-bar-fill" style="width:${pct}%"></div></div>
+            <span class="media-bk-count">${r.count}</span>
+          </div>`;
+        }).join("");
+      } else {
+        mediaBkHtml = `<div style="color:var(--hint);font-size:12px;text-align:center;padding:12px 0">Нет медиа</div>`;
+      }
+      const mediaCard = `<div class="media-bk-card"><div class="media-bk-title">📎 Медиа</div>${mediaBkHtml}</div>`;
+
+      return pills + chart + `<div class="analytics-bottom">${gauge}${mediaCard}</div>`;
     }
 
     /* ── Broadcast ── */

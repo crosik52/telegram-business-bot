@@ -136,6 +136,49 @@
   .card:nth-child(3){animation-delay:0.10s} .card:nth-child(4){animation-delay:0.14s}
   .card:nth-child(5){animation-delay:0.18s} .card:nth-child(6){animation-delay:0.22s}
 
+  /* ── Card % badge ── */
+  .card .card-pct {
+    position: absolute; top: 11px; right: 11px;
+    font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 8px;
+  }
+  .card.accent-edited .card-pct  { background: rgba(255,159,10,0.15); color: var(--orange); }
+  .card.accent-deleted .card-pct { background: rgba(255,69,58,0.15);  color: var(--red); }
+
+  /* ── Health section ── */
+  .health-card {
+    background: var(--secondary-bg);
+    border-radius: var(--card-radius);
+    padding: 16px 15px;
+    box-shadow: var(--shadow);
+    margin-bottom: 16px;
+    animation: riseIn 0.35s 0.20s ease backwards;
+  }
+  .health-row {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 9px;
+  }
+  .health-row:last-child { margin-bottom: 0; }
+  .health-lbl { font-size: 12px; color: var(--hint); width: 58px; flex-shrink: 0; }
+  .health-bar-track {
+    flex: 1; height: 7px; border-radius: 4px;
+    background: rgba(120,120,128,0.12); overflow: hidden;
+  }
+  .health-bar-fill { height: 100%; border-radius: 4px; transition: width 0.7s ease; }
+  .health-val { font-size: 12px; font-weight: 700; width: 32px; text-align: right; flex-shrink: 0; }
+  .health-pct { font-size: 11px; color: var(--hint); width: 28px; text-align: right; flex-shrink: 0; }
+
+  /* ── Content split donut ── */
+  .split-row {
+    display: flex; align-items: center; gap: 14px;
+    margin-top: 14px; padding-top: 13px;
+    border-top: 1px solid rgba(120,120,128,0.1);
+  }
+  .split-legend { display: flex; flex-direction: column; gap: 7px; flex: 1; }
+  .split-item { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+  .split-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .split-name { flex: 1; color: var(--hint); }
+  .split-count { font-weight: 700; }
+  .split-pct { color: var(--hint); min-width: 28px; text-align: right; font-size: 11.5px; }
+
   /* ── Section title ── */
   .section-title {
     font-size: 15px; font-weight: 700;
@@ -953,19 +996,76 @@
       return many;
     }
 
-    // ── Stats Cards ──
+    // ── Stats Cards (Variant A: KPI + Health bars + Content split) ──
     function renderCards(stats) {
-      const bestStreak   = stats.best_streak || 0;
-      const longestEver  = stats.global_longest_streak || 0;
-      return `
+      const bestStreak  = stats.best_streak || 0;
+      const longestEver = stats.global_longest_streak || 0;
+      const total   = stats.total_messages || 0;
+      const delPct  = total ? Math.round(stats.deleted_messages / total * 100) : 0;
+      const editPct = total ? Math.round(stats.edited_messages  / total * 100) : 0;
+
+      const kpi = `
         <div class="cards">
           <div class="card accent-messages"><span class="icon">💬</span><div class="value">${stats.total_messages}</div><div class="label">Сообщений</div></div>
           <div class="card accent-chats"><span class="icon">👥</span><div class="value">${stats.total_chats}</div><div class="label">Собеседников</div></div>
-          <div class="card accent-edited"><span class="icon">✏️</span><div class="value">${stats.edited_messages}</div><div class="label">Правок</div></div>
-          <div class="card accent-deleted"><span class="icon">🗑</span><div class="value">${stats.deleted_messages}</div><div class="label">Удалений</div></div>
+          <div class="card accent-edited"><span class="icon">✏️</span><div class="value">${stats.edited_messages}</div><div class="label">Правок</div><div class="card-pct">${editPct}%</div></div>
+          <div class="card accent-deleted"><span class="icon">🗑</span><div class="value">${stats.deleted_messages}</div><div class="label">Удалений</div><div class="card-pct">${delPct}%</div></div>
           ${bestStreak >= 1 ? `<div class="card accent-streak"><span class="icon">🔥</span><div class="value">${bestStreak}</div><div class="label">Лучшая серия сейчас</div></div>` : ""}
           ${longestEver > bestStreak ? `<div class="card accent-record"><span class="icon">💎</span><div class="value">${longestEver}</div><div class="label">Рекорд серии</div></div>` : ""}
         </div>
+      `;
+
+      if (!total) return kpi;
+
+      // Health bars
+      const media = stats.media_messages != null ? stats.media_messages : null;
+      const mediaPct = (media != null && total) ? Math.round(media / total * 100) : 0;
+      const healthRows = [
+        { label: "Удалено", val: stats.deleted_messages, pct: delPct,  color: "var(--red)" },
+        { label: "Правок",  val: stats.edited_messages,  pct: editPct, color: "var(--orange)" },
+      ];
+      if (media != null) healthRows.push({ label: "Медиа", val: media, pct: mediaPct, color: "var(--link)" });
+
+      const rowsHtml = healthRows.map(r => `
+        <div class="health-row">
+          <span class="health-lbl">${r.label}</span>
+          <div class="health-bar-track"><div class="health-bar-fill" style="width:${r.pct}%;background:${r.color}"></div></div>
+          <span class="health-val">${r.val}</span>
+          <span class="health-pct">${r.pct}%</span>
+        </div>`).join("");
+
+      // Content split donut (only when media data available)
+      let splitHtml = "";
+      if (media != null && total > 0) {
+        const textCount = total - media;
+        const mp = mediaPct;
+        splitHtml = `
+          <div class="split-row">
+            <div style="width:62px;height:62px;border-radius:50%;
+              background:conic-gradient(var(--link) 0% ${mp}%,rgba(52,199,89,0.65) ${mp}% 100%);
+              display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <div style="width:40px;height:40px;border-radius:50%;background:var(--secondary-bg)"></div>
+            </div>
+            <div class="split-legend">
+              <div class="split-item">
+                <div class="split-dot" style="background:var(--link)"></div>
+                <span class="split-name">Медиа</span>
+                <span class="split-count">${media}</span>
+                <span class="split-pct">${mp}%</span>
+              </div>
+              <div class="split-item">
+                <div class="split-dot" style="background:rgba(52,199,89,0.8)"></div>
+                <span class="split-name">Текст</span>
+                <span class="split-count">${textCount}</span>
+                <span class="split-pct">${100 - mp}%</span>
+              </div>
+            </div>
+          </div>`;
+      }
+
+      return kpi + `
+        <div class="section-title">📊 Здоровье переписки</div>
+        <div class="health-card">${rowsHtml}${splitHtml}</div>
       `;
     }
 

@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -17,6 +17,7 @@ from app.logging_config import get_logger
 from app.miniapp.auth import verify_init_data
 from app.models.admin_action_log import AdminActionLog
 from app.models.business_connection import BusinessConnection
+from app.models.message import MediaType, Message
 from app.repositories.message_repository import MessageFilters, MessageRepository
 from app.repositories.wallet_repository import WalletRepository
 from app.services.stats_service import StatsService
@@ -201,6 +202,8 @@ async def miniapp_stats(
             "total_chats": 0,
             "edited_messages": 0,
             "deleted_messages": 0,
+            "media_messages": 0,
+            "media_breakdown": [],
             "top_interlocutors": [],
             "badges": [],
         }
@@ -211,12 +214,32 @@ async def miniapp_stats(
             connection_ids=connection_ids, owner_telegram_id=owner_telegram_id
         )
 
+        # Media breakdown — one aggregate query, not loaded by get_owner_stats.
+        # Exclude both NONE (unset) and TEXT so only true media types are counted.
+        media_rows = (
+            await session.execute(
+                select(Message.media_type, func.count(Message.id))
+                .where(
+                    Message.business_connection_id.in_(connection_ids),
+                    Message.media_type.notin_([MediaType.NONE, MediaType.TEXT]),
+                )
+                .group_by(Message.media_type)
+            )
+        ).all()
+        media_messages = sum(r[1] for r in media_rows)
+        media_breakdown = [
+            {"type": r[0].value, "count": r[1]}
+            for r in sorted(media_rows, key=lambda r: r[1], reverse=True)
+        ]
+
         return {
             "connected": True,
             "total_messages": stats.total_messages,
             "total_chats": stats.total_chats,
             "edited_messages": stats.edited_messages,
             "deleted_messages": stats.deleted_messages,
+            "media_messages": media_messages,
+            "media_breakdown": media_breakdown,
             "best_streak": stats.best_streak,
             "best_streak_name": stats.best_streak_name,
             "global_longest_streak": stats.global_longest_streak,
@@ -688,6 +711,29 @@ async def admin_growth(
     stats_service = StatsService(session)
     growth = await stats_service.get_admin_growth(days=30)
     return {"days": 30, **growth}
+
+
+@router.post("/app/api/admin/dashboard_stats")
+async def admin_dashboard_stats(
+    payload: StatsRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Global aggregate stats for the admin analytics tab."""
+    _require_admin(payload.init_data)
+
+    stats_service = StatsService(session)
+    stats = await stats_service.get_dashboard_stats()
+    return {
+        "total_messages": stats.total_messages,
+        "total_users": stats.total_users,
+        "edited_messages": stats.edited_messages,
+        "deleted_messages": stats.deleted_messages,
+        "media_messages": stats.media_messages,
+        "text_messages": stats.text_messages,
+        "media_breakdown": [
+            {"media_type": item.media_type, "count": item.count}
+            for item in stats.media_breakdown
+        ],
+    }
 
 
 @router.post("/app/api/admin/messages")

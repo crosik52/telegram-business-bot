@@ -874,6 +874,69 @@
   .lb-name   { flex: 1; font-size: 13.5px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .lb-coins  { font-size: 13px; font-weight: 700; color: var(--orange); flex-shrink: 0; }
   .lb-my-rank-note { text-align: center; font-size: 12.5px; color: var(--hint); margin: 4px 0 12px; }
+
+  /* ── Pet section ── */
+  .pet-section { margin-bottom: 16px; }
+  .pet-card {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--secondary-bg); border-radius: var(--card-radius);
+    padding: 13px 14px; margin-bottom: 10px; box-shadow: var(--shadow);
+    animation: riseIn 0.3s ease backwards;
+  }
+  .pet-card.dead { opacity: 0.42; }
+  .pet-avatar  { font-size: 34px; flex-shrink: 0; line-height: 1; }
+  .pet-body    { flex: 1; min-width: 0; }
+  .pet-name-row{ display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
+  .pet-name    { font-size: 15px; font-weight: 700; }
+  .pet-stage   { font-size: 11px; color: var(--hint); }
+  .pet-with    { font-size: 12px; color: var(--hint); margin-top: 2px; }
+  .pet-hunger-wrap { display: flex; align-items: center; gap: 7px; margin-top: 7px; }
+  .pet-hunger-track{ flex: 1; height: 5px; border-radius: 3px; background: rgba(120,120,128,0.13); overflow: hidden; }
+  .pet-hunger-fill { height: 100%; border-radius: 3px; transition: width 0.55s ease; }
+  .pet-hunger-lbl  { font-size: 11px; font-weight: 700; flex-shrink: 0; }
+  .pet-hunger-status { font-size: 11.5px; color: var(--hint); margin-top: 3px; }
+  .pet-feed-btn {
+    flex-shrink: 0; border: none; border-radius: 11px; padding: 7px 11px;
+    font-size: 12.5px; font-weight: 700;
+    background: rgba(255,149,0,0.13); color: var(--orange);
+    transition: transform 0.1s, opacity 0.2s; touch-action: manipulation;
+  }
+  .pet-feed-btn:active   { transform: scale(0.92); }
+  .pet-feed-btn:disabled { opacity: 0.35; background: rgba(120,120,128,0.1); color: var(--hint); }
+  .pet-empty       { text-align: center; padding: 18px 8px 22px; }
+  .pet-empty-emoji { font-size: 46px; margin-bottom: 10px; }
+  .pet-empty-title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .pet-empty-sub   { font-size: 13px; color: var(--hint); margin-bottom: 18px; line-height: 1.45; }
+  .pet-adopt-cta {
+    border: none; border-radius: 14px; padding: 11px 24px;
+    font-size: 14px; font-weight: 700;
+    background: var(--green); color: #fff; touch-action: manipulation;
+  }
+  .pet-add-more {
+    border: none; border-radius: 10px; padding: 3px 10px;
+    font-size: 12px; font-weight: 600; margin-left: auto;
+    background: rgba(52,199,89,0.13); color: var(--green); touch-action: manipulation;
+  }
+  /* Adopt modal */
+  .adopt-chats { display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto; margin-bottom: 12px; }
+  .adopt-chat-btn {
+    display: flex; align-items: center; gap: 10px;
+    border: none; border-radius: 13px; padding: 10px 12px;
+    background: rgba(120,120,128,0.1); text-align: left; touch-action: manipulation;
+  }
+  .adopt-chat-avatar { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #fff; flex-shrink: 0; }
+  .adopt-chat-name { flex: 1; font-size: 14px; font-weight: 600; text-align: left; }
+  .adopt-chat-msgs { font-size: 12px; color: var(--hint); flex-shrink: 0; }
+  .adopt-species-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; margin-bottom: 14px; }
+  .adopt-species-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    border: 2px solid transparent; border-radius: 12px; padding: 9px 4px;
+    background: rgba(120,120,128,0.09); touch-action: manipulation;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .adopt-species-btn.selected { border-color: var(--green); background: rgba(52,199,89,0.1); }
+  .adopt-species-emoji { font-size: 24px; }
+  .adopt-species-lbl   { font-size: 10px; color: var(--hint); }
 </style>
 </head>
 <body>
@@ -938,6 +1001,7 @@
     let questsLoaded = false;
     let questData    = null;
     let lbData       = null;
+    let petData      = null;
     const SPIN_SYMBOLS = ["🍒","🍋","🍊","🍇","⭐","💎"];
 
     const AVATAR_COLORS = ["#FF6B6B","#4ECDC4","#45AAF2","#F7B731","#A55EEA","#26DE81","#FD9644","#2BCBBA"];
@@ -1640,26 +1704,30 @@
     // ══════════════════════════════════════════════════════════════════
     async function loadWallet() {
       const el = document.getElementById("casinoContent");
-      el.innerHTML = `<div class="empty skeleton"><span class="big-emoji">🎰</span>Загружаем кошелёк…</div>`;
+      el.innerHTML = `<div class="empty skeleton"><span class="big-emoji">🎰</span>Загружаем…</div>`;
       try {
-        const res = await fetch("/app/api/wallet/info", {
-          method: "POST", headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({initData: currentInitData}),
-        });
-        if (!res.ok) throw new Error();
-        walletData = await res.json();
+        const opts = { method: "POST", headers: {"Content-Type":"application/json"},
+                       body: JSON.stringify({initData: currentInitData}) };
+        const [wRes, pRes] = await Promise.all([
+          fetch("/app/api/wallet/info", opts),
+          fetch("/app/api/pet/list",    opts),
+        ]);
+        if (!wRes.ok) throw new Error();
+        walletData = await wRes.json();
+        petData    = pRes.ok ? await pRes.json() : { pets: [], available_chats: [], feed_cost: 20 };
         casinoLoaded = true;
         renderCasino();
       } catch {
-        el.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить кошелёк.<br>Попробуй обновить.</div>`;
+        el.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить.<br>Попробуй обновить.</div>`;
       }
     }
 
     function renderCasino() {
       if (!walletData) return;
       const el = document.getElementById("casinoContent");
-      el.innerHTML = renderWalletCard() + renderSlotsCard() + renderFlipCard();
+      el.innerHTML = renderPetsSection() + renderWalletCard() + renderSlotsCard() + renderFlipCard();
       attachCasinoHandlers();
+      attachPetHandlers();
     }
 
     function renderWalletCard() {
@@ -2022,6 +2090,245 @@
           <button class="tier-btn" disabled>Скоро доступно</button>
         </div>
       `;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // PETS
+    // ══════════════════════════════════════════════════════════════════
+    const PET_SPECIES = {
+      cat:     { stages: ["🥚","🐱","🐱","🐱","😺"], label: "Котик"   },
+      dog:     { stages: ["🥚","🐶","🐶","🐕","🦮"], label: "Пёсик"   },
+      rabbit:  { stages: ["🥚","🐰","🐰","🐇","🐇"], label: "Зайка"   },
+      hamster: { stages: ["🥚","🐹","🐹","🐹","🐹"], label: "Хомяк"   },
+      fox:     { stages: ["🥚","🦊","🦊","🦊","🦊"], label: "Лисёнок" },
+    };
+    const STAGE_LABELS = ["", "Яйцо", "Малыш", "Детёныш", "Подросток", "Взрослый"];
+
+    function petEmoji(pet) {
+      if (!pet.is_alive) return "💀";
+      const sp = PET_SPECIES[pet.species];
+      return sp ? sp.stages[Math.max(0, Math.min(pet.stage - 1, 4))] : "🐾";
+    }
+    function hungerColor(h) {
+      return h >= 70 ? "var(--green)" : h >= 30 ? "#f59e0b" : "var(--danger)";
+    }
+    function hungerStatus(h) {
+      return h >= 70 ? "😊 Сытый" : h >= 30 ? "😐 Голодный" : "😰 Очень голодный!";
+    }
+    function daysLabel(n) {
+      if (n === 0) return "только родился";
+      if (n === 1) return "1 день";
+      if (n < 5)   return `${n} дня`;
+      return `${n} дней`;
+    }
+
+    function renderPetsSection() {
+      if (!petData) return "";
+      const { pets = [], available_chats = [], feed_cost = 20 } = petData;
+      const alive = pets.filter(p => p.is_alive);
+      const dead  = pets.filter(p => !p.is_alive);
+
+      const hasAdopt = available_chats.length > 0;
+      const adoptBtn = hasAdopt
+        ? `<button class="pet-add-more" id="openAdoptBtn">+ Питомец</button>`
+        : "";
+
+      if (pets.length === 0) {
+        return `
+          <div class="pet-section">
+            <div class="section-title">🐾 Питомцы ${adoptBtn}</div>
+            <div class="pet-empty">
+              <div class="pet-empty-emoji">🥚</div>
+              <div class="pet-empty-title">Нет питомцев</div>
+              <div class="pet-empty-sub">Заведи питомца с кем-то из активных чатов.<br>Питомец живёт, пока живёт ваша переписка.</div>
+              ${hasAdopt
+                ? `<button class="pet-adopt-cta" id="openAdoptBtn">Завести питомца →</button>`
+                : `<div style="font-size:12.5px;color:var(--hint)">Нет активных чатов 💬</div>`}
+            </div>
+          </div>`;
+      }
+
+      const aliveCards = alive.map((p, i) => `
+        <div class="pet-card" style="animation-delay:${i * 0.06}s">
+          <div class="pet-avatar">${petEmoji(p)}</div>
+          <div class="pet-body">
+            <div class="pet-name-row">
+              <span class="pet-name">${p.pet_name}</span>
+              <span class="pet-stage">${STAGE_LABELS[p.stage] || ""} · ${daysLabel(p.days_alive)}</span>
+            </div>
+            <div class="pet-with">с ${p.interlocutor_name}</div>
+            <div class="pet-hunger-wrap">
+              <div class="pet-hunger-track">
+                <div class="pet-hunger-fill" style="width:${p.hunger}%;background:${hungerColor(p.hunger)}"></div>
+              </div>
+              <span class="pet-hunger-lbl" style="color:${hungerColor(p.hunger)}">${p.hunger}%</span>
+            </div>
+            <div class="pet-hunger-status">${hungerStatus(p.hunger)}</div>
+          </div>
+          <button class="pet-feed-btn" data-pet-id="${p.id}" ${p.hunger >= 100 ? "disabled" : ""}>
+            🍖 ${feed_cost} 🪙
+          </button>
+        </div>`).join("");
+
+      const deadCards = dead.slice(0, 2).map(p => `
+        <div class="pet-card dead">
+          <div class="pet-avatar">💀</div>
+          <div class="pet-body">
+            <div class="pet-name-row">
+              <span class="pet-name">${p.pet_name}</span>
+              <span class="pet-stage">${daysLabel(p.days_alive)} жизни</span>
+            </div>
+            <div class="pet-with">с ${p.interlocutor_name} · ${p.death_cause === "starvation" ? "умер от голода" : "серия оборвалась"}</div>
+          </div>
+        </div>`).join("");
+
+      return `
+        <div class="pet-section">
+          <div class="section-title">🐾 Питомцы ${adoptBtn}</div>
+          ${aliveCards}${deadCards}
+        </div>`;
+    }
+
+    function attachPetHandlers() {
+      document.querySelectorAll(".pet-feed-btn:not([disabled])").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const petId = Number(btn.dataset.petId);
+          btn.disabled = true;
+          btn.textContent = "⏳";
+          try {
+            if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("medium");
+            const res = await fetch("/app/api/pet/feed", {
+              method: "POST", headers: {"Content-Type":"application/json"},
+              body: JSON.stringify({initData: currentInitData, petId}),
+            });
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({}));
+              const msg = {
+                already_fed: "Питомец уже сыт сегодня 😊",
+                insufficient_coins: "Недостаточно монет!",
+                pet_is_dead: "Питомец уже умер 💀",
+              }[err.detail] || "Ошибка кормления.";
+              toastMessage(msg);
+              btn.disabled = false;
+              btn.textContent = `🍖 ${petData?.feed_cost ?? 20} 🪙`;
+              return;
+            }
+            const data = await res.json();
+            if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+            updateBalanceDisplay(data.new_balance);
+            toastMessage("🍖 Питомец накормлен! Сытость: 100%");
+            await _refreshPets();
+          } catch {
+            btn.disabled = false;
+            btn.textContent = `🍖 ${petData?.feed_cost ?? 20} 🪙`;
+            toastMessage("Ошибка. Попробуй ещё раз.");
+          }
+        });
+      });
+      document.querySelectorAll("#openAdoptBtn").forEach(btn =>
+        btn.addEventListener("click", openAdoptModal)
+      );
+    }
+
+    async function _refreshPets() {
+      try {
+        const res = await fetch("/app/api/pet/list", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData: currentInitData}),
+        });
+        if (res.ok) petData = await res.json();
+        renderCasino();
+      } catch {}
+    }
+
+    function openAdoptModal() {
+      const chats = petData?.available_chats || [];
+      if (!chats.length) { toastMessage("Нет активных чатов для питомца."); return; }
+
+      const overlay = document.createElement("div");
+      overlay.className = "balance-overlay";
+      overlay.innerHTML = `
+        <div class="balance-sheet">
+          <div class="balance-sheet-title">🥚 Новый питомец</div>
+          <div id="adoptStep1">
+            <div style="font-size:13px;color:var(--hint);margin-bottom:11px;text-align:center">Выбери собеседника</div>
+            <div class="adopt-chats">
+              ${chats.map(c => `
+                <button class="adopt-chat-btn" data-chat-id="${c.chat_id}" data-name="${(c.display_name||"").replace(/"/g,"&quot;")}">
+                  <div class="adopt-chat-avatar" style="background:${colorFor(c.display_name)}">${initials(c.display_name)}</div>
+                  <div class="adopt-chat-name">${c.display_name}</div>
+                  <div class="adopt-chat-msgs">${c.message_count} сообщ.</div>
+                </button>`).join("")}
+            </div>
+            <button class="balance-cancel-btn" id="adoptClose">Отмена</button>
+          </div>
+          <div id="adoptStep2" style="display:none">
+            <div id="adoptForLabel" style="font-size:13px;color:var(--hint);margin-bottom:11px;text-align:center"></div>
+            <div class="adopt-species-grid">
+              ${Object.entries(PET_SPECIES).map(([key, sp]) => `
+                <button class="adopt-species-btn" data-species="${key}">
+                  <span class="adopt-species-emoji">${sp.stages[1]}</span>
+                  <span class="adopt-species-lbl">${sp.label}</span>
+                </button>`).join("")}
+            </div>
+            <div style="margin-bottom:10px">
+              <input type="text" class="balance-number-input" id="adoptNameInput"
+                placeholder="Имя (необязательно)" maxlength="20"
+                style="text-align:left;font-size:14px;width:100%;box-sizing:border-box" />
+            </div>
+            <button class="balance-set-btn" id="adoptConfirmBtn" style="width:100%">Завести питомца 🥚</button>
+            <button class="balance-cancel-btn" id="adoptBack">← Назад</button>
+          </div>
+        </div>`;
+
+      document.body.appendChild(overlay);
+      overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
+      overlay.querySelector("#adoptClose").addEventListener("click", () => overlay.remove());
+
+      let selChatId = null, selSpecies = null;
+
+      overlay.querySelectorAll(".adopt-chat-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          selChatId = Number(btn.dataset.chatId);
+          overlay.querySelector("#adoptStep1").style.display = "none";
+          overlay.querySelector("#adoptStep2").style.display = "";
+          overlay.querySelector("#adoptForLabel").textContent = `Питомец с ${btn.dataset.name}`;
+        });
+      });
+      overlay.querySelector("#adoptBack").addEventListener("click", () => {
+        overlay.querySelector("#adoptStep1").style.display = "";
+        overlay.querySelector("#adoptStep2").style.display = "none";
+        selChatId = null; selSpecies = null;
+        overlay.querySelectorAll(".adopt-species-btn").forEach(b => b.classList.remove("selected"));
+      });
+      overlay.querySelectorAll(".adopt-species-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          selSpecies = btn.dataset.species;
+          overlay.querySelectorAll(".adopt-species-btn").forEach(b => b.classList.remove("selected"));
+          btn.classList.add("selected");
+        });
+      });
+      overlay.querySelector("#adoptConfirmBtn").addEventListener("click", async () => {
+        if (!selChatId)   { toastMessage("Выбери собеседника!"); return; }
+        if (!selSpecies)  { toastMessage("Выбери вид питомца!"); return; }
+        const petName = (overlay.querySelector("#adoptNameInput").value || "").trim();
+        const confirmBtn = overlay.querySelector("#adoptConfirmBtn");
+        confirmBtn.disabled = true; confirmBtn.textContent = "⏳";
+        try {
+          const res = await fetch("/app/api/pet/adopt", {
+            method: "POST", headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({initData: currentInitData, chatId: selChatId, species: selSpecies, petName}),
+          });
+          if (!res.ok) throw new Error((await res.json().catch(()=>({}))).detail || "error");
+          if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+          overlay.remove();
+          toastMessage("🥚 Питомец заведён! Корми его каждый день.");
+          await _refreshPets();
+        } catch(e) {
+          confirmBtn.disabled = false; confirmBtn.textContent = "Завести питомца 🥚";
+          toastMessage("Ошибка: " + e.message);
+        }
+      });
     }
 
     // ══════════════════════════════════════════════════════════════════

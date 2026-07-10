@@ -19,6 +19,7 @@ from app.models.admin_action_log import AdminActionLog
 from app.models.business_connection import BusinessConnection
 from app.models.message import MediaType, Message
 from app.repositories.message_repository import MessageFilters, MessageRepository
+from app.repositories.pet_repository import FEED_COST, PetRepository
 from app.repositories.quest_repository import QUESTS, QuestRepository
 from app.repositories.wallet_repository import WalletRepository
 from app.services.stats_service import StatsService
@@ -161,6 +162,22 @@ class AdminWalletSetRequest(BaseModel):
     init_data: str = Field(alias="initData")
     owner_telegram_id: int = Field(alias="ownerTelegramId")
     new_balance: int = Field(alias="newBalance", ge=0, le=10_000_000)
+
+
+class PetAdoptRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    init_data: str = Field(alias="initData")
+    chat_id: int = Field(alias="chatId")
+    species: str
+    pet_name: str = Field(alias="petName", default="")
+
+
+class PetFeedRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    init_data: str = Field(alias="initData")
+    pet_id: int = Field(alias="petId")
 
 
 def _require_admin(init_data: str) -> dict:
@@ -816,6 +833,73 @@ async def miniapp_leaderboard(
             my_rank = higher + 1
 
     return {"entries": entries, "my_rank": my_rank}
+
+
+# ── Pets ──────────────────────────────────────────────────────────────────────
+
+@router.post("/app/api/pet/list")
+async def miniapp_pet_list(
+    payload: StatsRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Return user's pets (alive + up to 3 dead) and available chats to adopt."""
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid Telegram init data")
+
+    owner_id = int(user["id"])
+    repo = PetRepository(session)
+    pets, available_chats = await repo.get_pets(owner_id)
+    await session.commit()  # persist any death updates flushed by get_pets
+    return {"pets": pets, "available_chats": available_chats, "feed_cost": FEED_COST}
+
+
+@router.post("/app/api/pet/adopt")
+async def miniapp_pet_adopt(
+    payload: PetAdoptRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Adopt a new pet for a chat with an active streak."""
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid Telegram init data")
+
+    owner_id = int(user["id"])
+    pet_name = (payload.pet_name or "").strip()[:30]
+
+    repo = PetRepository(session)
+    try:
+        pet = await repo.adopt(owner_id, payload.chat_id, payload.species, pet_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    await session.commit()
+    return {"ok": True, "pet": pet}
+
+
+@router.post("/app/api/pet/feed")
+async def miniapp_pet_feed(
+    payload: PetFeedRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Feed a pet, deducting FEED_COST coins."""
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid Telegram init data")
+
+    owner_id = int(user["id"])
+    repo = PetRepository(session)
+    try:
+        result = await repo.feed(owner_id, payload.pet_id)
+    except ValueError as exc:
+        code = str(exc)
+        status = 400
+        if code == "already_fed":
+            status = 409
+        raise HTTPException(status_code=status, detail=code) from exc
+
+    await session.commit()
+    return {"ok": True, **result}
 
 
 @router.post("/app/api/admin/overview")

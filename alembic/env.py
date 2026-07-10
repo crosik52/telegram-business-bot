@@ -14,6 +14,7 @@ from app.config import get_settings
 from app.database.base import Base
 from app.models import (  # noqa: F401  (ensure models are registered on Base)
     BusinessConnection,
+    ChatPet,
     DailyQuestCompletion,
     Message,
     MessageEditHistory,

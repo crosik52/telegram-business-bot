@@ -120,8 +120,10 @@ def render_info_image(stats: InfoStats) -> io.BytesIO:
     )
 
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", facecolor=BG_CARD, dpi=130)
-    plt.close(fig)
+    try:
+        fig.savefig(buf, format="png", facecolor=BG_CARD, dpi=130)
+    finally:
+        plt.close(fig)
     buf.seek(0)
     return buf
 

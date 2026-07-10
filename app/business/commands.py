@@ -26,7 +26,7 @@ import re
 from aiogram import Bot
 from aiogram.methods import DeleteMessage
 from aiogram.types import BufferedInputFile
-from sqlalchemy import case, func, select
+from sqlalchemy import Date, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.logging_config import get_logger
@@ -149,10 +149,11 @@ async def _cmd_info(
 
     # --- Daily breakdown (last 30 days, non-deleted) ---
     thirty_days_ago = now - dt.timedelta(days=30)
+    day_col = cast(Message.sent_at, Date).label("day")
     daily_rows = (
         await session.execute(
             select(
-                func.date_trunc("day", Message.sent_at).label("day"),
+                day_col,
                 func.sum(case((Message.sender_telegram_id != owner_id, 1), else_=0)).label("inbound"),
                 func.sum(case((Message.sender_telegram_id == owner_id, 1), else_=0)).label("outbound"),
             )
@@ -161,13 +162,22 @@ async def _cmd_info(
                 Message.sent_at >= thirty_days_ago,
                 Message.is_deleted.is_(False),
             )
-            .group_by("day")
-            .order_by("day")
+            .group_by(day_col)
+            .order_by(day_col)
         )
     ).all()
 
+    def _day_label(val: object) -> str:
+        """Format a date value that may arrive as date, datetime, or ISO string."""
+        if isinstance(val, dt.datetime):
+            return val.strftime("%d.%m")
+        if isinstance(val, dt.date):
+            return val.strftime("%d.%m")
+        # SQLite returns ISO string "YYYY-MM-DD"
+        return dt.date.fromisoformat(str(val)[:10]).strftime("%d.%m")
+
     daily: list[tuple[str, int, int]] = [
-        (r.day.strftime("%d.%m"), int(r.inbound or 0), int(r.outbound or 0))
+        (_day_label(r.day), int(r.inbound or 0), int(r.outbound or 0))
         for r in daily_rows
     ]
 

@@ -179,6 +179,71 @@
   .split-count { font-weight: 700; }
   .split-pct { color: var(--hint); min-width: 28px; text-align: right; font-size: 11.5px; }
 
+  /* ── Words cloud ── */
+  .words-card {
+    background: var(--secondary-bg);
+    border-radius: var(--card-radius);
+    padding: 16px 15px 12px;
+    box-shadow: var(--shadow);
+    margin-bottom: 16px;
+    animation: riseIn 0.35s 0.20s ease backwards;
+  }
+  .words-cloud {
+    display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px;
+  }
+  .word-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(120,120,128,0.10);
+    border-radius: 20px; padding: 5px 11px;
+    font-size: 13px; font-weight: 600; color: var(--text);
+    transition: background 0.15s;
+  }
+  .word-chip .wc {
+    font-size: 10.5px; font-weight: 500; color: var(--hint);
+  }
+  .word-chip.top1 { background: rgba(255,159,10,0.18); color: #ff9f0a; }
+  .word-chip.top2 { background: rgba(52,199,89,0.14); color: #34c759; }
+  .word-chip.top3 { background: rgba(10,132,255,0.14); color: var(--link); }
+  .emoji-row {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(120,120,128,0.10);
+    margin-bottom: 10px;
+  }
+  .emoji-chip {
+    display: inline-flex; flex-direction: column; align-items: center; gap: 2px;
+    background: rgba(120,120,128,0.08);
+    border-radius: 12px; padding: 7px 10px;
+    min-width: 44px;
+  }
+  .emoji-chip .ej { font-size: 20px; line-height: 1; }
+  .emoji-chip .ec { font-size: 10px; font-weight: 600; color: var(--hint); }
+  .words-meta {
+    font-size: 11px; color: var(--hint); text-align: right; margin-top: 4px;
+  }
+
+  /* ── Daily digest ── */
+  .digest-card {
+    background: var(--secondary-bg);
+    border-radius: var(--card-radius);
+    padding: 4px 15px 8px;
+    box-shadow: var(--shadow);
+    margin-bottom: 16px;
+    animation: riseIn 0.35s 0.25s ease backwards;
+  }
+  .digest-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 11px 0;
+    border-bottom: 1px solid rgba(120,120,128,0.08);
+    font-size: 14px;
+  }
+  .digest-row:last-child { border-bottom: none; }
+  .digest-label { color: var(--hint); font-size: 13px; }
+  .digest-val { font-weight: 700; }
+  .digest-highlight { color: var(--link); }
+  .digest-warn .digest-val { color: #ff9f0a; }
+  .digest-ok   .digest-val { color: #34c759; }
+
   /* ── Section title ── */
   .section-title {
     font-size: 15px; font-weight: 700;
@@ -1156,6 +1221,8 @@
     let petData      = null;
     let subData      = null;   // subscription config + user status
     let statsPremium = false;  // whether user has active subscription (from stats API)
+    let lastWords  = null;     // /app/api/stats/words response
+    let lastDigest = null;     // /app/api/stats/digest response
     const FREE_TOP_LIMIT = 5;  // free users see top N contacts
     const SPIN_SYMBOLS = ["🍒","🍋","🍊","🍇","⭐","💎"];
 
@@ -1449,6 +1516,102 @@
       `;
     }
 
+    // ── Daily digest ──────────────────────────────────────────────────────────
+    function renderDigest(data) {
+      if (!statsPremium) {
+        return `
+          <div class="section-title">🤖 Дайджест дня</div>
+          <div class="premium-gate-mini">
+            <div>
+              <div class="premium-gate-mini-title">🔒 Дайджест дня</div>
+              <div class="premium-gate-mini-hint">Итоги переписки за сегодня</div>
+            </div>
+            <button class="premium-gate-chip" data-premium-action="subscribe">⭐ Premium</button>
+          </div>`;
+      }
+      if (!data || data.locked || data.total_today === 0) {
+        return `
+          <div class="section-title">🤖 Дайджест дня</div>
+          <div class="health-card" style="text-align:center;color:var(--hint);font-size:13px;padding:20px 16px">
+            Сегодня сообщений пока не было
+          </div>`;
+      }
+      const ph = data.peak_hour;
+      const peakHtml = ph != null
+        ? `<div class="digest-row digest-highlight-row">
+             <span class="digest-label">⏰ Пик активности</span>
+             <span class="digest-val digest-highlight">${ph}:00–${ph+1}:00</span>
+           </div>`
+        : "";
+      const unaHtml = data.unanswered_count > 0
+        ? `<div class="digest-row digest-warn">
+             <span class="digest-label">💬 Без ответа</span>
+             <span class="digest-val">${data.unanswered_count} ${pluralize(data.unanswered_count,"чат","чата","чатов")}</span>
+           </div>`
+        : `<div class="digest-row digest-ok">
+             <span class="digest-label">✅ Без ответа</span>
+             <span class="digest-val">всё отвечено</span>
+           </div>`;
+      return `
+        <div class="section-title">🤖 Дайджест дня</div>
+        <div class="digest-card">
+          <div class="digest-row">
+            <span class="digest-label">Всего сообщений</span>
+            <span class="digest-val">${data.total_today}</span>
+          </div>
+          <div class="digest-row">
+            <span class="digest-label">📥 Входящих</span>
+            <span class="digest-val">${data.incoming}</span>
+          </div>
+          <div class="digest-row">
+            <span class="digest-label">📤 Исходящих</span>
+            <span class="digest-val">${data.outgoing}</span>
+          </div>
+          <div class="digest-row">
+            <span class="digest-label">👥 Активных чатов</span>
+            <span class="digest-val">${data.active_chats}</span>
+          </div>
+          ${peakHtml}${unaHtml}
+        </div>`;
+    }
+
+    // ── Words cloud ───────────────────────────────────────────────────────────
+    function renderWordsCloud(data) {
+      if (!statsPremium) {
+        return `
+          <div class="section-title">💬 Слова и эмодзи</div>
+          <div class="premium-gate-mini">
+            <div>
+              <div class="premium-gate-mini-title">🔒 Анализ слов</div>
+              <div class="premium-gate-mini-hint">Топ слов и эмодзи за 90 дней</div>
+            </div>
+            <button class="premium-gate-chip" data-premium-action="subscribe">⭐ Premium</button>
+          </div>`;
+      }
+      if (!data || data.locked || (!data.top_words?.length && !data.top_emojis?.length)) {
+        return `
+          <div class="section-title">💬 Слова и эмодзи</div>
+          <div class="health-card" style="text-align:center;color:var(--hint);font-size:13px;padding:20px 16px">
+            Пока недостаточно текстовых сообщений
+          </div>`;
+      }
+      const maxCount = data.top_words[0]?.count || 1;
+      const wordsHtml = data.top_words.slice(0, 15).map(({word, count}, i) => {
+        const cls = i === 0 ? "top1" : i === 1 ? "top2" : i === 2 ? "top3" : "";
+        return `<div class="word-chip ${cls}">${esc(word)}<span class="wc">${count}</span></div>`;
+      }).join("");
+      const emojisHtml = (data.top_emojis || []).slice(0, 12).map(({emoji, count}) =>
+        `<div class="emoji-chip"><span class="ej">${emoji}</span><span class="ec">${count}</span></div>`
+      ).join("");
+      return `
+        <div class="section-title">💬 Слова и эмодзи <span class="sub">90 дней</span></div>
+        <div class="words-card">
+          <div class="words-cloud">${wordsHtml}</div>
+          ${emojisHtml ? `<div class="emoji-row">${emojisHtml}</div>` : ""}
+          <div class="words-meta">${data.total_analyzed} сообщений проанализировано</div>
+        </div>`;
+    }
+
     // ── Top interlocutors ──
     function getSorted(list) {
       const filtered = searchQuery
@@ -1640,6 +1803,8 @@
         renderStreakBanner(lastStats) +
         renderCards(lastStats) +
         renderHeatmap(lastActivity) +
+        renderDigest(lastDigest) +
+        renderWordsCloud(lastWords) +
         renderBadges(lastStats.badges) +
         renderTop(lastStats);
       attachTopHandlers();
@@ -1859,21 +2024,23 @@
       if (isRefresh && refreshBtn) refreshBtn.classList.add("spinning");
 
       try {
-        const [statsRes, actRes] = await Promise.all([
-          fetch("/app/api/stats", {
-            method: "POST", headers: {"Content-Type":"application/json"},
-            body: JSON.stringify({initData}),
-          }),
-          fetch("/app/api/activity", {
-            method: "POST", headers: {"Content-Type":"application/json"},
-            body: JSON.stringify({initData}),
-          }).catch(() => null),
+        const body = JSON.stringify({initData});
+        const hdr  = {"Content-Type": "application/json"};
+        const post = (url) => fetch(url, {method:"POST", headers:hdr, body}).catch(()=>null);
+
+        const [statsRes, actRes, wordsRes, digestRes] = await Promise.all([
+          post("/app/api/stats"),
+          post("/app/api/activity"),
+          post("/app/api/stats/words"),
+          post("/app/api/stats/digest"),
         ]);
 
         if (!statsRes.ok) throw new Error("bad_status");
         const stats = await statsRes.json();
-        lastStats = stats;
-        lastActivity = actRes && actRes.ok ? ((await actRes.json()).activity || {}) : {};
+        lastStats  = stats;
+        lastActivity = actRes  && actRes.ok  ? ((await actRes.json()).activity || {}) : {};
+        lastWords    = wordsRes  && wordsRes.ok  ? await wordsRes.json()  : null;
+        lastDigest   = digestRes && digestRes.ok ? await digestRes.json() : null;
 
         if (tg?.initDataUnsafe?.user) {
           document.getElementById("greeting").textContent =

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import collections as _collections
 import datetime as dt
+import re as _re
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -436,6 +438,165 @@ async def miniapp_activity(
             "Failed to build activity for owner_telegram_id=%s", owner_telegram_id
         )
         raise HTTPException(status_code=500, detail="Failed to load activity") from None
+
+
+# ── Word / emoji frequency (premium) ────────────────────────────────────────
+
+_STOP_WORDS: frozenset[str] = frozenset({
+    "и","в","не","на","я","что","он","с","а","как","это","к","но","у","из","по",
+    "да","то","все","за","бы","до","же","уже","ты","мы","вы","они","так","вот",
+    "быть","есть","или","про","ну","при","со","от","об","для","им","его","её",
+    "их","нас","вас","мне","тебе","тоже","ещё","еще","если","когда","тут","там",
+    "здесь","меня","была","был","буду","могу","надо","нет","нам","всё","очень",
+    "тебя","него","неё","них","ему","ней","ним","мой","моя","моё","твой","твоя",
+    "этот","эта","эти","тот","та","те","сам","сама","само","сами","всего","мне",
+    "the","a","an","is","it","in","of","to","and","i","you","he","she","we","they",
+    "for","on","at","by","with","as","be","was","are","this","that","have","has",
+    "had","do","did","will","would","could","should","not","but","or","if","so",
+    "no","my","your","his","her","our","its","me","him","us","them","more","just",
+    "get","one","now","know","see","like","well","from","been","were","all","also",
+    "when","where","how","who","what","which","can","may","than","then","into","there",
+})
+
+_EMOJI_RE = _re.compile(
+    r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF'
+    r'\U0001F700-\U0001F77F\U0001F780-\U0001F7FF\U0001F800-\U0001F8FF'
+    r'\U0001F900-\U0001F9FF\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF'
+    r'\U00002702-\U000027B0\u2600-\u2B55]+',
+    flags=_re.UNICODE,
+)
+
+
+@router.post("/app/api/stats/words")
+async def miniapp_words(
+    payload: StatsRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid Telegram init data")
+
+    owner_telegram_id = int(user["id"])
+    _sub_repo = SubscriptionRepository(session)
+    _sub_config = await _sub_repo.get_config()
+    _active_sub = await _sub_repo.get_active_subscription(owner_telegram_id)
+    if not (_active_sub is not None and _sub_config.is_enabled):
+        return {"locked": True}
+
+    conn_result = await session.execute(
+        select(BusinessConnection.business_connection_id).where(
+            BusinessConnection.user_telegram_id == owner_telegram_id
+        )
+    )
+    connection_ids = [row[0] for row in conn_result.all()]
+    if not connection_ids:
+        return {"locked": False, "top_words": [], "top_emojis": [], "total_analyzed": 0}
+
+    since = dt.datetime.utcnow() - dt.timedelta(days=90)
+    rows = (await session.execute(
+        select(Message.text, Message.caption)
+        .where(
+            Message.business_connection_id.in_(connection_ids),
+            Message.sent_at >= since,
+        )
+        .limit(15000)
+    )).all()
+
+    word_counts: _collections.Counter = _collections.Counter()
+    emoji_counts: _collections.Counter = _collections.Counter()
+    total = 0
+
+    for text, caption in rows:
+        combined = " ".join(filter(None, [text, caption]))
+        if not combined.strip():
+            continue
+        total += 1
+        for w in _re.findall(r'\b[a-zA-Zа-яёА-ЯЁ]{3,}\b', combined.lower()):
+            if w not in _STOP_WORDS:
+                word_counts[w] += 1
+        for e in _EMOJI_RE.findall(combined):
+            emoji_counts[e] += 1
+
+    return {
+        "locked": False,
+        "top_words":   [{"word": w, "count": c} for w, c in word_counts.most_common(20)],
+        "top_emojis":  [{"emoji": e, "count": c} for e, c in emoji_counts.most_common(15)],
+        "total_analyzed": total,
+    }
+
+
+# ── Daily digest (premium) ───────────────────────────────────────────────────
+
+@router.post("/app/api/stats/digest")
+async def miniapp_digest(
+    payload: StatsRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid Telegram init data")
+
+    owner_telegram_id = int(user["id"])
+    _sub_repo = SubscriptionRepository(session)
+    _sub_config = await _sub_repo.get_config()
+    _active_sub = await _sub_repo.get_active_subscription(owner_telegram_id)
+    if not (_active_sub is not None and _sub_config.is_enabled):
+        return {"locked": True}
+
+    conn_result = await session.execute(
+        select(BusinessConnection.business_connection_id).where(
+            BusinessConnection.user_telegram_id == owner_telegram_id
+        )
+    )
+    connection_ids = [row[0] for row in conn_result.all()]
+    if not connection_ids:
+        return {"locked": False, "total_today": 0}
+
+    today_start = dt.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    today_rows = (await session.execute(
+        select(Message.chat_id, Message.is_outgoing, Message.sent_at)
+        .where(
+            Message.business_connection_id.in_(connection_ids),
+            Message.sent_at >= today_start,
+        )
+        .order_by(Message.sent_at)
+    )).all()
+
+    total_today = len(today_rows)
+    if total_today == 0:
+        return {"locked": False, "total_today": 0}
+
+    incoming = sum(1 for m in today_rows if not m.is_outgoing)
+    outgoing = sum(1 for m in today_rows if m.is_outgoing)
+
+    chat_msg_counts: dict[int, int] = {}
+    for m in today_rows:
+        chat_msg_counts[m.chat_id] = chat_msg_counts.get(m.chat_id, 0) + 1
+    active_chats = len(chat_msg_counts)
+
+    hour_counts: dict[int, int] = {}
+    for m in today_rows:
+        h = m.sent_at.hour
+        hour_counts[h] = hour_counts.get(h, 0) + 1
+    peak_hour = max(hour_counts, key=lambda h: hour_counts[h]) if hour_counts else None
+
+    # Unanswered: chats where the last message of today was incoming (not yet replied)
+    last_is_outgoing: dict[int, bool] = {}
+    for m in today_rows:  # ordered by sent_at — last write wins
+        last_is_outgoing[m.chat_id] = bool(m.is_outgoing)
+    unanswered_count = sum(1 for v in last_is_outgoing.values() if not v)
+
+    return {
+        "locked": False,
+        "date": today_start.date().isoformat(),
+        "total_today": total_today,
+        "incoming": incoming,
+        "outgoing": outgoing,
+        "active_chats": active_chats,
+        "peak_hour": peak_hour,
+        "unanswered_count": unanswered_count,
+    }
 
 
 @router.post("/app/api/game/send")

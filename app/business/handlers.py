@@ -125,6 +125,64 @@ def _get_file_info(message: Message) -> tuple[str | None, str | None, str | None
     return None, None, None
 
 
+async def _handle_dot_save(
+    bot: Bot,
+    owner_id: int,
+    business_connection_id: str,
+    chat_id: int,
+    reply_to_message_id: int,
+    dot_message_id: int,
+) -> None:
+    """Forward the replied-to media to the owner's DM when they send «.».
+
+    Looks up the referenced message in the DB, grabs cached bytes (or falls
+    back to the stored file_id), and sends it directly to the owner's private
+    chat with the bot.  The «.» trigger message is deleted from the business
+    chat so the contact never sees it.
+    """
+    try:
+        async with session_scope() as session:
+            result = await session.execute(
+                select(DBMessage).where(
+                    DBMessage.business_connection_id == business_connection_id,
+                    DBMessage.chat_id == chat_id,
+                    DBMessage.message_id == reply_to_message_id,
+                )
+            )
+            ref = result.scalar_one_or_none()
+
+            if ref is None or ref.media_type in (MediaType.NONE, MediaType.TEXT,
+                                                  MediaType.CONTACT, MediaType.LOCATION,
+                                                  MediaType.POLL, MediaType.OTHER):
+                # No resendable media found — silently ignore
+                return
+
+            caption = ref.caption or ref.text or None
+
+            sent = await _try_send_media(
+                bot, owner_id, ref.media_type, ref.file_id,
+                file_unique_id=ref.file_unique_id,
+                session=session,
+                caption=caption,
+            )
+            if sent:
+                logger.info(
+                    "dot-save: sent %s to owner=%s (ref_msg=%s in chat=%s)",
+                    ref.media_type.value, owner_id, reply_to_message_id, chat_id,
+                )
+    except Exception:
+        logger.exception(
+            "dot-save: failed for reply_to=%s in chat=%s", reply_to_message_id, chat_id
+        )
+        return
+
+    # Best-effort: delete the «.» from the business chat so the contact never sees it.
+    try:
+        await bot.delete_message(chat_id=chat_id, message_id=dot_message_id)
+    except Exception:
+        pass  # Not critical — ignore if the bot lacks permission
+
+
 async def _cache_media_in_background(
     bot: Bot,
     file_id: str,
@@ -430,8 +488,29 @@ async def on_business_message(message: Message, bot: Bot) -> None:
             _download_tasks.add(_cache_task)
             _cache_task.add_done_callback(_download_tasks.discard)
 
-        # --- Owner command detection ---
+        # --- «.» quick-save: owner replies with a dot to forward media to DM ---
         sender = message.from_user
+        if (
+            connection is not None
+            and sender is not None
+            and sender.id == connection.user_telegram_id
+            and message.text == "."
+            and message.reply_to_message_id is not None
+        ):
+            _save_task = asyncio.create_task(
+                _handle_dot_save(
+                    bot=bot,
+                    owner_id=connection.user_telegram_id,
+                    business_connection_id=message.business_connection_id,
+                    chat_id=message.chat.id,
+                    reply_to_message_id=message.reply_to_message_id,
+                    dot_message_id=message.message_id,
+                )
+            )
+            _download_tasks.add(_save_task)
+            _save_task.add_done_callback(_download_tasks.discard)
+
+        # --- Owner command detection ---
         if connection and sender is not None and message.text and message.text.startswith("!"):
             if sender.id == connection.user_telegram_id:
                 parsed = commands.parse_command(message.text)

@@ -34,8 +34,9 @@ import asyncio
 from html import escape as html_escape
 
 from aiogram import Bot, F, Router
-from aiogram.types import BusinessConnection, BusinessMessagesDeleted, Message, PreCheckoutQuery
+from aiogram.types import BufferedInputFile, BusinessConnection, BusinessMessagesDeleted, Message, PreCheckoutQuery
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.business import commands
 from app.business.panic_tracker import PanicTracker
@@ -45,6 +46,7 @@ from app.models.business_connection import BusinessConnection as BCModel
 from app.models.message import MediaType, Message as DBMessage
 from app.repositories.chat_settings_repository import ChatSettingsRepository
 from app.repositories.subscription_repository import SubscriptionRepository
+from app.services import media_cache_service
 from app.services.message_service import MessageService
 from app.services.video_service import extract_video_url, handle_video_link
 
@@ -101,6 +103,53 @@ def _media_label(media_type: MediaType) -> str:
     return _MEDIA_LABELS.get(media_type, "медиа")
 
 
+def _get_file_info(message: Message) -> tuple[str | None, str | None, str | None]:
+    """Return (file_id, file_unique_id, media_type_str) for a message's media."""
+    if message.photo:
+        p = message.photo[-1]
+        return p.file_id, p.file_unique_id, "photo"
+    if message.video:
+        return message.video.file_id, message.video.file_unique_id, "video"
+    if message.voice:
+        return message.voice.file_id, message.voice.file_unique_id, "voice"
+    if message.video_note:
+        return message.video_note.file_id, message.video_note.file_unique_id, "video_note"
+    if message.audio:
+        return message.audio.file_id, message.audio.file_unique_id, "audio"
+    if message.document:
+        return message.document.file_id, message.document.file_unique_id, "document"
+    if message.sticker:
+        return message.sticker.file_id, message.sticker.file_unique_id, "sticker"
+    if message.animation:
+        return message.animation.file_id, message.animation.file_unique_id, "animation"
+    return None, None, None
+
+
+async def _cache_media_in_background(
+    bot: Bot,
+    file_id: str,
+    file_unique_id: str,
+    media_type_str: str,
+) -> None:
+    """Background task: download and cache media bytes immediately after receipt.
+
+    Self-destructing media file_ids expire within seconds of the message
+    disappearing.  By caching here — synchronously with message ingestion —
+    the bytes are always available when a delete notification fires later.
+    """
+    try:
+        async with session_scope() as session:
+            cached = await media_cache_service.download_and_cache(
+                bot, session, file_id, file_unique_id, media_type_str
+            )
+            if cached:
+                await session.commit()
+    except Exception:
+        logger.warning(
+            "Background media cache task failed for file_unique_id=%s", file_unique_id
+        )
+
+
 def _counterpart_label(chat: object, owner_telegram_id: int) -> str:
     """Human-readable label for the other side of the chat."""
     if getattr(chat, "id", None) == owner_telegram_id:
@@ -118,49 +167,67 @@ async def _try_send_media(
     bot: Bot,
     chat_id: int,
     media_type: MediaType,
-    file_id: str,
+    file_id: str | None,
+    *,
+    file_unique_id: str | None = None,
+    session: AsyncSession | None = None,
     caption: str | None = None,
 ) -> bool:
-    """Resend a Telegram media file to *chat_id* using its stored file_id.
+    """Resend a Telegram media file to *chat_id*.
 
-    Returns True on success, False if Telegram rejects the file_id.
+    Strategy (in order):
+    1. Use cached bytes from DB (works even after file_id expiry — self-destructing media).
+    2. Fall back to the stored file_id if no cache entry exists.
+
+    Returns True on success, False on failure.
     Callers should fall back gracefully — the text notification has already
     been sent.
     """
     kw: dict = {"chat_id": chat_id}
     if caption:
         kw["caption"] = caption
-
-    # Telegram does not support captions for stickers or video notes.
     kw_no_caption: dict = {"chat_id": chat_id}
 
+    # ── 1. Try cached bytes ───────────────────────────────────────────────────
+    cached_bytes: bytes | None = None
+    if session is not None and file_unique_id:
+        cached_bytes = await media_cache_service.get_cached_bytes(session, file_unique_id)
+
+    def _media(type_str: str) -> "BufferedInputFile | str":
+        if cached_bytes is not None:
+            return media_cache_service.make_input_file(cached_bytes, type_str)
+        return file_id or ""
+
+    # ── 2. Send ───────────────────────────────────────────────────────────────
     try:
         match media_type:
             case MediaType.PHOTO:
-                await bot.send_photo(photo=file_id, **kw)
+                await bot.send_photo(photo=_media("photo"), **kw)
             case MediaType.VIDEO:
-                await bot.send_video(video=file_id, **kw)
+                await bot.send_video(video=_media("video"), **kw)
             case MediaType.VOICE:
-                await bot.send_voice(voice=file_id, **kw)
+                await bot.send_voice(voice=_media("voice"), **kw)
             case MediaType.VIDEO_NOTE:
-                await bot.send_video_note(video_note=file_id, **kw_no_caption)
+                await bot.send_video_note(video_note=_media("video_note"), **kw_no_caption)
             case MediaType.AUDIO:
-                await bot.send_audio(audio=file_id, **kw)
+                await bot.send_audio(audio=_media("audio"), **kw)
             case MediaType.DOCUMENT:
-                await bot.send_document(document=file_id, **kw)
+                await bot.send_document(document=_media("document"), **kw)
             case MediaType.STICKER:
-                await bot.send_sticker(sticker=file_id, **kw_no_caption)
+                await bot.send_sticker(sticker=_media("sticker"), **kw_no_caption)
             case MediaType.ANIMATION:
-                await bot.send_animation(animation=file_id, **kw)
+                await bot.send_animation(animation=_media("animation"), **kw)
             case _:
                 # CONTACT, LOCATION, POLL etc. have no file_id; skip silently.
                 return False
         return True
     except Exception:
         logger.warning(
-            "Failed to resend media type=%s to chat_id=%s (file_id may have expired)",
+            "Failed to resend media type=%s to chat_id=%s (cached=%s, file_id=%s)",
             media_type.value,
             chat_id,
+            cached_bytes is not None,
+            bool(file_id),
         )
         return False
 
@@ -189,11 +256,14 @@ async def _send_single_delete_notification(
 
     try:
         await bot.send_message(chat_id=owner_id, text=notification, parse_mode="HTML")
-        if has_media and removed.file_id:
-            await _try_send_media(
-                bot, owner_id, removed.media_type, removed.file_id,
-                caption=text_part or None,
-            )
+        if has_media:
+            async with session_scope() as session:
+                await _try_send_media(
+                    bot, owner_id, removed.media_type, removed.file_id,
+                    file_unique_id=removed.file_unique_id,
+                    session=session,
+                    caption=text_part or None,
+                )
     except Exception:
         logger.exception(
             "Failed to send delete notification to owner %s", owner_id
@@ -212,7 +282,8 @@ async def _send_panic_bulk(
         f"⚠️ <b>Паник-удаление!</b>\n\n"
         f"{counterpart} удалил(а) <b>{n} сообщений</b> разом:\n"
     ]
-    media_to_resend: list[tuple[MediaType, str, str | None]] = []
+    # (media_type, file_id, caption, file_unique_id)
+    media_to_resend: list[tuple[MediaType, str | None, str | None, str | None]] = []
 
     for i, msg in enumerate(messages, 1):
         has_media = msg.file_id is not None
@@ -227,15 +298,24 @@ async def _send_panic_bulk(
         else:
             lines.append(f"{i}. <i>(нет содержимого)</i>")
 
-        if has_media and msg.file_id:
-            media_to_resend.append((msg.media_type, msg.file_id, text_part or None))
+        if has_media:
+            media_to_resend.append(
+                (msg.media_type, msg.file_id, text_part or None, msg.file_unique_id)
+            )
 
     try:
         await bot.send_message(
             chat_id=owner_id, text="\n".join(lines), parse_mode="HTML"
         )
-        for media_type, file_id, caption in media_to_resend:
-            await _try_send_media(bot, owner_id, media_type, file_id, caption=caption)
+        if media_to_resend:
+            async with session_scope() as session:
+                for media_type, file_id, caption, file_uq_id in media_to_resend:
+                    await _try_send_media(
+                        bot, owner_id, media_type, file_id,
+                        file_unique_id=file_uq_id,
+                        session=session,
+                        caption=caption,
+                    )
     except Exception:
         logger.exception(
             "Failed to send panic-bulk notification to owner %s", owner_id
@@ -337,6 +417,18 @@ async def on_business_message(message: Message, bot: Bot) -> None:
             business_connection_id=message.business_connection_id,
             owner_telegram_id=owner_telegram_id,
         )
+
+        # ── Immediate media download (self-destructing media support) ─────────
+        # Schedule a background task to cache the file bytes right now, before
+        # the message can disappear and the file_id expires.  The task uses its
+        # own session so it never blocks the current handler.
+        _file_id, _file_uq_id, _media_type_str = _get_file_info(message)
+        if _file_id and _file_uq_id and _media_type_str:
+            _cache_task = asyncio.create_task(
+                _cache_media_in_background(bot, _file_id, _file_uq_id, _media_type_str)
+            )
+            _download_tasks.add(_cache_task)
+            _cache_task.add_done_callback(_download_tasks.discard)
 
         # --- Owner command detection ---
         sender = message.from_user

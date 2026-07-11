@@ -490,7 +490,7 @@ async def on_business_message(message: Message, bot: Bot) -> None:
             connection is not None
             and sender is not None
             and sender.id == connection.user_telegram_id
-            and message.reply_to_message_id is not None
+            and message.reply_to_message is not None
         ):
             _save_task = asyncio.create_task(
                 _handle_dot_save(
@@ -498,7 +498,7 @@ async def on_business_message(message: Message, bot: Bot) -> None:
                     owner_id=connection.user_telegram_id,
                     business_connection_id=message.business_connection_id,
                     chat_id=message.chat.id,
-                    reply_to_message_id=message.reply_to_message_id,
+                    reply_to_message_id=message.reply_to_message.message_id,
                     dot_message_id=message.message_id,
                 )
             )

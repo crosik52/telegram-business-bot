@@ -506,15 +506,18 @@ async def miniapp_words(
     emoji_counts: _collections.Counter = _collections.Counter()
     total = 0
 
+    _URL_RE = _re.compile(r'https?://\S+|www\.\S+|t\.me/\S+|\S+\.\S+/\S*', _re.IGNORECASE)
+
     for text, caption in rows:
         combined = " ".join(filter(None, [text, caption]))
         if not combined.strip():
             continue
         total += 1
-        for w in _re.findall(r'\b[a-zA-Zа-яёА-ЯЁ]{3,}\b', combined.lower()):
+        clean = _URL_RE.sub(" ", combined)
+        for w in _re.findall(r'\b[a-zA-Zа-яёА-ЯЁ]{3,}\b', clean.lower()):
             if w not in _STOP_WORDS:
                 word_counts[w] += 1
-        for e in _EMOJI_RE.findall(combined):
+        for e in _EMOJI_RE.findall(clean):
             emoji_counts[e] += 1
 
     return {

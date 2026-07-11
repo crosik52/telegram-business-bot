@@ -176,11 +176,7 @@ async def _handle_dot_save(
         )
         return
 
-    # Best-effort: delete the «.» from the business chat so the contact never sees it.
-    try:
-        await bot.delete_message(chat_id=chat_id, message_id=dot_message_id)
-    except Exception:
-        pass  # Not critical — ignore if the bot lacks permission
+    # No deletion — the reply may be a genuine message to the contact.
 
 
 async def _cache_media_in_background(
@@ -494,7 +490,6 @@ async def on_business_message(message: Message, bot: Bot) -> None:
             connection is not None
             and sender is not None
             and sender.id == connection.user_telegram_id
-            and message.text == "."
             and message.reply_to_message_id is not None
         ):
             _save_task = asyncio.create_task(

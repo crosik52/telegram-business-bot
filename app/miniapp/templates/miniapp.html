@@ -1546,7 +1546,7 @@
       const unaHtml = data.unanswered_count > 0
         ? `<div class="digest-row digest-warn">
              <span class="digest-label">💬 Без ответа</span>
-             <span class="digest-val">${data.unanswered_count} ${pluralize(data.unanswered_count,"чат","чата","чатов")}</span>
+             <span class="digest-val">${data.unanswered_count} ${data.unanswered_count === 1 ? "чат" : data.unanswered_count < 5 ? "чата" : "чатов"}</span>
            </div>`
         : `<div class="digest-row digest-ok">
              <span class="digest-label">✅ Без ответа</span>

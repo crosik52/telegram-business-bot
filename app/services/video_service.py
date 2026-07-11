@@ -262,6 +262,7 @@ async def handle_video_link(
             return
         try:
             await bot.edit_message_text(
+                business_connection_id=business_connection_id,
                 chat_id=chat_id,
                 message_id=status_msg.message_id,
                 text=text,
@@ -274,6 +275,7 @@ async def handle_video_link(
             return
         try:
             await bot.delete_message(
+                business_connection_id=business_connection_id,
                 chat_id=chat_id,
                 message_id=status_msg.message_id,
             )

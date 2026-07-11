@@ -178,41 +178,32 @@ async def _handle_dot_save(
                 )
                 return  # text / contact / poll — no file to forward
 
-            # ── Gate: only save self-destructing media ────────────────────────
-            # Regular media is cached immediately on arrival by the background
-            # task.  If bytes are already in cache the file is accessible by
-            # normal means — skip.  An empty cache means Telegram blocked the
-            # download (= self-destructing / view-once) — proceed with save.
-            if ref.file_unique_id:
-                cached_check = await media_cache_service.get_cached_bytes(
-                    session, ref.file_unique_id
-                )
-                if cached_check is not None:
-                    logger.info(
-                        "dot-save: skipping — regular media already cached (type=%s msg=%s)",
-                        ref.media_type.value, reply_to_message_id,
-                    )
-                    return  # ordinary media — no action needed
+            if not ref.file_unique_id:
+                return  # no file info — nothing to do
 
             logger.info(
-                "dot-save: found %s file_id=%s cached=%s",
-                ref.media_type.value,
-                ref.file_id[:20] + "…",
-                ref.file_unique_id,
+                "dot-save: found %s file_id=%.20s…",
+                ref.media_type.value, ref.file_id,
             )
 
-            # ── Ensure bytes are cached ───────────────────────────────────────
-            # For voice/audio or uncached (self-destructing) media: try to
-            # download right now — the reply is fresh, file may still be live.
-            if ref.file_unique_id:
-                cached = await media_cache_service.get_cached_bytes(session, ref.file_unique_id)
-                if cached is None:
-                    logger.info("dot-save: no cache hit — attempting fresh download")
-                    await media_cache_service.download_and_cache(
-                        bot, session, ref.file_id, ref.file_unique_id,
-                        ref.media_type.value,
-                    )
-                    await session.flush()
+            # ── Gate: skip regular media, only forward self-destructing ───────
+            # Try to download the file right now.
+            # • Download succeeds → file is accessible normally → regular media → skip.
+            # • Download fails    → Telegram blocked access → self-destructing → proceed.
+            fresh_ok = await media_cache_service.download_and_cache(
+                bot, session, ref.file_id, ref.file_unique_id, ref.media_type.value
+            )
+            if fresh_ok:
+                logger.info(
+                    "dot-save: skipping — download succeeded = regular media (type=%s msg=%s)",
+                    ref.media_type.value, reply_to_message_id,
+                )
+                await session.flush()
+                return
+
+            logger.info(
+                "dot-save: download blocked by Telegram — treating as self-destructing"
+            )
 
             caption = ref.caption or ref.text or None
             sent = await _try_send_media(

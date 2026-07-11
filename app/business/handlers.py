@@ -178,24 +178,21 @@ async def _handle_dot_save(
                 )
                 return  # text / contact / poll — no file to forward
 
-            # ── Gate: only save self-destructing media or voice/audio ─────────
-            # Voice/audio: always save on reply (owner wants to keep them).
-            # Other media: only save if the background download FAILED to cache
-            # the file — regular media is cached immediately on arrival, so an
-            # empty cache entry means Telegram blocked access (= self-destructing).
-            _AUDIO_TYPES = {MediaType.VOICE, MediaType.AUDIO, MediaType.VIDEO_NOTE}
-            if ref.media_type not in _AUDIO_TYPES:
-                cached_check = None
-                if ref.file_unique_id:
-                    cached_check = await media_cache_service.get_cached_bytes(
-                        session, ref.file_unique_id
-                    )
+            # ── Gate: only save self-destructing media ────────────────────────
+            # Regular media is cached immediately on arrival by the background
+            # task.  If bytes are already in cache the file is accessible by
+            # normal means — skip.  An empty cache means Telegram blocked the
+            # download (= self-destructing / view-once) — proceed with save.
+            if ref.file_unique_id:
+                cached_check = await media_cache_service.get_cached_bytes(
+                    session, ref.file_unique_id
+                )
                 if cached_check is not None:
                     logger.info(
                         "dot-save: skipping — regular media already cached (type=%s msg=%s)",
                         ref.media_type.value, reply_to_message_id,
                     )
-                    return  # ordinary photo/video/document — no action needed
+                    return  # ordinary media — no action needed
 
             logger.info(
                 "dot-save: found %s file_id=%s cached=%s",

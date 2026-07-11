@@ -275,12 +275,14 @@ async def handle_video_link(
             return
         try:
             await bot.delete_message(
-                business_connection_id=business_connection_id,
                 chat_id=chat_id,
                 message_id=status_msg.message_id,
             )
-        except Exception:
-            pass
+        except Exception as _del_exc:
+            logger.warning(
+                "Could not delete status message chat_id=%s msg_id=%s: %s",
+                chat_id, status_msg.message_id, _del_exc,
+            )
 
     def _progress_hook(d: dict) -> None:
         """Called by yt-dlp in the executor thread on every progress tick."""

@@ -157,7 +157,6 @@ async def _handle_dot_save(
         async with session_scope() as session:
             result = await session.execute(
                 select(DBMessage).where(
-                    DBMessage.business_connection_id == business_connection_id,
                     DBMessage.chat_id == chat_id,
                     DBMessage.message_id == reply_to_message_id,
                 )

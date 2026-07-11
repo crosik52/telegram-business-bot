@@ -1,0 +1,109 @@
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 941, in do_execute
+    cursor.execute(statement, parameters)
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 568, in execute
+    self._adapt_connection.await_(
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 546, in _prepare_and_execute
+    self._handle_exception(error)
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 497, in _handle_exception
+    self._adapt_connection._handle_exception(error)
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 780, in _handle_exception
+    raise translated_error from error
+sqlalchemy.exc.IntegrityError: (sqlalchemy.dialects.postgresql.asyncpg.IntegrityError) <class 'asyncpg.exceptions.UniqueViolationError'>: duplicate key value violates unique constraint "ix_media_cache_file_unique_id"
+DETAIL:  Key (file_unique_id)=(AgAD8ZkAAlhzkEo) already exists.
+[SQL: INSERT INTO media_cache (file_unique_id, file_id, media_type, file_data, file_size, created_at) VALUES ($1::VARCHAR, $2::VARCHAR, $3::VARCHAR, $4::BYTEA, $5::INTEGER, $6::TIMESTAMP WITH TIME ZONE) RETURNING media_cache.id]
+[parameters: ('AgAD8ZkAAlhzkEo', 'AwACAgIAAxkBAAEIa9ZqUdolgwq42ZU3HsdOZWGHaND2RAAC8ZkAAlhzkEpcz0VDIk23LjwE', 'voice', b'OggS\x00\x02\x00\x00\x00\x00\x00\x00\x00\x00M\xa8\x98\xf9\x00\x00\x00\x00D%\x9d\xc6\x01\x13OpusHead\x01\x018\x01\x80\xbb\x00\x00\x00\x00\x00OggS\x00 ... (13204 characters truncated) ... \xf7\xb7e\xd90\xea\x93x\x07\xc9y\xc8\xc9W\xc0\xfe\xc8+:5\xa0\x1a\xbcM\xc5\x87\x01;\xa1\x88\xc3\x9f"\x7f\xa9\xeb^\xa7\xadu\x8e\xb1\xf5\xc6\xeb\x8c\x00', 4787, datetime.datetime(2026, 7, 11, 5, 52, 38, 563297, tzinfo=datetime.timezone.utc))]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+2026-07-11T05:52:38+0000 | WARNING  | app.business.handlers | Background media cache task failed for file_unique_id=AgAD8ZkAAlhzkEo
+2026-07-11T05:52:44+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745832340
+2026-07-11T05:52:44+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745832341
+2026-07-11T05:52:44+0000 | INFO     | app.services.message_service | Stored new business message chat_id=1335699132 message_id=1431160 media=text
+2026-07-11T05:52:44+0000 | INFO     | aiogram.event | Update id=745832340 is handled. Duration 16 ms by bot id=1162707887
+2026-07-11T05:52:44+0000 | INFO     | http | POST /webhook -> 200 (17.9ms)
+2026-07-11T05:52:44+0000 | INFO     | app.services.message_service | Stored new business message chat_id=6291032910 message_id=551896 media=text
+2026-07-11T05:52:44+0000 | INFO     | app.business.handlers | dot-save: triggered owner=1335699132 chat=6291032910 reply_to=551894
+2026-07-11T05:52:44+0000 | INFO     | aiogram.event | Update id=745832341 is handled. Duration 18 ms by bot id=1162707887
+2026-07-11T05:52:44+0000 | INFO     | http | POST /webhook -> 200 (20.5ms)
+2026-07-11T05:52:44+0000 | INFO     | app.business.handlers | dot-save: found voice file_id=AwACAgIAAxkBAAEIa9Zq…
+2026-07-11T05:52:44+0000 | INFO     | app.business.handlers | dot-save: skipping — download succeeded = regular media (type=voice msg=551894)
+2026-07-11T05:52:46+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745832343
+2026-07-11T05:52:46+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745832342
+2026-07-11T05:52:46+0000 | INFO     | app.services.message_service | Stored new business message chat_id=6291032910 message_id=551897 media=text
+2026-07-11T05:52:46+0000 | INFO     | app.business.handlers | dot-save: triggered owner=1335699132 chat=6291032910 reply_to=551895
+2026-07-11T05:52:46+0000 | INFO     | aiogram.event | Update id=745832343 is handled. Duration 14 ms by bot id=1162707887
+2026-07-11T05:52:46+0000 | WARNING  | app.business.handlers | dot-save: message reply_to=551895 not found in DB (chat=6291032910 conn=JscGZwkpUUq_FQAAkqF46UAF6Z0)
+2026-07-11T05:52:46+0000 | INFO     | http | POST /webhook -> 200 (15.8ms)
+2026-07-11T05:52:46+0000 | INFO     | app.services.message_service | Stored new business message chat_id=1335699132 message_id=1431161 media=text
+2026-07-11T05:52:46+0000 | INFO     | aiogram.event | Update id=745832342 is handled. Duration 15 ms by bot id=1162707887
+2026-07-11T05:52:46+0000 | INFO     | http | POST /webhook -> 200 (17.8ms)
+2026-07-11T05:52:48+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745832345
+2026-07-11T05:52:48+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745832344
+2026-07-11T05:52:48+0000 | INFO     | app.services.message_service | Stored new business message chat_id=1335699132 message_id=1431162 media=text
+2026-07-11T05:52:48+0000 | INFO     | app.business.handlers | dot-save: triggered owner=6291032910 chat=1335699132 reply_to=1431159
+2026-07-11T05:52:48+0000 | INFO     | aiogram.event | Update id=745832345 is handled. Duration 13 ms by bot id=1162707887
+2026-07-11T05:52:48+0000 | WARNING  | app.business.handlers | dot-save: message reply_to=1431159 not found in DB (chat=1335699132 conn=1XJmBOPFiUo5EgAAXNEZShMW8dY)
+2026-07-11T05:52:48+0000 | INFO     | http | POST /webhook -> 200 (14.8ms)
+2026-07-11T05:52:48+0000 | INFO     | app.services.message_service | Stored new business message chat_id=6291032910 message_id=551898 media=text
+2026-07-11T05:52:48+0000 | INFO     | aiogram.event | Update id=745832344 is handled. Duration 21 ms by bot id=1162707887
+2026-07-11T05:52:48+0000 | INFO     | http | POST /webhook -> 200 (23.1ms)
+2026-07-11T05:52:51+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745832347
+2026-07-11T05:52:51+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745832346
+2026-07-11T05:52:51+0000 | INFO     | app.services.message_service | Stored new business message chat_id=1335699132 message_id=1431163 media=text
+2026-07-11T05:52:51+0000 | INFO     | app.business.handlers | dot-save: triggered owner=6291032910 chat=1335699132 reply_to=1431158
+2026-07-11T05:52:51+0000 | INFO     | aiogram.event | Update id=745832347 is handled. Duration 9 ms by bot id=1162707887
+2026-07-11T05:52:51+0000 | INFO     | http | POST /webhook -> 200 (11.0ms)
+2026-07-11T05:52:51+0000 | INFO     | app.services.message_service | Stored new business message chat_id=6291032910 message_id=551899 media=text
+2026-07-11T05:52:51+0000 | INFO     | app.business.handlers | dot-save: found voice file_id=AwACAgIAAxkBAAEIa9Zq…
+2026-07-11T05:52:51+0000 | INFO     | app.business.handlers | dot-save: skipping — download succeeded = regular media (type=voice msg=1431158)
+2026-07-11T05:52:51+0000 | INFO     | aiogram.event | Update id=745832346 is handled. Duration 10 ms by bot id=1162707887
+2026-07-11T05:52:51+0000 | INFO     | http | POST /webhook -> 200 (12.6ms)
+2026-07-11T05:52:51+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745832348
+2026-07-11T05:52:52+0000 | INFO     | app.services.message_service | Stored new business message chat_id=3680130 message_id=551900 media=text
+2026-07-11T05:52:52+0000 | INFO     | aiogram.event | Update id=745832348 is handled. Duration 10 ms by bot id=1162707887
+2026-07-11T05:52:52+0000 | INFO     | http | POST /webhook -> 200 (12.3ms)
+2026-07-11T05:53:01+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745832349
+2026-07-11T05:53:01+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745832350
+2026-07-11T05:53:01+0000 | INFO     | app.services.message_service | Stored new business message chat_id=6291032910 message_id=551901 media=text
+2026-07-11T05:53:01+0000 | INFO     | aiogram.event | Update id=745832349 is handled. Duration 9 ms by bot id=1162707887
+2026-07-11T05:53:01+0000 | INFO     | http | POST /webhook -> 200 (11.6ms)
+2026-07-11T05:53:01+0000 | INFO     | app.services.message_service | Stored new business message chat_id=1335699132 message_id=1431164 media=text
+2026-07-11T05:53:01+0000 | INFO     | app.business.handlers | dot-save: triggered owner=6291032910 chat=1335699132 reply_to=1431159
+2026-07-11T05:53:01+0000 | INFO     | aiogram.event | Update id=745832350 is handled. Duration 10 ms by bot id=1162707887
+2026-07-11T05:53:01+0000 | INFO     | http | POST /webhook -> 200 (12.3ms)
+2026-07-11T05:53:01+0000 | WARNING  | app.business.handlers | dot-save: message reply_to=1431159 not found in DB (chat=1335699132 conn=1XJmBOPFiUo5EgAAXNEZShMW8dY)
+2026-07-11T05:53:12+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745832351
+2026-07-11T05:53:12+0000 | INFO     | app.services.message_service | Stored new business message chat_id=3680130 message_id=551902 media=text
+2026-07-11T05:53:12+0000 | INFO     | aiogram.event | Update id=745832351 is handled. Duration 8 ms by bot id=1162707887
+2026-07-11T05:53:12+0000 | INFO     | http | POST /webhook -> 200 (8.5ms)
+2026-07-11T05:53:34+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745832352
+2026-07-11T05:53:34+0000 | INFO     | app.services.message_service | Stored new business message chat_id=3680130 message_id=551903 media=text
+2026-07-11T05:53:34+0000 | INFO     | app.business.handlers | dot-save: triggered owner=1335699132 chat=3680130 reply_to=551900
+2026-07-11T05:53:34+0000 | INFO     | aiogram.event | Update id=745832352 is handled. Duration 9 ms by bot id=1162707887
+2026-07-11T05:53:34+0000 | INFO     | http | POST /webhook -> 200 (11.0ms)
+2026-07-11T05:53:34+0000 | INFO     | app.business.handlers | dot-save: message 551900 has no sendable media (type=MediaType.TEXT)
+2026-07-11T05:53:38+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745832353
+2026-07-11T05:53:38+0000 | INFO     | app.services.message_service | Stored new business message chat_id=3680130 message_id=551904 media=text
+2026-07-11T05:53:38+0000 | INFO     | aiogram.event | Update id=745832353 is handled. Duration 9 ms by bot id=1162707887
+2026-07-11T05:53:38+0000 | INFO     | http | POST /webhook -> 200 (11.7ms)
+2026-07-11T05:53:48+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745832354
+2026-07-11T05:53:48+0000 | INFO     | app.services.message_service | Stored new business message chat_id=3680130 message_id=551905 media=text
+2026-07-11T05:53:48+0000 | INFO     | app.business.handlers | dot-save: triggered owner=1335699132 chat=3680130 reply_to=551893
+2026-07-11T05:53:48+0000 | INFO     | app.business.handlers | dot-save: message 551893 has no sendable media (type=MediaType.TEXT)
+2026-07-11T05:53:48+0000 | INFO     | aiogram.event | Update id=745832354 is handled. Duration 9 ms by bot id=1162707887
+2026-07-11T05:53:48+0000 | INFO     | http | POST /webhook -> 200 (10.3ms)
+2026-07-11T05:54:03+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745832355
+2026-07-11T05:54:03+0000 | INFO     | app.services.message_service | Stored new business message chat_id=3680130 message_id=551906 media=text
+2026-07-11T05:54:03+0000 | INFO     | aiogram.event | Update id=745832355 is handled. Duration 6 ms by bot id=1162707887
+2026-07-11T05:54:03+0000 | INFO     | http | POST /webhook -> 200 (7.4ms)
+2026-07-11T05:54:36+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745832356
+2026-07-11T05:54:36+0000 | INFO     | app.services.message_service | Stored new business message chat_id=7955055695 message_id=1431165 media=voice
+2026-07-11T05:54:36+0000 | INFO     | aiogram.event | Update id=745832356 is handled. Duration 10 ms by bot id=1162707887
+2026-07-11T05:54:36+0000 | INFO     | http | POST /webhook -> 200 (11.8ms)

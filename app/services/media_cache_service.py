@@ -62,22 +62,27 @@ async def download_and_cache(
         await bot.download_file(tg_file.file_path, buf)
         data = buf.getvalue()
 
-        session.add(
-            MediaCache(
-                file_unique_id=file_unique_id,
-                file_id=file_id,
-                media_type=media_type,
-                file_data=data,
-                file_size=len(data),
+        try:
+            session.add(
+                MediaCache(
+                    file_unique_id=file_unique_id,
+                    file_id=file_id,
+                    media_type=media_type,
+                    file_data=data,
+                    file_size=len(data),
+                )
             )
-        )
-        await session.flush()
-        logger.debug(
-            "media_cache: stored %s (%d B, type=%s)",
-            file_unique_id,
-            len(data),
-            media_type,
-        )
+            await session.flush()
+            logger.debug(
+                "media_cache: stored %s (%d B, type=%s)",
+                file_unique_id,
+                len(data),
+                media_type,
+            )
+        except Exception:
+            # Another concurrent call already inserted this row — that's fine.
+            await session.rollback()
+            logger.debug("media_cache: duplicate insert ignored for %s", file_unique_id)
         return True
 
     except Exception:

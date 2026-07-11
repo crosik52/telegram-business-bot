@@ -125,6 +125,12 @@ def _get_file_info(message: Message) -> tuple[str | None, str | None, str | None
     return None, None, None
 
 
+_NO_FILE_TYPES = (
+    MediaType.NONE, MediaType.TEXT, MediaType.CONTACT,
+    MediaType.LOCATION, MediaType.POLL, MediaType.OTHER,
+)
+
+
 async def _handle_dot_save(
     bot: Bot,
     owner_id: int,
@@ -133,13 +139,20 @@ async def _handle_dot_save(
     reply_to_message_id: int,
     dot_message_id: int,
 ) -> None:
-    """Forward the replied-to media to the owner's DM when they send «.».
+    """Forward the replied-to media to the owner's DM on any reply.
 
-    Looks up the referenced message in the DB, grabs cached bytes (or falls
-    back to the stored file_id), and sends it directly to the owner's private
-    chat with the bot.  The «.» trigger message is deleted from the business
-    chat so the contact never sees it.
+    Strategy:
+    1. Look up the original message in DB.
+    2. Use already-cached bytes if available.
+    3. If not cached, try to download right now (file may still be valid
+       at reply time even if the background task failed or timed out).
+    4. Send to owner's DM.
+    5. Notify owner on failure so they're not left wondering.
     """
+    logger.info(
+        "dot-save: triggered owner=%s chat=%s reply_to=%s",
+        owner_id, chat_id, reply_to_message_id,
+    )
     try:
         async with session_scope() as session:
             result = await session.execute(
@@ -151,32 +164,75 @@ async def _handle_dot_save(
             )
             ref = result.scalar_one_or_none()
 
-            if ref is None or ref.media_type in (MediaType.NONE, MediaType.TEXT,
-                                                  MediaType.CONTACT, MediaType.LOCATION,
-                                                  MediaType.POLL, MediaType.OTHER):
-                # No resendable media found — silently ignore
-                return
+            if ref is None:
+                logger.warning(
+                    "dot-save: message reply_to=%s not found in DB (chat=%s conn=%s)",
+                    reply_to_message_id, chat_id, business_connection_id,
+                )
+                return  # message was never captured — nothing to do
+
+            if ref.media_type in _NO_FILE_TYPES or not ref.file_id:
+                logger.info(
+                    "dot-save: message %s has no sendable media (type=%s)",
+                    reply_to_message_id, ref.media_type,
+                )
+                return  # text / contact / poll — no file to forward
+
+            logger.info(
+                "dot-save: found %s file_id=%s cached=%s",
+                ref.media_type.value,
+                ref.file_id[:20] + "…",
+                ref.file_unique_id,
+            )
+
+            # ── Ensure bytes are cached ───────────────────────────────────────
+            # The background task might have failed (Telegram rejected the
+            # download) or might not have finished yet.  Try again right here —
+            # the owner's reply happened quickly, so the file may still be live.
+            if ref.file_unique_id:
+                cached = await media_cache_service.get_cached_bytes(session, ref.file_unique_id)
+                if cached is None:
+                    logger.info("dot-save: no cache hit — attempting fresh download")
+                    await media_cache_service.download_and_cache(
+                        bot, session, ref.file_id, ref.file_unique_id,
+                        ref.media_type.value,
+                    )
+                    await session.flush()
 
             caption = ref.caption or ref.text or None
-
             sent = await _try_send_media(
                 bot, owner_id, ref.media_type, ref.file_id,
                 file_unique_id=ref.file_unique_id,
                 session=session,
                 caption=caption,
             )
+
             if sent:
                 logger.info(
-                    "dot-save: sent %s to owner=%s (ref_msg=%s in chat=%s)",
-                    ref.media_type.value, owner_id, reply_to_message_id, chat_id,
+                    "dot-save: ✓ sent %s to owner=%s", ref.media_type.value, owner_id,
                 )
+            else:
+                logger.warning(
+                    "dot-save: ✗ could not send %s to owner=%s "
+                    "(file_id expired or Telegram blocked access)",
+                    ref.media_type.value, owner_id,
+                )
+                await bot.send_message(
+                    chat_id=owner_id,
+                    text=(
+                        "⚠️ Не удалось сохранить медиа — "
+                        "Telegram заблокировал доступ к файлу.\n"
+                        "Самоудаляющиеся медиа с таймером защищены на уровне API."
+                    ),
+                )
+
     except Exception:
         logger.exception(
-            "dot-save: failed for reply_to=%s in chat=%s", reply_to_message_id, chat_id
+            "dot-save: unexpected error reply_to=%s chat=%s",
+            reply_to_message_id, chat_id,
         )
-        return
 
-    # No deletion — the reply may be a genuine message to the contact.
+    # No deletion — the reply is a genuine message to the contact.
 
 
 async def _cache_media_in_background(

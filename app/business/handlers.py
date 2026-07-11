@@ -178,6 +178,25 @@ async def _handle_dot_save(
                 )
                 return  # text / contact / poll — no file to forward
 
+            # ── Gate: only save self-destructing media or voice/audio ─────────
+            # Voice/audio: always save on reply (owner wants to keep them).
+            # Other media: only save if the background download FAILED to cache
+            # the file — regular media is cached immediately on arrival, so an
+            # empty cache entry means Telegram blocked access (= self-destructing).
+            _AUDIO_TYPES = {MediaType.VOICE, MediaType.AUDIO, MediaType.VIDEO_NOTE}
+            if ref.media_type not in _AUDIO_TYPES:
+                cached_check = None
+                if ref.file_unique_id:
+                    cached_check = await media_cache_service.get_cached_bytes(
+                        session, ref.file_unique_id
+                    )
+                if cached_check is not None:
+                    logger.info(
+                        "dot-save: skipping — regular media already cached (type=%s msg=%s)",
+                        ref.media_type.value, reply_to_message_id,
+                    )
+                    return  # ordinary photo/video/document — no action needed
+
             logger.info(
                 "dot-save: found %s file_id=%s cached=%s",
                 ref.media_type.value,
@@ -186,9 +205,8 @@ async def _handle_dot_save(
             )
 
             # ── Ensure bytes are cached ───────────────────────────────────────
-            # The background task might have failed (Telegram rejected the
-            # download) or might not have finished yet.  Try again right here —
-            # the owner's reply happened quickly, so the file may still be live.
+            # For voice/audio or uncached (self-destructing) media: try to
+            # download right now — the reply is fresh, file may still be live.
             if ref.file_unique_id:
                 cached = await media_cache_service.get_cached_bytes(session, ref.file_unique_id)
                 if cached is None:

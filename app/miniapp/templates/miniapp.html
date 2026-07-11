@@ -1651,12 +1651,12 @@
         el.addEventListener("click", (e) => {
           e.stopPropagation();
           if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
-          switchMainTab("casino");
-          // Give casino tab time to render, then scroll to subscription banner
+          switchMainTab("donate");
+          // Give donate tab time to render, then scroll to subscription banner
           setTimeout(() => {
             const subBanner = document.querySelector(".sub-banner");
             if (subBanner) subBanner.scrollIntoView({ behavior: "smooth", block: "start" });
-          }, 150);
+          }, 300);
         });
       });
     }
@@ -1936,7 +1936,11 @@
         if (!questsLoaded && currentInitData) loadQuestsLeaderboard();
         else if (questsLoaded) renderQuestsTab();
       }
-      if (tab === "donate") renderDonate();
+      if (tab === "donate") {
+        // Wallet data contains subscription info — load it if not yet loaded
+        if (!casinoLoaded && currentInitData) loadWalletForDonate();
+        else renderDonate();
+      }
       if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
     }
 
@@ -1947,6 +1951,28 @@
     // ══════════════════════════════════════════════════════════════════
     // WALLET / CASINO
     // ══════════════════════════════════════════════════════════════════
+
+    // Load wallet silently for donate tab (subscription info lives in walletData)
+    async function loadWalletForDonate() {
+      const el = document.getElementById("donateContent");
+      el.innerHTML = `<div class="empty skeleton"><span class="big-emoji">💎</span>Загружаем…</div>`;
+      try {
+        const opts = { method: "POST", headers: {"Content-Type":"application/json"},
+                       body: JSON.stringify({initData: currentInitData}) };
+        const [wRes, pRes] = await Promise.all([
+          fetch("/app/api/wallet/info", opts),
+          fetch("/app/api/pet/list",    opts),
+        ]);
+        if (!wRes.ok) throw new Error();
+        walletData = await wRes.json();
+        petData    = pRes.ok ? await pRes.json() : { pets: [], available_chats: [], feed_cost: 20 };
+        casinoLoaded = true;
+        renderDonate();
+      } catch {
+        el.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить.<br>Попробуй обновить.</div>`;
+      }
+    }
+
     async function loadWallet() {
       const el = document.getElementById("casinoContent");
       el.innerHTML = `<div class="empty skeleton"><span class="big-emoji">🎰</span>Загружаем…</div>`;
@@ -1969,13 +1995,11 @@
 
     function renderCasino() {
       if (!walletData) return;
-      // Subscription status lives inside walletData (returned by wallet/info)
       subData = walletData.subscription || null;
       const el = document.getElementById("casinoContent");
-      el.innerHTML = renderSubscriptionSection() + renderPetsSection() + renderWalletCard() + renderSlotsCard() + renderFlipCard();
+      el.innerHTML = renderPetsSection() + renderWalletCard() + renderSlotsCard() + renderFlipCard();
       attachCasinoHandlers();
       attachPetHandlers();
-      attachSubscriptionHandlers();
     }
 
     // ── Subscription section ─────────────────────────────────────────────────
@@ -2410,38 +2434,21 @@
     // DONATE / SUPPORT SECTION
     // ══════════════════════════════════════════════════════════════════
     function renderDonate() {
+      subData = walletData?.subscription || null;
       const el = document.getElementById("donateContent");
       el.innerHTML = `
         <div class="donate-header">
           <div class="donate-icon">💎</div>
           <div class="donate-title">Поддержать проект</div>
-          <div class="donate-sub">Помоги нам развиваться и получи эксклюзивные возможности для своего аккаунта</div>
+          <div class="donate-sub">Помоги нам развиваться и получи эксклюзивные возможности</div>
         </div>
-        <div class="tiers-grid">
-          ${renderTier("☕","Кофе","50 ⭐ / месяц",[
-            "Значок поддержателя в профиле",
-            "Наша искренняя благодарность",
-          ], false)}
-          ${renderTier("🚀","Энтузиаст","250 ⭐ / месяц",[
-            "Всё из «Кофе»",
-            "+100 монет к ежедневной награде",
-            "Приоритет в поддержке",
-            "Специальный бейдж 🚀",
-          ], true)}
-          ${renderTier("💎","Спонсор","1000 ⭐ / месяц",[
-            "Всё из «Энтузиаст»",
-            "+500 монет к ежедневной награде",
-            "Эксклюзивные игровые режимы",
-            "Имя в Credits приложения",
-            "Прямой контакт с разработчиком",
-          ], false)}
-        </div>
+        ${renderSubscriptionSection()}
         <div class="donate-stars-note">
           <strong>⭐ Telegram Stars</strong> — встроенная платёжная система Telegram.<br>
-          Покупаются прямо в приложении, безопасно и мгновенно.<br>
-          <span class="donate-coming-soon">🚧 Оплата в разработке</span>
+          Покупаются прямо в приложении, безопасно и мгновенно.
         </div>
       `;
+      attachSubscriptionHandlers();
     }
 
     function renderTier(emoji, name, price, perks, isPopular) {

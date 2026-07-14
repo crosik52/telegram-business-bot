@@ -40,6 +40,7 @@ from aiogram import Bot, F, Router
 from aiogram.types import (
     BufferedInputFile, BusinessConnection, BusinessMessagesDeleted,
     CallbackQuery, ChosenInlineResult, FSInputFile, InlineQuery,
+    InlineKeyboardButton, InlineKeyboardMarkup,
     InlineQueryResultArticle, InputMediaAudio, InputTextMessageContent,
     Message, PreCheckoutQuery,
 )
@@ -1024,11 +1025,16 @@ async def on_inline_query(query: InlineQuery, bot: Bot) -> None:
             input_message_content=InputTextMessageContent(
                 message_text=(
                     f"🎵 <b>{html_escape(r['title'])}</b>\n"
-                    f"<i>{html_escape(uploader)}  ·  {dur}</i>\n\n"
-                    f"⏳ Загружаю трек…"
+                    f"<i>{html_escape(uploader)}  ·  {dur}</i>"
                 ),
                 parse_mode="HTML",
             ),
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(
+                    text="🎵 Загрузить трек",
+                    callback_data=f"mp3i:{key}",
+                )
+            ]]),
         ))
 
     await query.answer(
@@ -1036,6 +1042,94 @@ async def on_inline_query(query: InlineQuery, bot: Bot) -> None:
         is_personal=True,
         cache_time=30,
     )
+
+
+@router.callback_query(F.data.startswith("mp3i:"))
+async def on_inline_mp3_download(call: CallbackQuery, bot: Bot) -> None:
+    """User pressed 'Загрузить трек' button inside an inline message.
+
+    callback_query gives us inline_message_id — use it to replace the
+    text card with an actual audio file via edit_message_media.
+    No BotFather Inline Feedback setting required.
+    """
+    await call.answer()                         # remove button spinner immediately
+
+    key           = call.data[len("mp3i:"):]
+    inline_msg_id = call.inline_message_id
+
+    if not inline_msg_id:
+        # Shouldn't happen for inline messages, but guard anyway
+        return
+
+    cached = audio_service.get(key)
+    if cached is None:
+        try:
+            await bot.edit_message_text(
+                inline_message_id=inline_msg_id,
+                text="⌛ Сессия истекла — попробуйте снова.",
+            )
+        except Exception:
+            pass
+        return
+
+    # Show loading state while streaming
+    try:
+        await bot.edit_message_reply_markup(
+            inline_message_id=inline_msg_id,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="⏳ Загружаю…", callback_data="mp3i_noop"),
+            ]]),
+        )
+    except Exception:
+        pass
+
+    # Stream: yt-dlp → ffmpeg → RAM
+    try:
+        audio_bytes, filename = await audio_service.stream_to_bytes(cached.url)
+    except Exception as exc:
+        logger.warning("inline mp3i: stream failed key=%s: %s", key, exc)
+        try:
+            await bot.edit_message_text(
+                inline_message_id=inline_msg_id,
+                text="❌ <b>Не удалось загрузить трек.</b> Попробуйте другой.",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+        return
+
+    # Replace text card with audio file directly in the chat
+    try:
+        await bot.edit_message_media(
+            inline_message_id=inline_msg_id,
+            media=InputMediaAudio(
+                media=BufferedInputFile(audio_bytes, filename=filename),
+                performer=cached.uploader or None,
+                title=cached.title or None,
+                duration=cached.duration or None,
+            ),
+        )
+        logger.info("inline mp3i: sent in-chat key=%s title=%r size=%dKB",
+                    key, cached.title, len(audio_bytes) // 1024)
+    except Exception as exc:
+        logger.warning("inline mp3i: edit_message_media failed: %s", exc)
+        try:
+            await bot.edit_message_text(
+                inline_message_id=inline_msg_id,
+                text=(
+                    f"🎵 <b>{html_escape(cached.title)}</b>"
+                    f" — <i>{html_escape(cached.uploader or '')}</i>\n"
+                    f"❌ Не удалось прикрепить аудио."
+                ),
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
+
+@router.callback_query(F.data == "mp3i_noop")
+async def on_inline_mp3_noop(call: CallbackQuery) -> None:
+    await call.answer()
 
 
 @router.chosen_inline_result()

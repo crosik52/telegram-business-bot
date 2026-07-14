@@ -29,7 +29,7 @@
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
     margin: 0;
-    padding: 0 14px calc(env(safe-area-inset-bottom, 0px) + 76px);
+    padding: 0 14px calc(env(safe-area-inset-bottom, 0px) + 86px);
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -537,67 +537,201 @@
   /* ══════════════════════════════════════════
      BOTTOM TAB BAR
   ══════════════════════════════════════════ */
+  /* ── Liquid Glass Bottom Tab Bar ─────────────────────────────────────── */
   .bottom-tab-bar {
     position: fixed;
-    bottom: 0; left: 0; right: 0;
-    height: calc(env(safe-area-inset-bottom, 0px) + 60px);
-    background: rgba(249,249,249,0.90);
-    backdrop-filter: blur(28px) saturate(200%);
-    -webkit-backdrop-filter: blur(28px) saturate(200%);
-    border-top: 0.5px solid rgba(60,60,67,0.15);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+    left: 14px; right: 14px;
+    height: 64px;
+    border-radius: 26px;
+    overflow: hidden;
+
+    /* Glass base */
+    background: rgba(255,255,255,0.28);
+    backdrop-filter: blur(40px) saturate(200%) brightness(1.06);
+    -webkit-backdrop-filter: blur(40px) saturate(200%) brightness(1.06);
+
+    /* Multi-layer liquid glass shadows */
+    box-shadow:
+      0 10px 36px rgba(0,0,0,0.16),
+      0 2px 10px rgba(0,0,0,0.10),
+      0 0 0 0.5px rgba(255,255,255,0.55),
+      inset 0 1px 0 rgba(255,255,255,0.85),
+      inset 0 -0.5px 0 rgba(0,0,0,0.10),
+      inset 1.5px 0 0 rgba(255,255,255,0.40),
+      inset -1.5px 0 0 rgba(255,255,255,0.40),
+      inset 0 0 28px rgba(255,255,255,0.18);
+
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-around;
-    padding-top: 8px;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding: 0 4px;
     z-index: 200;
   }
 
-  /* dark-mode tint for Telegram dark theme */
+  /* Top specular highlight — simulates glass lens curvature */
+  .bottom-tab-bar::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 16px; right: 16px;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255,255,255,0.55) 20%,
+      rgba(255,255,255,0.95) 50%,
+      rgba(255,255,255,0.55) 80%,
+      transparent 100%
+    );
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  /* Liquid glass inner tint + distorted gradient layer */
+  .bottom-tab-bar::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+      165deg,
+      rgba(255,255,255,0.22) 0%,
+      rgba(255,255,255,0.04) 45%,
+      rgba(255,255,255,0.10) 100%
+    );
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* SVG-filtered lens wave texture inside the glass */
+  .tab-bar-lens {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+      130deg,
+      rgba(255,255,255,0.18) 0%,
+      rgba(255,255,255,0.06) 40%,
+      rgba(255,255,255,0.14) 100%
+    );
+    filter: url("#liquid-glass-filter");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Dark mode */
   @media (prefers-color-scheme: dark) {
     .bottom-tab-bar {
-      background: rgba(18,18,20,0.90);
-      border-top-color: rgba(255,255,255,0.10);
+      background: rgba(22,22,28,0.72);
+      backdrop-filter: blur(40px) saturate(180%) brightness(0.92);
+      -webkit-backdrop-filter: blur(40px) saturate(180%) brightness(0.92);
+      box-shadow:
+        0 10px 36px rgba(0,0,0,0.50),
+        0 2px 10px rgba(0,0,0,0.34),
+        0 0 0 0.5px rgba(255,255,255,0.10),
+        inset 0 1px 0 rgba(255,255,255,0.13),
+        inset 0 -0.5px 0 rgba(255,255,255,0.04),
+        inset 1.5px 0 0 rgba(255,255,255,0.07),
+        inset -1.5px 0 0 rgba(255,255,255,0.07),
+        inset 0 0 28px rgba(255,255,255,0.05);
+    }
+    .bottom-tab-bar::before {
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255,255,255,0.07) 20%,
+        rgba(255,255,255,0.16) 50%,
+        rgba(255,255,255,0.07) 80%,
+        transparent 100%
+      );
+    }
+    .bottom-tab-bar::after {
+      background: linear-gradient(
+        165deg,
+        rgba(255,255,255,0.09) 0%,
+        transparent 45%,
+        rgba(255,255,255,0.04) 100%
+      );
+    }
+    .tab-bar-lens {
+      background: linear-gradient(
+        130deg,
+        rgba(255,255,255,0.07) 0%,
+        rgba(255,255,255,0.02) 40%,
+        rgba(255,255,255,0.06) 100%
+      );
     }
   }
 
+  /* ── Tab items ──────────────────────────────────────────────────────── */
   .tab-item {
     flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 3px;
-    padding: 0 6px;
+    padding: 0 4px;
     border: none;
     background: transparent;
-    color: rgba(130,130,140,0.85);
+    color: rgba(110,110,120,0.80);
     font-size: 10px;
     font-weight: 600;
     letter-spacing: 0.1px;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
-    transition: color 0.2s ease;
+    transition: color 0.22s ease;
+    position: relative;
+    z-index: 3;
   }
+
   .tab-icon-wrap {
-    width: 50px; height: 28px;
+    width: 50px; height: 30px;
     display: flex; align-items: center; justify-content: center;
-    border-radius: 12px;
+    border-radius: 14px;
     font-size: 22px; line-height: 1;
-    transition: background 0.2s ease, transform 0.25s cubic-bezier(.34,1.56,.64,1);
+    position: relative;
+    transition:
+      background 0.25s ease,
+      box-shadow 0.25s ease,
+      transform 0.3s cubic-bezier(.34,1.56,.64,1);
     will-change: transform;
   }
-  .tab-label { line-height: 1; margin-top: 1px; }
 
-  /* Active states */
+  .tab-label { line-height: 1; margin-top: 2px; }
+
+  /* ── Active states — liquid glass pill on icon ── */
   .tab-item.active { color: var(--link); }
   .tab-item.active .tab-icon-wrap {
-    background: rgba(36,129,204,0.12);
-    transform: scale(1.08) translateY(-1px);
+    background: rgba(36,129,204,0.22);
+    box-shadow:
+      0 2px 10px rgba(36,129,204,0.20),
+      inset 0 1px 0 rgba(255,255,255,0.65),
+      inset 0 -0.5px 0 rgba(36,129,204,0.15),
+      inset 0 0 10px rgba(255,255,255,0.20);
+    transform: scale(1.08) translateY(-2px);
   }
+
   .tab-item.tab-casino.active { color: #9333ea; }
-  .tab-item.tab-casino.active .tab-icon-wrap { background: rgba(147,51,234,0.12); }
-  .tab-item.tab-donate.active  { color: #f59e0b; }
-  .tab-item.tab-donate.active .tab-icon-wrap  { background: rgba(245,158,11,0.12); }
+  .tab-item.tab-casino.active .tab-icon-wrap {
+    background: rgba(147,51,234,0.20);
+    box-shadow:
+      0 2px 10px rgba(147,51,234,0.22),
+      inset 0 1px 0 rgba(255,255,255,0.60),
+      inset 0 -0.5px 0 rgba(147,51,234,0.15),
+      inset 0 0 10px rgba(255,255,255,0.18);
+    transform: scale(1.08) translateY(-2px);
+  }
+
+  .tab-item.tab-donate.active { color: #f59e0b; }
+  .tab-item.tab-donate.active .tab-icon-wrap {
+    background: rgba(245,158,11,0.20);
+    box-shadow:
+      0 2px 10px rgba(245,158,11,0.22),
+      inset 0 1px 0 rgba(255,255,255,0.60),
+      inset 0 -0.5px 0 rgba(245,158,11,0.15),
+      inset 0 0 10px rgba(255,255,255,0.18);
+    transform: scale(1.08) translateY(-2px);
+  }
 
   /* ══════════════════════════════════════════
      CASINO – DARK MINIMAL THEME
@@ -942,7 +1076,15 @@
   }
   /* ── Quest tab colours ── */
   .tab-item.tab-quests.active { color: var(--green); }
-  .tab-item.tab-quests.active .tab-icon-wrap { background: rgba(52,199,89,0.12); }
+  .tab-item.tab-quests.active .tab-icon-wrap {
+    background: rgba(52,199,89,0.20);
+    box-shadow:
+      0 2px 10px rgba(52,199,89,0.22),
+      inset 0 1px 0 rgba(255,255,255,0.60),
+      inset 0 -0.5px 0 rgba(52,199,89,0.15),
+      inset 0 0 10px rgba(255,255,255,0.18);
+    transform: scale(1.08) translateY(-2px);
+  }
 
   /* ── Quest card ── */
   .quest-card {
@@ -1184,7 +1326,23 @@
   <!-- kept for JS compat, hidden via CSS -->
   <button class="refresh-fab" id="refreshFabLegacy" style="display:none"></button>
 
+  <!-- SVG filter for liquid glass lens distortion -->
+  <svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden;">
+    <defs>
+      <filter id="liquid-glass-filter" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+        <feTurbulence type="fractalNoise" baseFrequency="0.028 0.055" numOctaves="3" seed="8" result="noise"/>
+        <feGaussianBlur in="noise" stdDeviation="1.2" result="smoothNoise"/>
+        <feDisplacementMap in="SourceGraphic" in2="smoothNoise" scale="14" xChannelSelector="R" yChannelSelector="G" result="distorted"/>
+        <feGaussianBlur in="distorted" stdDeviation="0.6" result="softDistorted"/>
+        <feComposite in="softDistorted" in2="SourceGraphic" operator="atop"/>
+      </filter>
+    </defs>
+  </svg>
+
   <nav class="bottom-tab-bar" id="mainTabBar">
+    <!-- Liquid glass lens wave texture layer -->
+    <div class="tab-bar-lens" aria-hidden="true"></div>
+
     <button class="tab-item active" data-tab="stats">
       <div class="tab-icon-wrap">📊</div>
       <span class="tab-label">Стата</span>

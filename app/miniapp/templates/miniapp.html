@@ -2974,8 +2974,8 @@
         else if (questsLoaded) renderQuestsTab();
       }
       if (tab === "donate") {
-        // Wallet data contains subscription info — load it if not yet loaded
-        if (!casinoLoaded && currentInitData) loadWalletForDonate();
+        // Need both wallet AND referral data — referralLoaded tracks the latter
+        if ((!casinoLoaded || !referralLoaded) && currentInitData) loadWalletForDonate();
         else renderDonate();
       }
       if (tab === "shop") {

@@ -201,34 +201,33 @@ async def stream_to_bytes(url: str) -> tuple[bytes, str]:
         url,
     ]
 
+    # Step 1: yt-dlp → raw audio bytes in RAM
+    ytdlp_proc = await asyncio.create_subprocess_exec(
+        *ytdlp_args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    raw_bytes, _ = await ytdlp_proc.communicate()
+
+    if not raw_bytes:
+        raise RuntimeError("yt-dlp produced no output")
+
     if has_ffmpeg:
-        ytdlp_proc = await asyncio.create_subprocess_exec(
-            *ytdlp_args,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
+        # Step 2: raw bytes → ffmpeg stdin → mp3 bytes
         ffmpeg_proc = await asyncio.create_subprocess_exec(
             "ffmpeg",
             "-i", "pipe:0",
-            "-vn",
-            "-acodec", "libmp3lame",
-            "-q:a", "2",
-            "-f", "mp3",
-            "pipe:1",
-            stdin=ytdlp_proc.stdout,
+            "-vn", "-acodec", "libmp3lame", "-q:a", "2",
+            "-f", "mp3", "pipe:1",
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
         )
-        audio_bytes, _ = await ffmpeg_proc.communicate()
-        await ytdlp_proc.wait()
+        audio_bytes, _ = await ffmpeg_proc.communicate(input=raw_bytes)
+        del raw_bytes   # free memory immediately
         filename = "track.mp3"
     else:
-        ytdlp_proc = await asyncio.create_subprocess_exec(
-            *ytdlp_args,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-        audio_bytes, _ = await ytdlp_proc.communicate()
+        audio_bytes = raw_bytes
         filename = "track.m4a"
 
     if not audio_bytes:

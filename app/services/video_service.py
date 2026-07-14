@@ -213,30 +213,75 @@ def _download_sync(
     if is_tiktok:
         _apply_tiktok_opts(opts_photo, url, out_dir)
 
+    ydl_photo_ok = False
     try:
         _run(opts_photo)
+        ydl_photo_ok = True
     except yt_dlp.utils.DownloadError as exc:
         if "cookiefile" in opts_photo:
             opts_no_cookie = {k: v for k, v in opts_photo.items() if k != "cookiefile"}
-            _run(opts_no_cookie)
+            try:
+                _run(opts_no_cookie)
+                ydl_photo_ok = True
+            except yt_dlp.utils.DownloadError:
+                pass  # fall through to gallery-dl
         else:
-            raise
+            # e.g. "Unsupported URL" for TikTok /photo/ — fall through
+            logger.debug("yt-dlp photo attempt failed (%s), will try gallery-dl", exc)
 
-    videos2, images2 = _scan_dir(out_dir)
+    if ydl_photo_ok:
+        videos2, images2 = _scan_dir(out_dir)
+        if videos2:
+            return [max(videos2, key=lambda p: p.stat().st_size)], "video"
+        if images2:
+            return sorted(images2, key=lambda p: p.name)[:MAX_PHOTOS], "photo"
 
-    if videos2:
-        best = max(videos2, key=lambda p: p.stat().st_size)
-        return [best], "video"
+    # ── Attempt 3: gallery-dl (TikTok carousels, Instagram photos) ───────────
+    # Clear partial files before gallery-dl writes its own
+    for p in Path(out_dir).iterdir():
+        if not p.name.startswith("_"):
+            p.unlink(missing_ok=True)
 
-    if images2:
-        # Sort by filename for consistent carousel order
-        ordered = sorted(images2, key=lambda p: p.name)[:MAX_PHOTOS]
-        return ordered, "photo"
+    try:
+        images3 = _gallery_dl_download(url, out_dir)
+        if images3:
+            return images3[:MAX_PHOTOS], "photo"
+    except Exception as exc:
+        logger.debug("gallery-dl attempt failed: %s", exc)
 
     raise FileNotFoundError(
-        f"yt-dlp finished but no media files found in {out_dir} "
-        f"(files: {[p.name for p in Path(out_dir).iterdir()]})"
+        f"All download attempts failed for {url}. "
+        f"Remaining files: {[p.name for p in Path(out_dir).iterdir()]}"
     )
+
+
+def _gallery_dl_download(url: str, out_dir: str) -> list[Path]:
+    """Download images from *url* using gallery-dl.
+
+    Returns a sorted list of image Paths found in out_dir after download.
+    Raises on failure.
+    """
+    import subprocess, sys
+
+    result = subprocess.run(
+        [
+            sys.executable, "-m", "gallery_dl",
+            "--dest", out_dir,
+            "--filename", "{num:>03}_{filename}.{extension}",
+            "--no-mtime",
+            url,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"gallery-dl exited {result.returncode}: {result.stderr.strip()[:300]}"
+        )
+
+    _, images = _scan_dir(out_dir)
+    return sorted(images, key=lambda p: p.name)
 
 
 # ── Progress helpers ──────────────────────────────────────────────────────────

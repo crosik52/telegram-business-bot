@@ -1,0 +1,41 @@
+Starting Container
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO:     Started server process [5]
+INFO:     Waiting for application startup.
+2026-07-14T19:59:59+0000 | INFO     | app.main | Starting Telegram Business Bot (environment=production)
+2026-07-14T19:59:59+0000 | INFO     | app.main | Database dialect: postgresql (persistent)
+2026-07-14T19:59:59+0000 | INFO     | app.main | Telegram webhook set to https://telegram-business-bot-production.up.railway.app/webhook
+2026-07-14T19:59:59+0000 | INFO     | app.main | Telegram chat menu button set to open mini app
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+2026-07-14T20:00:00+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745850301
+2026-07-14T20:00:00+0000 | INFO     | app.services.message_service | Stored new business message chat_id=1335699132 message_id=1399789 media=text
+2026-07-14T20:00:00+0000 | INFO     | app.business.handlers | Video link detected (tiktok) in chat=1335699132 can_reply=True
+2026-07-14T20:00:00+0000 | INFO     | aiogram.event | Update id=745850301 is handled. Duration 118 ms by bot id=1162707887
+2026-07-14T20:00:00+0000 | INFO     | http | POST /webhook -> 200 (122.3ms)
+2026-07-14T20:00:00+0000 | INFO     | app.services.video_service | Downloading TikTok media: https://vm.tiktok.com/ZNRoHbhW9/
+2026-07-14T20:00:00+0000 | WARNING  | app.services.video_service | TikTok: TIKTOK_COOKIES env var is empty or not set
+ERROR: Unsupported URL: https://www.tiktok.com/@user5861133223336/photo/7662472705072958742?_r=1&_t=ZN-982DNEzqp2U
+2026-07-14T20:00:03+0000 | WARNING  | app.services.video_service | TikTok: TIKTOK_COOKIES env var is empty or not set
+ERROR: Unsupported URL: https://www.tiktok.com/@user5861133223336/photo/7662472705072958742?_r=1&_t=ZN-982DNEzqp2U
+2026-07-14T20:00:05+0000 | WARNING  | app.services.video_service | Media download/send failed for https://vm.tiktok.com/ZNRoHbhW9/ (TikTok): ERROR: Unsupported URL: https://www.tiktok.com/@user5861133223336/photo/7662472705072958742?_r=1&_t=ZN-982DNEzqp2U
+2026-07-14T20:00:08+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745850300
+2026-07-14T20:00:08+0000 | INFO     | app.services.video_service | Downloading TikTok media: https://vm.tiktok.com/ZNRoHbhW9/
+2026-07-14T20:00:08+0000 | WARNING  | app.services.video_service | TikTok: TIKTOK_COOKIES env var is empty or not set
+2026-07-14T20:00:08+0000 | INFO     | app.services.message_service | Stored new business message chat_id=5688354783 message_id=555814 media=text
+2026-07-14T20:00:08+0000 | INFO     | app.business.handlers | Video link detected (tiktok) in chat=5688354783 can_reply=True
+2026-07-14T20:00:08+0000 | INFO     | aiogram.event | Update id=745850300 is handled. Duration 41 ms by bot id=1162707887
+2026-07-14T20:00:08+0000 | INFO     | http | POST /webhook -> 200 (44.2ms)
+ERROR: Unsupported URL: https://www.tiktok.com/@user5861133223336/photo/7662472705072958742?_r=1&_t=ZN-982DNEzqp2U
+2026-07-14T20:00:09+0000 | WARNING  | app.services.video_service | TikTok: TIKTOK_COOKIES env var is empty or not set
+ERROR: Unsupported URL: https://www.tiktok.com/@user5861133223336/photo/7662472705072958742?_r=1&_t=ZN-982DNEzqp2U
+2026-07-14T20:00:11+0000 | WARNING  | app.services.video_service | Media download/send failed for https://vm.tiktok.com/ZNRoHbhW9/ (TikTok): ERROR: Unsupported URL: https://www.tiktok.com/@user5861133223336/photo/7662472705072958742?_r=1&_t=ZN-982DNEzqp2U
+2026-07-14T20:00:29+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745850302
+2026-07-14T20:00:29+0000 | INFO     | app.services.message_service | Stored new business message chat_id=5688354783 message_id=555817 media=text
+2026-07-14T20:00:29+0000 | INFO     | aiogram.event | Update id=745850302 is handled. Duration 32 ms by bot id=1162707887
+2026-07-14T20:00:29+0000 | INFO     | http | POST /webhook -> 200 (34.2ms)
+2026-07-14T20:00:29+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745850303
+2026-07-14T20:00:29+0000 | INFO     | app.services.message_service | Stored new business message chat_id=1335699132 message_id=1399792 media=text
+2026-07-14T20:00:29+0000 | INFO     | aiogram.event | Update id=745850303 is handled. Duration 35 ms by bot id=1162707887
+2026-07-14T20:00:29+0000 | INFO     | http | POST /webhook -> 200 (37.2ms)

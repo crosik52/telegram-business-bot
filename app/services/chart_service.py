@@ -124,8 +124,8 @@ def render_info_image(stats: InfoStats) -> io.BytesIO:
         (stats.outgoing, "Ваших сообщений",    C_BLUE),
         (stats.incoming, "Сообщений контакта", C_GREEN),
         (avg,            "В среднем в день",   C_AMBER),
-        (f"{stats.media_count} · {media_pct}%", "Медиа и файлы",     "#6366F1"),
-        (f"{stats.audio_count} · {audio_pct}%","Аудио и голосовые", "#EC4899"),
+        (stats.media_count, "Медиа и файлы",     "#6366F1"),
+        (stats.audio_count, "Аудио и голосовые", "#EC4899"),
     ]
     for row in range(3):
         for col in range(2):

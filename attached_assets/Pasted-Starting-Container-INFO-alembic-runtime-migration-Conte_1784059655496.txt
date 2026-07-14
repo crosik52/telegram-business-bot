@@ -1,0 +1,26 @@
+Starting Container
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+2026-07-14T20:06:35+0000 | INFO     | app.main | Database dialect: postgresql (persistent)
+INFO:     Started server process [5]
+INFO:     Waiting for application startup.
+2026-07-14T20:06:35+0000 | INFO     | app.main | Starting Telegram Business Bot (environment=production)
+2026-07-14T20:06:36+0000 | INFO     | app.main | Telegram webhook set to https://telegram-business-bot-production.up.railway.app/webhook
+2026-07-14T20:06:36+0000 | INFO     | app.main | Telegram chat menu button set to open mini app
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+2026-07-14T20:07:09+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745850320
+2026-07-14T20:07:09+0000 | INFO     | app.services.message_service | Stored new business message chat_id=5688354783 message_id=555821 media=text
+2026-07-14T20:07:09+0000 | INFO     | app.business.handlers | Video link detected (tiktok) in chat=5688354783 can_reply=True
+2026-07-14T20:07:09+0000 | INFO     | aiogram.event | Update id=745850320 is handled. Duration 67 ms by bot id=1162707887
+2026-07-14T20:07:09+0000 | INFO     | http | POST /webhook -> 200 (69.7ms)
+2026-07-14T20:07:09+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745850321
+2026-07-14T20:07:09+0000 | INFO     | app.services.message_service | Stored new business message chat_id=1335699132 message_id=1399793 media=text
+2026-07-14T20:07:09+0000 | INFO     | aiogram.event | Update id=745850321 is handled. Duration 37 ms by bot id=1162707887
+2026-07-14T20:07:09+0000 | INFO     | http | POST /webhook -> 200 (42.4ms)
+2026-07-14T20:07:09+0000 | INFO     | app.services.video_service | Downloading TikTok media: https://vm.tiktok.com/ZNRoHbhW9/
+2026-07-14T20:07:09+0000 | WARNING  | app.services.video_service | TikTok: TIKTOK_COOKIES env var is empty or not set
+ERROR: Unsupported URL: https://www.tiktok.com/@user5861133223336/photo/7662472705072958742?_r=1&_t=ZN-982DNEzqp2U
+2026-07-14T20:07:11+0000 | WARNING  | app.services.video_service | TikTok: TIKTOK_COOKIES env var is empty or not set
+ERROR: Unsupported URL: https://www.tiktok.com/@user5861133223336/photo/7662472705072958742?_r=1&_t=ZN-982DNEzqp2U
+2026-07-14T20:07:15+0000 | WARNING  | app.services.video_service | Media download/send failed for https://vm.tiktok.com/ZNRoHbhW9/ (TikTok): All download attempts failed for https://vm.tiktok.com/ZNRoHbhW9/. Remaining files: ['tiktok']

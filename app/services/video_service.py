@@ -127,9 +127,11 @@ def _apply_tiktok_opts(ydl_opts: dict, url: str, out_dir: str) -> None:
 
 
 def _scan_dir(out_dir: str) -> tuple[list[Path], list[Path]]:
-    """Return (video_files, image_files) found in out_dir, non-empty files only."""
+    """Return (video_files, image_files) found in out_dir recursively, non-empty files only."""
     videos, images = [], []
-    for p in Path(out_dir).iterdir():
+    for p in Path(out_dir).rglob("*"):
+        if not p.is_file():
+            continue
         if p.name.startswith("_") or p.stat().st_size == 0:
             continue
         ext = p.suffix.lower()
@@ -267,6 +269,8 @@ def _gallery_dl_download(url: str, out_dir: str) -> list[Path]:
         [
             sys.executable, "-m", "gallery_dl",
             "--dest", out_dir,
+            # Force flat output — no platform subdirectories
+            "--directory", "",
             "--filename", "{num:>03}_{filename}.{extension}",
             "--no-mtime",
             url,

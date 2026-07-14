@@ -29,7 +29,7 @@
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
     margin: 0;
-    padding: 0 14px calc(env(safe-area-inset-bottom, 0px) + 86px);
+    padding: 0 14px calc(env(safe-area-inset-bottom, 0px) + 104px);
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -540,11 +540,14 @@
   /* ── Liquid Glass Bottom Tab Bar ─────────────────────────────────────── */
   .bottom-tab-bar {
     position: fixed;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
-    left: 14px; right: 14px;
-    height: 64px;
-    border-radius: 26px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+    left: 12px; right: 12px;
+    height: 80px;
+    border-radius: 32px;
     overflow: hidden;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
 
     /* Glass base */
     background: rgba(255,255,255,0.28);
@@ -553,19 +556,19 @@
 
     /* Multi-layer liquid glass shadows */
     box-shadow:
-      0 10px 36px rgba(0,0,0,0.16),
-      0 2px 10px rgba(0,0,0,0.10),
+      0 12px 40px rgba(0,0,0,0.18),
+      0 3px 12px rgba(0,0,0,0.11),
       0 0 0 0.5px rgba(255,255,255,0.55),
       inset 0 1px 0 rgba(255,255,255,0.85),
       inset 0 -0.5px 0 rgba(0,0,0,0.10),
       inset 1.5px 0 0 rgba(255,255,255,0.40),
       inset -1.5px 0 0 rgba(255,255,255,0.40),
-      inset 0 0 28px rgba(255,255,255,0.18);
+      inset 0 0 32px rgba(255,255,255,0.18);
 
     display: flex;
     align-items: center;
     justify-content: space-around;
-    padding: 0 4px;
+    padding: 0 6px;
     z-index: 200;
   }
 
@@ -674,7 +677,7 @@
     border: none;
     background: transparent;
     color: rgba(110,110,120,0.80);
-    font-size: 10px;
+    font-size: 10.5px;
     font-weight: 600;
     letter-spacing: 0.1px;
     cursor: pointer;
@@ -682,56 +685,68 @@
     transition: color 0.22s ease;
     position: relative;
     z-index: 3;
+    touch-action: none;
   }
 
   .tab-icon-wrap {
-    width: 50px; height: 30px;
+    width: 58px; height: 36px;
     display: flex; align-items: center; justify-content: center;
-    border-radius: 14px;
-    font-size: 22px; line-height: 1;
+    border-radius: 17px;
+    font-size: 24px; line-height: 1;
     position: relative;
-    transition:
-      background 0.25s ease,
-      box-shadow 0.25s ease,
-      transform 0.3s cubic-bezier(.34,1.56,.64,1);
+    transition: transform 0.3s cubic-bezier(.34,1.56,.64,1);
     will-change: transform;
   }
 
   .tab-label { line-height: 1; margin-top: 2px; }
 
-  /* ── Active states — liquid glass pill on icon ── */
-  .tab-item.active { color: var(--link); }
-  .tab-item.active .tab-icon-wrap {
+  /* ── Sliding glass indicator (replaces per-tab bg on icon-wrap) ── */
+  .tab-slider {
+    position: absolute;
+    top: 14px;
+    height: 38px;
+    width: 58px;
+    border-radius: 17px;
+    pointer-events: none;
+    z-index: 2;
+    /* spring animation when not dragging */
+    transition: left 0.38s cubic-bezier(.34,1.56,.64,1),
+                background 0.25s ease,
+                box-shadow 0.25s ease;
+    /* Glass pill */
     background: rgba(36,129,204,0.22);
     box-shadow:
-      0 2px 10px rgba(36,129,204,0.20),
-      inset 0 1px 0 rgba(255,255,255,0.65),
-      inset 0 -0.5px 0 rgba(36,129,204,0.15),
-      inset 0 0 10px rgba(255,255,255,0.20);
-    transform: scale(1.08) translateY(-2px);
+      0 3px 12px rgba(36,129,204,0.22),
+      inset 0 1px 0 rgba(255,255,255,0.70),
+      inset 0 -0.5px 0 rgba(0,0,0,0.08),
+      inset 0 0 12px rgba(255,255,255,0.22);
+    border: 0.5px solid rgba(255,255,255,0.45);
+  }
+  .tab-slider.dragging {
+    /* no spring while finger is moving */
+    transition: background 0.15s ease, box-shadow 0.15s ease;
+    box-shadow:
+      0 6px 20px rgba(0,0,0,0.18),
+      inset 0 1px 0 rgba(255,255,255,0.80),
+      inset 0 0 14px rgba(255,255,255,0.28);
   }
 
-  .tab-item.tab-casino.active { color: #9333ea; }
-  .tab-item.tab-casino.active .tab-icon-wrap {
-    background: rgba(147,51,234,0.20);
-    box-shadow:
-      0 2px 10px rgba(147,51,234,0.22),
-      inset 0 1px 0 rgba(255,255,255,0.60),
-      inset 0 -0.5px 0 rgba(147,51,234,0.15),
-      inset 0 0 10px rgba(255,255,255,0.18);
-    transform: scale(1.08) translateY(-2px);
-  }
+  /* ── Active states — only icon lift, slider provides the bg ── */
+  .tab-item.active         { color: var(--link); }
+  .tab-item.active .tab-icon-wrap      { transform: scale(1.08) translateY(-2px); }
 
-  .tab-item.tab-donate.active { color: #f59e0b; }
-  .tab-item.tab-donate.active .tab-icon-wrap {
-    background: rgba(245,158,11,0.20);
-    box-shadow:
-      0 2px 10px rgba(245,158,11,0.22),
-      inset 0 1px 0 rgba(255,255,255,0.60),
-      inset 0 -0.5px 0 rgba(245,158,11,0.15),
-      inset 0 0 10px rgba(255,255,255,0.18);
-    transform: scale(1.08) translateY(-2px);
-  }
+  .tab-item.tab-casino.active          { color: #9333ea; }
+  .tab-item.tab-casino.active .tab-icon-wrap { transform: scale(1.08) translateY(-2px); }
+
+  .tab-item.tab-donate.active          { color: #f59e0b; }
+  .tab-item.tab-donate.active .tab-icon-wrap { transform: scale(1.08) translateY(-2px); }
+
+  /* ── Drag-hover preview (tab highlighted under finger, not yet confirmed) ── */
+  .tab-item.drag-preview         { color: var(--link); }
+  .tab-item.tab-casino.drag-preview { color: #9333ea; }
+  .tab-item.tab-quests.drag-preview { color: var(--green); }
+  .tab-item.tab-donate.drag-preview  { color: #f59e0b; }
+  .tab-item.drag-preview .tab-icon-wrap { transform: scale(1.05) translateY(-1px); }
 
   /* ══════════════════════════════════════════
      CASINO – DARK MINIMAL THEME
@@ -1076,15 +1091,7 @@
   }
   /* ── Quest tab colours ── */
   .tab-item.tab-quests.active { color: var(--green); }
-  .tab-item.tab-quests.active .tab-icon-wrap {
-    background: rgba(52,199,89,0.20);
-    box-shadow:
-      0 2px 10px rgba(52,199,89,0.22),
-      inset 0 1px 0 rgba(255,255,255,0.60),
-      inset 0 -0.5px 0 rgba(52,199,89,0.15),
-      inset 0 0 10px rgba(255,255,255,0.18);
-    transform: scale(1.08) translateY(-2px);
-  }
+  .tab-item.tab-quests.active .tab-icon-wrap { transform: scale(1.08) translateY(-2px); }
 
   /* ── Quest card ── */
   .quest-card {
@@ -1342,6 +1349,8 @@
   <nav class="bottom-tab-bar" id="mainTabBar">
     <!-- Liquid glass lens wave texture layer -->
     <div class="tab-bar-lens" aria-hidden="true"></div>
+    <!-- Sliding glass pill indicator -->
+    <div class="tab-slider" id="tabSlider" aria-hidden="true"></div>
 
     <button class="tab-item active" data-tab="stats">
       <div class="tab-icon-wrap">📊</div>
@@ -2367,11 +2376,132 @@
         else renderDonate();
       }
       if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+      if (window._tabSwitchHook) window._tabSwitchHook(tab);
     }
 
-    document.querySelectorAll(".tab-item").forEach(btn =>
-      btn.addEventListener("click", () => switchMainTab(btn.dataset.tab))
-    );
+    // ── Liquid-glass tab bar: tap + drag-to-slide ────────────────────────
+    (function initTabDrag() {
+      const bar      = document.getElementById("mainTabBar");
+      const slider   = document.getElementById("tabSlider");
+      const tabItems = Array.from(bar.querySelectorAll(".tab-item"));
+
+      /* Per-tab accent colours for the slider pill */
+      const SLIDER_STYLES = {
+        stats:  { bg: "rgba(36,129,204,0.24)",  shadow: "rgba(36,129,204,0.24)"  },
+        casino: { bg: "rgba(147,51,234,0.22)",  shadow: "rgba(147,51,234,0.22)"  },
+        quests: { bg: "rgba(52,199,89,0.22)",   shadow: "rgba(52,199,89,0.22)"   },
+        donate: { bg: "rgba(245,158,11,0.22)",  shadow: "rgba(245,158,11,0.22)"  },
+      };
+
+      /* Place slider under a given tab element (optionally without spring) */
+      function snapSliderTo(tabEl, instant) {
+        if (!tabEl) return;
+        const barRect = bar.getBoundingClientRect();
+        const tabRect = tabEl.getBoundingClientRect();
+        const sl = slider.offsetWidth || 58;
+        const left = tabRect.left - barRect.left + (tabRect.width - sl) / 2;
+        if (instant) slider.style.transition = "none";
+        slider.style.left = left + "px";
+        if (instant) {
+          slider.offsetHeight; /* force reflow so next frame can re-enable transition */
+          slider.style.transition = "";
+        }
+        const tab = tabEl.dataset.tab;
+        const s = SLIDER_STYLES[tab] || SLIDER_STYLES.stats;
+        slider.style.background = s.bg;
+        slider.style.boxShadow  =
+          `0 3px 14px ${s.shadow}, inset 0 1px 0 rgba(255,255,255,0.72),` +
+          `inset 0 0 14px rgba(255,255,255,0.24)`;
+      }
+
+      /* Initial placement — find active tab */
+      const initialActive = bar.querySelector(".tab-item.active") || tabItems[0];
+      snapSliderTo(initialActive, true);
+
+      /* Get tab element whose rect contains clientX */
+      function tabAtX(x) {
+        for (const t of tabItems) {
+          const r = t.getBoundingClientRect();
+          if (x >= r.left && x <= r.right) return t;
+        }
+        const barRect = bar.getBoundingClientRect();
+        if (x <= barRect.left)  return tabItems[0];
+        if (x >= barRect.right) return tabItems[tabItems.length - 1];
+        return null;
+      }
+
+      let dragging     = false;
+      let hoveredTab   = null;
+      let startX       = 0;
+      let dragStarted  = false; /* becomes true after 6px horizontal movement */
+
+      function clearDragPreviews() {
+        tabItems.forEach(t => t.classList.remove("drag-preview"));
+      }
+
+      bar.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0 && e.pointerType === "mouse") return;
+        dragging    = true;
+        dragStarted = false;
+        startX      = e.clientX;
+        hoveredTab  = tabAtX(e.clientX);
+        bar.setPointerCapture(e.pointerId);
+      }, { passive: true });
+
+      bar.addEventListener("pointermove", (e) => {
+        if (!dragging) return;
+        const dx = Math.abs(e.clientX - startX);
+
+        if (!dragStarted && dx > 6) {
+          dragStarted = true;
+          slider.classList.add("dragging");
+          if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
+        }
+
+        if (!dragStarted) return;
+
+        const t = tabAtX(e.clientX);
+        if (t && t !== hoveredTab) {
+          hoveredTab = t;
+          clearDragPreviews();
+          t.classList.add("drag-preview");
+          snapSliderTo(t, true);
+          if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+        }
+      });
+
+      function endDrag(e) {
+        if (!dragging) return;
+        dragging = false;
+        slider.classList.remove("dragging");
+        clearDragPreviews();
+
+        const finalTab = dragStarted ? hoveredTab : tabAtX(e ? e.clientX : startX);
+        if (finalTab) {
+          switchMainTab(finalTab.dataset.tab);
+          snapSliderTo(finalTab, false); /* spring snap */
+        }
+        dragStarted = false;
+        hoveredTab  = null;
+      }
+
+      bar.addEventListener("pointerup",     endDrag);
+      bar.addEventListener("pointercancel", () => {
+        dragging = false;
+        dragStarted = false;
+        slider.classList.remove("dragging");
+        clearDragPreviews();
+        const active = bar.querySelector(".tab-item.active");
+        if (active) snapSliderTo(active, false);
+      });
+
+      /* Keep slider in sync when tab is switched from outside (if ever) */
+      const _origSwitch = switchMainTab;
+      window._tabSwitchHook = (tab) => {
+        const el = tabItems.find(t => t.dataset.tab === tab);
+        if (el) snapSliderTo(el, false);
+      };
+    })();
 
     // ══════════════════════════════════════════════════════════════════
     // WALLET / CASINO

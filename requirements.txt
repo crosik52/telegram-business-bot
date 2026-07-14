@@ -13,3 +13,4 @@ itsdangerous==2.2.0
 matplotlib
 Pillow
 yt-dlp
+httpx

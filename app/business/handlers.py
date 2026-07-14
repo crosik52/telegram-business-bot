@@ -41,7 +41,7 @@ from aiogram.types import (
     BufferedInputFile, BusinessConnection, BusinessMessagesDeleted,
     CallbackQuery, ChosenInlineResult, FSInputFile, InlineQuery,
     InlineKeyboardButton, InlineKeyboardMarkup,
-    InlineQueryResultArticle, InlineQueryResultCachedAudio,
+    InlineQueryResultAudio, InlineQueryResultCachedAudio,
     InputMediaAudio, InputTextMessageContent,
     Message, PreCheckoutQuery,
 )
@@ -50,6 +50,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.business import commands
 from app.business.panic_tracker import PanicTracker
+from app.config import get_settings
 from app.database.session import session_scope
 from app.logging_config import get_logger
 from app.models.business_connection import BusinessConnection as BCModel
@@ -1009,6 +1010,7 @@ async def on_inline_query(query: InlineQuery, bot: Bot) -> None:
         logger.warning("inline_query: search failed for %r: %s", q, exc)
         results = []
 
+    base_url = get_settings().webhook_base_url.rstrip("/")
     articles: list = []
     for r in results:
         key      = audio_service.store(r["url"], r["title"], r["uploader"],
@@ -1018,30 +1020,20 @@ async def on_inline_query(query: InlineQuery, bot: Bot) -> None:
 
         cached_fid = audio_service.get_cached_file_id(r["url"])
         if cached_fid:
-            # Already uploaded — deliver inline instantly, no placeholder needed
+            # Already uploaded — re-use Telegram's file_id, instant delivery
             articles.append(InlineQueryResultCachedAudio(
                 id=key,
                 audio_file_id=cached_fid,
             ))
         else:
-            # First time — show placeholder; chosen_inline_result will upload to DM
-            # reply_markup is required to receive inline_message_id in chosen_inline_result
-            articles.append(InlineQueryResultArticle(
+            # Stream on demand: Telegram downloads from our /audio/{key} endpoint
+            # and places the audio directly in the chat — no DM, no placeholder swap
+            articles.append(InlineQueryResultAudio(
                 id=key,
+                audio_url=f"{base_url}/audio/{key}",
                 title=r["title"][:60],
-                description=f"{dur}  ·  {uploader}" if uploader else dur,
-                thumbnail_url=r.get("thumbnail") or None,
-                input_message_content=InputTextMessageContent(
-                    message_text=(
-                        f"🎵 <b>{html_escape(r['title'])}</b>\n"
-                        f"<i>{html_escape(uploader)}  ·  {dur}</i>\n\n"
-                        f"⏳ Загружаю…"
-                    ),
-                    parse_mode="HTML",
-                ),
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                    InlineKeyboardButton(text="⏳", callback_data="noop"),
-                ]]),
+                performer=uploader or None,
+                audio_duration=r["duration"] or None,
             ))
 
     await query.answer(
@@ -1058,90 +1050,9 @@ async def on_noop(call: CallbackQuery) -> None:
 
 @router.chosen_inline_result()
 async def on_chosen_inline_result(result: ChosenInlineResult, bot: Bot) -> None:
-    """Stream the chosen track and replace the placeholder with audio in-chat."""
-    key           = result.result_id
-    inline_msg_id = result.inline_message_id
-
+    """Log chosen inline result. Audio is delivered via InlineQueryResultAudio URL."""
     logger.info("chosen_inline_result: key=%s inline_msg_id=%s user=%s",
-                key, inline_msg_id, result.from_user.id)
-
-    if not inline_msg_id:
-        logger.warning("chosen_inline_result: no inline_message_id — "
-                       "reply_markup missing from InlineQueryResultArticle?")
-        return
-
-    cached = audio_service.get(key)
-    if cached is None:
-        try:
-            await bot.edit_message_text(
-                inline_message_id=inline_msg_id,
-                text="⌛ Сессия истекла — попробуйте снова.",
-            )
-        except Exception:
-            pass
-        return
-
-    user_id = result.from_user.id
-
-    # Stream: yt-dlp → ffmpeg → RAM (no disk I/O)
-    try:
-        audio_bytes, filename = await audio_service.stream_to_bytes(cached.url)
-    except Exception as exc:
-        logger.warning("inline mp3: stream failed key=%s: %s", key, exc)
-        try:
-            await bot.edit_message_text(
-                inline_message_id=inline_msg_id,
-                text="❌ <b>Не удалось загрузить трек.</b> Попробуйте другой.",
-                parse_mode="HTML",
-            )
-        except Exception:
-            pass
-        return
-
-    # Send audio to user's DM to obtain a reusable file_id.
-    # edit_message_media cannot change a text inline message into audio —
-    # Telegram only allows this path when the original message already has media.
-    try:
-        sent = await bot.send_audio(
-            chat_id=user_id,
-            audio=BufferedInputFile(audio_bytes, filename=filename),
-            performer=cached.uploader or None,
-            title=cached.title or None,
-            duration=cached.duration or None,
-        )
-        file_id = sent.audio.file_id
-        audio_service.cache_file_id(cached.url, file_id)
-        logger.info("inline mp3: sent to DM user=%s key=%s title=%r size=%dKB",
-                    user_id, key, cached.title, len(audio_bytes) // 1024)
-    except Exception as exc:
-        logger.warning("inline mp3: send_audio to DM failed user=%s: %s", user_id, exc)
-        try:
-            await bot.edit_message_text(
-                inline_message_id=inline_msg_id,
-                text=(
-                    f"🎵 <b>{html_escape(cached.title)}</b>"
-                    f" — <i>{html_escape(cached.uploader or '')}</i>\n"
-                    f"❌ Не удалось отправить трек."
-                ),
-                parse_mode="HTML",
-            )
-        except Exception:
-            pass
-        return
-
-    # Update the in-chat placeholder to confirm delivery
-    try:
-        await bot.edit_message_text(
-            inline_message_id=inline_msg_id,
-            text=(
-                f"🎵 <b>{html_escape(cached.title)}</b>\n"
-                f"<i>{html_escape(cached.uploader or '')}</i>\n\n"
-                f"☝️ Трек отправлен в личку"
-            ),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+                result.result_id, result.inline_message_id, result.from_user.id)
 
 
 @router.pre_checkout_query()

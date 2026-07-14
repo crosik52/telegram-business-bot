@@ -24,6 +24,7 @@ from app.database.session import dispose_engine, get_engine
 from app.logging_config import configure_logging, get_logger
 from app.middlewares.logging_middleware import RequestLoggingMiddleware
 from app.miniapp import routes as miniapp_routes
+from app.routers import audio as audio_router
 from app.routers import health, webhook
 
 settings = get_settings()
@@ -146,6 +147,7 @@ app.mount(
 )
 
 app.include_router(health.router)
+app.include_router(audio_router.router)
 app.include_router(webhook.router)
 app.include_router(dashboard_auth.router)
 app.include_router(dashboard_home.router)

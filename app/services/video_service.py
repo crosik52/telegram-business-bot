@@ -271,29 +271,10 @@ async def handle_video_link(
             pass
 
     async def _delete_status() -> None:
+        """Business connection messages cannot be deleted via Bot API.
+        Edit to a single checkmark so the message disappears visually."""
         if status_msg is None:
             return
-        import aiohttp
-        url = f"https://api.telegram.org/bot{bot.token}/deleteMessage"
-        payload = {
-            "chat_id": status_msg.chat.id,
-            "message_id": status_msg.message_id,
-            "business_connection_id": business_connection_id,
-        }
-        try:
-            async with aiohttp.ClientSession() as _s:
-                async with _s.post(url, json=payload) as resp:
-                    data = await resp.json()
-            if data.get("ok"):
-                return  # deleted successfully
-            logger.warning(
-                "deleteMessage failed for chat_id=%s msg_id=%s: %s",
-                status_msg.chat.id, status_msg.message_id, data,
-            )
-        except Exception as _exc:
-            logger.warning("deleteMessage HTTP error: %s", _exc)
-
-        # Fall back: edit to a checkmark so the message looks resolved.
         try:
             await bot.edit_message_text(
                 business_connection_id=business_connection_id,
@@ -301,11 +282,8 @@ async def handle_video_link(
                 message_id=status_msg.message_id,
                 text="✅",
             )
-        except Exception as _edit_exc:
-            logger.warning(
-                "Status message cleanup failed (delete + edit) chat_id=%s msg_id=%s: %s",
-                status_msg.chat.id, status_msg.message_id, _edit_exc,
-            )
+        except Exception:
+            pass
 
     def _progress_hook(d: dict) -> None:
         """Called by yt-dlp in the executor thread on every progress tick."""

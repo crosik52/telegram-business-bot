@@ -2,24 +2,25 @@
 
 from __future__ import annotations
 
+import copy
 import datetime as dt
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.boost import UserBoost
+from app.models.shop_config import DEFAULT_SHOP_CONFIG, ShopConfig
 from app.models.user_settings import UserSettings
 from app.models.wallet import UserWallet
 
-# ── Prices (coins) ────────────────────────────────────────────────────────────
-BOOST_DOUBLE_XP_COST = 200
+# ── Module-level fallback prices (used if DB has no config row) ───────────────
+BOOST_DOUBLE_XP_COST  = 200
 BOOST_DOUBLE_XP_HOURS = 24
-
-PIN_CHAT_COST = 75
-THEME_COST = 100
-FRAME_COST = 150
-GIFT_COST = 30   # coins deducted from sender; recipient gets GIFT_AMOUNT
-GIFT_AMOUNT = 50  # coins credited to recipient
+PIN_CHAT_COST  = 75
+THEME_COST     = 100
+FRAME_COST     = 150
+GIFT_COST      = 30
+GIFT_AMOUNT    = 50
 
 VALID_THEMES = {"default", "dark_forest", "ocean", "sunset", "lavender"}
 VALID_FRAMES = {"none", "stars", "flowers", "fire", "neon"}
@@ -28,6 +29,39 @@ VALID_FRAMES = {"none", "stars", "flowers", "fire", "neon"}
 class ShopRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    # ── Shop config (singleton) ───────────────────────────────────────────────
+
+    async def _get_shop_cfg(self) -> dict:
+        """Load shop config from DB. Falls back to DEFAULT_SHOP_CONFIG."""
+        result = await self._session.execute(select(ShopConfig).limit(1))
+        cfg = result.scalar_one_or_none()
+        if cfg is None:
+            return copy.deepcopy(DEFAULT_SHOP_CONFIG)
+        return cfg.items or copy.deepcopy(DEFAULT_SHOP_CONFIG)
+
+    async def get_shop_config_admin(self) -> dict:
+        """Admin: return full shop config dict."""
+        result = await self._session.execute(select(ShopConfig).limit(1))
+        cfg = result.scalar_one_or_none()
+        if cfg is None:
+            # Create the singleton row with defaults
+            cfg = ShopConfig(id=1, items=copy.deepcopy(DEFAULT_SHOP_CONFIG))
+            self._session.add(cfg)
+            await self._session.flush()
+        return cfg.items or copy.deepcopy(DEFAULT_SHOP_CONFIG)
+
+    async def update_shop_config(self, items: dict) -> dict:
+        """Admin: overwrite shop config. Returns new config."""
+        result = await self._session.execute(select(ShopConfig).limit(1))
+        cfg = result.scalar_one_or_none()
+        if cfg is None:
+            cfg = ShopConfig(id=1, items=items)
+            self._session.add(cfg)
+        else:
+            cfg.items = items
+        await self._session.flush()
+        return cfg.items
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -88,29 +122,43 @@ class ShopRepository:
         }
 
     async def get_shop_status(self, owner_id: int) -> dict:
-        boosts = await self.get_active_boosts(owner_id)
+        cfg = await self._get_shop_cfg()
+        boosts   = await self.get_active_boosts(owner_id)
         settings = await self.get_settings(owner_id)
+
+        def _p(key: str, field: str, default: int) -> int:
+            return int(cfg.get(key, {}).get(field, default))
+
         return {
             "active_boosts": boosts,
             "settings": settings,
             "prices": {
-                "double_xp": BOOST_DOUBLE_XP_COST,
-                "pin_chat": PIN_CHAT_COST,
-                "theme": THEME_COST,
-                "frame": FRAME_COST,
-                "gift": GIFT_COST,
-                "gift_amount": GIFT_AMOUNT,
+                "double_xp":  _p("double_xp", "cost",   BOOST_DOUBLE_XP_COST),
+                "pin_chat":   _p("pin_chat",  "cost",   PIN_CHAT_COST),
+                "theme":      _p("theme",     "cost",   THEME_COST),
+                "frame":      _p("frame",     "cost",   FRAME_COST),
+                "gift":       _p("gift",      "cost",   GIFT_COST),
+                "gift_amount":_p("gift",      "amount", GIFT_AMOUNT),
+            },
+            "available": {
+                "themes": cfg.get("theme", {}).get("options", list(VALID_THEMES)),
+                "frames": cfg.get("frame", {}).get("options", list(VALID_FRAMES)),
             },
         }
 
     # ── Purchases ─────────────────────────────────────────────────────────────
 
     async def buy_double_xp(self, owner_id: int) -> dict:
-        """Buy a 24h double-XP boost. Stacks: extends existing expiry by 24h."""
-        new_balance = await self._deduct(owner_id, BOOST_DOUBLE_XP_COST)
+        """Buy a double-XP boost (duration from DB config). Extends existing expiry."""
+        cfg   = await self._get_shop_cfg()
+        cost  = int(cfg.get("double_xp", {}).get("cost",  BOOST_DOUBLE_XP_COST))
+        hours = int(cfg.get("double_xp", {}).get("hours", BOOST_DOUBLE_XP_HOURS))
 
+        if not cfg.get("double_xp", {}).get("enabled", True):
+            raise ValueError("item_disabled")
+
+        new_balance = await self._deduct(owner_id, cost)
         now = dt.datetime.now(dt.timezone.utc)
-        # Check for an existing active double_xp boost to extend
         result = await self._session.execute(
             select(UserBoost)
             .where(
@@ -121,10 +169,10 @@ class ShopRepository:
         )
         existing = result.scalar_one_or_none()
         if existing:
-            existing.expires_at = existing.expires_at + dt.timedelta(hours=BOOST_DOUBLE_XP_HOURS)
+            existing.expires_at = existing.expires_at + dt.timedelta(hours=hours)
             expires_at = existing.expires_at
         else:
-            expires_at = now + dt.timedelta(hours=BOOST_DOUBLE_XP_HOURS)
+            expires_at = now + dt.timedelta(hours=hours)
             boost = UserBoost(
                 owner_telegram_id=owner_id,
                 boost_type="double_xp",
@@ -137,46 +185,67 @@ class ShopRepository:
         return {"new_balance": new_balance, "expires_at": expires_at.isoformat()}
 
     async def buy_theme(self, owner_id: int, theme: str) -> dict:
-        if theme not in VALID_THEMES:
+        cfg  = await self._get_shop_cfg()
+        cost = int(cfg.get("theme", {}).get("cost", THEME_COST))
+        valid = set(cfg.get("theme", {}).get("options", list(VALID_THEMES)))
+
+        if not cfg.get("theme", {}).get("enabled", True):
+            raise ValueError("item_disabled")
+        if theme not in valid:
             raise ValueError("invalid_theme")
-        new_balance = await self._deduct(owner_id, THEME_COST)
+
+        new_balance = await self._deduct(owner_id, cost)
         settings = await self._get_or_create_settings(owner_id)
         settings.theme = theme
         await self._session.flush()
         return {"new_balance": new_balance, "theme": theme}
 
     async def buy_frame(self, owner_id: int, frame: str) -> dict:
-        if frame not in VALID_FRAMES:
+        cfg  = await self._get_shop_cfg()
+        cost = int(cfg.get("frame", {}).get("cost", FRAME_COST))
+        valid = set(cfg.get("frame", {}).get("options", list(VALID_FRAMES)))
+
+        if not cfg.get("frame", {}).get("enabled", True):
+            raise ValueError("item_disabled")
+        if frame not in valid:
             raise ValueError("invalid_frame")
-        new_balance = await self._deduct(owner_id, FRAME_COST)
+
+        new_balance = await self._deduct(owner_id, cost)
         settings = await self._get_or_create_settings(owner_id)
         settings.frame = frame
         await self._session.flush()
         return {"new_balance": new_balance, "frame": frame}
 
     async def pin_chat(self, owner_id: int, chat_id: int | None) -> dict:
-        """Pin or unpin a chat. Costs PIN_CHAT_COST if pinning for the first time / changing."""
+        cfg  = await self._get_shop_cfg()
+        cost = int(cfg.get("pin_chat", {}).get("cost", PIN_CHAT_COST))
+
         settings = await self._get_or_create_settings(owner_id)
         if settings.pinned_chat_id == chat_id:
-            # No change — free
             return {"new_balance": None, "pinned_chat_id": chat_id}
 
         new_balance: int | None = None
-        if chat_id is not None:  # pinning (not unpinning) costs coins
-            new_balance = await self._deduct(owner_id, PIN_CHAT_COST)
+        if chat_id is not None:
+            if not cfg.get("pin_chat", {}).get("enabled", True):
+                raise ValueError("item_disabled")
+            new_balance = await self._deduct(owner_id, cost)
 
         settings.pinned_chat_id = chat_id
         await self._session.flush()
         return {"new_balance": new_balance, "pinned_chat_id": chat_id}
 
     async def gift_coins(self, owner_id: int, recipient_id: int) -> dict:
-        """Deduct GIFT_COST from sender, credit GIFT_AMOUNT to recipient."""
+        cfg    = await self._get_shop_cfg()
+        cost   = int(cfg.get("gift", {}).get("cost",   GIFT_COST))
+        amount = int(cfg.get("gift", {}).get("amount", GIFT_AMOUNT))
+
+        if not cfg.get("gift", {}).get("enabled", True):
+            raise ValueError("item_disabled")
         if owner_id == recipient_id:
             raise ValueError("cannot_gift_self")
 
-        new_balance = await self._deduct(owner_id, GIFT_COST)
+        new_balance = await self._deduct(owner_id, cost)
 
-        # Credit recipient (create wallet if needed)
         r_result = await self._session.execute(
             select(UserWallet)
             .where(UserWallet.owner_telegram_id == recipient_id)
@@ -186,17 +255,17 @@ class ShopRepository:
         if r_wallet is None:
             r_wallet = UserWallet(
                 owner_telegram_id=recipient_id,
-                balance=GIFT_AMOUNT,
-                total_earned=GIFT_AMOUNT,
+                balance=amount,
+                total_earned=amount,
                 total_spent=0,
             )
             self._session.add(r_wallet)
         else:
-            r_wallet.balance += GIFT_AMOUNT
-            r_wallet.total_earned = (r_wallet.total_earned or 0) + GIFT_AMOUNT
+            r_wallet.balance += amount
+            r_wallet.total_earned = (r_wallet.total_earned or 0) + amount
 
         await self._session.flush()
-        return {"new_balance": new_balance, "gifted_amount": GIFT_AMOUNT}
+        return {"new_balance": new_balance, "gifted_amount": amount}
 
     # ── Double-XP check (used by pet_repository) ──────────────────────────────
 

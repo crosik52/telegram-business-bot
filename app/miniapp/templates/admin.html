@@ -627,6 +627,91 @@
   }
   .sub-status-pill.on  { background: rgba(52,199,89,.14);  color: var(--green); }
   .sub-status-pill.off { background: rgba(255,59,48,.14);  color: var(--danger); }
+
+  /* ── Dynamic benefits editor ── */
+  .dyn-benefit-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 0; border-bottom: 1px solid rgba(120,120,128,.07);
+  }
+  .dyn-benefit-row:last-child { border-bottom: none; }
+  .dyn-del-btn {
+    border: none; border-radius: 8px; padding: 4px 8px;
+    font-size: 12px; font-weight: 700; flex-shrink: 0;
+    background: rgba(255,59,48,.12); color: var(--danger);
+    touch-action: manipulation;
+  }
+  .quickadd-wrap { margin-top: 12px; }
+  .quickadd-label { font-size: 11px; color: var(--hint); font-weight: 600; margin-bottom: 6px; }
+  .quickadd-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .quickadd-chip {
+    border: 1.5px dashed rgba(120,120,128,.35);
+    border-radius: 10px; padding: 5px 11px;
+    font-size: 12px; font-weight: 600; color: var(--hint);
+    background: transparent; touch-action: manipulation;
+  }
+  .custom-ben-add { margin-top: 10px; }
+  .custom-ben-row { display: flex; gap: 7px; margin-top: 8px; flex-wrap: wrap; }
+  .custom-ben-row input {
+    flex: 1; min-width: 100px; border: 1.5px solid rgba(120,120,128,.22);
+    border-radius: 10px; padding: 8px 11px;
+    font-size: 13px; background: var(--bg); color: var(--text); outline: none;
+  }
+  .custom-ben-add-btn {
+    border: none; border-radius: 10px; padding: 8px 14px;
+    font-size: 13px; font-weight: 700;
+    background: rgba(36,129,204,.13); color: var(--link);
+    touch-action: manipulation; white-space: nowrap;
+  }
+  .show-custom-btn {
+    border: none; background: none; color: var(--link);
+    font-size: 13px; font-weight: 600; padding: 6px 0;
+    touch-action: manipulation;
+  }
+
+  /* ── Shop admin tab ── */
+  .shop-item-card {
+    background: var(--secondary-bg); border-radius: var(--card-radius);
+    padding: 16px; box-shadow: var(--shadow); margin-bottom: 14px;
+  }
+  .shop-item-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .shop-item-title { font-size: 14px; font-weight: 700; }
+  .shop-field { margin-bottom: 12px; }
+  .shop-field label { font-size: 12px; color: var(--hint); font-weight: 600; display: block; margin-bottom: 5px; }
+  .shop-field input[type="number"], .shop-field input[type="text"] {
+    width: 100%; border: 1.5px solid rgba(120,120,128,.2);
+    border-radius: 12px; padding: 10px 12px;
+    font-size: 14px; font-family: inherit; color: var(--text);
+    background: var(--bg); outline: none; transition: border-color .2s;
+    box-sizing: border-box;
+  }
+  .shop-field input:focus { border-color: var(--link); }
+  .shop-options-wrap { margin-top: 4px; }
+  .shop-options-label { font-size: 12px; color: var(--hint); font-weight: 600; margin-bottom: 7px; }
+  .shop-options-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .shop-option-tag {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(36,129,204,.12); color: var(--link);
+    border-radius: 10px; padding: 5px 10px; font-size: 12px; font-weight: 700;
+  }
+  .shop-option-del {
+    border: none; background: none; color: var(--link);
+    font-size: 13px; font-weight: 700; padding: 0; cursor: pointer; line-height: 1;
+  }
+  .shop-add-option-row { display: flex; gap: 7px; }
+  .shop-add-option-row input {
+    flex: 1; border: 1.5px solid rgba(120,120,128,.22);
+    border-radius: 10px; padding: 7px 11px; font-size: 13px;
+    background: var(--bg); color: var(--text); outline: none;
+  }
+  .shop-add-option-btn {
+    border: none; border-radius: 10px; padding: 7px 14px;
+    font-size: 13px; font-weight: 700;
+    background: rgba(52,199,89,.13); color: var(--green);
+    touch-action: manipulation; white-space: nowrap;
+  }
 </style>
 </head>
 <body>
@@ -642,6 +727,7 @@
     <button class="tab-chip" data-tab="broadcast">📢 Рассылка</button>
     <button class="tab-chip" data-tab="log">📜 Журнал</button>
     <button class="tab-chip" data-tab="subscription">⭐ Подписка</button>
+    <button class="tab-chip" data-tab="shop">🛒 Магазин</button>
     <button class="tab-chip" id="btnInfographic" onclick="downloadInfographic(this)">📊 Инфографика</button>
   </div>
 
@@ -848,6 +934,7 @@
       else if (tab === "broadcast") renderBroadcastTab();
       else if (tab === "log")       loadActionLog(1);
       else if (tab === "subscription") loadSubscriptionTab();
+      else if (tab === "shop")         loadShopAdminTab();
     }
 
     function render() {
@@ -1563,6 +1650,7 @@
     // ══════════════════════════════════════════════════════════════════
 
     let subConfig = null;
+    let shopAdminConfig = null;
 
     async function loadSubscriptionTab() {
       const content = document.getElementById("content");
@@ -1594,12 +1682,60 @@
       }
     }
 
+    // ── Known benefit metadata ────────────────────────────────────────────────
+    const BENEFIT_META = {
+      daily_multiplier:  { label: "🎁 Множитель монет (ежедневно)", type: "number", step: 0.5, min: 1,   max: 10,   hint: "×N к ежедневной награде" },
+      daily_bonus_coins: { label: "💰 Доп. монеты (ежедневно)",     type: "number", step: 1,   min: 0,   max: 9999, hint: "Фиксированный бонус сверх базы" },
+      pet_feed_free:     { label: "🍖 Бесплатное кормление",        type: "bool",                                   hint: "Кормление питомца не тратит монеты" },
+      xp_multiplier:     { label: "⭐ Множитель XP питомца",        type: "number", step: 0.1, min: 1,   max: 5,    hint: "×N к опыту за все действия" },
+      max_pets_bonus:    { label: "🐾 Доп. слоты питомцев",         type: "number", step: 1,   min: 0,   max: 20,   hint: "+N питомцев сверх лимита" },
+      shop_discount:     { label: "🛒 Скидка в магазине (%)",       type: "number", step: 5,   min: 0,   max: 100,  hint: "Скидка на монетные товары" },
+      vip_badge:         { label: "👑 VIP-значок",                  type: "bool",                                   hint: "Специальный значок в профиле" },
+      casino_bonus:      { label: "🎰 Бонус монет в казино (%)",    type: "number", step: 5,   min: 0,   max: 200,  hint: "Бонус к выигрышам" },
+      double_xp_free:    { label: "🚀 Бесплатный буст XP",          type: "bool",                                   hint: "Буст ×2 XP всегда активен" },
+    };
+
+    function renderBenefitRow(key, val) {
+      const m = BENEFIT_META[key] || {
+        label: key,
+        type: typeof val === "boolean" ? "bool" : "number",
+        step: 1, min: 0, max: 99999, hint: "",
+      };
+      const valInput = m.type === "bool"
+        ? `<label class="toggle-switch" style="flex-shrink:0"><input type="checkbox" class="ben-val" ${val ? "checked" : ""}><span class="toggle-slider"></span></label>`
+        : `<input class="benefit-input ben-val" type="number" value="${val ?? 0}" min="${m.min ?? 0}" max="${m.max ?? 99999}" step="${m.step ?? 1}">`;
+      return `
+        <div class="dyn-benefit-row" data-key="${esc(key)}">
+          <div style="flex:1;min-width:0">
+            <div class="benefit-name">${esc(m.label)}</div>
+            ${m.hint ? `<div class="benefit-hint">${esc(m.hint)}</div>` : ""}
+          </div>
+          ${valInput}
+          <button class="dyn-del-btn" title="Удалить преимущество">✕</button>
+        </div>`;
+    }
+
+    function renderQuickAddChips(existingKeys) {
+      const unset = Object.keys(BENEFIT_META).filter(k => !existingKeys.includes(k));
+      if (!unset.length) return "";
+      return `
+        <div class="quickadd-wrap">
+          <div class="quickadd-label">Быстрое добавление:</div>
+          <div class="quickadd-chips">
+            ${unset.map(k => `<button class="quickadd-chip" data-key="${k}">${BENEFIT_META[k].label}</button>`).join("")}
+          </div>
+        </div>`;
+    }
+
     function renderSubscriptionTab(cfg, subsData) {
       const b = cfg.benefits || {};
       const isOn = cfg.is_enabled;
       const pill = isOn
         ? `<span class="sub-status-pill on">✓ Включена</span>`
         : `<span class="sub-status-pill off">✗ Выключена</span>`;
+
+      const benefitRows = Object.entries(b).map(([k, v]) => renderBenefitRow(k, v)).join("");
+      const existingKeys = Object.keys(b);
 
       return `
         <!-- Status header -->
@@ -1613,7 +1749,7 @@
 
         <!-- Config form -->
         <div class="sub-admin-card">
-          <div class="sub-admin-title">⚙️ Настройки подписки</div>
+          <div class="sub-admin-title">⚙️ Основные настройки</div>
 
           <div class="sub-toggle-row">
             <div>
@@ -1635,64 +1771,35 @@
             <input type="number" id="subDuration" value="${cfg.duration_days}" min="1" max="365" step="1">
           </div>
           <div class="sub-field">
-            <label>Заголовок</label>
+            <label>Заголовок подписки</label>
             <input type="text" id="subTitle" value="${esc(cfg.title)}">
           </div>
           <div class="sub-field">
             <label>Описание</label>
-            <textarea id="subDesc" rows="2" style="resize:none">${esc(cfg.description)}</textarea>
+            <textarea id="subDesc" rows="2" style="resize:none;width:100%;border:1.5px solid rgba(120,120,128,.2);border-radius:12px;padding:10px 12px;font-size:14px;font-family:inherit;color:var(--text);background:var(--bg);outline:none;box-sizing:border-box">${esc(cfg.description)}</textarea>
           </div>
         </div>
 
-        <!-- Benefits -->
+        <!-- Dynamic benefits -->
         <div class="sub-admin-card">
-          <div class="sub-admin-title">🎁 Бонусы подписки</div>
+          <div class="sub-admin-title">🎁 Преимущества, доступы и ограничения</div>
+          <div id="dynBenefits">${benefitRows || '<div style="color:var(--hint);font-size:13px;padding:10px 0;text-align:center">Нет настроенных преимуществ</div>'}</div>
 
-          <div class="benefit-row">
-            <div>
-              <div class="benefit-name">🎁 Множитель монет (ежедневно)</div>
-              <div class="benefit-hint">×N к ежедневной награде</div>
-            </div>
-            <input class="benefit-input" type="number" id="bDailyMult" value="${b.daily_multiplier ?? 1}" min="1" max="10" step="0.5">
-          </div>
+          ${renderQuickAddChips(existingKeys)}
 
-          <div class="benefit-row">
-            <div>
-              <div class="benefit-name">💰 Бонус монет (ежедневно)</div>
-              <div class="benefit-hint">Дополнительно к базовым наградам</div>
+          <div class="custom-ben-add">
+            <button class="show-custom-btn" id="showCustomBenBtn">+ Добавить вручную</button>
+            <div id="customBenForm" style="display:none">
+              <div class="custom-ben-row">
+                <input id="customBenKey" placeholder="ключ (напр. vip_level)" type="text">
+                <input id="customBenVal" placeholder="значение (1.5 / true / 100)" type="text">
+                <button class="custom-ben-add-btn" id="addCustomBenBtn">Добавить</button>
+              </div>
             </div>
-            <input class="benefit-input" type="number" id="bDailyBonus" value="${b.daily_bonus_coins ?? 0}" min="0" max="9999" step="5">
-          </div>
-
-          <div class="benefit-row">
-            <div>
-              <div class="benefit-name">🍖 Бесплатное кормление питомца</div>
-              <div class="benefit-hint">Кормление не тратит монеты</div>
-            </div>
-            <label class="toggle-switch">
-              <input type="checkbox" id="bFeedFree" ${b.pet_feed_free ? "checked" : ""}>
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-
-          <div class="benefit-row">
-            <div>
-              <div class="benefit-name">⭐ Множитель XP питомца</div>
-              <div class="benefit-hint">×N к опыту за все действия</div>
-            </div>
-            <input class="benefit-input" type="number" id="bXpMult" value="${b.xp_multiplier ?? 1}" min="1" max="5" step="0.25">
-          </div>
-
-          <div class="benefit-row">
-            <div>
-              <div class="benefit-name">🐾 Бонус слотов питомцев</div>
-              <div class="benefit-hint">+N дополнительных питомцев</div>
-            </div>
-            <input class="benefit-input" type="number" id="bMaxPets" value="${b.max_pets_bonus ?? 0}" min="0" max="20" step="1">
           </div>
         </div>
 
-        <button class="sub-save-btn" id="subSaveBtn">💾 Сохранить настройки</button>
+        <button class="sub-save-btn" id="subSaveBtn">💾 Сохранить настройки подписки</button>
 
         <!-- Grant subscription -->
         <div class="sub-admin-card" style="margin-top:14px">
@@ -1729,7 +1836,103 @@
         </div>`;
     }
 
+    // ── Collect current benefits from DOM ────────────────────────────────────
+    function collectBenefits() {
+      const rows = document.querySelectorAll(".dyn-benefit-row");
+      const result = {};
+      rows.forEach(row => {
+        const key = row.dataset.key;
+        if (!key) return;
+        const meta = BENEFIT_META[key] || {};
+        const inputEl = row.querySelector(".ben-val");
+        if (!inputEl) return;
+        if (inputEl.type === "checkbox") {
+          result[key] = inputEl.checked;
+        } else {
+          const raw = inputEl.value;
+          result[key] = parseFloat(raw);
+          if (isNaN(result[key])) result[key] = parseInt(raw) || 0;
+        }
+      });
+      return result;
+    }
+
+    // ── Refresh quick-add chips after add/delete ──────────────────────────────
+    function refreshQuickAdd() {
+      const existing = [...document.querySelectorAll(".dyn-benefit-row")].map(r => r.dataset.key);
+      const unset = Object.keys(BENEFIT_META).filter(k => !existing.includes(k));
+      const wrap = document.querySelector(".quickadd-wrap");
+      if (!wrap) return;
+      if (!unset.length) { wrap.style.display = "none"; return; }
+      wrap.style.display = "";
+      wrap.querySelector(".quickadd-chips").innerHTML = unset.map(k =>
+        `<button class="quickadd-chip" data-key="${k}">${BENEFIT_META[k].label}</button>`
+      ).join("");
+      wrap.querySelectorAll(".quickadd-chip").forEach(chip => {
+        chip.addEventListener("click", () => addBenefitRow(chip.dataset.key, BENEFIT_META[chip.dataset.key]?.type === "bool" ? false : 0));
+      });
+    }
+
+    function addBenefitRow(key, defaultVal) {
+      const container = document.getElementById("dynBenefits");
+      // Remove "no benefits" placeholder if present
+      const ph = container.querySelector("div[style*='text-align:center']");
+      if (ph) ph.remove();
+      // Check if key already exists
+      if (container.querySelector(`.dyn-benefit-row[data-key="${key}"]`)) {
+        showToast(`⚠️ "${key}" уже добавлен`);
+        return;
+      }
+      const tmp = document.createElement("div");
+      tmp.innerHTML = renderBenefitRow(key, defaultVal);
+      const row = tmp.firstElementChild;
+      row.querySelector(".dyn-del-btn").addEventListener("click", () => {
+        row.remove();
+        refreshQuickAdd();
+      });
+      container.appendChild(row);
+      refreshQuickAdd();
+    }
+
     function attachSubscriptionTabHandlers() {
+      // Delete existing benefit rows
+      document.querySelectorAll(".dyn-benefit-row .dyn-del-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.currentTarget.closest(".dyn-benefit-row").remove();
+          refreshQuickAdd();
+        });
+      });
+
+      // Quick-add chips
+      document.querySelectorAll(".quickadd-chip").forEach(chip => {
+        chip.addEventListener("click", () => {
+          const key = chip.dataset.key;
+          const meta = BENEFIT_META[key] || {};
+          addBenefitRow(key, meta.type === "bool" ? false : 0);
+        });
+      });
+
+      // Show/hide custom add form
+      document.getElementById("showCustomBenBtn")?.addEventListener("click", () => {
+        const form = document.getElementById("customBenForm");
+        form.style.display = form.style.display === "none" ? "" : "none";
+      });
+
+      // Add custom benefit
+      document.getElementById("addCustomBenBtn")?.addEventListener("click", () => {
+        const keyEl = document.getElementById("customBenKey");
+        const valEl = document.getElementById("customBenVal");
+        const key = keyEl.value.trim().replace(/\s+/g, "_");
+        if (!key) { showToast("⚠️ Введи ключ"); return; }
+        let val = valEl.value.trim();
+        if (val === "true")  val = true;
+        else if (val === "false") val = false;
+        else { const n = parseFloat(val); val = isNaN(n) ? val : n; }
+        addBenefitRow(key, val);
+        keyEl.value = ""; valEl.value = "";
+        document.getElementById("customBenForm").style.display = "none";
+      });
+
       // Save config
       document.getElementById("subSaveBtn")?.addEventListener("click", async (e) => {
         const btn = e.currentTarget;
@@ -1745,13 +1948,7 @@
               durationDays: parseInt(document.getElementById("subDuration").value),
               title:        document.getElementById("subTitle").value.trim(),
               description:  document.getElementById("subDesc").value.trim(),
-              benefits: {
-                daily_multiplier:  parseFloat(document.getElementById("bDailyMult").value)  || 1,
-                daily_bonus_coins: parseInt(document.getElementById("bDailyBonus").value)   || 0,
-                pet_feed_free:     document.getElementById("bFeedFree").checked,
-                xp_multiplier:     parseFloat(document.getElementById("bXpMult").value)     || 1,
-                max_pets_bonus:    parseInt(document.getElementById("bMaxPets").value)       || 0,
-              },
+              benefits:     collectBenefits(),
             }),
           });
           if (!res.ok) throw new Error();
@@ -1761,7 +1958,7 @@
           showToast("❌ Ошибка при сохранении");
         } finally {
           btn.disabled = false;
-          btn.textContent = "💾 Сохранить настройки";
+          btn.textContent = "💾 Сохранить настройки подписки";
         }
       });
 
@@ -1780,7 +1977,6 @@
           if (!res.ok) throw new Error();
           showToast(`✅ Подписка выдана пользователю ${userId} на ${days} дн.`);
           document.getElementById("grantUserId").value = "";
-          // Reload the tab
           await loadSubscriptionTab();
         } catch {
           showToast("❌ Ошибка при выдаче подписки");
@@ -1792,7 +1988,8 @@
       document.querySelectorAll(".sub-revoke-btn").forEach(btn => {
         btn.addEventListener("click", async (e) => {
           const userId = parseInt(e.currentTarget.dataset.userId);
-          if (!confirm(`Отозвать подписку у пользователя ${userId}?`)) return;
+          const ok = await confirmAction(`Отозвать подписку у пользователя ${userId}?`);
+          if (!ok) return;
           e.currentTarget.disabled = true;
           try {
             const res = await fetch("/app/api/admin/subscription/revoke", {
@@ -1807,6 +2004,215 @@
             e.currentTarget.disabled = false;
           }
         });
+      });
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // SHOP ADMIN TAB
+    // ══════════════════════════════════════════════════════════════════
+
+    async function loadShopAdminTab() {
+      const content = document.getElementById("content");
+      document.getElementById("subtitle").textContent = "🛒 Настройки магазина";
+      content.innerHTML = `<div style="padding:20px;text-align:center;color:var(--hint)">Загружаем…</div>`;
+      try {
+        const res = await fetch("/app/api/admin/shop/config", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData}),
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        shopAdminConfig = data.items;
+        content.innerHTML = renderShopAdminTab(shopAdminConfig);
+        attachShopAdminHandlers();
+      } catch {
+        content.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить настройки магазина.</div>`;
+      }
+    }
+
+    function shopField(id, label, val, opts = {}) {
+      return `
+        <div class="shop-field">
+          <label>${label}</label>
+          <input type="${opts.type || 'number'}" id="${id}" value="${esc(String(val ?? ''))}"
+            ${opts.min !== undefined ? `min="${opts.min}"` : ""}
+            ${opts.max !== undefined ? `max="${opts.max}"` : ""}
+            ${opts.step ? `step="${opts.step}"` : ""}>
+        </div>`;
+    }
+
+    function shopToggle(id, label, checked) {
+      return `
+        <div class="sub-toggle-row" style="border-bottom:none;margin-bottom:0;padding-bottom:0">
+          <div class="sub-toggle-lbl">${label}</div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="${id}" ${checked ? "checked" : ""}>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>`;
+    }
+
+    function shopOptionsList(prefix, options) {
+      const tags = (options || []).map(o => `
+        <span class="shop-option-tag" data-val="${esc(o)}">
+          ${esc(o)}
+          <button class="shop-option-del" data-prefix="${prefix}" data-val="${esc(o)}" title="Удалить">✕</button>
+        </span>`).join("");
+      return `
+        <div class="shop-options-wrap">
+          <div class="shop-options-label">Доступные варианты:</div>
+          <div class="shop-options-list" id="${prefix}-options">${tags}</div>
+          <div class="shop-add-option-row">
+            <input type="text" id="${prefix}-new-option" placeholder="Новый вариант…">
+            <button class="shop-add-option-btn" data-prefix="${prefix}">+ Добавить</button>
+          </div>
+        </div>`;
+    }
+
+    function renderShopAdminTab(items) {
+      const dx  = items.double_xp || {};
+      const th  = items.theme     || {};
+      const fr  = items.frame     || {};
+      const pc  = items.pin_chat  || {};
+      const gi  = items.gift      || {};
+
+      return `
+        <!-- Double XP boost -->
+        <div class="shop-item-card">
+          <div class="shop-item-header">
+            <div class="shop-item-title">🚀 Двойной XP</div>
+            ${shopToggle("sh-dx-enabled", "Включено", dx.enabled !== false)}
+          </div>
+          ${shopField("sh-dx-cost",  "Цена (монеты)",       dx.cost  ?? 200, {min:0})}
+          ${shopField("sh-dx-hours", "Длительность (часов)", dx.hours ?? 24,  {min:1, max:720})}
+        </div>
+
+        <!-- Themes -->
+        <div class="shop-item-card">
+          <div class="shop-item-header">
+            <div class="shop-item-title">🎨 Темы оформления</div>
+            ${shopToggle("sh-th-enabled", "Включено", th.enabled !== false)}
+          </div>
+          ${shopField("sh-th-cost", "Цена (монеты)", th.cost ?? 100, {min:0})}
+          ${shopOptionsList("sh-th", th.options || [])}
+        </div>
+
+        <!-- Frames -->
+        <div class="shop-item-card">
+          <div class="shop-item-header">
+            <div class="shop-item-title">🖼 Рамки профиля</div>
+            ${shopToggle("sh-fr-enabled", "Включено", fr.enabled !== false)}
+          </div>
+          ${shopField("sh-fr-cost", "Цена (монеты)", fr.cost ?? 150, {min:0})}
+          ${shopOptionsList("sh-fr", fr.options || [])}
+        </div>
+
+        <!-- Pin chat -->
+        <div class="shop-item-card">
+          <div class="shop-item-header">
+            <div class="shop-item-title">📌 Закрепить чат</div>
+            ${shopToggle("sh-pc-enabled", "Включено", pc.enabled !== false)}
+          </div>
+          ${shopField("sh-pc-cost", "Цена (монеты)", pc.cost ?? 75, {min:0})}
+        </div>
+
+        <!-- Gift -->
+        <div class="shop-item-card">
+          <div class="shop-item-header">
+            <div class="shop-item-title">🎁 Подарок монет</div>
+            ${shopToggle("sh-gi-enabled", "Включено", gi.enabled !== false)}
+          </div>
+          ${shopField("sh-gi-cost",   "Стоимость отправки (монеты)", gi.cost   ?? 30, {min:0})}
+          ${shopField("sh-gi-amount", "Получает адресат (монеты)",   gi.amount ?? 50, {min:1})}
+        </div>
+
+        <button class="sub-save-btn" id="shopSaveBtn">💾 Сохранить настройки магазина</button>`;
+    }
+
+    function attachShopAdminHandlers() {
+      // Option delete buttons
+      document.querySelectorAll(".shop-option-del").forEach(btn => {
+        btn.addEventListener("click", () => {
+          btn.closest(".shop-option-tag").remove();
+        });
+      });
+
+      // Option add buttons
+      document.querySelectorAll(".shop-add-option-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const prefix = btn.dataset.prefix;
+          const inp = document.getElementById(`${prefix}-new-option`);
+          const val = inp.value.trim();
+          if (!val) return;
+          const list = document.getElementById(`${prefix}-options`);
+          // Duplicate check
+          if ([...list.querySelectorAll(".shop-option-tag")].some(t => t.dataset.val === val)) {
+            showToast("⚠️ Такой вариант уже есть"); return;
+          }
+          const tag = document.createElement("span");
+          tag.className = "shop-option-tag"; tag.dataset.val = val;
+          tag.innerHTML = `${esc(val)} <button class="shop-option-del" title="Удалить">✕</button>`;
+          tag.querySelector(".shop-option-del").addEventListener("click", () => tag.remove());
+          list.appendChild(tag);
+          inp.value = "";
+        });
+      });
+
+      // Collect options helper
+      function getOptions(prefix) {
+        return [...document.querySelectorAll(`#${prefix}-options .shop-option-tag`)].map(t => t.dataset.val);
+      }
+
+      // Save shop config
+      document.getElementById("shopSaveBtn")?.addEventListener("click", async (e) => {
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        btn.textContent = "Сохраняем…";
+        try {
+          const items = {
+            double_xp: {
+              label:   "Двойной XP",
+              enabled: document.getElementById("sh-dx-enabled").checked,
+              cost:    parseInt(document.getElementById("sh-dx-cost").value)  || 200,
+              hours:   parseInt(document.getElementById("sh-dx-hours").value) || 24,
+            },
+            theme: {
+              label:   "Тема оформления",
+              enabled: document.getElementById("sh-th-enabled").checked,
+              cost:    parseInt(document.getElementById("sh-th-cost").value) || 100,
+              options: getOptions("sh-th"),
+            },
+            frame: {
+              label:   "Рамка профиля",
+              enabled: document.getElementById("sh-fr-enabled").checked,
+              cost:    parseInt(document.getElementById("sh-fr-cost").value) || 150,
+              options: getOptions("sh-fr"),
+            },
+            pin_chat: {
+              label:   "Закрепить чат",
+              enabled: document.getElementById("sh-pc-enabled").checked,
+              cost:    parseInt(document.getElementById("sh-pc-cost").value) || 75,
+            },
+            gift: {
+              label:   "Подарок монет",
+              enabled: document.getElementById("sh-gi-enabled").checked,
+              cost:    parseInt(document.getElementById("sh-gi-cost").value)   || 30,
+              amount:  parseInt(document.getElementById("sh-gi-amount").value) || 50,
+            },
+          };
+          const res = await fetch("/app/api/admin/shop/update", {
+            method: "POST", headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({initData, items}),
+          });
+          if (!res.ok) throw new Error();
+          shopAdminConfig = (await res.json()).items;
+          showToast("✅ Настройки магазина сохранены");
+        } catch {
+          showToast("❌ Ошибка при сохранении");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "💾 Сохранить настройки магазина";
+        }
       });
     }
   </script>

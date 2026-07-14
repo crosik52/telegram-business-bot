@@ -1489,6 +1489,43 @@ async def admin_subscription_revoke(
     return {"ok": True}
 
 
+# ── Shop admin ────────────────────────────────────────────────────────────────
+
+class AdminShopConfigRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    init_data: str = Field(alias="initData")
+
+
+class AdminShopUpdateRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    init_data: str = Field(alias="initData")
+    items: dict
+
+
+@router.post("/app/api/admin/shop/config")
+async def admin_shop_config(
+    payload: AdminShopConfigRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Get full shop config for admin."""
+    _require_admin(payload.init_data)
+    shop_repo = ShopRepository(session)
+    return {"ok": True, "items": await shop_repo.get_shop_config_admin()}
+
+
+@router.post("/app/api/admin/shop/update")
+async def admin_shop_update(
+    payload: AdminShopUpdateRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Admin: overwrite shop config items dict."""
+    _require_admin(payload.init_data)
+    if not isinstance(payload.items, dict):
+        raise HTTPException(status_code=422, detail="items must be a dict")
+    shop_repo = ShopRepository(session)
+    new_cfg = await shop_repo.update_shop_config(payload.items)
+    await session.commit()
+    return {"ok": True, "items": new_cfg}
+
+
 @router.post("/app/api/admin/overview")
 async def admin_overview(
     payload: StatsRequest, session: AsyncSession = Depends(get_db_session)

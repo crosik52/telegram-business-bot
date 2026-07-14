@@ -97,6 +97,22 @@ async def on_start(message: Message) -> None:
                     "Referral registered: referrer=%s → referred=%s",
                     referrer_id, referred_id,
                 )
+                # Notify the referrer
+                try:
+                    u = message.from_user
+                    who = u.first_name or ""
+                    if u.username:
+                        who += f" (@{u.username})"
+                    who = who.strip() or f"#{referred_id}"
+                    await message.bot.send_message(
+                        referrer_id,
+                        f"🎉 По твоей реферальной ссылке перешёл пользователь <b>{who}</b>!\n\n"
+                        f"Как только он подключит бота к своему Business-аккаунту, "
+                        f"ты получишь вознаграждение ⭐",
+                        parse_mode="HTML",
+                    )
+                except Exception as notify_exc:
+                    logger.debug("Failed to notify referrer %s: %s", referrer_id, notify_exc)
         except (ValueError, Exception) as exc:
             logger.debug("Referral deep-link error: %s", exc)
 

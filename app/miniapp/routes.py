@@ -369,25 +369,50 @@ async def miniapp_stats(
             )
             if _ref_rewards:
                 await session.commit()
-                # Notify referrer via bot if possible
+                # Notify both sides via bot (best-effort)
                 try:
-                    _bot = get_bot()
-                    if _bot:
-                        _cfg = await _ref_repo.get_config()
-                        _active = await _ref_repo._count_active(_ref.referrer_telegram_id)
-                        _next_ms = None
-                        for _m in sorted(_cfg.milestones, key=lambda x: x["count"]):
-                            if _m["count"] > _active:
-                                _next_ms = _m
-                                break
-                        _msg = (
-                            f"🎉 Ваш реферал активирован!\n"
-                            f"Вы получили +{_cfg.referrer_reward_days} дн. Premium.\n"
-                            f"Всего активных рефералов: {_active}"
+                    _settings = get_settings()
+                    _bot = get_bot(_settings)
+                    _cfg = await _ref_repo.get_config()
+                    _active = await _ref_repo._count_active(_ref.referrer_telegram_id)
+
+                    # Build referred user display name
+                    _who = _ref.referred_first_name or ""
+                    if _ref.referred_username:
+                        _who += f" (@{_ref.referred_username})"
+                    _who = _who.strip() or f"#{_ref.referred_telegram_id}"
+
+                    # Next milestone hint
+                    _next_ms = next(
+                        (m for m in sorted(_cfg.milestones, key=lambda x: x["count"])
+                         if m["count"] > _active),
+                        None,
+                    )
+
+                    # ── Notify referrer ──────────────────────────────────────
+                    _ref_msg = (
+                        f"✅ <b>{_who}</b> подключил бота и стал активным рефералом!\n\n"
+                    )
+                    if _cfg.referrer_reward_days > 0:
+                        _ref_msg += f"⭐ +{_cfg.referrer_reward_days} дн. Premium начислено тебе\n"
+                    _ref_msg += f"👥 Всего активных рефералов: <b>{_active}</b>"
+                    if _next_ms:
+                        _need = _next_ms["count"] - _active
+                        _ref_msg += (
+                            f"\n\n🎯 До награды «{_next_ms['label']}» — ещё <b>{_need}</b>"
                         )
-                        if _next_ms:
-                            _msg += f"\nДо следующей награды «{_next_ms['label']}»: ещё {_next_ms['count'] - _active}"
-                        await _bot.send_message(_ref.referrer_telegram_id, _msg)
+                    await _bot.send_message(
+                        _ref.referrer_telegram_id, _ref_msg, parse_mode="HTML"
+                    )
+
+                    # ── Notify referred user (welcome bonus) ─────────────────
+                    if _cfg.referee_reward_days > 0:
+                        await _bot.send_message(
+                            owner_telegram_id,
+                            f"🎁 Ты подключил бота по реферальной ссылке — "
+                            f"<b>+{_cfg.referee_reward_days} дн. Premium</b> уже у тебя!",
+                            parse_mode="HTML",
+                        )
                 except Exception:
                     pass  # Notification is best-effort
         except Exception:

@@ -23,6 +23,12 @@ from app.models.business_connection import BusinessConnection
 from app.models.message import MediaType, Message
 from app.repositories.message_repository import MessageFilters, MessageRepository
 from app.repositories.pet_repository import FEED_COST, RENAME_COST, SPECIES as PET_SPECIES_CATALOGUE, PetRepository
+from app.repositories.shop_repository import (
+    ShopRepository,
+    BOOST_DOUBLE_XP_COST, BOOST_DOUBLE_XP_HOURS,
+    PIN_CHAT_COST, THEME_COST, FRAME_COST, GIFT_COST, GIFT_AMOUNT,
+    VALID_THEMES, VALID_FRAMES,
+)
 from app.repositories.quest_repository import QUESTS, QuestRepository
 from app.repositories.subscription_repository import SubscriptionRepository
 from app.repositories.wallet_repository import WalletRepository
@@ -1208,17 +1214,22 @@ async def miniapp_pet_adopt(
 
 
 async def _get_pet_sub_benefits(session: AsyncSession, user_id: int) -> dict:
-    """Return pet-related subscription benefits for user, or defaults."""
+    """Return pet-related subscription benefits for user, or defaults.
+    Also applies 2× multiplier when the user has an active double_xp shop boost."""
     sub_repo = SubscriptionRepository(session)
     config   = await sub_repo.get_config()
     sub      = await sub_repo.get_active_subscription(user_id)
+    feed_free     = False
+    xp_multiplier = 1.0
     if sub and config.is_enabled:
-        b = config.benefits or {}
-        return {
-            "feed_free":     bool(b.get("pet_feed_free", False)),
-            "xp_multiplier": float(b.get("xp_multiplier", 1.0)),
-        }
-    return {"feed_free": False, "xp_multiplier": 1.0}
+        b             = config.benefits or {}
+        feed_free     = bool(b.get("pet_feed_free", False))
+        xp_multiplier = float(b.get("xp_multiplier", 1.0))
+    # Double XP shop boost stacks multiplicatively
+    shop_repo = ShopRepository(session)
+    if await shop_repo.has_double_xp(user_id):
+        xp_multiplier *= 2.0
+    return {"feed_free": feed_free, "xp_multiplier": xp_multiplier}
 
 
 @router.post("/app/api/pet/feed")
@@ -1927,3 +1938,183 @@ async def admin_infographic(
         media_type="image/png",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ── Shop endpoints ─────────────────────────────────────────────────────────────
+
+
+class ShopStatusRequest(BaseModel):
+    initData: str = Field(alias="initData", default="")
+    init_data: str = ""
+
+    @property
+    def resolved_init(self) -> str:
+        return self.initData or self.init_data
+
+    model_config = {"populate_by_name": True}
+
+
+class ShopBoostRequest(BaseModel):
+    initData: str = Field(alias="initData", default="")
+    init_data: str = ""
+    boostType: str = Field(alias="boostType", default="double_xp")
+
+    @property
+    def resolved_init(self) -> str:
+        return self.initData or self.init_data
+
+    model_config = {"populate_by_name": True}
+
+
+class ShopThemeRequest(BaseModel):
+    initData: str = Field(alias="initData", default="")
+    init_data: str = ""
+    theme: str
+
+    @property
+    def resolved_init(self) -> str:
+        return self.initData or self.init_data
+
+    model_config = {"populate_by_name": True}
+
+
+class ShopFrameRequest(BaseModel):
+    initData: str = Field(alias="initData", default="")
+    init_data: str = ""
+    frame: str
+
+    @property
+    def resolved_init(self) -> str:
+        return self.initData or self.init_data
+
+    model_config = {"populate_by_name": True}
+
+
+class ShopPinChatRequest(BaseModel):
+    initData: str = Field(alias="initData", default="")
+    init_data: str = ""
+    chatId: int | None = Field(alias="chatId", default=None)
+
+    @property
+    def resolved_init(self) -> str:
+        return self.initData or self.init_data
+
+    model_config = {"populate_by_name": True}
+
+
+class ShopGiftRequest(BaseModel):
+    initData: str = Field(alias="initData", default="")
+    init_data: str = ""
+    chatId: int = Field(alias="chatId")
+
+    @property
+    def resolved_init(self) -> str:
+        return self.initData or self.init_data
+
+    model_config = {"populate_by_name": True}
+
+
+def _shop_auth(init_data: str, settings) -> int:
+    user = verify_init_data(init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid init data")
+    return int(user["id"])
+
+
+@router.post("/app/api/shop/status")
+async def shop_status(
+    payload: ShopStatusRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Return active boosts + settings + price list for the shop tab."""
+    settings = get_settings()
+    owner_id = _shop_auth(payload.resolved_init, settings)
+    repo = ShopRepository(session)
+    return await repo.get_shop_status(owner_id)
+
+
+@router.post("/app/api/shop/boost")
+async def shop_buy_boost(
+    payload: ShopBoostRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Buy a timed boost (currently only double_xp)."""
+    settings = get_settings()
+    owner_id = _shop_auth(payload.resolved_init, settings)
+    if payload.boostType != "double_xp":
+        raise HTTPException(status_code=400, detail="unknown_boost_type")
+    repo = ShopRepository(session)
+    try:
+        result = await repo.buy_double_xp(owner_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=402, detail=str(exc)) from exc
+    await session.commit()
+    return {"ok": True, **result}
+
+
+@router.post("/app/api/shop/theme")
+async def shop_buy_theme(
+    payload: ShopThemeRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Purchase and apply a UI theme."""
+    settings = get_settings()
+    owner_id = _shop_auth(payload.resolved_init, settings)
+    repo = ShopRepository(session)
+    try:
+        result = await repo.buy_theme(owner_id, payload.theme)
+    except ValueError as exc:
+        code = str(exc)
+        status = 402 if code == "insufficient_coins" else 400
+        raise HTTPException(status_code=status, detail=code) from exc
+    await session.commit()
+    return {"ok": True, **result}
+
+
+@router.post("/app/api/shop/frame")
+async def shop_buy_frame(
+    payload: ShopFrameRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Purchase and apply a profile frame."""
+    settings = get_settings()
+    owner_id = _shop_auth(payload.resolved_init, settings)
+    repo = ShopRepository(session)
+    try:
+        result = await repo.buy_frame(owner_id, payload.frame)
+    except ValueError as exc:
+        code = str(exc)
+        status = 402 if code == "insufficient_coins" else 400
+        raise HTTPException(status_code=status, detail=code) from exc
+    await session.commit()
+    return {"ok": True, **result}
+
+
+@router.post("/app/api/shop/pin-chat")
+async def shop_pin_chat(
+    payload: ShopPinChatRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Pin (or unpin) a chat. Costs PIN_CHAT_COST coins when setting/changing."""
+    settings = get_settings()
+    owner_id = _shop_auth(payload.resolved_init, settings)
+    repo = ShopRepository(session)
+    try:
+        result = await repo.pin_chat(owner_id, payload.chatId)
+    except ValueError as exc:
+        raise HTTPException(status_code=402, detail=str(exc)) from exc
+    await session.commit()
+    return {"ok": True, **result}
+
+
+@router.post("/app/api/shop/gift")
+async def shop_gift_coins(
+    payload: ShopGiftRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Gift coins to another user (chat partner)."""
+    settings = get_settings()
+    owner_id = _shop_auth(payload.resolved_init, settings)
+    repo = ShopRepository(session)
+    try:
+        result = await repo.gift_coins(owner_id, payload.chatId)
+    except ValueError as exc:
+        code = str(exc)
+        status = 400 if code == "cannot_gift_self" else 402
+        raise HTTPException(status_code=status, detail=code) from exc
+    await session.commit()
+    return {"ok": True, **result}

@@ -754,7 +754,11 @@
   .tab-item.tab-casino.drag-preview { color: #9333ea; }
   .tab-item.tab-quests.drag-preview { color: var(--green); }
   .tab-item.tab-donate.drag-preview  { color: #f59e0b; }
+  .tab-item.tab-shop.drag-preview    { color: #e11d48; }
   .tab-item.drag-preview .tab-icon-wrap { transform: scale(1.05) translateY(-1px); }
+
+  .tab-item.tab-shop.active          { color: #e11d48; }
+  .tab-item.tab-shop.active .tab-icon-wrap { transform: scale(1.08) translateY(-2px); }
 
   /* ══════════════════════════════════════════
      CASINO – DARK MINIMAL THEME
@@ -1189,56 +1193,122 @@
   .sub-cta.full { width: 100%; justify-content: center; }
 
   /* ── Pet section ── */
+  /* ── Pet system — redesigned ─────────────────────────────── */
+  @keyframes petFloat {
+    0%,100% { transform: translateY(0); }
+    50%      { transform: translateY(-5px); }
+  }
+  @keyframes bubblePop {
+    0%   { opacity:0; transform: scale(0.7) translateY(6px); }
+    100% { opacity:1; transform: scale(1) translateY(0); }
+  }
+  @keyframes statPulse {
+    0%,100% { opacity:1; }
+    50%      { opacity:0.55; }
+  }
+
   .pet-section { margin-bottom: 16px; }
   .pet-card {
     background: var(--secondary-bg); border-radius: var(--card-radius);
-    padding: 14px 14px 12px; margin-bottom: 10px; box-shadow: var(--shadow);
+    padding: 16px 14px 14px; margin-bottom: 10px; box-shadow: var(--shadow);
     animation: riseIn 0.3s ease backwards;
+    position: relative; overflow: hidden;
+  }
+  .pet-card::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit;
+    background: linear-gradient(135deg, rgba(255,149,0,0.04) 0%, rgba(52,199,89,0.03) 100%);
+    pointer-events: none;
   }
   .pet-card.dead { opacity: 0.45; }
-  .pet-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
-  .pet-avatar-wrap { position: relative; flex-shrink: 0; }
-  .pet-avatar  { font-size: 38px; line-height: 1; display: block; }
-  .pet-level-badge {
-    position: absolute; bottom: -4px; right: -6px;
-    background: var(--link); color: #fff;
-    font-size: 9px; font-weight: 800; border-radius: 8px; padding: 1px 5px;
-    border: 1.5px solid var(--secondary-bg);
-  }
-  .pet-info { flex: 1; min-width: 0; }
-  .pet-name-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-  .pet-name  { font-size: 15px; font-weight: 700; }
-  .pet-personality { font-size: 11px; background: rgba(120,120,128,0.12); border-radius: 7px; padding: 1px 6px; }
-  .pet-meta  { font-size: 11.5px; color: var(--hint); margin-top: 2px; }
-  .pet-with  { font-size: 12px; color: var(--hint); margin-top: 1px; }
 
-  /* stat bars */
-  .pet-stats { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
-  .pet-stat-row { display: flex; align-items: center; gap: 7px; }
-  .pet-stat-icon { font-size: 12px; width: 14px; flex-shrink: 0; }
-  .pet-stat-track { flex: 1; height: 5px; border-radius: 3px; background: rgba(120,120,128,0.13); overflow: hidden; }
-  .pet-stat-fill  { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
-  .pet-stat-lbl   { font-size: 11px; font-weight: 700; flex-shrink: 0; width: 30px; text-align: right; }
+  /* hero section — centered avatar + speech bubble */
+  .pet-hero { display: flex; flex-direction: column; align-items: center; padding: 8px 0 14px; }
+  .pet-bubble-wrap { position: relative; margin-bottom: 4px; }
+  .pet-speech-bubble {
+    background: var(--secondary-bg);
+    border: 1.5px solid rgba(120,120,128,0.18);
+    border-radius: 14px; padding: 6px 12px;
+    font-size: 12.5px; color: var(--text); white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    animation: bubblePop 0.3s cubic-bezier(.34,1.56,.64,1) backwards;
+  }
+  .pet-speech-bubble::after {
+    content: ""; position: absolute; bottom: -7px; left: 50%; transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: rgba(120,120,128,0.18);
+  }
+  .pet-speech-bubble::before {
+    content: ""; position: absolute; bottom: -5.5px; left: 50%; transform: translateX(-50%);
+    border: 4.5px solid transparent;
+    border-top-color: var(--secondary-bg);
+    z-index: 1;
+  }
+
+  .pet-avatar-circle {
+    width: 80px; height: 80px; border-radius: 50%;
+    background: rgba(255,149,0,0.09);
+    display: flex; align-items: center; justify-content: center;
+    animation: petFloat 3s ease-in-out infinite;
+    margin: 10px 0 8px; position: relative;
+  }
+  .pet-avatar  { font-size: 48px; line-height: 1; display: block; }
+  .pet-level-badge {
+    position: absolute; bottom: -2px; right: -4px;
+    background: var(--link); color: #fff;
+    font-size: 9px; font-weight: 800; border-radius: 8px; padding: 2px 6px;
+    border: 2px solid var(--secondary-bg);
+    white-space: nowrap;
+  }
+
+  .pet-name-centered { font-size: 17px; font-weight: 800; margin-bottom: 4px; letter-spacing: -0.2px; }
+  .pet-badges-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .pet-personality {
+    font-size: 11px; background: rgba(120,120,128,0.12);
+    border-radius: 7px; padding: 2px 7px;
+  }
+  .pet-stage-badge {
+    font-size: 11px; background: rgba(255,149,0,0.12); color: var(--orange);
+    border-radius: 7px; padding: 2px 7px;
+  }
+  .pet-with-lbl {
+    font-size: 11.5px; color: var(--hint); margin-top: 5px;
+  }
+
+  /* stat bars — taller and more expressive */
+  .pet-stats { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+  .pet-stat-row { display: flex; align-items: center; gap: 8px; }
+  .pet-stat-icon { font-size: 13px; width: 16px; flex-shrink: 0; }
+  .pet-stat-label { font-size: 11.5px; color: var(--hint); width: 54px; flex-shrink: 0; }
+  .pet-stat-track { flex: 1; height: 8px; border-radius: 6px; background: rgba(120,120,128,0.12); overflow: hidden; }
+  .pet-stat-fill  { height: 100%; border-radius: 6px; transition: width 0.7s cubic-bezier(.4,0,.2,1); }
+  .pet-stat-fill.pulsing { animation: statPulse 1.8s ease-in-out infinite; }
+  .pet-stat-lbl   { font-size: 11px; font-weight: 700; flex-shrink: 0; width: 32px; text-align: right; }
 
   /* xp bar */
-  .pet-xp-row { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
-  .pet-xp-track { flex: 1; height: 3px; border-radius: 2px; background: rgba(120,120,128,0.13); overflow: hidden; }
-  .pet-xp-fill  { height: 100%; border-radius: 2px; background: linear-gradient(90deg, #5856d6, var(--link)); transition: width 0.6s ease; }
-  .pet-xp-lbl   { font-size: 10px; color: var(--hint); flex-shrink: 0; }
+  .pet-xp-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .pet-xp-label { font-size: 11px; color: var(--hint); flex-shrink: 0; }
+  .pet-xp-track { flex: 1; height: 6px; border-radius: 4px; background: rgba(120,120,128,0.12); overflow: hidden; }
+  .pet-xp-fill  { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #f59e0b, #f97316); transition: width 0.7s cubic-bezier(.4,0,.2,1); }
+  .pet-xp-lbl   { font-size: 10.5px; color: var(--hint); flex-shrink: 0; }
 
-  /* action buttons */
-  .pet-actions { display: flex; gap: 7px; }
+  /* action buttons — 2×2 grid */
+  .pet-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .pet-action-btn {
-    flex: 1; border: none; border-radius: 11px; padding: 7px 4px;
-    font-size: 12px; font-weight: 700;
+    border: none; border-radius: 13px; padding: 10px 8px;
+    font-size: 12.5px; font-weight: 700; line-height: 1.3;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
     transition: transform 0.1s, opacity 0.2s; touch-action: manipulation;
+    min-height: 52px; justify-content: center;
   }
   .pet-action-btn:active   { transform: scale(0.93); }
-  .pet-action-btn:disabled { opacity: 0.35; background: rgba(120,120,128,0.1) !important; color: var(--hint) !important; }
-  .pet-btn-feed   { background: rgba(255,149,0,0.14); color: var(--orange); }
-  .pet-btn-play   { background: rgba(52,199,89,0.13); color: var(--green); }
-  .pet-btn-cuddle { background: rgba(191,90,242,0.13); color: #bf5af2; }
-  .pet-btn-rename { background: rgba(36,129,204,0.13); color: var(--link); font-size: 11px; flex: none; padding: 7px 10px; }
+  .pet-action-btn:disabled { opacity: 0.32; background: rgba(120,120,128,0.09) !important; color: var(--hint) !important; }
+  .pet-btn-icon  { font-size: 18px; }
+  .pet-btn-label { font-size: 11.5px; font-weight: 700; }
+  .pet-btn-sub   { font-size: 10px; opacity: 0.75; font-weight: 600; }
+  .pet-btn-feed   { background: rgba(255,149,0,0.13); color: var(--orange); }
+  .pet-btn-play   { background: rgba(52,199,89,0.12); color: var(--green); }
+  .pet-btn-cuddle { background: rgba(191,90,242,0.12); color: #bf5af2; }
+  .pet-btn-rename { background: rgba(36,129,204,0.12); color: var(--link); }
 
   .pet-empty       { text-align: center; padding: 18px 8px 22px; }
   .pet-empty-emoji { font-size: 46px; margin-bottom: 10px; }
@@ -1258,6 +1328,93 @@
   .pet-dead-row { display: flex; align-items: center; gap: 12px; }
   .pet-dead-body { flex: 1; min-width: 0; }
   .pet-dead-cause { font-size: 11.5px; color: var(--hint); margin-top: 2px; }
+
+  /* ── Shop tab ────────────────────────────────────────────── */
+  #shopContent { padding-bottom: 20px; }
+  .shop-balance-bar {
+    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+    border-radius: var(--card-radius); padding: 16px 16px 14px;
+    margin-bottom: 14px; text-align: center;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.18);
+  }
+  .shop-coin-amount {
+    font-size: 28px; font-weight: 900; letter-spacing: -0.5px;
+    color: #f59e0b; display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .shop-coin-sub { font-size: 12px; color: rgba(255,255,255,0.45); margin-top: 2px; }
+  .shop-earn-chips { display: flex; gap: 8px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
+  .shop-earn-chip {
+    background: rgba(255,255,255,0.08); border-radius: 20px;
+    padding: 4px 10px; font-size: 11.5px; color: rgba(255,255,255,0.7);
+    border: 1px solid rgba(255,255,255,0.12);
+  }
+  .shop-section-title {
+    font-size: 14px; font-weight: 800; margin: 14px 0 8px;
+    display: flex; align-items: center; gap: 6px; letter-spacing: -0.1px;
+  }
+  .shop-items-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 9px;
+    margin-bottom: 4px;
+  }
+  .shop-item-wide { grid-column: 1 / -1; }
+  .shop-item {
+    background: var(--secondary-bg); border-radius: 14px;
+    padding: 13px 12px 11px; display: flex; flex-direction: column;
+    align-items: center; gap: 4px; text-align: center;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.06); position: relative;
+    animation: riseIn 0.25s ease backwards;
+  }
+  .shop-item-wide .shop-item { flex-direction: row; text-align: left; gap: 10px; padding: 12px 14px; }
+  .shop-item-icon { font-size: 28px; line-height: 1; }
+  .shop-item-wide .shop-item-icon { font-size: 32px; }
+  .shop-item-body { flex: 1; min-width: 0; }
+  .shop-item-name { font-size: 12.5px; font-weight: 700; line-height: 1.3; }
+  .shop-item-desc { font-size: 11px; color: var(--hint); margin-top: 1px; line-height: 1.35; }
+  .shop-item-price {
+    font-size: 11.5px; font-weight: 800; margin-top: 4px;
+    background: rgba(245,158,11,0.13); color: #d97706;
+    border-radius: 6px; padding: 2px 7px; display: inline-block;
+  }
+  .shop-buy-btn {
+    border: none; border-radius: 9px; padding: 7px 10px;
+    font-size: 11.5px; font-weight: 800; margin-top: 6px;
+    touch-action: manipulation; transition: transform 0.1s, opacity 0.18s;
+    width: 100%; cursor: pointer;
+  }
+  .shop-item-wide .shop-buy-btn { width: auto; flex-shrink: 0; margin-top: 0; padding: 8px 14px; }
+  .shop-buy-btn:active { transform: scale(0.93); }
+  .shop-buy-btn:disabled { opacity: 0.35; }
+  .shop-buy-amber  { background: rgba(245,158,11,0.15); color: #d97706; }
+  .shop-buy-purple { background: rgba(124,58,237,0.14); color: #7c3aed; }
+  .shop-buy-teal   { background: rgba(20,184,166,0.14); color: #0d9488; }
+  .shop-buy-pink   { background: rgba(225,29,72,0.14);  color: #e11d48; }
+  .shop-buy-blue   { background: rgba(36,129,204,0.14); color: var(--link); }
+  .shop-active-boost {
+    background: rgba(20,184,166,0.12); border: 1px solid rgba(20,184,166,0.3);
+    border-radius: var(--card-radius); padding: 10px 12px; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px;
+    animation: riseIn 0.25s ease;
+  }
+  .shop-boost-text { font-size: 12.5px; font-weight: 700; color: #0d9488; }
+  .shop-boost-sub  { font-size: 11px; color: var(--hint); }
+  .theme-picker { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 6px; margin-bottom: 4px; }
+  .theme-btn {
+    border: 2px solid transparent; border-radius: 10px; padding: 7px 12px;
+    font-size: 12px; font-weight: 700; background: var(--secondary-bg);
+    touch-action: manipulation; transition: border-color 0.15s;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  }
+  .theme-btn.active { border-color: var(--link); }
+  .frame-picker { display: grid; grid-template-columns: repeat(5,1fr); gap: 6px; margin-top: 6px; }
+  .frame-btn {
+    border: 2px solid transparent; border-radius: 9px; padding: 8px 4px;
+    font-size: 11px; font-weight: 700; background: var(--secondary-bg);
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    touch-action: manipulation; transition: border-color 0.15s;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  }
+  .frame-btn.active { border-color: var(--link); }
+  .frame-btn-icon { font-size: 18px; }
 
   /* ── Bottom-sheet overlay (used by adopt modal) ── */
   .balance-overlay {
@@ -1337,6 +1494,7 @@
   <div id="casinoContent" style="display:none"></div>
   <div id="donateContent" style="display:none"></div>
   <div id="questContent"  style="display:none"></div>
+  <div id="shopContent"   style="display:none"></div>
 
   <!-- kept for JS compat, hidden via CSS -->
   <button class="refresh-fab" id="refreshFabLegacy" style="display:none"></button>
@@ -1375,6 +1533,10 @@
     <button class="tab-item tab-donate" data-tab="donate">
       <div class="tab-icon-wrap">💎</div>
       <span class="tab-label">Поддержать</span>
+    </button>
+    <button class="tab-item tab-shop" data-tab="shop">
+      <div class="tab-icon-wrap">🛒</div>
+      <span class="tab-label">Магазин</span>
     </button>
   </nav>
 
@@ -2349,8 +2511,10 @@
     // ══════════════════════════════════════════════════════════════════
     // MAIN TAB SWITCHING
     // ══════════════════════════════════════════════════════════════════
-    const TAB_HEADER_ICONS  = { stats: "📊", casino: "🎰", quests: "🏆", donate: "💎" };
-    const TAB_HEADER_TITLES = { stats: "Моя статистика", casino: "Игры", quests: "Задания и рейтинг", donate: "Поддержать" };
+    const TAB_HEADER_ICONS  = { stats: "📊", casino: "🎰", quests: "🏆", donate: "💎", shop: "🛒" };
+    const TAB_HEADER_TITLES = { stats: "Моя статистика", casino: "Игры", quests: "Задания и рейтинг", donate: "Поддержать", shop: "Монетный магазин" };
+    let shopLoaded = false;
+    let shopData   = null;
 
     function switchMainTab(tab) {
       currentTab = tab;
@@ -2361,6 +2525,7 @@
       document.getElementById("casinoContent").style.display = tab === "casino" ? "" : "none";
       document.getElementById("questContent").style.display  = tab === "quests" ? "" : "none";
       document.getElementById("donateContent").style.display = tab === "donate" ? "" : "none";
+      document.getElementById("shopContent").style.display   = tab === "shop"   ? "" : "none";
 
       // Header refresh button — only on stats
       const headerActions = document.getElementById("headerActions");
@@ -2383,6 +2548,10 @@
         if (!casinoLoaded && currentInitData) loadWalletForDonate();
         else renderDonate();
       }
+      if (tab === "shop") {
+        if (!shopLoaded && currentInitData) loadShop();
+        else if (shopLoaded) renderShop();
+      }
       if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
       if (window._tabSwitchHook) window._tabSwitchHook(tab);
     }
@@ -2399,6 +2568,7 @@
         casino: { bg: "rgba(147,51,234,0.22)",  shadow: "rgba(147,51,234,0.22)"  },
         quests: { bg: "rgba(52,199,89,0.22)",   shadow: "rgba(52,199,89,0.22)"   },
         donate: { bg: "rgba(245,158,11,0.22)",  shadow: "rgba(245,158,11,0.22)"  },
+        shop:   { bg: "rgba(225,29,72,0.20)",   shadow: "rgba(225,29,72,0.20)"   },
       };
 
       /* Place slider under a given tab element (optionally without spring) */
@@ -3077,6 +3247,20 @@
       return `${m}м`;
     }
 
+    function petSpeech(p) {
+      if (p.hunger < 30) return p.hunger < 15
+        ? `Я очень голодна… 😿 Покорми меня!`
+        : `Хочу кушать ${hungerEmoji(p.hunger)} покорми меня?`;
+      if (p.mood < 30) return `Мне скучно… поиграй со мной! 🎾`;
+      if (p.mood >= 90) return `Я счастлива! ❤️ Спасибо!`;
+      if (p.hunger >= 90) return `Сытая и довольная~ 😸`;
+      const phrases = [
+        `Мяу! Привет! 👋`, `Всё хорошо~ 😊`, `Поиграй со мной! 🎮`,
+        `Я тебя люблю! 💕`, `Сегодня отличный день! ✨`,
+      ];
+      return phrases[Math.abs(p.id * 7 + p.mood) % phrases.length];
+    }
+
     function renderPetsSection() {
       if (!petData) return "";
       const { pets = [], available_chats = [] } = petData;
@@ -3107,57 +3291,85 @@
         const feedCd   = fmtCooldown(p.feed_cooldown_secs);
         const playCd   = fmtCooldown(p.play_cooldown_secs);
         const cuddleCd = fmtCooldown(p.cuddle_cooldown_secs);
-        const xpPct    = Math.min(100, Math.round((p.xp - (p.level-1)**2*8) / Math.max(1, p.level**2*8 - (p.level-1)**2*8) * 100));
+        const xpPct    = Math.min(100, Math.round(
+          (p.xp - (p.level-1)**2*8) / Math.max(1, p.level**2*8 - (p.level-1)**2*8) * 100
+        ));
+        const hungerPulsing = p.hunger < 35 ? " pulsing" : "";
+        const speech = petSpeech(p);
+
         return `
         <div class="pet-card" style="animation-delay:${i * 0.07}s">
-          <div class="pet-header">
-            <div class="pet-avatar-wrap">
+          <!-- Hero -->
+          <div class="pet-hero">
+            <div class="pet-bubble-wrap">
+              <div class="pet-speech-bubble" style="animation-delay:${0.1 + i*0.07}s">${esc(speech)}</div>
+            </div>
+            <div class="pet-avatar-circle">
               <span class="pet-avatar">${petEmoji(p)}</span>
-              <span class="pet-level-badge">Lv${p.level}</span>
+              <span class="pet-level-badge">Ур.${p.level}</span>
             </div>
-            <div class="pet-info">
-              <div class="pet-name-row">
-                <span class="pet-name">${esc(p.pet_name)}</span>
-                <span class="pet-personality">${esc(p.personality_emoji)} ${esc(p.personality_label)}</span>
-              </div>
-              <div class="pet-meta">${esc(STAGE_LABELS[p.stage] || "")} · ${daysLabel(p.days_alive)}</div>
-              <div class="pet-with">с ${esc(p.interlocutor_name)}</div>
+            <div class="pet-name-centered">${esc(p.pet_name)}</div>
+            <div class="pet-badges-row">
+              <span class="pet-personality">${esc(p.personality_emoji)} ${esc(p.personality_label)}</span>
+              ${p.stage ? `<span class="pet-stage-badge">${esc(STAGE_LABELS[p.stage] || "")}</span>` : ""}
             </div>
+            <div class="pet-with-lbl">с ${esc(p.interlocutor_name)} · ${daysLabel(p.days_alive)}</div>
           </div>
 
+          <!-- XP bar -->
+          <div class="pet-xp-row">
+            <span class="pet-xp-label">XP ${p.xp}</span>
+            <div class="pet-xp-track"><div class="pet-xp-fill" style="width:${xpPct}%"></div></div>
+            <span class="pet-xp-lbl">→ Ур.${p.level + 1}</span>
+          </div>
+
+          <!-- Stat bars -->
           <div class="pet-stats">
             <div class="pet-stat-row">
               <span class="pet-stat-icon">${hungerEmoji(p.hunger)}</span>
-              <div class="pet-stat-track"><div class="pet-stat-fill" style="width:${p.hunger}%;background:${statColor(p.hunger)}"></div></div>
+              <span class="pet-stat-label">Сытость</span>
+              <div class="pet-stat-track">
+                <div class="pet-stat-fill${hungerPulsing}"
+                  style="width:${p.hunger}%;background:${statColor(p.hunger)}"></div>
+              </div>
               <span class="pet-stat-lbl" style="color:${statColor(p.hunger)}">${p.hunger}%</span>
             </div>
             <div class="pet-stat-row">
               <span class="pet-stat-icon">${moodEmoji(p.mood)}</span>
-              <div class="pet-stat-track"><div class="pet-stat-fill" style="width:${p.mood}%;background:${statColor(p.mood)}"></div></div>
+              <span class="pet-stat-label">Настрой</span>
+              <div class="pet-stat-track">
+                <div class="pet-stat-fill"
+                  style="width:${p.mood}%;background:${statColor(p.mood)}"></div>
+              </div>
               <span class="pet-stat-lbl" style="color:${statColor(p.mood)}">${p.mood}%</span>
             </div>
           </div>
 
-          <div class="pet-xp-row">
-            <div class="pet-xp-track"><div class="pet-xp-fill" style="width:${xpPct}%"></div></div>
-            <span class="pet-xp-lbl">${p.xp} XP</span>
-          </div>
-
+          <!-- 2×2 action grid -->
           <div class="pet-actions">
             <button class="pet-action-btn pet-btn-feed" data-pet-id="${p.id}" data-action="feed"
               ${feedCd ? "disabled" : ""}>
-              🍖 ${p.feed_cost}🪙${feedCd ? ` · ${feedCd}` : ""}
+              <span class="pet-btn-icon">🍣</span>
+              <span class="pet-btn-label">Покормить</span>
+              <span class="pet-btn-sub">${feedCd ? feedCd : p.feed_cost + " 🪙"}</span>
             </button>
             <button class="pet-action-btn pet-btn-play" data-pet-id="${p.id}" data-action="play"
               ${playCd ? "disabled" : ""}>
-              🎮 Играть${playCd ? ` · ${playCd}` : ""}
+              <span class="pet-btn-icon">🎾</span>
+              <span class="pet-btn-label">Поиграть</span>
+              <span class="pet-btn-sub">${playCd ? playCd : "Бесплатно"}</span>
             </button>
             <button class="pet-action-btn pet-btn-cuddle" data-pet-id="${p.id}" data-action="cuddle"
               ${cuddleCd ? "disabled" : ""}>
-              🤗${cuddleCd ? ` ${cuddleCd}` : ""}
+              <span class="pet-btn-icon">🤗</span>
+              <span class="pet-btn-label">Обнять</span>
+              <span class="pet-btn-sub">${cuddleCd ? cuddleCd : "Бесплатно"}</span>
             </button>
-            <button class="pet-action-btn pet-btn-rename" data-pet-id="${p.id}" data-action="rename"
-              title="Переименовать (50🪙)">✏️</button>
+            <button class="pet-action-btn pet-btn-rename" data-pet-id="${p.id}" data-action="rename">
+              <span class="pet-btn-icon">✏️</span>
+              <span class="pet-btn-label">Имя</span>
+              <span class="pet-btn-sub">50 🪙</span>
+            </button>
           </div>
         </div>`;
       }).join("");
@@ -3517,6 +3729,323 @@
             btn.textContent = "Забрать";
             toastMessage("Ошибка. Попробуй позже.");
           }
+        });
+      });
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // SHOP TAB
+    // ══════════════════════════════════════════════════════════════════
+
+    const THEMES = [
+      { id: "default",     emoji: "🌿", label: "Стандарт" },
+      { id: "dark_forest", emoji: "🌲", label: "Лес"      },
+      { id: "ocean",       emoji: "🌊", label: "Океан"    },
+      { id: "sunset",      emoji: "🌅", label: "Закат"    },
+      { id: "lavender",    emoji: "💜", label: "Лаванда"  },
+    ];
+    const FRAMES = [
+      { id: "none",    emoji: "⬜", label: "Нет"    },
+      { id: "stars",   emoji: "⭐", label: "Звёзды" },
+      { id: "flowers", emoji: "🌸", label: "Цветы"  },
+      { id: "fire",    emoji: "🔥", label: "Огонь"  },
+      { id: "neon",    emoji: "💡", label: "Неон"   },
+    ];
+
+    async function loadShop() {
+      const el = document.getElementById("shopContent");
+      el.innerHTML = `<div class="empty skeleton"><span class="big-emoji">🛒</span>Загружаем…</div>`;
+      try {
+        const opts = { method: "POST", headers: { "Content-Type": "application/json" },
+                       body: JSON.stringify({ initData: currentInitData }) };
+        const [wRes, sRes, pRes] = await Promise.all([
+          fetch("/app/api/wallet/info", opts),
+          fetch("/app/api/shop/status", opts),
+          fetch("/app/api/pet/list",    opts),
+        ]);
+        if (!wRes.ok) throw new Error();
+        walletData = await wRes.json();
+        shopData   = sRes.ok ? await sRes.json() : { active_boosts: [], settings: {}, prices: {} };
+        petData    = pRes.ok ? await pRes.json() : { pets: [], available_chats: [] };
+        shopLoaded = true;
+        renderShop();
+      } catch {
+        el.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить.<br>Попробуй обновить.</div>`;
+      }
+    }
+
+    function renderShop() {
+      if (!shopData || !walletData) return;
+      const el = document.getElementById("shopContent");
+      const bal = walletData.balance ?? 0;
+      const prices = shopData.prices || {};
+      const settings = shopData.settings || {};
+      const boosts   = shopData.active_boosts || [];
+      const dxpBoost = boosts.find(b => b.boost_type === "double_xp");
+
+      // Active boost banner
+      const boostBanner = dxpBoost ? `
+        <div class="shop-active-boost">
+          <span style="font-size:22px">⚡</span>
+          <div>
+            <div class="shop-boost-text">Двойной XP активен!</div>
+            <div class="shop-boost-sub">Осталось ${dxpBoost.hours_left} ч.</div>
+          </div>
+        </div>` : "";
+
+      // Chats for gift/pin
+      const chats = petData?.available_chats || [];
+
+      el.innerHTML = `
+        <!-- Balance header -->
+        <div class="shop-balance-bar">
+          <div class="shop-coin-amount">🪙 ${bal.toLocaleString("ru-RU")}</div>
+          <div class="shop-coin-sub">твои монеты</div>
+          <div class="shop-earn-chips">
+            <span class="shop-earn-chip">📅 Ежедневный бонус</span>
+            <span class="shop-earn-chip">📋 Квесты</span>
+            <span class="shop-earn-chip">💬 Активность</span>
+          </div>
+        </div>
+
+        ${boostBanner}
+
+        <!-- Питомцы -->
+        <div class="shop-section-title">🐾 Питомцы</div>
+        <div class="shop-items-grid">
+          <div class="shop-item" style="animation-delay:0.05s">
+            <span class="shop-item-icon">🍣</span>
+            <span class="shop-item-name">Покормить</span>
+            <span class="shop-item-price">${prices.double_xp != null ? (prices.gift ?? 20) : 20} 🪙</span>
+            <button class="shop-buy-btn shop-buy-amber" onclick="switchMainTab('casino')">Перейти →</button>
+          </div>
+          <div class="shop-item" style="animation-delay:0.08s">
+            <span class="shop-item-icon">✏️</span>
+            <span class="shop-item-name">Переименовать</span>
+            <span class="shop-item-price">50 🪙</span>
+            <button class="shop-buy-btn shop-buy-amber" onclick="switchMainTab('casino')">Перейти →</button>
+          </div>
+        </div>
+
+        <!-- Казино -->
+        <div class="shop-section-title">🎰 Казино</div>
+        <div class="shop-items-grid">
+          <div class="shop-item" style="animation-delay:0.1s">
+            <span class="shop-item-icon">🎰</span>
+            <span class="shop-item-name">Слоты</span>
+            <span class="shop-item-price">от 10 🪙</span>
+            <button class="shop-buy-btn shop-buy-purple" onclick="switchMainTab('casino')">Играть →</button>
+          </div>
+          <div class="shop-item" style="animation-delay:0.12s">
+            <span class="shop-item-icon">🪙</span>
+            <span class="shop-item-name">Монетка</span>
+            <span class="shop-item-price">10–500 🪙</span>
+            <button class="shop-buy-btn shop-buy-purple" onclick="switchMainTab('casino')">Играть →</button>
+          </div>
+        </div>
+
+        <!-- Бусты -->
+        <div class="shop-section-title">⚡ Бусты</div>
+        <div class="shop-items-grid">
+          <div class="shop-item" style="animation-delay:0.14s">
+            <span class="shop-item-icon">⚡</span>
+            <span class="shop-item-name">Двойной XP</span>
+            <span class="shop-item-price">${prices.double_xp ?? 200} 🪙</span>
+            <button class="shop-buy-btn shop-buy-teal" id="buyDxpBtn"
+              ${bal < (prices.double_xp ?? 200) ? "disabled" : ""}>
+              ${dxpBoost ? `+24ч` : "Купить"}
+            </button>
+          </div>
+          <div class="shop-item" style="animation-delay:0.16s">
+            <span class="shop-item-icon">📌</span>
+            <span class="shop-item-name">Закрепить чат</span>
+            <span class="shop-item-price">${prices.pin_chat ?? 75} 🪙</span>
+            <button class="shop-buy-btn shop-buy-teal" id="pinChatBtn"
+              ${chats.length === 0 ? "disabled" : ""}>
+              ${settings.pinned_chat_id ? "Изменить" : "Выбрать"}
+            </button>
+          </div>
+        </div>
+
+        <!-- Кастомизация -->
+        <div class="shop-section-title">🎨 Кастомизация</div>
+        <div class="section-title" style="font-size:12px;color:var(--hint);margin-top:2px;margin-bottom:6px">Тема · ${prices.theme ?? 100} 🪙</div>
+        <div class="theme-picker">
+          ${THEMES.map(t => `
+            <button class="theme-btn ${settings.theme === t.id ? "active" : ""}"
+              data-theme="${t.id}" id="themBtn_${t.id}"
+              ${bal < (prices.theme ?? 100) && settings.theme !== t.id ? "disabled" : ""}
+              ${settings.theme === t.id ? "disabled" : ""}>
+              ${t.emoji} ${t.label}
+            </button>`).join("")}
+        </div>
+        <div class="section-title" style="font-size:12px;color:var(--hint);margin-top:10px;margin-bottom:6px">Рамка профиля · ${prices.frame ?? 150} 🪙</div>
+        <div class="frame-picker">
+          ${FRAMES.map(f => `
+            <button class="frame-btn ${settings.frame === f.id ? "active" : ""}"
+              data-frame="${f.id}"
+              ${bal < (prices.frame ?? 150) && settings.frame !== f.id ? "disabled" : ""}
+              ${settings.frame === f.id ? "disabled" : ""}>
+              <span class="frame-btn-icon">${f.emoji}</span>
+              <span>${f.label}</span>
+            </button>`).join("")}
+        </div>
+
+        <!-- Подарки -->
+        <div class="shop-section-title">🎁 Подарки</div>
+        <div class="shop-items-grid shop-item-wide">
+          <div class="shop-item">
+            <span class="shop-item-icon">🎁</span>
+            <div class="shop-item-body">
+              <div class="shop-item-name">Подарить монеты собеседнику</div>
+              <div class="shop-item-desc">Стоит ${prices.gift ?? 30} 🪙 · Получит ${prices.gift_amount ?? 50} 🪙</div>
+            </div>
+            <button class="shop-buy-btn shop-buy-pink" id="giftCoinsBtn"
+              ${chats.length === 0 || bal < (prices.gift ?? 30) ? "disabled" : ""}>
+              Подарить
+            </button>
+          </div>
+        </div>
+      `;
+
+      attachShopHandlers(prices, settings, chats, bal);
+    }
+
+    function attachShopHandlers(prices, settings, chats, bal) {
+      // Double XP boost
+      document.getElementById("buyDxpBtn")?.addEventListener("click", async () => {
+        const btn = document.getElementById("buyDxpBtn");
+        btn.disabled = true; btn.textContent = "⏳";
+        try {
+          const res = await fetch("/app/api/shop/boost", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ initData: currentInitData, boostType: "double_xp" }),
+          });
+          if (!res.ok) {
+            const e = await res.json().catch(() => ({}));
+            throw new Error({ insufficient_coins: "Недостаточно монет 🪙" }[e.detail] || "Ошибка");
+          }
+          const data = await res.json();
+          if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+          updateBalanceDisplay(data.new_balance);
+          toastMessage("⚡ Двойной XP активирован на 24 часа!");
+          await loadShop();
+        } catch (e) { btn.disabled = false; btn.textContent = "Купить"; toastMessage(e.message); }
+      });
+
+      // Pin chat
+      document.getElementById("pinChatBtn")?.addEventListener("click", () => {
+        if (!chats.length) return;
+        openChatPickerModal("📌 Закрепить чат", chats, async (chatId, chatName) => {
+          try {
+            const res = await fetch("/app/api/shop/pin-chat", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ initData: currentInitData, chatId }),
+            });
+            if (!res.ok) {
+              const e = await res.json().catch(() => ({}));
+              throw new Error({ insufficient_coins: "Недостаточно монет 🪙" }[e.detail] || "Ошибка");
+            }
+            const data = await res.json();
+            if (data.new_balance != null) updateBalanceDisplay(data.new_balance);
+            toastMessage(`📌 Чат с ${chatName} закреплён!`);
+            await loadShop();
+          } catch (e) { toastMessage(e.message); }
+        });
+      });
+
+      // Theme buttons
+      document.querySelectorAll(".theme-btn[data-theme]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const theme = btn.dataset.theme;
+          btn.disabled = true;
+          try {
+            const res = await fetch("/app/api/shop/theme", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ initData: currentInitData, theme }),
+            });
+            if (!res.ok) {
+              const e = await res.json().catch(() => ({}));
+              throw new Error({ insufficient_coins: "Недостаточно монет 🪙" }[e.detail] || "Ошибка");
+            }
+            const data = await res.json();
+            if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+            updateBalanceDisplay(data.new_balance);
+            toastMessage(`🎨 Тема «${THEMES.find(t=>t.id===theme)?.label}» применена!`);
+            await loadShop();
+          } catch (e) { btn.disabled = false; toastMessage(e.message); }
+        });
+      });
+
+      // Frame buttons
+      document.querySelectorAll(".frame-btn[data-frame]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const frame = btn.dataset.frame;
+          btn.disabled = true;
+          try {
+            const res = await fetch("/app/api/shop/frame", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ initData: currentInitData, frame }),
+            });
+            if (!res.ok) {
+              const e = await res.json().catch(() => ({}));
+              throw new Error({ insufficient_coins: "Недостаточно монет 🪙" }[e.detail] || "Ошибка");
+            }
+            const data = await res.json();
+            if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+            updateBalanceDisplay(data.new_balance);
+            toastMessage(`🖼 Рамка «${FRAMES.find(f=>f.id===frame)?.label}» применена!`);
+            await loadShop();
+          } catch (e) { btn.disabled = false; toastMessage(e.message); }
+        });
+      });
+
+      // Gift coins
+      document.getElementById("giftCoinsBtn")?.addEventListener("click", () => {
+        if (!chats.length) return;
+        openChatPickerModal("🎁 Подарить монеты", chats, async (chatId, chatName) => {
+          try {
+            const res = await fetch("/app/api/shop/gift", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ initData: currentInitData, chatId }),
+            });
+            if (!res.ok) {
+              const e = await res.json().catch(() => ({}));
+              throw new Error({ insufficient_coins: "Недостаточно монет 🪙", cannot_gift_self: "Нельзя подарить себе!" }[e.detail] || "Ошибка");
+            }
+            const data = await res.json();
+            if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+            updateBalanceDisplay(data.new_balance);
+            toastMessage(`🎁 Подарок отправлен в чат с ${chatName}! Получит 50 🪙`);
+            await loadShop();
+          } catch (e) { toastMessage(e.message); }
+        });
+      });
+    }
+
+    function openChatPickerModal(title, chats, onSelect) {
+      const overlay = document.createElement("div");
+      overlay.className = "balance-overlay";
+      overlay.innerHTML = `
+        <div class="balance-sheet">
+          <div class="balance-sheet-title">${esc(title)}</div>
+          <div class="adopt-chats">
+            ${chats.map(c => `
+              <button class="adopt-chat-btn" data-chat-id="${c.chat_id}" data-name="${esc(c.display_name)}">
+                <div class="adopt-chat-avatar" style="background:${colorFor(c.display_name)}">${initials(c.display_name)}</div>
+                <div class="adopt-chat-name">${esc(c.display_name)}</div>
+                <div class="adopt-chat-msgs">${c.message_count} сообщ.</div>
+              </button>`).join("")}
+          </div>
+          <button class="balance-cancel-btn" id="chatPickerClose">Отмена</button>
+        </div>`;
+      document.body.appendChild(overlay);
+      overlay.querySelector("#chatPickerClose").addEventListener("click", () => overlay.remove());
+      overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
+      overlay.querySelectorAll(".adopt-chat-btn").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          overlay.remove();
+          await onSelect(Number(btn.dataset.chatId), btn.dataset.name);
         });
       });
     }

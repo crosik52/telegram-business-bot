@@ -1,3 +1,4 @@
 - [Wallet security patterns](wallet-security.md) — coin economy mutations require row-level locks + server-derived streak; never trust client reward params
 - [Subscription system](subscription-system.md) — Stars subscription: models, repo, payment flow, admin panel, DB safety constraints
 - [Pet system v2](pet-system-v2.md) — 8 species, 5 personalities, play/cuddle/rename actions, XP/level, mood; feed_free+xp_multiplier for premium
+- [Shop system](shop-system.md) — coin-spending shop tab: UserBoost, UserSettings models, ShopRepository, 6 endpoints, double_xp stacks with sub multiplier

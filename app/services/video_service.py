@@ -311,7 +311,6 @@ async def handle_video_link(
                 message_id=status_msg.message_id,
                 media=InputMediaVideo(
                     media=FSInputFile(path),
-                    caption=f"📥 {label}",
                     supports_streaming=True,
                 ),
             )
@@ -321,7 +320,6 @@ async def handle_video_link(
                 chat_id=chat_id,
                 business_connection_id=business_connection_id,
                 video=FSInputFile(path),
-                caption=f"📥 {label}",
                 supports_streaming=True,
             )
         logger.info("Video delivered to chat_id=%s", chat_id)

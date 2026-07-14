@@ -1,0 +1,33 @@
+2026-07-11T13:48:47+0000 | INFO     | app.services.video_service | Downloading Instagram Reels video: https://www.instagram.com/reel/DaNPF46M6yL/?igsh=MWRtZGRtNG1oaWlidQ==
+
+[download]   0.3% of  338.79KiB at  Unknown B/s ETA Unknown
+[download]   0.9% of  338.79KiB at    1.39MiB/s ETA 00:00  
+[download]   2.1% of  338.79KiB at    2.68MiB/s ETA 00:00
+[download]   4.4% of  338.79KiB at    5.32MiB/s ETA 00:00
+[download]   9.2% of  338.79KiB at   10.33MiB/s ETA 00:00
+[download]  18.6% of  338.79KiB at   19.78MiB/s ETA 00:00
+[download]  37.5% of  338.79KiB at   21.52MiB/s ETA 00:00
+[download]  75.3% of  338.79KiB at   32.44MiB/s ETA 00:00
+[download] 100.0% of  338.79KiB at   40.66MiB/s ETA 00:00
+[download] 100% of  338.79KiB in 00:00:00 at 599.72KiB/s 
+
+                                                        
+2026-07-11T13:48:49+0000 | INFO     | app.services.video_service | Downloaded DaNPF46M6yL.mp4 (0.3 MB), uploading to chat 1335699132
+2026-07-11T13:48:51+0000 | INFO     | app.services.video_service | Video sent to chat_id=1335699132
+2026-07-11T13:48:51+0000 | WARNING  | app.services.video_service | Could not delete status message chat_id=1335699132 msg_id=1431316: Telegram server says - Bad Request: message to delete not found
+2026-07-11T13:49:15+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745833034
+2026-07-11T13:49:15+0000 | WARNING  | app.services.message_service | Received delete event for untracked message chat_id=1172295929 message_id=1431314
+2026-07-11T13:49:15+0000 | INFO     | aiogram.event | Update id=745833034 is handled. Duration 10 ms by bot id=1162707887
+2026-07-11T13:49:15+0000 | INFO     | http | POST /webhook -> 200 (11.5ms)
+2026-07-11T13:49:48+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745833035
+2026-07-11T13:49:48+0000 | INFO     | app.services.message_service | Stored new business message chat_id=8246152069 message_id=1003213 media=photo
+2026-07-11T13:49:48+0000 | INFO     | aiogram.event | Update id=745833035 is handled. Duration 9 ms by bot id=1162707887
+2026-07-11T13:49:48+0000 | INFO     | http | POST /webhook -> 200 (10.8ms)
+2026-07-11T13:49:53+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745833036
+2026-07-11T13:49:53+0000 | INFO     | app.services.message_service | Stored new business message chat_id=8246152069 message_id=1003214 media=document
+2026-07-11T13:49:53+0000 | INFO     | aiogram.event | Update id=745833036 is handled. Duration 9 ms by bot id=1162707887
+2026-07-11T13:49:53+0000 | INFO     | http | POST /webhook -> 200 (10.2ms)
+2026-07-11T13:50:11+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745833037
+2026-07-11T13:50:11+0000 | INFO     | app.services.message_service | Stored new business message chat_id=1172295929 message_id=1431320 media=text
+2026-07-11T13:50:11+0000 | INFO     | aiogram.event | Update id=745833037 is handled. Duration 7 ms by bot id=1162707887
+2026-07-11T13:50:11+0000 | INFO     | http | POST /webhook -> 200 (9.0ms)

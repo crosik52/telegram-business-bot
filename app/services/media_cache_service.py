@@ -8,11 +8,12 @@ assembled — even if the file_id has long since expired.
 
 from __future__ import annotations
 
+import datetime as dt
 import io
 
 from aiogram import Bot
 from aiogram.types import BufferedInputFile
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.logging_config import get_logger
@@ -22,6 +23,10 @@ logger = get_logger(__name__)
 
 # Skip files larger than this to keep DB size manageable.
 _MAX_BYTES = 50 * 1024 * 1024  # 50 MB
+
+# How long to keep cached media before purging (self-destructing media is
+# consumed within seconds/minutes; 7 days is very generous).
+_CACHE_TTL_DAYS = 7
 
 
 async def download_and_cache(
@@ -106,6 +111,27 @@ async def get_cached_bytes(
         )
     ).scalar_one_or_none()
     return row.file_data if row is not None else None
+
+
+async def purge_old_media_cache(
+    session: AsyncSession,
+    max_age_days: int = _CACHE_TTL_DAYS,
+) -> int:
+    """Delete media_cache rows older than *max_age_days*.
+
+    Returns the number of rows deleted.
+    """
+    cutoff = dt.datetime.now(dt.UTC) - dt.timedelta(days=max_age_days)
+    result = await session.execute(
+        delete(MediaCache).where(MediaCache.created_at < cutoff)
+    )
+    deleted = result.rowcount or 0
+    await session.commit()
+    if deleted:
+        logger.info("media_cache: purged %d rows older than %d days", deleted, max_age_days)
+    else:
+        logger.debug("media_cache: nothing to purge (all rows within %d days)", max_age_days)
+    return deleted
 
 
 def make_input_file(data: bytes, media_type: str) -> BufferedInputFile:

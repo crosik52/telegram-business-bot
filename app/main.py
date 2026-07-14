@@ -6,6 +6,7 @@ a single ASGI app. Runs entirely in webhook mode — polling is never used.
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -28,6 +29,25 @@ from app.routers import health, webhook
 settings = get_settings()
 configure_logging(settings.log_level)
 logger = get_logger(__name__)
+
+_CLEANUP_INTERVAL_HOURS = 6
+
+
+async def _cleanup_loop() -> None:
+    """Background task: purge old media_cache rows every N hours."""
+    from app.database.session import get_db_session
+
+    from app.services.media_cache_service import purge_old_media_cache
+
+    # Wait a bit after startup before first run so the app is fully ready.
+    await asyncio.sleep(60)
+    while True:
+        try:
+            async for session in get_db_session():
+                await purge_old_media_cache(session)
+        except Exception:
+            logger.exception("media_cache cleanup failed — will retry next cycle")
+        await asyncio.sleep(_CLEANUP_INTERVAL_HOURS * 3600)
 
 
 @asynccontextmanager
@@ -89,7 +109,16 @@ async def lifespan(app: FastAPI):
             "Set it (or call setWebhook manually) before the bot can receive updates."
         )
 
+    # ── Periodic DB cleanup task ──────────────────────────────────────────────
+    cleanup_task = asyncio.create_task(_cleanup_loop())
+
     yield
+
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
 
     logger.info("Shutting down Telegram Business Bot")
     from app.business.dispatcher import close_bot

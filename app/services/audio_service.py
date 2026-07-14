@@ -49,6 +49,31 @@ def cache_file_id(url: str, file_id: str) -> None:
     _file_id_cache[url] = file_id
 
 
+# ── Per-user inline history (user_id → [key, ...]) ───────────────────────────
+# Stores the last HISTORY_SIZE track keys chosen by each user via inline mode.
+# Shown when the user opens @bot without typing a query.
+
+HISTORY_SIZE = 7
+_user_history: dict[int, list[str]] = {}   # user_id → ordered list of keys (newest first)
+
+
+def add_to_history(user_id: int, key: str) -> None:
+    """Prepend key to user's history, evicting the oldest entry past HISTORY_SIZE."""
+    history = _user_history.setdefault(user_id, [])
+    # Remove duplicate if present so the track bubbles to the top
+    try:
+        history.remove(key)
+    except ValueError:
+        pass
+    history.insert(0, key)
+    del history[HISTORY_SIZE:]
+
+
+def get_history(user_id: int) -> list[str]:
+    """Return the user's recent track keys, newest first."""
+    return list(_user_history.get(user_id, []))
+
+
 # ── In-memory result cache ────────────────────────────────────────────────────
 
 class _Result:

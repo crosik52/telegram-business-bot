@@ -993,14 +993,47 @@ async def on_mp3_callback(callback: CallbackQuery, bot: Bot) -> None:
 @router.inline_query()
 async def on_inline_query(query: InlineQuery, bot: Bot) -> None:
     """Handle @bot <query> — search YouTube and show result list above input."""
-    q = (query.query or "").strip()
+    q       = (query.query or "").strip()
+    user_id = query.from_user.id
+
     if not q:
+        # Show the user's recent inline picks instead of an empty list
+        history_keys = audio_service.get_history(user_id)
+        if not history_keys:
+            await query.answer(
+                [],
+                is_personal=True,
+                cache_time=5,
+                switch_pm_text="Введите название песни",
+                switch_pm_parameter="inline_help",
+            )
+            return
+
+        base_url = get_settings().webhook_base_url.rstrip("/")
+        history_results: list = []
+        for key in history_keys:
+            cached = audio_service.get(key)
+            if cached is None:
+                continue
+            fid = audio_service.get_cached_file_id(cached.url)
+            if fid:
+                history_results.append(InlineQueryResultCachedAudio(
+                    id=key,
+                    audio_file_id=fid,
+                ))
+            else:
+                history_results.append(InlineQueryResultAudio(
+                    id=key,
+                    audio_url=f"{base_url}/audio/{key}",
+                    title=cached.title[:60] if cached.title else "Трек",
+                    performer=cached.uploader[:40] if cached.uploader else None,
+                    audio_duration=cached.duration or None,
+                ))
+
         await query.answer(
-            [],
+            history_results,
             is_personal=True,
-            cache_time=5,
-            switch_pm_text="Введите название песни",
-            switch_pm_parameter="inline_help",
+            cache_time=0,   # always fresh — history is per-user
         )
         return
 
@@ -1050,9 +1083,11 @@ async def on_noop(call: CallbackQuery) -> None:
 
 @router.chosen_inline_result()
 async def on_chosen_inline_result(result: ChosenInlineResult, bot: Bot) -> None:
-    """Log chosen inline result. Audio is delivered via InlineQueryResultAudio URL."""
-    logger.info("chosen_inline_result: key=%s inline_msg_id=%s user=%s",
-                result.result_id, result.inline_message_id, result.from_user.id)
+    """Record the chosen track in the user's history for next empty-query open."""
+    key     = result.result_id
+    user_id = result.from_user.id
+    audio_service.add_to_history(user_id, key)
+    logger.info("chosen_inline_result: key=%s user=%s", key, user_id)
 
 
 @router.pre_checkout_query()

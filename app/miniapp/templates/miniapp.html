@@ -2666,14 +2666,30 @@
         hoveredTab  = null;
       }
 
-      bar.addEventListener("pointerup", endDrag);
-      bar.addEventListener("pointercancel", () => {
+      bar.addEventListener("pointerup",     endDrag);
+      bar.addEventListener("pointercancel", endCancel);
+
+      // Safety net: capture pointerup/cancel at window level so the drag
+      // state is always reset even when Telegram WebView swallows the bar event
+      window.addEventListener("pointerup",     endDrag,    { passive: true });
+      window.addEventListener("pointercancel", endCancel,  { passive: true });
+
+      function endCancel() {
         dragging    = false;
         dragStarted = false;
         slider.classList.remove("slider-pressed", "dragging");
         clearDragPreviews();
         const active = bar.querySelector(".tab-item.active");
         if (active) snapSliderTo(active, false);
+      }
+
+      // Click fallback — fires reliably even when pointer events misbehave
+      tabItems.forEach(btn => {
+        btn.addEventListener("click", () => {
+          if (dragStarted) return; // was a real drag, not a tap
+          switchMainTab(btn.dataset.tab);
+          snapSliderTo(btn, false);
+        });
       });
 
       /* Keep slider in sync when tab is switched from outside (if ever) */

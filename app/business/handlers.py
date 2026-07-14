@@ -1040,65 +1040,98 @@ async def on_inline_query(query: InlineQuery, bot: Bot) -> None:
 
 @router.chosen_inline_result()
 async def on_chosen_inline_result(result: ChosenInlineResult, bot: Bot) -> None:
-    """Download the chosen track and replace the placeholder with an audio file."""
+    """Download the chosen track and send it to the user's DM."""
     key           = result.result_id
     inline_msg_id = result.inline_message_id
-
-    if not inline_msg_id:
-        # Bot must have inline feedback enabled in BotFather for this to fire.
-        logger.warning("chosen_inline_result: no inline_message_id — enable feedback in BotFather")
-        return
+    user_id       = result.from_user.id
 
     cached = audio_service.get(key)
     if cached is None:
-        try:
-            await bot.edit_message_text(
-                inline_message_id=inline_msg_id,
-                text="⌛ Сессия истекла — попробуйте снова.",
-            )
-        except Exception:
-            pass
+        if inline_msg_id:
+            try:
+                await bot.edit_message_text(
+                    inline_message_id=inline_msg_id,
+                    text="⌛ Сессия истекла — попробуйте снова (@бот название).",
+                )
+            except Exception:
+                pass
         return
 
     url      = cached.url
     title    = cached.title
     uploader = cached.uploader
-    duration = cached.duration
+
+    # Update placeholder immediately so user knows download is in progress
+    if inline_msg_id:
+        try:
+            await bot.edit_message_text(
+                inline_message_id=inline_msg_id,
+                text=(
+                    f"🎵 <b>{html_escape(title)}</b>\n"
+                    f"<i>{html_escape(uploader)}</i>\n\n"
+                    f"⏳ Скачиваю, отправлю в личку…"
+                ),
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
 
     with tempfile.TemporaryDirectory() as tmpdir:
         try:
             path, title, uploader, duration = await audio_service.download(url, tmpdir)
         except Exception as exc:
             logger.warning("inline mp3: download failed key=%s: %s", key, exc)
-            try:
-                await bot.edit_message_text(
-                    inline_message_id=inline_msg_id,
-                    text=(
-                        f"❌ <b>Не удалось загрузить трек.</b>\n"
-                        f"<i>Попробуйте другой результат.</i>"
-                    ),
-                    parse_mode="HTML",
-                )
-            except Exception:
-                pass
+            if inline_msg_id:
+                try:
+                    await bot.edit_message_text(
+                        inline_message_id=inline_msg_id,
+                        text="❌ <b>Не удалось загрузить трек.</b> Попробуйте другой.",
+                        parse_mode="HTML",
+                    )
+                except Exception:
+                    pass
             return
 
+        # Send audio to user's private chat with the bot
         try:
-            await bot.edit_message_media(
-                inline_message_id=inline_msg_id,
-                media=InputMediaAudio(
-                    media=FSInputFile(path),
-                    performer=uploader or None,
-                    title=title or None,
-                    duration=duration or None,
-                ),
+            await bot.send_audio(
+                chat_id=user_id,
+                audio=FSInputFile(path),
+                performer=uploader or None,
+                title=title or None,
+                duration=duration or None,
             )
-            logger.info(
-                "inline mp3: sent audio key=%s title=%r user=%s",
-                key, title, result.from_user.id,
+            logger.info("inline mp3: audio sent to DM user=%s title=%r", user_id, title)
+        except Exception as exc:
+            logger.warning("inline mp3: send_audio to DM failed user=%s: %s", user_id, exc)
+            if inline_msg_id:
+                try:
+                    await bot.edit_message_text(
+                        inline_message_id=inline_msg_id,
+                        text=(
+                            f"❌ Не удалось отправить трек.\n"
+                            f"<i>Сначала напишите боту в личку, затем повторите поиск.</i>"
+                        ),
+                        parse_mode="HTML",
+                    )
+                except Exception:
+                    pass
+            return
+
+    # Update inline message to final state
+    if inline_msg_id:
+        try:
+            await bot.edit_message_text(
+                inline_message_id=inline_msg_id,
+                text=(
+                    f"🎵 <b>{html_escape(title)}</b>\n"
+                    f"<i>{html_escape(uploader)}</i>\n\n"
+                    f"✅ Трек отправлен в личку бота"
+                ),
+                parse_mode="HTML",
             )
         except Exception as exc:
-            logger.warning("inline mp3: edit_message_media failed: %s", exc)
+            logger.debug("inline mp3: final edit failed: %s", exc)
 
 
 @router.pre_checkout_query()

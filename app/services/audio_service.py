@@ -87,8 +87,11 @@ def _search_sync(query: str, n: int = 5) -> list[dict]:
     opts = {
         "quiet":        True,
         "no_warnings":  True,
-        "extract_flat": "in_playlist",   # flat entries from search playlist
-        "noplaylist":   False,           # search IS a playlist of results
+        "extract_flat": "in_playlist",
+        "noplaylist":   False,
+        "extractor_args": {
+            "youtube": {"player_client": ["android"]},
+        },
     }
     search_url = f"ytsearch{n}:{query}"
     with yt_dlp.YoutubeDL(opts) as ydl:
@@ -135,11 +138,15 @@ def _download_sync(url: str, out_dir: str) -> tuple[Path, str, str, int]:
         "format":      "bestaudio/best",
         "outtmpl":     os.path.join(out_dir, "%(title)s.%(ext)s"),
         "postprocessors": [{
-            "key":             "FFmpegExtractAudio",
-            "preferredcodec":  "mp3",
+            "key":              "FFmpegExtractAudio",
+            "preferredcodec":   "mp3",
             "preferredquality": "192",
         }],
         "noplaylist": True,
+        # Use the Android client to bypass YouTube bot-detection on server IPs
+        "extractor_args": {
+            "youtube": {"player_client": ["android"]},
+        },
     }
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)

@@ -99,14 +99,14 @@ async def _delete_cmd_msg(
 
 _HELP_TEXT = (
     "📋 <b>Доступные команды</b> (пишите прямо в чате):\n\n"
-    "<code>!info</code> — статистика по собеседнику\n"
-    "<code>!note текст</code> — сохранить заметку\n"
-    "<code>!notes</code> — показать все заметки\n"
-    "<code>!mute 30m</code> / <code>2h</code> / <code>1d</code> — "
+    "<code>!info</code> · <code>!инфо</code> — статистика по собеседнику\n"
+    "<code>!note текст</code> · <code>!заметка текст</code> — сохранить заметку\n"
+    "<code>!notes</code> · <code>!заметки</code> — показать все заметки\n"
+    "<code>!mute 30m</code> · <code>!мут 30m</code> / <code>2h</code> / <code>1d</code> — "
     "отключить уведомления из этого чата\n"
-    "<code>!unmute</code> — включить уведомления обратно\n"
-    "<code>!mp3 название</code> — найти и скачать музыку\n"
-    "<code>!help</code> — эта справка\n"
+    "<code>!unmute</code> · <code>!размут</code> — включить уведомления обратно\n"
+    "<code>!mp3 название</code> · <code>!мп3 название</code> — найти и скачать музыку\n"
+    "<code>!help</code> · <code>!помощь</code> — эта справка\n"
 )
 
 
@@ -491,13 +491,22 @@ def build_page_markup(
 # ── Dispatch table ────────────────────────────────────────────────────────────
 
 _HANDLERS: dict[str, object] = {
-    "help":   _cmd_help,
-    "info":   _cmd_info,
-    "note":   _cmd_note,
-    "notes":  _cmd_notes,
-    "mute":   _cmd_mute,
-    "unmute": _cmd_unmute,
-    "mp3":    _cmd_mp3,
+    # English
+    "help":    _cmd_help,
+    "info":    _cmd_info,
+    "note":    _cmd_note,
+    "notes":   _cmd_notes,
+    "mute":    _cmd_mute,
+    "unmute":  _cmd_unmute,
+    "mp3":     _cmd_mp3,
+    # Russian aliases
+    "помощь":  _cmd_help,
+    "инфо":    _cmd_info,
+    "заметка": _cmd_note,
+    "заметки": _cmd_notes,
+    "мут":     _cmd_mute,
+    "размут":  _cmd_unmute,
+    "мп3":     _cmd_mp3,
 }
 
 

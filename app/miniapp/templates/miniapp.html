@@ -1829,64 +1829,164 @@
     // ── Share card (Canvas) ──
     function downloadShareCard() {
       if (!lastStats) return;
+      const W = 900, H = 1280;
       const canvas = document.createElement("canvas");
-      canvas.width = 900; canvas.height = 1200;
+      canvas.width = W; canvas.height = H;
       const ctx = canvas.getContext("2d");
 
-      const grad = ctx.createLinearGradient(0, 0, 900, 1200);
-      grad.addColorStop(0, "#1a1a2e");
-      grad.addColorStop(0.5, "#16213e");
-      grad.addColorStop(1, "#0f3460");
-      ctx.fillStyle = grad; ctx.fillRect(0, 0, 900, 1200);
-
-      // Glow circle
-      const glow = ctx.createRadialGradient(450, 300, 50, 450, 300, 400);
-      glow.addColorStop(0, "rgba(36,129,204,0.18)"); glow.addColorStop(1, "transparent");
-      ctx.fillStyle = glow; ctx.fillRect(0, 0, 900, 1200);
-
-      ctx.fillStyle = "#ffffff"; ctx.textAlign = "center";
-      ctx.font = "bold 52px sans-serif"; ctx.fillText("📊 Моя статистика", 450, 120);
-      ctx.font = "26px sans-serif"; ctx.fillStyle = "rgba(255,255,255,0.6)";
-      ctx.fillText("Telegram Business Bot", 450, 162);
-
-      const streak = lastStats.best_streak || 0;
-      if (streak >= 2) {
-        ctx.font = "bold 32px sans-serif"; ctx.fillStyle = "#ff6b00";
-        ctx.fillText(`🔥 Серия ${streak} ${streak === 1 ? "день" : streak < 5 ? "дня" : "дней"} подряд!`, 450, 218);
+      // ── helpers ────────────────────────────────────────────────────────────
+      function roundRect(x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+        ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+        ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+        ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+      }
+      function fmt(n) {
+        if (n >= 1000000) return (n/1000000).toFixed(1) + "M";
+        if (n >= 1000) return (n/1000).toFixed(1) + "K";
+        return String(n);
       }
 
-      const rows = [
-        ["💬", lastStats.total_messages, "Сообщений"],
-        ["👥", lastStats.total_chats, "Собеседников"],
-        ["✏️", lastStats.edited_messages, "Правок"],
-        ["🗑", lastStats.deleted_messages, "Удалений"],
+      // ── background ─────────────────────────────────────────────────────────
+      ctx.fillStyle = "#0e0e10";
+      ctx.fillRect(0, 0, W, H);
+
+      // subtle top-left glow
+      const gA = ctx.createRadialGradient(160, 160, 0, 160, 160, 420);
+      gA.addColorStop(0, "rgba(88,86,214,0.22)"); gA.addColorStop(1, "transparent");
+      ctx.fillStyle = gA; ctx.fillRect(0, 0, W, H);
+
+      // subtle bottom-right glow
+      const gB = ctx.createRadialGradient(W - 100, H - 180, 0, W - 100, H - 180, 380);
+      gB.addColorStop(0, "rgba(10,132,255,0.18)"); gB.addColorStop(1, "transparent");
+      ctx.fillStyle = gB; ctx.fillRect(0, 0, W, H);
+
+      // ── top accent bar ─────────────────────────────────────────────────────
+      const barGrad = ctx.createLinearGradient(60, 0, W - 60, 0);
+      barGrad.addColorStop(0, "#5856d6");
+      barGrad.addColorStop(1, "#0a84ff");
+      ctx.fillStyle = barGrad;
+      roundRect(60, 56, W - 120, 5, 3);
+      ctx.fill();
+
+      // ── header ─────────────────────────────────────────────────────────────
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "700 54px -apple-system, sans-serif";
+      ctx.fillText("Моя статистика", 60, 154);
+
+      ctx.font = "400 27px -apple-system, sans-serif";
+      ctx.fillStyle = "rgba(255,255,255,0.45)";
+      ctx.fillText("SaveLog · Telegram Business Bot", 60, 196);
+
+      // streak badge
+      const streak = lastStats.best_streak || 0;
+      if (streak >= 2) {
+        const sLabel = `🔥 ${streak} ${streak === 1 ? "день" : streak < 5 ? "дня" : "дней"} подряд`;
+        ctx.font = "600 26px -apple-system, sans-serif";
+        const sW = ctx.measureText(sLabel).width + 36;
+        ctx.fillStyle = "rgba(255,107,0,0.18)";
+        roundRect(60, 220, sW, 48, 24); ctx.fill();
+        ctx.strokeStyle = "rgba(255,107,0,0.45)"; ctx.lineWidth = 1.5;
+        roundRect(60, 220, sW, 48, 24); ctx.stroke();
+        ctx.fillStyle = "#ff6b00"; ctx.textAlign = "left";
+        ctx.fillText(sLabel, 60 + 18, 252);
+      }
+
+      // ── stat cards (2×2 grid) ───────────────────────────────────────────────
+      const statData = [
+        { emoji: "💬", value: fmt(lastStats.total_messages   || 0), label: "Сообщений",    accent: "#0a84ff" },
+        { emoji: "👥", value: fmt(lastStats.total_chats       || 0), label: "Собеседников", accent: "#5856d6" },
+        { emoji: "✏️", value: fmt(lastStats.edited_messages  || 0), label: "Правок",       accent: "#30d158" },
+        { emoji: "🗑️", value: fmt(lastStats.deleted_messages || 0), label: "Удалений",    accent: "#ff453a" },
       ];
-      let y = 330;
-      rows.forEach(([emoji, value, label]) => {
-        ctx.textAlign = "left"; ctx.fillStyle = "#ffffff";
-        ctx.font = "46px sans-serif"; ctx.fillText(emoji, 90, y);
-        ctx.font = "bold 44px sans-serif"; ctx.fillText(String(value), 165, y);
-        ctx.font = "27px sans-serif"; ctx.fillStyle = "rgba(255,255,255,0.7)";
-        ctx.fillText(label, 320, y);
-        y += 96;
+      const cardW = 380, cardH = 190, cardGap = 20;
+      const cardStartX = 60, cardStartY = 300;
+      statData.forEach((s, i) => {
+        const col = i % 2, row = Math.floor(i / 2);
+        const cx = cardStartX + col * (cardW + cardGap);
+        const cy = cardStartY + row * (cardH + cardGap);
+
+        // card background
+        ctx.fillStyle = "#1c1c1e";
+        roundRect(cx, cy, cardW, cardH, 20); ctx.fill();
+
+        // top-left accent dot
+        ctx.fillStyle = s.accent;
+        ctx.beginPath(); ctx.arc(cx + 30, cy + 30, 8, 0, Math.PI * 2); ctx.fill();
+
+        // emoji
+        ctx.font = "48px sans-serif"; ctx.textAlign = "left";
+        ctx.fillText(s.emoji, cx + 24, cy + 90);
+
+        // big number
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "700 64px -apple-system, sans-serif";
+        ctx.fillText(s.value, cx + 24, cy + 156);
+
+        // label
+        ctx.fillStyle = "rgba(255,255,255,0.4)";
+        ctx.font = "400 24px -apple-system, sans-serif";
+        ctx.fillText(s.label, cx + cardW - ctx.measureText(s.label).width - 20, cy + cardH - 20);
       });
 
+      // ── top contacts section ────────────────────────────────────────────────
       const top = (lastStats.top_interlocutors || []).slice(0, 3);
+      let ty = cardStartY + 2 * (cardH + cardGap) + 52;
+
       if (top.length) {
-        ctx.textAlign = "left"; ctx.fillStyle = "#ffffff";
-        ctx.font = "bold 32px sans-serif"; ctx.fillText("🏆 Топ собеседников", 90, y + 30);
-        y += 80;
+        ctx.fillStyle = "rgba(255,255,255,0.12)";
+        ctx.fillRect(60, ty - 2, W - 120, 1);
+        ty += 42;
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "700 32px -apple-system, sans-serif"; ctx.textAlign = "left";
+        ctx.fillText("🏆  Топ собеседников", 60, ty);
+        ty += 52;
+
+        const medals = ["🥇","🥈","🥉"];
+        const medalColors = ["rgba(255,215,0,0.15)","rgba(192,192,192,0.12)","rgba(205,127,50,0.12)"];
+        const medalBorder = ["rgba(255,215,0,0.4)","rgba(192,192,192,0.3)","rgba(205,127,50,0.3)"];
+
         top.forEach((s, i) => {
-          ctx.font = "28px sans-serif"; ctx.fillStyle = "#ffffff";
-          const streak_info = s.streak_days >= 2 ? ` 🔥${s.streak_days}` : "";
-          ctx.fillText(`${["🥇","🥈","🥉"][i]} ${s.display_name} — ${s.message_count} сообщ.${streak_info}`, 90, y);
-          y += 52;
+          const rowH = 82;
+          ctx.fillStyle = medalColors[i];
+          roundRect(60, ty, W - 120, rowH, 16); ctx.fill();
+          ctx.strokeStyle = medalBorder[i]; ctx.lineWidth = 1;
+          roundRect(60, ty, W - 120, rowH, 16); ctx.stroke();
+
+          ctx.font = "36px sans-serif"; ctx.textAlign = "left";
+          ctx.fillText(medals[i], 88, ty + 52);
+
+          ctx.fillStyle = "#ffffff";
+          ctx.font = "600 28px -apple-system, sans-serif";
+          const name = s.display_name.length > 22 ? s.display_name.slice(0, 21) + "…" : s.display_name;
+          ctx.fillText(name, 148, ty + 52);
+
+          const streak_info = s.streak_days >= 2 ? `  🔥${s.streak_days}` : "";
+          ctx.fillStyle = "rgba(255,255,255,0.45)";
+          ctx.font = "400 24px -apple-system, sans-serif";
+          const countLabel = `${fmt(s.message_count)} сообщ.${streak_info}`;
+          ctx.fillText(countLabel, W - 60 - ctx.measureText(countLabel).width - 30, ty + 52);
+
+          ty += rowH + 14;
         });
       }
 
-      ctx.textAlign = "center"; ctx.font = "22px sans-serif";
-      ctx.fillStyle = "rgba(255,255,255,0.4)";
-      ctx.fillText(new Date().toLocaleDateString("ru-RU"), 450, 1160);
+      // ── footer ─────────────────────────────────────────────────────────────
+      ctx.fillStyle = "rgba(255,255,255,0.15)";
+      ctx.fillRect(60, H - 80, W - 120, 1);
+
+      ctx.textAlign = "left";
+      ctx.fillStyle = "rgba(255,255,255,0.3)";
+      ctx.font = "400 22px -apple-system, sans-serif";
+      ctx.fillText("t.me/SaveLogBot", 60, H - 36);
+
+      ctx.textAlign = "right";
+      ctx.fillText(new Date().toLocaleDateString("ru-RU"), W - 60, H - 36);
 
       canvas.toBlob(blob => {
         if (!blob) return;

@@ -40,9 +40,7 @@ from aiogram import Bot, F, Router
 from aiogram.types import (
     BufferedInputFile, BusinessConnection, BusinessMessagesDeleted,
     CallbackQuery, ChosenInlineResult, FSInputFile, InlineQuery,
-    InlineKeyboardButton, InlineKeyboardMarkup,
-    InlineQueryResultArticle, InlineQueryResultCachedAudio,
-    InputMediaAudio, InputTextMessageContent,
+    InlineQueryResultArticle, InputMediaAudio, InputTextMessageContent,
     Message, PreCheckoutQuery,
 )
 from sqlalchemy import select
@@ -1009,42 +1007,27 @@ async def on_inline_query(query: InlineQuery, bot: Bot) -> None:
         logger.warning("inline_query: search failed for %r: %s", q, exc)
         results = []
 
-    articles: list = []
+    articles: list[InlineQueryResultArticle] = []
     for r in results:
-        key = audio_service.store(r["url"], r["title"], r["uploader"],
-                                  r["duration"], "inline", 0)
-        dur        = audio_service.fmt_duration(r["duration"])
-        title_disp = r["title"][:60]
-        uploader   = r["uploader"][:40] if r["uploader"] else ""
+        key      = audio_service.store(r["url"], r["title"], r["uploader"],
+                                       r["duration"], "inline", 0)
+        dur      = audio_service.fmt_duration(r["duration"])
+        uploader = r["uploader"][:40] if r["uploader"] else ""
 
-        cached_fid = audio_service.get_cached_file_id(r["url"])
-        if cached_fid:
-            # Track already uploaded to Telegram — send instantly, no placeholder
-            articles.append(InlineQueryResultCachedAudio(
-                id=key,
-                audio_file_id=cached_fid,
-            ))
-        else:
-            # First time — show card with download button
-            articles.append(InlineQueryResultArticle(
-                id=key,
-                title=title_disp,
-                description=f"{dur}  ·  {uploader}" if uploader else dur,
-                thumbnail_url=r.get("thumbnail") or None,
-                input_message_content=InputTextMessageContent(
-                    message_text=(
-                        f"🎵 <b>{html_escape(r['title'])}</b>\n"
-                        f"<i>{html_escape(uploader)}  ·  {dur}</i>"
-                    ),
-                    parse_mode="HTML",
+        articles.append(InlineQueryResultArticle(
+            id=key,
+            title=r["title"][:60],
+            description=f"{dur}  ·  {uploader}" if uploader else dur,
+            thumbnail_url=r.get("thumbnail") or None,
+            input_message_content=InputTextMessageContent(
+                message_text=(
+                    f"🎵 <b>{html_escape(r['title'])}</b>\n"
+                    f"<i>{html_escape(uploader)}  ·  {dur}</i>\n\n"
+                    f"⏳ Загружаю…"
                 ),
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                    InlineKeyboardButton(
-                        text="🎵 Загрузить трек",
-                        callback_data=f"mp3i:{key}",
-                    )
-                ]]),
-            ))
+                parse_mode="HTML",
+            ),
+        ))
 
     await query.answer(
         articles,            # type: ignore[arg-type]
@@ -1053,21 +1036,13 @@ async def on_inline_query(query: InlineQuery, bot: Bot) -> None:
     )
 
 
-@router.callback_query(F.data.startswith("mp3i:"))
-async def on_inline_mp3_download(call: CallbackQuery, bot: Bot) -> None:
-    """User pressed 'Загрузить трек' button inside an inline message.
-
-    callback_query gives us inline_message_id — use it to replace the
-    text card with an actual audio file via edit_message_media.
-    No BotFather Inline Feedback setting required.
-    """
-    await call.answer()                         # remove button spinner immediately
-
-    key           = call.data[len("mp3i:"):]
-    inline_msg_id = call.inline_message_id
+@router.chosen_inline_result()
+async def on_chosen_inline_result(result: ChosenInlineResult, bot: Bot) -> None:
+    """Stream the chosen track and replace the placeholder with audio in-chat."""
+    key           = result.result_id
+    inline_msg_id = result.inline_message_id
 
     if not inline_msg_id:
-        # Shouldn't happen for inline messages, but guard anyway
         return
 
     cached = audio_service.get(key)
@@ -1081,100 +1056,9 @@ async def on_inline_mp3_download(call: CallbackQuery, bot: Bot) -> None:
             pass
         return
 
-    # Show loading state while streaming
-    try:
-        await bot.edit_message_reply_markup(
-            inline_message_id=inline_msg_id,
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="⏳ Загружаю…", callback_data="mp3i_noop"),
-            ]]),
-        )
-    except Exception:
-        pass
-
-    # Stream: yt-dlp → ffmpeg → RAM
+    # Stream: yt-dlp → ffmpeg → RAM (no disk I/O)
     try:
         audio_bytes, filename = await audio_service.stream_to_bytes(cached.url)
-    except Exception as exc:
-        logger.warning("inline mp3i: stream failed key=%s: %s", key, exc)
-        try:
-            await bot.edit_message_text(
-                inline_message_id=inline_msg_id,
-                text="❌ <b>Не удалось загрузить трек.</b> Попробуйте другой.",
-                parse_mode="HTML",
-            )
-        except Exception:
-            pass
-        return
-
-    # Replace text card with audio file directly in the chat
-    try:
-        await bot.edit_message_media(
-            inline_message_id=inline_msg_id,
-            media=InputMediaAudio(
-                media=BufferedInputFile(audio_bytes, filename=filename),
-                performer=cached.uploader or None,
-                title=cached.title or None,
-                duration=cached.duration or None,
-            ),
-        )
-        logger.info("inline mp3i: sent in-chat key=%s title=%r size=%dKB",
-                    key, cached.title, len(audio_bytes) // 1024)
-    except Exception as exc:
-        logger.warning("inline mp3i: edit_message_media failed: %s", exc)
-        try:
-            await bot.edit_message_text(
-                inline_message_id=inline_msg_id,
-                text=(
-                    f"🎵 <b>{html_escape(cached.title)}</b>"
-                    f" — <i>{html_escape(cached.uploader or '')}</i>\n"
-                    f"❌ Не удалось прикрепить аудио."
-                ),
-                parse_mode="HTML",
-            )
-        except Exception:
-            pass
-
-
-@router.callback_query(F.data == "mp3i_noop")
-async def on_inline_mp3_noop(call: CallbackQuery) -> None:
-    await call.answer()
-
-
-@router.chosen_inline_result()
-async def on_chosen_inline_result(result: ChosenInlineResult, bot: Bot) -> None:
-    """Download the chosen track and send it to the user's DM."""
-    key           = result.result_id
-    inline_msg_id = result.inline_message_id
-    user_id       = result.from_user.id
-
-    cached = audio_service.get(key)
-    if cached is None:
-        if inline_msg_id:
-            try:
-                await bot.edit_message_text(
-                    inline_message_id=inline_msg_id,
-                    text="⌛ Сессия истекла — попробуйте снова (@бот название).",
-                )
-            except Exception:
-                pass
-        return
-
-    url      = cached.url
-    title    = cached.title
-    uploader = cached.uploader
-
-    if not inline_msg_id:
-        # BotFather → Inline Feedback must be set to 100% to receive inline_message_id
-        logger.warning(
-            "inline mp3: no inline_message_id for user=%s — "
-            "enable Inline Feedback 100%% in BotFather", user_id,
-        )
-        return
-
-    # Stream audio: yt-dlp → ffmpeg → RAM (no disk I/O)
-    try:
-        audio_bytes, filename = await audio_service.stream_to_bytes(url)
     except Exception as exc:
         logger.warning("inline mp3: stream failed key=%s: %s", key, exc)
         try:
@@ -1187,26 +1071,27 @@ async def on_chosen_inline_result(result: ChosenInlineResult, bot: Bot) -> None:
             pass
         return
 
-    # Replace the text placeholder in the original chat with the audio file
+    # Replace the placeholder in the chat with the audio file
     try:
         await bot.edit_message_media(
             inline_message_id=inline_msg_id,
             media=InputMediaAudio(
                 media=BufferedInputFile(audio_bytes, filename=filename),
-                performer=uploader or None,
-                title=title or None,
+                performer=cached.uploader or None,
+                title=cached.title or None,
                 duration=cached.duration or None,
             ),
         )
-        logger.info("inline mp3: sent in-chat user=%s title=%r size=%dKB",
-                    user_id, title, len(audio_bytes) // 1024)
+        logger.info("inline mp3: sent in-chat key=%s title=%r size=%dKB",
+                    key, cached.title, len(audio_bytes) // 1024)
     except Exception as exc:
         logger.warning("inline mp3: edit_message_media failed: %s", exc)
         try:
             await bot.edit_message_text(
                 inline_message_id=inline_msg_id,
                 text=(
-                    f"🎵 <b>{html_escape(title)}</b> — <i>{html_escape(uploader)}</i>\n"
+                    f"🎵 <b>{html_escape(cached.title)}</b>"
+                    f" — <i>{html_escape(cached.uploader or '')}</i>\n"
                     f"❌ Не удалось прикрепить аудио."
                 ),
                 parse_mode="HTML",

@@ -39,7 +39,9 @@ import tempfile
 from aiogram import Bot, F, Router
 from aiogram.types import (
     BufferedInputFile, BusinessConnection, BusinessMessagesDeleted,
-    CallbackQuery, FSInputFile, InputMediaAudio, Message, PreCheckoutQuery,
+    CallbackQuery, ChosenInlineResult, FSInputFile, InlineQuery,
+    InlineQueryResultArticle, InputMediaAudio, InputTextMessageContent,
+    Message, PreCheckoutQuery,
 )
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1000,6 +1002,122 @@ async def on_mp3_callback(callback: CallbackQuery, bot: Bot) -> None:
 
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+# ── Inline mode: @bot название_песни ─────────────────────────────────────────
+
+@router.inline_query()
+async def on_inline_query(query: InlineQuery, bot: Bot) -> None:
+    """Handle @bot <query> — search YouTube and show result list above input."""
+    q = (query.query or "").strip()
+    if not q:
+        await query.answer(
+            [],
+            is_personal=True,
+            cache_time=5,
+            switch_pm_text="Введите название песни",
+            switch_pm_parameter="inline_help",
+        )
+        return
+
+    try:
+        results = await audio_service.search(q, n=audio_service.SEARCH_N)
+    except Exception as exc:
+        logger.warning("inline_query: search failed for %r: %s", q, exc)
+        results = []
+
+    articles: list[InlineQueryResultArticle] = []
+    for r in results:
+        # Store result (bc_id / chat_id are irrelevant for inline mode)
+        key = audio_service.store(r["url"], r["title"], r["uploader"],
+                                  r["duration"], "inline", 0)
+        dur  = audio_service.fmt_duration(r["duration"])
+        title_disp = r["title"][:60]
+        uploader   = r["uploader"][:40] if r["uploader"] else ""
+
+        articles.append(InlineQueryResultArticle(
+            id=key,
+            title=title_disp,
+            description=f"{dur}  ·  {uploader}" if uploader else dur,
+            thumbnail_url=r.get("thumbnail") or None,
+            input_message_content=InputTextMessageContent(
+                message_text=(
+                    f"🎵 <b>{html_escape(r['title'])}</b>\n"
+                    f"<i>{html_escape(uploader)}  ·  {dur}</i>\n\n"
+                    f"⏳ Загружаю трек…"
+                ),
+                parse_mode="HTML",
+            ),
+        ))
+
+    await query.answer(
+        articles,            # type: ignore[arg-type]
+        is_personal=True,
+        cache_time=30,
+    )
+
+
+@router.chosen_inline_result()
+async def on_chosen_inline_result(result: ChosenInlineResult, bot: Bot) -> None:
+    """Download the chosen track and replace the placeholder with an audio file."""
+    key           = result.result_id
+    inline_msg_id = result.inline_message_id
+
+    if not inline_msg_id:
+        # Bot must have inline feedback enabled in BotFather for this to fire.
+        logger.warning("chosen_inline_result: no inline_message_id — enable feedback in BotFather")
+        return
+
+    cached = audio_service.get(key)
+    if cached is None:
+        try:
+            await bot.edit_message_text(
+                inline_message_id=inline_msg_id,
+                text="⌛ Сессия истекла — попробуйте снова.",
+            )
+        except Exception:
+            pass
+        return
+
+    url      = cached.url
+    title    = cached.title
+    uploader = cached.uploader
+    duration = cached.duration
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        try:
+            path, title, uploader, duration = await audio_service.download(url, tmpdir)
+        except Exception as exc:
+            logger.warning("inline mp3: download failed key=%s: %s", key, exc)
+            try:
+                await bot.edit_message_text(
+                    inline_message_id=inline_msg_id,
+                    text=(
+                        f"❌ <b>Не удалось загрузить трек.</b>\n"
+                        f"<i>Попробуйте другой результат.</i>"
+                    ),
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+            return
+
+        try:
+            await bot.edit_message_media(
+                inline_message_id=inline_msg_id,
+                media=InputMediaAudio(
+                    media=FSInputFile(path),
+                    performer=uploader or None,
+                    title=title or None,
+                    duration=duration or None,
+                ),
+            )
+            logger.info(
+                "inline mp3: sent audio key=%s title=%r user=%s",
+                key, title, result.from_user.id,
+            )
+        except Exception as exc:
+            logger.warning("inline mp3: edit_message_media failed: %s", exc)
 
 
 @router.pre_checkout_query()

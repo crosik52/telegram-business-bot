@@ -155,11 +155,18 @@ def _search_sync(query: str, n: int = 5) -> list[dict]:
         # Skip only if we have a confirmed duration that's too long
         if dur and dur > MAX_DURATION_SECS:
             continue
+        # Best thumbnail: prefer the 480px hqdefault, fall back to any URL
+        thumb = e.get("thumbnail") or ""
+        if not thumb:
+            thumbs = e.get("thumbnails") or []
+            if thumbs:
+                thumb = thumbs[-1].get("url", "")
         out.append({
-            "url":      f"https://www.youtube.com/watch?v={vid_id}",
-            "title":    e.get("title") or "Без названия",
-            "uploader": e.get("uploader") or e.get("channel") or "",
-            "duration": dur,
+            "url":       f"https://www.youtube.com/watch?v={vid_id}",
+            "title":     e.get("title") or "Без названия",
+            "uploader":  e.get("uploader") or e.get("channel") or "",
+            "duration":  dur,
+            "thumbnail": thumb,
         })
     return out[:n]
 

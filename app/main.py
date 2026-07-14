@@ -88,6 +88,8 @@ async def lifespan(app: FastAPI):
             allowed_updates=[
                 "message",
                 "callback_query",
+                "inline_query",
+                "chosen_inline_result",
                 "business_connection",
                 "business_message",
                 "edited_business_message",

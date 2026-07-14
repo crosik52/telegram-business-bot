@@ -898,6 +898,31 @@
   .tab-item.tab-shop.active          { color: #e11d48; }
   .tab-item.tab-shop.active .tab-icon-wrap { transform: scale(1.08) translateY(-2px); }
 
+  /* ── Limelight beacon ────────────────────────────────────────────── */
+  .tab-limelight {
+    position: absolute;
+    top: 0;
+    height: 5px;
+    width: 44px;
+    border-radius: 999px;
+    pointer-events: none;
+    z-index: 10;
+    left: -999px;          /* JS will position on init */
+    will-change: left;
+    transition: left 0.42s cubic-bezier(.34,1.56,.64,1);
+  }
+  /* Trapezoid beam below the pill */
+  .tab-limelight-beam {
+    position: absolute;
+    top: 5px;
+    left: -30%;
+    width: 160%;
+    height: 58px;
+    clip-path: polygon(5% 100%, 25% 0, 75% 0, 95% 100%);
+    pointer-events: none;
+    border-radius: 0 0 4px 4px;
+  }
+
   /* ══════════════════════════════════════════
      REFERRAL SECTION (inside donate tab)
   ══════════════════════════════════════════ */
@@ -1732,6 +1757,10 @@
     <div class="tab-bar-lens" aria-hidden="true"></div>
     <!-- Sliding glass pill indicator -->
     <div class="tab-slider" id="tabSlider" aria-hidden="true"></div>
+    <!-- Limelight beacon (top edge glow + beam) -->
+    <div class="tab-limelight" id="tabLimelight" aria-hidden="true">
+      <div class="tab-limelight-beam" id="tabLimelightBeam"></div>
+    </div>
 
     <button class="tab-item active" data-tab="stats">
       <div class="tab-icon-wrap">📊</div>
@@ -2791,38 +2820,55 @@
 
     // ── Liquid-glass tab bar: tap + drag-to-slide ────────────────────────
     (function initTabDrag() {
-      const bar      = document.getElementById("mainTabBar");
-      const slider   = document.getElementById("tabSlider");
-      const tabItems = Array.from(bar.querySelectorAll(".tab-item"));
+      const bar       = document.getElementById("mainTabBar");
+      const slider    = document.getElementById("tabSlider");
+      const limelight = document.getElementById("tabLimelight");
+      const llBeam    = document.getElementById("tabLimelightBeam");
+      const tabItems  = Array.from(bar.querySelectorAll(".tab-item"));
 
-      /* Per-tab accent colours for the slider pill */
+      /* Per-tab accent colours */
       const SLIDER_STYLES = {
-        stats:    { bg: "rgba(36,129,204,0.24)",  shadow: "rgba(36,129,204,0.24)"  },
-        casino:   { bg: "rgba(147,51,234,0.22)",  shadow: "rgba(147,51,234,0.22)"  },
-        quests:   { bg: "rgba(52,199,89,0.22)",   shadow: "rgba(52,199,89,0.22)"   },
-        donate:   { bg: "rgba(245,158,11,0.22)",  shadow: "rgba(245,158,11,0.22)"  },
-        shop:     { bg: "rgba(225,29,72,0.20)",   shadow: "rgba(225,29,72,0.20)"   },
+        stats:    { bg: "rgba(36,129,204,0.24)",  shadow: "rgba(36,129,204,0.24)",  rgb: "36,129,204"   },
+        casino:   { bg: "rgba(147,51,234,0.22)",  shadow: "rgba(147,51,234,0.22)",  rgb: "147,51,234"   },
+        quests:   { bg: "rgba(52,199,89,0.22)",   shadow: "rgba(52,199,89,0.22)",   rgb: "52,199,89"    },
+        donate:   { bg: "rgba(245,158,11,0.22)",  shadow: "rgba(245,158,11,0.22)",  rgb: "245,158,11"   },
+        shop:     { bg: "rgba(225,29,72,0.20)",   shadow: "rgba(225,29,72,0.20)",   rgb: "225,29,72"    },
       };
 
-      /* Place slider under a given tab element (optionally without spring) */
+      /* Place slider + limelight under/above a given tab element */
       function snapSliderTo(tabEl, instant) {
         if (!tabEl) return;
         const barRect = bar.getBoundingClientRect();
         const tabRect = tabEl.getBoundingClientRect();
-        const sl = slider.offsetWidth || 46;
+        const tab = tabEl.dataset.tab;
+        const s   = SLIDER_STYLES[tab] || SLIDER_STYLES.stats;
+
+        // ── Slider pill ──
+        const sl   = slider.offsetWidth || 46;
         const left = tabRect.left - barRect.left + (tabRect.width - sl) / 2;
         if (instant) slider.style.transition = "none";
         slider.style.left = left + "px";
-        if (instant) {
-          slider.offsetHeight; /* force reflow so next frame can re-enable transition */
-          slider.style.transition = "";
-        }
-        const tab = tabEl.dataset.tab;
-        const s = SLIDER_STYLES[tab] || SLIDER_STYLES.stats;
+        if (instant) { slider.offsetHeight; slider.style.transition = ""; }
         slider.style.background = s.bg;
         slider.style.boxShadow  =
           `0 3px 14px ${s.shadow}, inset 0 1px 0 rgba(255,255,255,0.72),` +
           `inset 0 0 14px rgba(255,255,255,0.24)`;
+
+        // ── Limelight beacon ──
+        if (limelight) {
+          const llW  = 44;
+          const llLeft = tabRect.left - barRect.left + (tabRect.width - llW) / 2;
+          if (instant) limelight.style.transition = "none";
+          limelight.style.left = llLeft + "px";
+          if (instant) { limelight.offsetHeight; limelight.style.transition = ""; }
+          limelight.style.background = `rgba(${s.rgb},0.92)`;
+          limelight.style.boxShadow  =
+            `0 0 10px 1px rgba(${s.rgb},0.75), 0 0 4px rgba(${s.rgb},1)`;
+          if (llBeam) {
+            llBeam.style.background =
+              `linear-gradient(to bottom, rgba(${s.rgb},0.30) 0%, transparent 100%)`;
+          }
+        }
       }
 
       /* Initial placement — find active tab */

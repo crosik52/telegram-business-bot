@@ -56,6 +56,11 @@ _download_tasks: set[asyncio.Task] = set()
 # Global semaphore: at most 3 video downloads run concurrently across all chats.
 _download_semaphore = asyncio.Semaphore(3)
 
+# ── In-memory cache: connection_id → owner_telegram_id ───────────────────────
+# Eliminates one SELECT per incoming message — connections rarely change.
+# Invalidated on every business_connection lifecycle event.
+_bc_cache: dict[str, int] = {}
+
 # Conversation-level dedup: prevents both bots from downloading the same link
 # when both participants have the bot connected.
 # Key: (min(owner_id, chat_id), max(owner_id, chat_id), url) — symmetric,
@@ -496,6 +501,9 @@ async def on_business_connection(connection: BusinessConnection) -> None:
             ]
             for k in keys_to_clear:
                 _panic_tracker.clear(k)
+            _bc_cache.pop(connection.id, None)
+        else:
+            _bc_cache[connection.id] = connection.user.id
 
     logger.info(
         "Business connection %s enabled=%s can_reply=%s",
@@ -516,20 +524,33 @@ async def on_business_message(message: Message, bot: Bot) -> None:
         logger.warning("Received business_message without a connection id")
         return
 
+    bc_id = message.business_connection_id
+
+    # ── BC connection lookup (cache-first) ────────────────────────────────────
+    # owner_telegram_id is needed to classify outgoing vs incoming messages and
+    # to gate owner-only features (commands, dot-save, video download).
+    # The cache avoids one SELECT per message; it is populated by the
+    # business_connection lifecycle handler and invalidated on disconnect.
+    cached_owner_id = _bc_cache.get(bc_id)
+
     async with session_scope() as session:
-        # Always load the connection so we know the owner's ID for is_outgoing.
-        conn_result = await session.execute(
-            select(BCModel).where(
-                BCModel.business_connection_id == message.business_connection_id
+        if cached_owner_id is not None:
+            owner_telegram_id = cached_owner_id
+            has_connection    = True
+        else:
+            conn_result = await session.execute(
+                select(BCModel).where(BCModel.business_connection_id == bc_id)
             )
-        )
-        connection = conn_result.scalar_one_or_none()
-        owner_telegram_id = connection.user_telegram_id if connection else None
+            conn_row = conn_result.scalar_one_or_none()
+            owner_telegram_id = conn_row.user_telegram_id if conn_row else None
+            has_connection    = conn_row is not None
+            if owner_telegram_id:
+                _bc_cache[bc_id] = owner_telegram_id
 
         service = MessageService(session)
         await service.ingest_new_message(
             message,
-            business_connection_id=message.business_connection_id,
+            business_connection_id=bc_id,
             owner_telegram_id=owner_telegram_id,
         )
 
@@ -548,16 +569,16 @@ async def on_business_message(message: Message, bot: Bot) -> None:
         # --- «.» quick-save: owner replies with a dot to forward media to DM ---
         sender = message.from_user
         if (
-            connection is not None
+            has_connection
             and sender is not None
-            and sender.id == connection.user_telegram_id
+            and sender.id == owner_telegram_id
             and message.reply_to_message is not None
         ):
             _save_task = asyncio.create_task(
                 _handle_dot_save(
                     bot=bot,
-                    owner_id=connection.user_telegram_id,
-                    business_connection_id=message.business_connection_id,
+                    owner_id=owner_telegram_id,
+                    business_connection_id=bc_id,
                     chat_id=message.chat.id,
                     reply_to_message_id=message.reply_to_message.message_id,
                     dot_message_id=message.message_id,
@@ -567,8 +588,8 @@ async def on_business_message(message: Message, bot: Bot) -> None:
             _save_task.add_done_callback(_download_tasks.discard)
 
         # --- Owner command detection ---
-        if connection and sender is not None and message.text and message.text.startswith("!"):
-            if sender.id == connection.user_telegram_id:
+        if has_connection and sender is not None and message.text and message.text.startswith("!"):
+            if sender.id == owner_telegram_id:
                 parsed = commands.parse_command(message.text)
                 if parsed:
                     cmd, args = parsed
@@ -579,9 +600,9 @@ async def on_business_message(message: Message, bot: Bot) -> None:
                     await commands.dispatch(
                         cmd, args,
                         bot=bot,
-                        owner_id=connection.user_telegram_id,
+                        owner_id=owner_telegram_id,
                         chat_id=message.chat.id,
-                        business_connection_id=message.business_connection_id,
+                        business_connection_id=bc_id,
                         message_id=message.message_id,
                         session=session,
                     )

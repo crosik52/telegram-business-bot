@@ -113,6 +113,26 @@ async def get_cached_bytes(
     return row.file_data if row is not None else None
 
 
+async def purge_old_messages(
+    session: AsyncSession,
+    max_age_days: int = 90,
+) -> int:
+    """Delete Message rows (+ their edit history via CASCADE) older than max_age_days."""
+    from app.models.message import Message as DBMessage
+
+    cutoff = dt.datetime.now(dt.UTC) - dt.timedelta(days=max_age_days)
+    result = await session.execute(
+        delete(DBMessage).where(DBMessage.sent_at < cutoff)
+    )
+    deleted = result.rowcount or 0
+    await session.commit()
+    if deleted:
+        logger.info("messages: purged %d rows older than %d days", deleted, max_age_days)
+    else:
+        logger.debug("messages: nothing to purge (all rows within %d days)", max_age_days)
+    return deleted
+
+
 async def purge_old_media_cache(
     session: AsyncSession,
     max_age_days: int = _CACHE_TTL_DAYS,

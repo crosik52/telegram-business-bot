@@ -34,10 +34,9 @@ _CLEANUP_INTERVAL_HOURS = 6
 
 
 async def _cleanup_loop() -> None:
-    """Background task: purge old media_cache rows every N hours."""
+    """Background task: purge old media_cache and message rows every N hours."""
     from app.database.session import get_db_session
-
-    from app.services.media_cache_service import purge_old_media_cache
+    from app.services.media_cache_service import purge_old_media_cache, purge_old_messages
 
     # Wait a bit after startup before first run so the app is fully ready.
     await asyncio.sleep(60)
@@ -45,8 +44,10 @@ async def _cleanup_loop() -> None:
         try:
             async for session in get_db_session():
                 await purge_old_media_cache(session)
+            async for session in get_db_session():
+                await purge_old_messages(session, max_age_days=90)
         except Exception:
-            logger.exception("media_cache cleanup failed — will retry next cycle")
+            logger.exception("DB cleanup failed — will retry next cycle")
         await asyncio.sleep(_CLEANUP_INTERVAL_HOURS * 3600)
 
 

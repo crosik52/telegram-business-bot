@@ -63,3 +63,4 @@ alembic/        migrations
 ## User preferences
 
 - Keep the existing structure and stack — do not restructure or migrate.
+- Every new feature must have a corresponding admin panel section: config controls, enable/disable toggle, editable parameters, and (where relevant) a list/management UI. Build both sides together by default.

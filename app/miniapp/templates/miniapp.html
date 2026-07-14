@@ -51,8 +51,21 @@
     --theme-glow: 0 0 20px rgba(99,102,241,0.15);
     --shadow: 0 2px 12px rgba(0,0,0,0.4);
   }
-  [data-theme="frost"] body { background: linear-gradient(180deg,#070d1a 0%,#0a1428 60%,#060c18 100%) !important; }
-  [data-theme="frost"] .card, [data-theme="frost"] .shop-item {
+  [data-theme="frost"] body { background: linear-gradient(180deg,#070d1a 0%,#0a1428 60%,#060c18 100%) !important; color: #c8daff !important; }
+  [data-theme="frost"] .card,
+  [data-theme="frost"] .shop-item,
+  [data-theme="frost"] .digest-card,
+  [data-theme="frost"] .streak-banner,
+  [data-theme="frost"] .stat-section,
+  [data-theme="frost"] .sub-card,
+  [data-theme="frost"] .ref-stat-card,
+  [data-theme="frost"] .ref-milestone,
+  [data-theme="frost"] .ref-referral-item,
+  [data-theme="frost"] .casino-section,
+  [data-theme="frost"] .shop-item,
+  [data-theme="frost"] .pet-card,
+  [data-theme="frost"] .balance-btn-row button,
+  [data-theme="frost"] .header-card {
     background: var(--theme-card-bg) !important;
     border: 1px solid var(--theme-card-border) !important;
     backdrop-filter: blur(10px);
@@ -79,8 +92,20 @@
     --theme-glow: 0 0 20px rgba(249,115,22,0.1);
     --shadow: 0 2px 12px rgba(0,0,0,0.5);
   }
-  [data-theme="ember"] body { background: #0e0a07 !important; }
-  [data-theme="ember"] .card, [data-theme="ember"] .shop-item {
+  [data-theme="ember"] body { background: #0e0a07 !important; color: #f5e8d0 !important; }
+  [data-theme="ember"] .card,
+  [data-theme="ember"] .shop-item,
+  [data-theme="ember"] .digest-card,
+  [data-theme="ember"] .streak-banner,
+  [data-theme="ember"] .stat-section,
+  [data-theme="ember"] .sub-card,
+  [data-theme="ember"] .ref-stat-card,
+  [data-theme="ember"] .ref-milestone,
+  [data-theme="ember"] .ref-referral-item,
+  [data-theme="ember"] .casino-section,
+  [data-theme="ember"] .pet-card,
+  [data-theme="ember"] .balance-btn-row button,
+  [data-theme="ember"] .header-card {
     background: var(--theme-card-bg) !important;
     border: 1px solid var(--theme-card-border) !important;
   }
@@ -106,8 +131,20 @@
     --theme-glow: 0 0 24px rgba(139,92,246,0.15);
     --shadow: 0 2px 12px rgba(0,0,0,0.5);
   }
-  [data-theme="violet_dream"] body { background: #08040f !important; }
-  [data-theme="violet_dream"] .card, [data-theme="violet_dream"] .shop-item {
+  [data-theme="violet_dream"] body { background: #08040f !important; color: #f0e8ff !important; }
+  [data-theme="violet_dream"] .card,
+  [data-theme="violet_dream"] .shop-item,
+  [data-theme="violet_dream"] .digest-card,
+  [data-theme="violet_dream"] .streak-banner,
+  [data-theme="violet_dream"] .stat-section,
+  [data-theme="violet_dream"] .sub-card,
+  [data-theme="violet_dream"] .ref-stat-card,
+  [data-theme="violet_dream"] .ref-milestone,
+  [data-theme="violet_dream"] .ref-referral-item,
+  [data-theme="violet_dream"] .casino-section,
+  [data-theme="violet_dream"] .pet-card,
+  [data-theme="violet_dream"] .balance-btn-row button,
+  [data-theme="violet_dream"] .header-card {
     background: var(--theme-card-bg) !important;
     border: 1px solid var(--theme-card-border) !important;
     backdrop-filter: blur(12px);
@@ -2687,22 +2724,127 @@
       setTimeout(() => t.classList.remove("show"), 2200);
     }
 
-    // ── Theme application ──
+    // ── Theme application ──────────────────────────────────────────────────
+    // Telegram WebApp sets background-color / CSS vars as INLINE styles on
+    // <html> and <body>, which beat any CSS rule. We fight fire with fire:
+    // apply theme by calling element.style.setProperty() — inline styles with
+    // the highest possible priority. The [data-theme] CSS attribute is kept
+    // only for tab-bar active-colour overrides that need CSS cascade.
+    const THEME_DEFS = {
+      frost: {
+        vars: {
+          '--bg':                '#070d1a',
+          '--secondary-bg':      '#0d1630',
+          '--text':              '#c8daff',
+          '--hint':              'rgba(147,197,253,0.5)',
+          '--link':              '#3b82f6',
+          '--button':            '#3b82f6',
+          '--button-text':       '#ffffff',
+          '--green':             '#34d399',
+          '--red':               '#f87171',
+          '--orange':            '#fb923c',
+          '--shadow':            '0 2px 12px rgba(0,0,0,0.4)',
+          '--streak-1':          '#60a5fa',
+          '--streak-2':          '#3b82f6',
+          '--streak-3':          '#6366f1',
+          '--streak-legendary':  '#818cf8',
+          '--theme-card-bg':     'rgba(255,255,255,0.04)',
+          '--theme-card-border': 'rgba(99,130,255,0.14)',
+        },
+        bodyBg: 'linear-gradient(180deg,#070d1a 0%,#0a1428 60%,#060c18 100%)',
+        bodyColor: '#c8daff',
+      },
+      ember: {
+        vars: {
+          '--bg':                '#0e0a07',
+          '--secondary-bg':      '#1c1007',
+          '--text':              '#f5e8d0',
+          '--hint':              'rgba(251,146,60,0.5)',
+          '--link':              '#f97316',
+          '--button':            '#f97316',
+          '--button-text':       '#ffffff',
+          '--green':             '#34d399',
+          '--red':               '#ef4444',
+          '--orange':            '#f59e0b',
+          '--shadow':            '0 2px 12px rgba(0,0,0,0.5)',
+          '--streak-1':          '#fb923c',
+          '--streak-2':          '#f97316',
+          '--streak-3':          '#ef4444',
+          '--streak-legendary':  '#fbbf24',
+          '--theme-card-bg':     'rgba(255,255,255,0.04)',
+          '--theme-card-border': 'rgba(251,146,60,0.12)',
+        },
+        bodyBg: '#0e0a07',
+        bodyColor: '#f5e8d0',
+      },
+      violet_dream: {
+        vars: {
+          '--bg':                '#08040f',
+          '--secondary-bg':      '#110820',
+          '--text':              '#f0e8ff',
+          '--hint':              'rgba(196,181,253,0.45)',
+          '--link':              '#8b5cf6',
+          '--button':            '#8b5cf6',
+          '--button-text':       '#ffffff',
+          '--green':             '#34d399',
+          '--red':               '#f87171',
+          '--orange':            '#fb923c',
+          '--shadow':            '0 2px 12px rgba(0,0,0,0.5)',
+          '--streak-1':          '#c4b5fd',
+          '--streak-2':          '#a78bfa',
+          '--streak-3':          '#8b5cf6',
+          '--streak-legendary':  '#ec4899',
+          '--theme-card-bg':     'rgba(139,92,246,0.09)',
+          '--theme-card-border': 'rgba(167,139,250,0.18)',
+        },
+        bodyBg: '#08040f',
+        bodyColor: '#f0e8ff',
+      },
+    };
+
+    // All CSS vars we may set inline — cleared on theme reset
+    const THEME_VAR_KEYS = [
+      '--bg','--secondary-bg','--text','--hint',
+      '--link','--button','--button-text',
+      '--green','--red','--orange','--shadow',
+      '--streak-1','--streak-2','--streak-3','--streak-legendary',
+      '--theme-card-bg','--theme-card-border',
+    ];
+
     function applyTheme(theme) {
-      const validThemes = ["frost", "ember", "violet_dream",
-                           "dark_forest", "ocean", "sunset", "lavender"];
-      document.documentElement.removeAttribute("data-theme");
-      if (theme && validThemes.includes(theme)) {
-        document.documentElement.setAttribute("data-theme", theme);
+      const root = document.documentElement;
+
+      // 1. Clear previously injected inline CSS vars
+      THEME_VAR_KEYS.forEach(k => root.style.removeProperty(k));
+      document.body.style.removeProperty('background');
+      document.body.style.removeProperty('color');
+
+      // 2. Clear data-theme (used for tab active colours in CSS)
+      root.removeAttribute('data-theme');
+
+      const def = THEME_DEFS[theme];
+      if (def) {
+        // 3. Inject vars inline on <html> — beats any CSS rule including
+        //    Telegram's own inline vars (same layer, declared later = wins)
+        Object.entries(def.vars).forEach(([k, v]) => root.style.setProperty(k, v));
+
+        // 4. Force body background + color — defeats Telegram's inline body style
+        document.body.style.setProperty('background', def.bodyBg, 'important');
+        document.body.style.setProperty('color',      def.bodyColor, 'important');
+
+        // 5. Keep data-theme for CSS-only tab active colour overrides
+        root.setAttribute('data-theme', theme);
       }
-      try { localStorage.setItem("app_theme", theme || "default"); } catch (_) {}
+
+      try { localStorage.setItem('app_theme', theme || 'default'); } catch (_) {}
     }
 
-    // Apply persisted theme immediately on load (before any network call)
+    // Apply persisted theme immediately — before any network call or
+    // Telegram SDK colour injection
     (function () {
       try {
-        const saved = localStorage.getItem("app_theme");
-        if (saved) applyTheme(saved);
+        const saved = localStorage.getItem('app_theme');
+        if (saved && saved !== 'default') applyTheme(saved);
       } catch (_) {}
     })();
 

@@ -755,21 +755,14 @@
   .tab-item.tab-quests.drag-preview { color: var(--green); }
   .tab-item.tab-donate.drag-preview  { color: #f59e0b; }
   .tab-item.tab-shop.drag-preview    { color: #e11d48; }
-  .tab-item.tab-referral.drag-preview { color: #14b8a6; }
   .tab-item.drag-preview .tab-icon-wrap { transform: scale(1.05) translateY(-1px); }
 
   .tab-item.tab-shop.active          { color: #e11d48; }
   .tab-item.tab-shop.active .tab-icon-wrap { transform: scale(1.08) translateY(-2px); }
 
-  .tab-item.tab-referral.active          { color: #14b8a6; }
-  .tab-item.tab-referral.active .tab-icon-wrap { transform: scale(1.08) translateY(-2px); }
-
   /* ══════════════════════════════════════════
-     REFERRAL TAB
+     REFERRAL SECTION (inside donate tab)
   ══════════════════════════════════════════ */
-  #referralContent {
-    padding: 16px 0 30px;
-  }
   .ref-hero {
     background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
     border-radius: 20px; padding: 20px 18px; margin-bottom: 14px;
@@ -1579,7 +1572,6 @@
   <div id="donateContent"   style="display:none"></div>
   <div id="questContent"    style="display:none"></div>
   <div id="shopContent"     style="display:none"></div>
-  <div id="referralContent" style="display:none"></div>
 
   <!-- kept for JS compat, hidden via CSS -->
   <button class="refresh-fab" id="refreshFabLegacy" style="display:none"></button>
@@ -1622,10 +1614,6 @@
     <button class="tab-item tab-shop" data-tab="shop">
       <div class="tab-icon-wrap">🛒</div>
       <span class="tab-label">Магазин</span>
-    </button>
-    <button class="tab-item tab-referral" data-tab="referral">
-      <div class="tab-icon-wrap">🔗</div>
-      <span class="tab-label">Рефералы</span>
     </button>
   </nav>
 
@@ -2600,7 +2588,7 @@
     // ══════════════════════════════════════════════════════════════════
     // MAIN TAB SWITCHING
     // ══════════════════════════════════════════════════════════════════
-    const TAB_HEADER_ICONS  = { stats: "📊", casino: "🎰", quests: "🏆", donate: "💎", shop: "🛒", referral: "🔗" };
+    const TAB_HEADER_ICONS  = { stats: "📊", casino: "🎰", quests: "🏆", donate: "💎", shop: "🛒" };
     const TAB_HEADER_TITLES = { stats: "Моя статистика", casino: "Игры", quests: "Задания и рейтинг", donate: "Поддержать", shop: "Монетный магазин" };
     let shopLoaded = false;
     let shopData   = null;
@@ -2615,8 +2603,6 @@
       document.getElementById("questContent").style.display    = tab === "quests"   ? "" : "none";
       document.getElementById("donateContent").style.display   = tab === "donate"   ? "" : "none";
       document.getElementById("shopContent").style.display     = tab === "shop"     ? "" : "none";
-      document.getElementById("referralContent").style.display = tab === "referral" ? "" : "none";
-
       // Header refresh button — only on stats
       const headerActions = document.getElementById("headerActions");
       if (headerActions) headerActions.style.display = tab === "stats" ? "" : "none";
@@ -2642,10 +2628,6 @@
         if (!shopLoaded && currentInitData) loadShop();
         else if (shopLoaded) renderShop();
       }
-      if (tab === "referral") {
-        if (!referralLoaded && currentInitData) loadReferral();
-        else if (referralLoaded) renderReferral();
-      }
       if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
       if (window._tabSwitchHook) window._tabSwitchHook(tab);
     }
@@ -2663,7 +2645,6 @@
         quests:   { bg: "rgba(52,199,89,0.22)",   shadow: "rgba(52,199,89,0.22)"   },
         donate:   { bg: "rgba(245,158,11,0.22)",  shadow: "rgba(245,158,11,0.22)"  },
         shop:     { bg: "rgba(225,29,72,0.20)",   shadow: "rgba(225,29,72,0.20)"   },
-        referral: { bg: "rgba(20,184,166,0.22)",  shadow: "rgba(20,184,166,0.22)"  },
       };
 
       /* Place slider under a given tab element (optionally without spring) */
@@ -2806,14 +2787,17 @@
       try {
         const opts = { method: "POST", headers: {"Content-Type":"application/json"},
                        body: JSON.stringify({initData: currentInitData}) };
-        const [wRes, pRes] = await Promise.all([
-          fetch("/app/api/wallet/info", opts),
-          fetch("/app/api/pet/list",    opts),
+        const [wRes, pRes, rRes] = await Promise.all([
+          fetch("/app/api/wallet/info",    opts),
+          fetch("/app/api/pet/list",       opts),
+          fetch("/app/api/referral/info",  opts),
         ]);
         if (!wRes.ok) throw new Error();
-        walletData = await wRes.json();
-        petData    = pRes.ok ? await pRes.json() : { pets: [], available_chats: [], feed_cost: 20 };
-        casinoLoaded = true;
+        walletData   = await wRes.json();
+        petData      = pRes.ok ? await pRes.json() : { pets: [], available_chats: [], feed_cost: 20 };
+        referralData = rRes.ok ? await rRes.json() : null;
+        referralLoaded = true;
+        casinoLoaded   = true;
         renderDonate();
       } catch {
         el.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить.<br>Попробуй обновить.</div>`;
@@ -3294,8 +3278,10 @@
           <strong>⭐ Telegram Stars</strong> — встроенная платёжная система Telegram.<br>
           Покупаются прямо в приложении, безопасно и мгновенно.
         </div>
+        ${renderReferralSection()}
       `;
       attachSubscriptionHandlers();
+      attachReferralDonateHandlers();
     }
 
     function renderTier(emoji, name, price, perks, isPopular) {
@@ -4165,62 +4151,36 @@
     loadStats(false);
 
     // ══════════════════════════════════════════════════════════════════════
-    //  REFERRAL TAB
+    //  REFERRAL SECTION (embedded in donate tab)
     // ══════════════════════════════════════════════════════════════════════
     let referralLoaded = false;
     let referralData   = null;
 
-    async function loadReferral() {
-      const container = document.getElementById("referralContent");
-      container.innerHTML = `<div style="text-align:center;padding:40px 0;color:var(--hint)">Загрузка…</div>`;
-      try {
-        const res = await fetch("/app/api/referral/info", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ initData: currentInitData }),
-        });
-        if (!res.ok) throw new Error("fetch_error");
-        referralData = await res.json();
-        referralLoaded = true;
-        renderReferral();
-      } catch (e) {
-        container.innerHTML = `<div style="text-align:center;padding:40px 0;color:var(--hint)">Не удалось загрузить данные</div>`;
-      }
-    }
-
-    function renderReferral() {
-      if (!referralData) return;
+    function renderReferralSection() {
+      if (!referralData) return "";
       const d = referralData;
-      const container = document.getElementById("referralContent");
+      if (!d.enabled) return `<div class="ref-empty" style="margin-top:16px">🔗 Реферальная программа временно недоступна</div>`;
 
-      if (!d.enabled) {
-        container.innerHTML = `<div class="ref-empty">🔗 Реферальная программа временно недоступна</div>`;
-        return;
-      }
+      const lvl    = d.level    || { name: "Bronze", emoji: "🥉", color: "#CD7F32" };
+      const nextLv = d.next_level;
+      const nextMs = d.next_milestone;
+      const active = d.active_count || 0;
 
-      const lvl     = d.level     || { name: "Bronze", emoji: "🥉", color: "#CD7F32" };
-      const nextLv  = d.next_level;
-      const nextMs  = d.next_milestone;
-      const active  = d.active_count || 0;
-
-      // Level progress to next level
       let progPct = 100, progLabel = "Максимальный уровень!";
       if (nextLv) {
         const span = nextLv.min - lvl.min;
-        const done = active - lvl.min;
-        progPct  = Math.min(100, Math.round(done / span * 100));
+        progPct  = Math.min(100, Math.round((active - lvl.min) / span * 100));
         progLabel = `${active} / ${nextLv.min} до уровня ${nextLv.name} ${nextLv.emoji}`;
       }
 
-      // Milestones
       const milestonesHtml = (d.milestones || []).map(m => {
-        const done  = active >= m.count;
+        const done   = active >= m.count;
         const isNext = !done && (!nextMs || m.count === nextMs.count);
-        const pct   = Math.min(100, Math.round(active / m.count * 100));
-        const rewardIcon = m.type === "premium_days" ? "⭐" : "🏅";
+        const pct    = Math.min(100, Math.round(active / m.count * 100));
+        const icon   = m.type === "premium_days" ? "⭐" : "🏅";
         return `
           <div class="ref-milestone${done ? " done" : ""}${isNext ? " next" : ""}">
-            <div class="ref-m-icon">${rewardIcon}</div>
+            <div class="ref-m-icon">${icon}</div>
             <div class="ref-m-body">
               <div class="ref-m-label">${esc(m.label)}</div>
               <div class="ref-m-sub">${m.count} активных рефералов</div>
@@ -4233,116 +4193,99 @@
           </div>`;
       }).join("");
 
-      // Recent referrals
-      const recentHtml = d.recent_referrals && d.recent_referrals.length
+      const recentHtml = d.recent_referrals?.length
         ? d.recent_referrals.map(r => {
             const idStr = String(r.referred_telegram_id);
-            const initl = idStr.slice(0, 2);
             const bg    = colorFor(idStr);
             const statusLabel = r.status === "active" ? "Активен" : "Ожидает";
             const statusCls   = r.status === "active" ? "ref-status-active" : "ref-status-pending";
-            const date = r.created_at ? r.created_at.slice(0, 10) : "";
             return `
               <div class="ref-recent-row">
-                <div class="ref-recent-avatar" style="background:${bg}">${initl}</div>
+                <div class="ref-recent-avatar" style="background:${bg}">${idStr.slice(0,2)}</div>
                 <div class="ref-recent-name">ID ${esc(idStr)}</div>
                 <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0">
                   <span class="ref-recent-status ${statusCls}">${statusLabel}</span>
-                  <span style="font-size:10px;color:var(--hint)">${esc(date)}</span>
+                  <span style="font-size:10px;color:var(--hint)">${r.created_at?.slice(0,10) || ""}</span>
                 </div>
               </div>`;
           }).join("")
         : `<div class="ref-empty">Пока нет приглашённых</div>`;
 
-      // Reward history
       const REWARD_ICONS = { welcome: "🎁", per_activation: "⭐", milestone: "🏆" };
-      const rewardHtml = d.reward_logs && d.reward_logs.length
-        ? d.reward_logs.map(r => {
-            const icon = REWARD_ICONS[r.reward_type] || "🎁";
-            const date = r.granted_at ? r.granted_at.slice(0, 10) : "";
-            return `
-              <div class="ref-reward-row">
-                <div class="ref-reward-icon">${icon}</div>
-                <div class="ref-reward-label">${esc(r.label)}</div>
-                <div class="ref-reward-date">${esc(date)}</div>
-              </div>`;
-          }).join("")
+      const rewardHtml = d.reward_logs?.length
+        ? d.reward_logs.map(r => `
+            <div class="ref-reward-row">
+              <div class="ref-reward-icon">${REWARD_ICONS[r.reward_type] || "🎁"}</div>
+              <div class="ref-reward-label">${esc(r.label)}</div>
+              <div class="ref-reward-date">${r.granted_at?.slice(0,10) || ""}</div>
+            </div>`).join("")
         : `<div class="ref-empty">История наград пуста</div>`;
 
-      container.innerHTML = `
-        <!-- Hero card -->
-        <div class="ref-hero">
-          <div class="ref-hero-label">Реферальная программа</div>
-          <div class="ref-level-row">
-            <div class="ref-level-badge">${esc(lvl.emoji || "🥉")}</div>
-            <div>
-              <div class="ref-level-name">${esc(lvl.name)}</div>
-              <div class="ref-level-sub">Уровень участника</div>
+      return `
+        <div style="margin-top:20px">
+          <!-- Hero -->
+          <div class="ref-hero">
+            <div class="ref-hero-label">Реферальная программа</div>
+            <div class="ref-level-row">
+              <div class="ref-level-badge">${esc(lvl.emoji || "🥉")}</div>
+              <div>
+                <div class="ref-level-name">${esc(lvl.name)}</div>
+                <div class="ref-level-sub">Уровень участника</div>
+              </div>
             </div>
-          </div>
-          ${nextLv ? `
-          <div class="ref-prog-wrap">
-            <div class="ref-prog-track">
-              <div class="ref-prog-fill" style="width:${progPct}%"></div>
+            ${nextLv ? `
+            <div class="ref-prog-wrap">
+              <div class="ref-prog-track"><div class="ref-prog-fill" style="width:${progPct}%"></div></div>
+              <div class="ref-prog-label">${esc(progLabel)}</div>
+            </div>` : `<div class="ref-prog-label" style="color:rgba(255,255,255,0.7);margin-bottom:12px">💎 Максимальный уровень — Diamond!</div>`}
+            <div class="ref-link-wrap">
+              <div class="ref-link-text" id="refLinkText">${esc(d.ref_link)}</div>
+              <button class="ref-copy-btn" id="refCopyBtn">📋 Копировать</button>
             </div>
-            <div class="ref-prog-label">${esc(progLabel)}</div>
-          </div>` : `<div class="ref-prog-label" style="color:rgba(255,255,255,0.7);margin-bottom:12px">💎 Максимальный уровень — Diamond!</div>`}
-          <div class="ref-link-wrap">
-            <div class="ref-link-text" id="refLinkText">${esc(d.ref_link)}</div>
-            <button class="ref-copy-btn" id="refCopyBtn">📋 Копировать</button>
+            <button class="ref-share-btn" id="refShareBtn">🚀 Поделиться ссылкой</button>
           </div>
-          <button class="ref-share-btn" id="refShareBtn">🚀 Поделиться ссылкой</button>
+
+          <!-- Stats -->
+          <div class="ref-stats-row">
+            <div class="ref-stat-card"><div class="ref-stat-val">${d.total_invited}</div><div class="ref-stat-lbl">Приглашено</div></div>
+            <div class="ref-stat-card"><div class="ref-stat-val" style="color:var(--green)">${d.active_count}</div><div class="ref-stat-lbl">Активных</div></div>
+            <div class="ref-stat-card"><div class="ref-stat-val" style="color:var(--hint)">${d.pending_count}</div><div class="ref-stat-lbl">Ожидают</div></div>
+          </div>
+
+          ${(d.referrer_reward_days || d.referee_reward_days) ? `
+          <div style="background:rgba(20,184,166,0.1);border-radius:14px;padding:12px 14px;margin-bottom:4px;font-size:12.5px;color:var(--text);line-height:1.6">
+            ${d.referrer_reward_days ? `⭐ <b>Ты</b> получаешь +${d.referrer_reward_days} дн. Premium за каждого активного реферала<br>` : ""}
+            ${d.referee_reward_days  ? `🎁 <b>Друг</b> получает +${d.referee_reward_days} дн. Premium при регистрации` : ""}
+          </div>` : ""}
+
+          <div class="ref-section-title">Награды за количество</div>
+          <div class="ref-milestone-list">${milestonesHtml}</div>
+
+          <div class="ref-section-title">Последние рефералы</div>
+          <div class="ref-recent-list">${recentHtml}</div>
+
+          <div class="ref-section-title">История начислений</div>
+          <div class="ref-reward-list">${rewardHtml}</div>
         </div>
-
-        <!-- Stats row -->
-        <div class="ref-stats-row">
-          <div class="ref-stat-card">
-            <div class="ref-stat-val">${d.total_invited}</div>
-            <div class="ref-stat-lbl">Приглашено</div>
-          </div>
-          <div class="ref-stat-card">
-            <div class="ref-stat-val" style="color:var(--green)">${d.active_count}</div>
-            <div class="ref-stat-lbl">Активных</div>
-          </div>
-          <div class="ref-stat-card">
-            <div class="ref-stat-val" style="color:var(--hint)">${d.pending_count}</div>
-            <div class="ref-stat-lbl">Ожидают</div>
-          </div>
-        </div>
-
-        ${d.referrer_reward_days || d.referee_reward_days ? `
-        <div style="background:rgba(20,184,166,0.1);border-radius:14px;padding:12px 14px;margin-bottom:4px;font-size:12.5px;color:var(--text);line-height:1.5">
-          ${d.referrer_reward_days ? `⭐ <b>Ты</b> получаешь +${d.referrer_reward_days} дн. Premium за каждого активного реферала<br>` : ""}
-          ${d.referee_reward_days  ? `🎁 <b>Друг</b> получает +${d.referee_reward_days} дн. Premium при регистрации` : ""}
-        </div>` : ""}
-
-        <!-- Milestones -->
-        <div class="ref-section-title">Награды за количество</div>
-        <div class="ref-milestone-list">${milestonesHtml}</div>
-
-        <!-- Recent -->
-        <div class="ref-section-title">Последние рефералы</div>
-        <div class="ref-recent-list">${recentHtml}</div>
-
-        <!-- Reward history -->
-        <div class="ref-section-title">История начислений</div>
-        <div class="ref-reward-list">${rewardHtml}</div>
       `;
+    }
 
-      // Copy link
+    function attachReferralDonateHandlers() {
+      if (!referralData?.ref_link) return;
+      const link = referralData.ref_link;
+
       document.getElementById("refCopyBtn")?.addEventListener("click", () => {
-        navigator.clipboard?.writeText(d.ref_link).catch(() => {});
+        navigator.clipboard?.writeText(link).catch(() => {});
         toastMessage("🔗 Ссылка скопирована!");
         if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
       });
 
-      // Share via Telegram
       document.getElementById("refShareBtn")?.addEventListener("click", () => {
-        const shareText = `🔗 Присоединяйся по моей ссылке и получи бонус!\n${d.ref_link}`;
+        const shareText = `🔗 Присоединяйся по моей ссылке и получи бонус!\n${link}`;
         if (tg?.openTelegramLink) {
-          tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(d.ref_link)}&text=${encodeURIComponent(shareText)}`);
+          tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(shareText)}`);
         } else {
-          navigator.clipboard?.writeText(d.ref_link).catch(() => {});
+          navigator.clipboard?.writeText(link).catch(() => {});
           toastMessage("🔗 Ссылка скопирована!");
         }
       });

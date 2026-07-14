@@ -33,6 +33,22 @@ PAGE_SIZE  = 5    # results per page shown in inline keyboard
 SEARCH_N   = 15   # total results fetched from YouTube
 
 
+# ── Persistent file_id cache (youtube url → telegram file_id) ────────────────
+# After a track is uploaded to Telegram once, the file_id is valid forever.
+# Using it in InlineQueryResultCachedAudio lets Telegram send audio instantly
+# when user selects the result — no placeholder, no button needed.
+
+_file_id_cache: dict[str, str] = {}   # url → telegram file_id
+
+
+def get_cached_file_id(url: str) -> str | None:
+    return _file_id_cache.get(url)
+
+
+def cache_file_id(url: str, file_id: str) -> None:
+    _file_id_cache[url] = file_id
+
+
 # ── In-memory result cache ────────────────────────────────────────────────────
 
 class _Result:

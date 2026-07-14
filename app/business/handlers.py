@@ -41,7 +41,8 @@ from aiogram.types import (
     BufferedInputFile, BusinessConnection, BusinessMessagesDeleted,
     CallbackQuery, ChosenInlineResult, FSInputFile, InlineQuery,
     InlineKeyboardButton, InlineKeyboardMarkup,
-    InlineQueryResultArticle, InputMediaAudio, InputTextMessageContent,
+    InlineQueryResultArticle, InlineQueryResultCachedAudio,
+    InputMediaAudio, InputTextMessageContent,
     Message, PreCheckoutQuery,
 )
 from sqlalchemy import select
@@ -1008,34 +1009,42 @@ async def on_inline_query(query: InlineQuery, bot: Bot) -> None:
         logger.warning("inline_query: search failed for %r: %s", q, exc)
         results = []
 
-    articles: list[InlineQueryResultArticle] = []
+    articles: list = []
     for r in results:
-        # Store result (bc_id / chat_id are irrelevant for inline mode)
         key = audio_service.store(r["url"], r["title"], r["uploader"],
                                   r["duration"], "inline", 0)
-        dur  = audio_service.fmt_duration(r["duration"])
+        dur        = audio_service.fmt_duration(r["duration"])
         title_disp = r["title"][:60]
         uploader   = r["uploader"][:40] if r["uploader"] else ""
 
-        articles.append(InlineQueryResultArticle(
-            id=key,
-            title=title_disp,
-            description=f"{dur}  ·  {uploader}" if uploader else dur,
-            thumbnail_url=r.get("thumbnail") or None,
-            input_message_content=InputTextMessageContent(
-                message_text=(
-                    f"🎵 <b>{html_escape(r['title'])}</b>\n"
-                    f"<i>{html_escape(uploader)}  ·  {dur}</i>"
+        cached_fid = audio_service.get_cached_file_id(r["url"])
+        if cached_fid:
+            # Track already uploaded to Telegram — send instantly, no placeholder
+            articles.append(InlineQueryResultCachedAudio(
+                id=key,
+                audio_file_id=cached_fid,
+            ))
+        else:
+            # First time — show card with download button
+            articles.append(InlineQueryResultArticle(
+                id=key,
+                title=title_disp,
+                description=f"{dur}  ·  {uploader}" if uploader else dur,
+                thumbnail_url=r.get("thumbnail") or None,
+                input_message_content=InputTextMessageContent(
+                    message_text=(
+                        f"🎵 <b>{html_escape(r['title'])}</b>\n"
+                        f"<i>{html_escape(uploader)}  ·  {dur}</i>"
+                    ),
+                    parse_mode="HTML",
                 ),
-                parse_mode="HTML",
-            ),
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(
-                    text="🎵 Загрузить трек",
-                    callback_data=f"mp3i:{key}",
-                )
-            ]]),
-        ))
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(
+                        text="🎵 Загрузить трек",
+                        callback_data=f"mp3i:{key}",
+                    )
+                ]]),
+            ))
 
     await query.answer(
         articles,            # type: ignore[arg-type]

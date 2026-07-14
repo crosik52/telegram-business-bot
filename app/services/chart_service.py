@@ -53,8 +53,8 @@ def _font(weight: int = 400) -> dict:
 
 BG_PAGE   = "#0e0e10"
 BG_CARD   = "#1c1c1e"
-C_PRIMARY = "#5856d6"
-C_BLUE    = "#0a84ff"
+C_PRIMARY = "#5856d6"   # purple — stat cards only
+C_BLUE    = "#0a84ff"   # blue — stat cards only
 C_GREEN   = "#30d158"
 C_AMBER   = "#ffd60a"
 C_RED     = "#ff453a"
@@ -62,6 +62,10 @@ C_TEXT    = "#ffffff"
 C_HINT    = "#8e8e93"
 C_BORDER  = "#2c2c2e"
 C_SHADOW  = "#000000"
+
+# ── Chart-specific colors (bright enough to pop on dark cards) ────────────────
+C_IN  = "#5ac8fa"   # sky-cyan  — incoming
+C_OUT = "#ff9f0a"   # warm amber — outgoing
 
 # ── Canvas ────────────────────────────────────────────────────────────────────
 
@@ -419,7 +423,7 @@ def _draw_donut(ax: plt.Axes, stats: InfoStats) -> None:
         return
 
     sizes  = [max(0, stats.incoming), max(0, stats.outgoing)]
-    colors = [C_BLUE, C_PRIMARY]
+    colors = [C_IN, C_OUT]
     labels = ["Входящие", "Исходящие"]
 
     wedges, _ = ax.pie(
@@ -427,37 +431,38 @@ def _draw_donut(ax: plt.Axes, stats: InfoStats) -> None:
         colors=colors,
         startangle=90,
         counterclock=False,
-        wedgeprops=dict(width=0.52, edgecolor=BG_PAGE, linewidth=3),
+        wedgeprops=dict(width=0.55, edgecolor=BG_CARD, linewidth=4),
     )
 
     fd = _font(700)
-    # Center percentage
-    in_pct = round(stats.incoming / total * 100)
-    ax.text(0, 0.08, f"{in_pct}%",
-            ha="center", va="center",
-            color=C_TEXT, fontsize=26, fontweight=700,
-            fontfamily=fd["fontfamily"])
     fd2 = _font(400)
-    ax.text(0, -0.22, "входящих",
+
+    # Center: big percentage + label
+    in_pct = round(stats.incoming / total * 100)
+    ax.text(0, 0.12, f"{in_pct}%",
             ha="center", va="center",
-            color=C_HINT, fontsize=11,
+            color=C_TEXT, fontsize=30, fontweight=700,
+            fontfamily=fd["fontfamily"])
+    ax.text(0, -0.20, "входящих",
+            ha="center", va="center",
+            color=C_HINT, fontsize=12,
             fontfamily=fd2["fontfamily"])
 
-    # Legend (bottom)
+    # Legend with counts
     legend_patches = [
         mpatches.Patch(color=c, label=f"{l}  {v}")
         for c, l, v in zip(colors, labels, sizes)
     ]
-    legend = ax.legend(
+    ax.legend(
         handles=legend_patches,
         loc="lower center",
         ncol=2,
-        fontsize=12,
+        fontsize=13,
         framealpha=0,
         labelcolor=C_TEXT,
-        bbox_to_anchor=(0.5, -0.18),
-        handlelength=1.2,
-        handleheight=1.0,
+        bbox_to_anchor=(0.5, -0.20),
+        handlelength=1.4,
+        handleheight=1.1,
     )
     ax.set_xlim(-1.4, 1.4)
 
@@ -493,26 +498,26 @@ def _draw_bars(ax: plt.Axes, stats: InfoStats) -> None:
     ax.set_xlim(-0.7, n - 0.3)
 
     for xi, (hi, ho) in enumerate(zip(inbound, outbound)):
-        for val, x_off, color in [(hi, -BAR_W / 2 - GAP / 2, C_BLUE),
-                                   (ho,  GAP / 2,             C_PRIMARY)]:
+        for val, x_off, color in [(hi, -BAR_W / 2 - GAP / 2, C_IN),
+                                   (ho,  GAP / 2,             C_OUT)]:
             if val > 0:
-                r = BAR_W * 0.48  # nearly semicircular top
+                r = BAR_W * 0.48
                 p = FancyBboxPatch(
-                    (xi + x_off, -r),        # extend below 0
-                    BAR_W, val + r,           # extra height compensates
+                    (xi + x_off, -r),
+                    BAR_W, val + r,
                     boxstyle=f"round,pad=0,rounding_size={r}",
                     facecolor=color,
                     edgecolor="none",
                     linewidth=0,
-                    alpha=0.88,
+                    alpha=1.0,
                     clip_on=True,
                     zorder=3,
                 )
                 ax.add_patch(p)
 
-    # Grid
+    # Grid — slightly brighter than card border so lines are visible
     ax.yaxis.set_major_locator(mticker.MaxNLocator(integer=True, nbins=4))
-    ax.yaxis.grid(True, color=C_BORDER, linewidth=0.6, alpha=0.7, zorder=0)
+    ax.yaxis.grid(True, color="#3a3a3c", linewidth=0.8, alpha=1.0, zorder=0)
     ax.set_axisbelow(True)
 
     # Tick styling
@@ -520,22 +525,21 @@ def _draw_bars(ax: plt.Axes, stats: InfoStats) -> None:
                    for i in range(n)]
     ax.set_xticks(x)
     ax.set_xticklabels(tick_labels, rotation=45, ha="right",
-                       fontsize=9, color=C_HINT)
+                       fontsize=9, color="#aeaeb2")
     ax.tick_params(axis="x", length=0, pad=6)
-    ax.tick_params(axis="y", colors=C_HINT, labelsize=9, length=0, pad=8)
+    ax.tick_params(axis="y", colors="#aeaeb2", labelsize=9, length=0, pad=8)
 
     # Legend
-    fd = _font(400)
     ax.legend(
         handles=[
-            mpatches.Patch(color=C_BLUE,    label="Входящие"),
-            mpatches.Patch(color=C_PRIMARY, label="Исходящие"),
+            mpatches.Patch(color=C_IN,  label="Входящие"),
+            mpatches.Patch(color=C_OUT, label="Исходящие"),
         ],
         loc="upper right",
-        fontsize=10,
+        fontsize=11,
         framealpha=0,
-        labelcolor=C_HINT,
-        handlelength=1,
+        labelcolor=C_TEXT,
+        handlelength=1.2,
     )
 
     # Apply font family to tick labels

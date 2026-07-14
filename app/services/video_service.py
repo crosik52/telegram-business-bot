@@ -274,16 +274,29 @@ async def handle_video_link(
         if status_msg is None:
             return
         try:
-            from aiogram.methods import DeleteMessage
-            await bot(DeleteMessage(
-                chat_id=chat_id,
+            await bot.delete_message(
+                chat_id=status_msg.chat.id,
                 message_id=status_msg.message_id,
+            )
+            return  # deleted successfully
+        except Exception:
+            pass  # fall through to edit fallback
+
+        # Business connection may lack can_delete_outgoing_messages permission.
+        # Fall back: edit to a single checkmark so the message looks resolved.
+        try:
+            await bot.edit_message_text(
                 business_connection_id=business_connection_id,
-            ))
-        except Exception as _del_exc:
+                chat_id=status_msg.chat.id,
+                message_id=status_msg.message_id,
+                text="✅",
+            )
+        except Exception as _edit_exc:
             logger.warning(
-                "Could not delete status message chat_id=%s msg_id=%s: %s",
-                chat_id, status_msg.message_id, _del_exc,
+                "Status message cleanup failed (delete + edit) for chat_id=%s "
+                "msg_id=%s — grant can_delete_outgoing_messages to the business "
+                "bot to enable deletion. Edit error: %s",
+                status_msg.chat.id, status_msg.message_id, _edit_exc,
             )
 
     def _progress_hook(d: dict) -> None:

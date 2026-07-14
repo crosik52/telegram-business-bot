@@ -688,23 +688,23 @@
   }
 
   .tab-icon-wrap {
-    width: 58px; height: 36px;
+    width: 46px; height: 34px;
     display: flex; align-items: center; justify-content: center;
-    border-radius: 17px;
-    font-size: 24px; line-height: 1;
+    border-radius: 15px;
+    font-size: 22px; line-height: 1;
     position: relative;
     transition: transform 0.3s cubic-bezier(.34,1.56,.64,1);
     will-change: transform;
   }
 
-  .tab-label { line-height: 1; margin-top: 2px; }
+  .tab-label { line-height: 1; margin-top: 2px; font-size: 9.5px; }
 
   /* ── Sliding glass indicator ── */
   .tab-slider {
     position: absolute;
     top: 14px;
-    height: 38px;
-    width: 58px;
+    height: 36px;
+    width: 46px;
     border-radius: 17px;
     pointer-events: none;
     z-index: 2;
@@ -2576,7 +2576,7 @@
         if (!tabEl) return;
         const barRect = bar.getBoundingClientRect();
         const tabRect = tabEl.getBoundingClientRect();
-        const sl = slider.offsetWidth || 58;
+        const sl = slider.offsetWidth || 46;
         const left = tabRect.left - barRect.left + (tabRect.width - sl) / 2;
         if (instant) slider.style.transition = "none";
         slider.style.left = left + "px";

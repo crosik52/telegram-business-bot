@@ -205,19 +205,16 @@ async def stream_to_bytes(url: str) -> tuple[bytes, str]:
 
     has_ffmpeg = bool(_shutil.which("ffmpeg"))
 
-    # Only single-stream formats work with -o - (stdout).
-    # DASH (bestaudio alone) often requires merging and silently fails.
-    # Prefer m4a (AAC) then webm (opus) — both are single-file audio containers.
-    fmt = "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio[acodec!=none]"
-
+    # Use the same format + client as _download_sync (known to work),
+    # only replacing the output path with "-" for stdout piping.
     ytdlp_args = [
         "yt-dlp",
         "--no-playlist",
-        "--extractor-args", "youtube:player_client=android,web",
+        "--extractor-args", "youtube:player_client=android",
         "--max-filesize", "48m",
         "--no-part",
         "--no-warnings",
-        "-f", fmt,
+        "-f", "bestaudio[ext=m4a]/bestaudio/best",
         "-o", "-",
         url,
     ]

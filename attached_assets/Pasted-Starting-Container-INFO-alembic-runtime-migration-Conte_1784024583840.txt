@@ -1,0 +1,80 @@
+Starting Container
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO:     Started server process [5]
+INFO:     Waiting for application startup.
+2026-07-14T10:22:24+0000 | INFO     | app.main | Starting Telegram Business Bot (environment=production)
+2026-07-14T10:22:24+0000 | INFO     | app.main | Database dialect: postgresql (persistent)
+2026-07-14T10:22:25+0000 | INFO     | app.main | Telegram webhook set to https://telegram-business-bot-production.up.railway.app/webhook
+2026-07-14T10:22:25+0000 | INFO     | app.main | Telegram chat menu button set to open mini app
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+2026-07-14T10:22:27+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847665
+2026-07-14T10:22:27+0000 | INFO     | aiogram.event | Update id=745847665 is handled. Duration 191 ms by bot id=1162707887
+2026-07-14T10:22:27+0000 | INFO     | http | POST /webhook -> 200 (193.3ms)
+2026-07-14T10:22:29+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847666
+2026-07-14T10:22:31+0000 | INFO     | aiogram.event | Update id=745847666 is handled. Duration 1192 ms by bot id=1162707887
+2026-07-14T10:22:31+0000 | INFO     | http | POST /webhook -> 200 (1193.0ms)
+2026-07-14T10:22:32+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847667
+2026-07-14T10:22:32+0000 | INFO     | app.business.handlers | chosen_inline_result: key=c2540de8 inline_msg_id=AgAAACt4CAC8Jp1Pyp4RycNthJ0 user=1335699132
+2026-07-14T10:22:32+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847668
+2026-07-14T10:22:32+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847669
+2026-07-14T10:22:32+0000 | INFO     | app.services.message_service | Stored new business message chat_id=1335699132 message_id=1437274 media=text
+2026-07-14T10:22:32+0000 | INFO     | aiogram.event | Update id=745847668 is handled. Duration 195 ms by bot id=1162707887
+2026-07-14T10:22:32+0000 | INFO     | http | POST /webhook -> 200 (201.1ms)
+2026-07-14T10:22:32+0000 | INFO     | app.services.message_service | Stored new business message chat_id=6291032910 message_id=555051 media=text
+2026-07-14T10:22:32+0000 | INFO     | aiogram.event | Update id=745847669 is handled. Duration 205 ms by bot id=1162707887
+2026-07-14T10:22:32+0000 | INFO     | http | POST /webhook -> 200 (211.0ms)
+2026-07-14T10:22:33+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847670
+2026-07-14T10:22:33+0000 | INFO     | aiogram.event | Update id=745847670 is handled. Duration 211 ms by bot id=1162707887
+2026-07-14T10:22:33+0000 | INFO     | http | POST /webhook -> 200 (213.4ms)
+2026-07-14T10:22:34+0000 | WARNING  | app.business.handlers | inline mp3: stream failed key=c2540de8: yt-dlp produced no output: [youtube] Extracting URL: https://www.youtube.com/watch?v=nidQCt_HEsY
+[youtube] nidQCt_HEsY: Downloading webpage
+[youtube] nidQCt_HEsY: Downloading initial data API JSON
+[youtube] nidQCt_HEsY: Downloading android player API JSON
+[youtube] nidQCt_HEsY: Downloading web client config
+[youtube] nidQCt_HEsY: Downloading web player API JSON
+ERROR: [youtube] nidQCt_HEsY: Requested format is not available. Use --list-formats for a list of available formats
+2026-07-14T10:22:35+0000 | INFO     | aiogram.event | Update id=745847667 is handled. Duration 2824 ms by bot id=1162707887
+2026-07-14T10:22:35+0000 | INFO     | http | POST /webhook -> 200 (2826.2ms)
+2026-07-14T10:22:35+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847671
+2026-07-14T10:22:35+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847672
+2026-07-14T10:22:35+0000 | INFO     | app.services.message_service | Recorded edit for chat_id=6291032910 message_id=555051 (edit #1)
+2026-07-14T10:22:35+0000 | INFO     | app.services.message_service | Recorded edit for chat_id=1335699132 message_id=1437274 (edit #1)
+2026-07-14T10:22:35+0000 | INFO     | aiogram.event | Update id=745847672 is handled. Duration 15 ms by bot id=1162707887
+2026-07-14T10:22:35+0000 | INFO     | http | POST /webhook -> 200 (18.2ms)
+2026-07-14T10:22:35+0000 | INFO     | aiogram.event | Update id=745847671 is handled. Duration 195 ms by bot id=1162707887
+2026-07-14T10:22:35+0000 | INFO     | http | POST /webhook -> 200 (197.2ms)
+2026-07-14T10:22:36+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847673
+2026-07-14T10:22:37+0000 | INFO     | aiogram.event | Update id=745847673 is handled. Duration 163 ms by bot id=1162707887
+2026-07-14T10:22:37+0000 | INFO     | http | POST /webhook -> 200 (164.5ms)
+2026-07-14T10:22:40+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847674
+2026-07-14T10:22:41+0000 | INFO     | aiogram.event | Update id=745847674 is handled. Duration 925 ms by bot id=1162707887
+2026-07-14T10:22:41+0000 | INFO     | http | POST /webhook -> 200 (926.7ms)
+2026-07-14T10:22:41+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847675
+2026-07-14T10:22:41+0000 | INFO     | app.business.handlers | chosen_inline_result: key=c2540de8 inline_msg_id=AgAAACx4CAC8Jp1Pqzl7R8v-P9U user=1335699132
+2026-07-14T10:22:41+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847676
+2026-07-14T10:22:41+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847677
+2026-07-14T10:22:41+0000 | INFO     | app.services.message_service | Stored new business message chat_id=1335699132 message_id=1437276 media=text
+2026-07-14T10:22:41+0000 | INFO     | aiogram.event | Update id=745847676 is handled. Duration 10 ms by bot id=1162707887
+2026-07-14T10:22:41+0000 | INFO     | http | POST /webhook -> 200 (13.0ms)
+2026-07-14T10:22:41+0000 | INFO     | app.services.message_service | Stored new business message chat_id=6291032910 message_id=555052 media=text
+2026-07-14T10:22:41+0000 | INFO     | aiogram.event | Update id=745847677 is handled. Duration 15 ms by bot id=1162707887
+2026-07-14T10:22:41+0000 | INFO     | http | POST /webhook -> 200 (17.3ms)
+2026-07-14T10:22:44+0000 | WARNING  | app.business.handlers | inline mp3: stream failed key=c2540de8: yt-dlp produced no output: [youtube] Extracting URL: https://www.youtube.com/watch?v=nidQCt_HEsY
+[youtube] nidQCt_HEsY: Downloading webpage
+[youtube] nidQCt_HEsY: Downloading initial data API JSON
+[youtube] nidQCt_HEsY: Downloading android player API JSON
+[youtube] nidQCt_HEsY: Downloading web client config
+[youtube] nidQCt_HEsY: Downloading web player API JSON
+ERROR: [youtube] nidQCt_HEsY: Requested format is not available. Use --list-formats for a list of available formats
+2026-07-14T10:22:44+0000 | INFO     | aiogram.event | Update id=745847675 is handled. Duration 3043 ms by bot id=1162707887
+2026-07-14T10:22:44+0000 | INFO     | http | POST /webhook -> 200 (3044.8ms)
+2026-07-14T10:22:44+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847679
+2026-07-14T10:22:44+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847678
+2026-07-14T10:22:44+0000 | INFO     | app.services.message_service | Recorded edit for chat_id=6291032910 message_id=555052 (edit #1)
+2026-07-14T10:22:44+0000 | INFO     | app.services.message_service | Recorded edit for chat_id=1335699132 message_id=1437276 (edit #1)
+2026-07-14T10:22:44+0000 | INFO     | aiogram.event | Update id=745847679 is handled. Duration 8 ms by bot id=1162707887
+2026-07-14T10:22:44+0000 | INFO     | http | POST /webhook -> 200 (9.2ms)
+2026-07-14T10:22:45+0000 | INFO     | aiogram.event | Update id=745847678 is handled. Duration 188 ms by bot id=1162707887
+2026-07-14T10:22:45+0000 | INFO     | http | POST /webhook -> 200 (190.3ms)

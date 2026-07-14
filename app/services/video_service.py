@@ -273,17 +273,27 @@ async def handle_video_link(
     async def _delete_status() -> None:
         if status_msg is None:
             return
+        import aiohttp
+        url = f"https://api.telegram.org/bot{bot.token}/deleteMessage"
+        payload = {
+            "chat_id": status_msg.chat.id,
+            "message_id": status_msg.message_id,
+            "business_connection_id": business_connection_id,
+        }
         try:
-            await bot.delete_message(
-                chat_id=status_msg.chat.id,
-                message_id=status_msg.message_id,
+            async with aiohttp.ClientSession() as _s:
+                async with _s.post(url, json=payload) as resp:
+                    data = await resp.json()
+            if data.get("ok"):
+                return  # deleted successfully
+            logger.warning(
+                "deleteMessage failed for chat_id=%s msg_id=%s: %s",
+                status_msg.chat.id, status_msg.message_id, data,
             )
-            return  # deleted successfully
-        except Exception:
-            pass  # fall through to edit fallback
+        except Exception as _exc:
+            logger.warning("deleteMessage HTTP error: %s", _exc)
 
-        # Business connection may lack can_delete_outgoing_messages permission.
-        # Fall back: edit to a single checkmark so the message looks resolved.
+        # Fall back: edit to a checkmark so the message looks resolved.
         try:
             await bot.edit_message_text(
                 business_connection_id=business_connection_id,
@@ -293,9 +303,7 @@ async def handle_video_link(
             )
         except Exception as _edit_exc:
             logger.warning(
-                "Status message cleanup failed (delete + edit) for chat_id=%s "
-                "msg_id=%s — grant can_delete_outgoing_messages to the business "
-                "bot to enable deletion. Edit error: %s",
+                "Status message cleanup failed (delete + edit) chat_id=%s msg_id=%s: %s",
                 status_msg.chat.id, status_msg.message_id, _edit_exc,
             )
 

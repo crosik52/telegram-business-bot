@@ -2050,6 +2050,18 @@ class ShopThemeRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class ShopThemeActivateRequest(BaseModel):
+    initData: str = Field(alias="initData", default="")
+    init_data: str = ""
+    theme: str
+
+    @property
+    def resolved_init(self) -> str:
+        return self.initData or self.init_data
+
+    model_config = {"populate_by_name": True}
+
+
 class ShopFrameRequest(BaseModel):
     initData: str = Field(alias="initData", default="")
     init_data: str = ""
@@ -2135,6 +2147,24 @@ async def shop_buy_theme(
     except ValueError as exc:
         code = str(exc)
         status = 402 if code == "insufficient_coins" else 400
+        raise HTTPException(status_code=status, detail=code) from exc
+    await session.commit()
+    return {"ok": True, **result}
+
+
+@router.post("/app/api/shop/theme/activate")
+async def shop_activate_theme(
+    payload: ShopThemeActivateRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Activate an already-owned theme for free."""
+    settings = get_settings()
+    owner_id = _shop_auth(payload.resolved_init, settings)
+    repo = ShopRepository(session)
+    try:
+        result = await repo.activate_theme(owner_id, payload.theme)
+    except ValueError as exc:
+        code = str(exc)
+        status = 403 if code == "not_owned" else 400
         raise HTTPException(status_code=status, detail=code) from exc
     await session.commit()
     return {"ok": True, **result}

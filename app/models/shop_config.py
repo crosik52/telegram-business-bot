@@ -18,7 +18,15 @@ DEFAULT_SHOP_CONFIG: dict = {
         "label":   "Тема оформления",
         "cost":    100,
         "enabled": True,
-        "options": ["default", "dark_forest", "ocean", "sunset", "lavender"],
+        "options": ["default", "dark_forest", "ocean", "sunset", "lavender",
+                    "frost", "ember", "violet_dream"],
+        # Per-theme price overrides (if absent, falls back to "cost")
+        "theme_prices": {
+            "default":      0,
+            "frost":        500,
+            "ember":        500,
+            "violet_dream": 750,
+        },
     },
     "frame": {
         "label":   "Рамка профиля",

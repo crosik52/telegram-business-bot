@@ -22,8 +22,14 @@ FRAME_COST     = 150
 GIFT_COST      = 30
 GIFT_AMOUNT    = 50
 
-VALID_THEMES = {"default", "dark_forest", "ocean", "sunset", "lavender"}
+VALID_THEMES = {
+    "default", "dark_forest", "ocean", "sunset", "lavender",
+    "frost", "ember", "violet_dream",
+}
 VALID_FRAMES = {"none", "stars", "flowers", "fire", "neon"}
+
+# Themes that are free for everyone (always in owned list)
+FREE_THEMES = {"default"}
 
 
 class ShopRepository:
@@ -115,10 +121,15 @@ class ShopRepository:
 
     async def get_settings(self, owner_id: int) -> dict:
         settings = await self._get_or_create_settings(owner_id)
+        owned = list(settings.owned_themes or [])
+        # "default" is always owned
+        if "default" not in owned:
+            owned.insert(0, "default")
         return {
-            "theme": settings.theme,
-            "frame": settings.frame,
+            "theme":        settings.theme,
+            "frame":        settings.frame,
             "pinned_chat_id": settings.pinned_chat_id,
+            "owned_themes": owned,
         }
 
     async def get_shop_status(self, owner_id: int) -> dict:
@@ -129,14 +140,24 @@ class ShopRepository:
         def _p(key: str, field: str, default: int) -> int:
             return int(cfg.get(key, {}).get(field, default))
 
+        theme_prices_raw = cfg.get("theme", {}).get("theme_prices", {})
+        default_theme_cost = _p("theme", "cost", THEME_COST)
+        theme_prices = {
+            t: int(theme_prices_raw.get(t, default_theme_cost))
+            for t in cfg.get("theme", {}).get("options", list(VALID_THEMES))
+        }
+        # Always free for default
+        theme_prices["default"] = 0
+
         return {
             "active_boosts": boosts,
             "settings": settings,
             "prices": {
-                "double_xp":  _p("double_xp", "cost",   BOOST_DOUBLE_XP_COST),
-                "pin_chat":   _p("pin_chat",  "cost",   PIN_CHAT_COST),
-                "theme":      _p("theme",     "cost",   THEME_COST),
-                "frame":      _p("frame",     "cost",   FRAME_COST),
+                "double_xp":   _p("double_xp", "cost",   BOOST_DOUBLE_XP_COST),
+                "pin_chat":    _p("pin_chat",  "cost",   PIN_CHAT_COST),
+                "theme":       default_theme_cost,
+                "theme_prices": theme_prices,
+                "frame":       _p("frame",     "cost",   FRAME_COST),
                 "gift":       _p("gift",      "cost",   GIFT_COST),
                 "gift_amount":_p("gift",      "amount", GIFT_AMOUNT),
             },
@@ -185,8 +206,8 @@ class ShopRepository:
         return {"new_balance": new_balance, "expires_at": expires_at.isoformat()}
 
     async def buy_theme(self, owner_id: int, theme: str) -> dict:
-        cfg  = await self._get_shop_cfg()
-        cost = int(cfg.get("theme", {}).get("cost", THEME_COST))
+        """Purchase a new theme (charges coins) or activate a free/owned one."""
+        cfg   = await self._get_shop_cfg()
         valid = set(cfg.get("theme", {}).get("options", list(VALID_THEMES)))
 
         if not cfg.get("theme", {}).get("enabled", True):
@@ -194,11 +215,49 @@ class ShopRepository:
         if theme not in valid:
             raise ValueError("invalid_theme")
 
-        new_balance = await self._deduct(owner_id, cost)
         settings = await self._get_or_create_settings(owner_id)
+        owned = list(settings.owned_themes or [])
+        if "default" not in owned:
+            owned.insert(0, "default")
+
+        # Already owned — just activate, no charge
+        if theme in owned or theme in FREE_THEMES:
+            settings.theme = theme
+            settings.owned_themes = owned
+            await self._session.flush()
+            return {"new_balance": None, "theme": theme, "already_owned": True}
+
+        # Per-theme price override, then category cost, then module default
+        theme_prices = cfg.get("theme", {}).get("theme_prices", {})
+        cost = int(theme_prices.get(theme, cfg.get("theme", {}).get("cost", THEME_COST)))
+
+        new_balance = await self._deduct(owner_id, cost)
+        owned.append(theme)
+        settings.owned_themes = owned
         settings.theme = theme
         await self._session.flush()
-        return {"new_balance": new_balance, "theme": theme}
+        return {"new_balance": new_balance, "theme": theme, "already_owned": False}
+
+    async def activate_theme(self, owner_id: int, theme: str) -> dict:
+        """Activate an already-owned theme — free, no coin deduction."""
+        cfg   = await self._get_shop_cfg()
+        valid = set(cfg.get("theme", {}).get("options", list(VALID_THEMES)))
+
+        if theme not in valid:
+            raise ValueError("invalid_theme")
+
+        settings = await self._get_or_create_settings(owner_id)
+        owned = list(settings.owned_themes or [])
+        if "default" not in owned:
+            owned.insert(0, "default")
+
+        if theme not in owned and theme not in FREE_THEMES:
+            raise ValueError("not_owned")
+
+        settings.theme = theme
+        settings.owned_themes = owned
+        await self._session.flush()
+        return {"theme": theme}
 
     async def buy_frame(self, owner_id: int, frame: str) -> dict:
         cfg  = await self._get_shop_cfg()

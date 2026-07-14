@@ -75,6 +75,12 @@ async def lifespan(app: FastAPI):
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Safe column additions for tables that already exist in production
+        if not settings.is_sqlite:
+            from sqlalchemy import text
+            await conn.execute(text(
+                "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS owned_themes JSONB"
+            ))
 
     if settings.webhook_base_url:
         from aiogram.types import MenuButtonWebApp, WebAppInfo

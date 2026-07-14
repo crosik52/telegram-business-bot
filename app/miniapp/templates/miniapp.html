@@ -25,7 +25,145 @@
     --streak-legendary: #bf5af2;
     --card-radius: 20px;
     --shadow: 0 1px 4px rgba(0,0,0,0.07);
+    --theme-accent: var(--link);
+    --theme-accent2: var(--link);
+    --theme-card-bg: var(--secondary-bg);
+    --theme-card-border: transparent;
+    --theme-glow: none;
   }
+
+  /* ── ❄️ Frost theme ──────────────────────────────────────────────────────── */
+  [data-theme="frost"] {
+    --bg: #070d1a;
+    --secondary-bg: #0d1630;
+    --text: #c8daff;
+    --hint: rgba(147,197,253,0.5);
+    --link: #3b82f6;
+    --button: #3b82f6;
+    --button-text: #ffffff;
+    --green: #34d399;
+    --red: #f87171;
+    --orange: #fb923c;
+    --theme-accent: #3b82f6;
+    --theme-accent2: #6366f1;
+    --theme-card-bg: rgba(255,255,255,0.04);
+    --theme-card-border: rgba(99,130,255,0.12);
+    --theme-glow: 0 0 20px rgba(99,102,241,0.15);
+    --shadow: 0 2px 12px rgba(0,0,0,0.4);
+  }
+  [data-theme="frost"] body { background: linear-gradient(180deg,#070d1a 0%,#0a1428 60%,#060c18 100%) !important; }
+  [data-theme="frost"] .card, [data-theme="frost"] .shop-item {
+    background: var(--theme-card-bg) !important;
+    border: 1px solid var(--theme-card-border) !important;
+    backdrop-filter: blur(10px);
+  }
+  [data-theme="frost"] .tab-item.active { color: #93c5fd !important; }
+  [data-theme="frost"] .tab-item.active .tab-icon-wrap { filter: drop-shadow(0 0 6px rgba(99,102,241,0.8)); }
+
+  /* ── 🔥 Ember theme ──────────────────────────────────────────────────────── */
+  [data-theme="ember"] {
+    --bg: #0e0a07;
+    --secondary-bg: #1c1007;
+    --text: #f5e8d0;
+    --hint: rgba(251,146,60,0.5);
+    --link: #f97316;
+    --button: #f97316;
+    --button-text: #ffffff;
+    --green: #34d399;
+    --red: #ef4444;
+    --orange: #f59e0b;
+    --theme-accent: #f97316;
+    --theme-accent2: #ef4444;
+    --theme-card-bg: rgba(255,255,255,0.03);
+    --theme-card-border: rgba(251,146,60,0.1);
+    --theme-glow: 0 0 20px rgba(249,115,22,0.1);
+    --shadow: 0 2px 12px rgba(0,0,0,0.5);
+  }
+  [data-theme="ember"] body { background: #0e0a07 !important; }
+  [data-theme="ember"] .card, [data-theme="ember"] .shop-item {
+    background: var(--theme-card-bg) !important;
+    border: 1px solid var(--theme-card-border) !important;
+  }
+  [data-theme="ember"] .tab-item.active { color: #fb923c !important; }
+  [data-theme="ember"] .tab-item.active .tab-icon-wrap { filter: drop-shadow(0 0 6px rgba(249,115,22,0.9)); }
+
+  /* ── 💜 Violet Dream theme ───────────────────────────────────────────────── */
+  [data-theme="violet_dream"] {
+    --bg: #08040f;
+    --secondary-bg: #110820;
+    --text: #f0e8ff;
+    --hint: rgba(196,181,253,0.45);
+    --link: #8b5cf6;
+    --button: #8b5cf6;
+    --button-text: #ffffff;
+    --green: #34d399;
+    --red: #f87171;
+    --orange: #fb923c;
+    --theme-accent: #8b5cf6;
+    --theme-accent2: #ec4899;
+    --theme-card-bg: rgba(139,92,246,0.07);
+    --theme-card-border: rgba(167,139,250,0.15);
+    --theme-glow: 0 0 24px rgba(139,92,246,0.15);
+    --shadow: 0 2px 12px rgba(0,0,0,0.5);
+  }
+  [data-theme="violet_dream"] body { background: #08040f !important; }
+  [data-theme="violet_dream"] .card, [data-theme="violet_dream"] .shop-item {
+    background: var(--theme-card-bg) !important;
+    border: 1px solid var(--theme-card-border) !important;
+    backdrop-filter: blur(12px);
+  }
+  [data-theme="violet_dream"] .tab-item.active { color: #c4b5fd !important; }
+  [data-theme="violet_dream"] .tab-item.active .tab-icon-wrap { filter: drop-shadow(0 0 6px rgba(167,139,250,0.9)); }
+
+  /* ── Theme card in shop ──────────────────────────────────────────────────── */
+  .theme-card-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 4px;
+  }
+  .theme-card {
+    border-radius: 16px;
+    padding: 12px 12px 10px;
+    border: 1.5px solid rgba(120,120,128,0.15);
+    background: var(--secondary-bg);
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.15s;
+  }
+  .theme-card.active-theme {
+    border-color: var(--link);
+    box-shadow: 0 0 0 1px var(--link);
+  }
+  .theme-card-swatch {
+    height: 40px;
+    border-radius: 10px;
+    margin-bottom: 8px;
+  }
+  .theme-card-name { font-size: 12px; font-weight: 700; margin-bottom: 2px; }
+  .theme-card-desc { font-size: 10px; color: var(--hint); margin-bottom: 8px; }
+  .theme-card-btn {
+    width: 100%;
+    border: none;
+    border-radius: 9px;
+    padding: 6px 0;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .theme-card-btn:disabled { opacity: 0.4; cursor: default; }
+  .theme-card-active-badge {
+    position: absolute;
+    top: 8px; right: 8px;
+    background: var(--link);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    border-radius: 5px;
+    padding: 2px 5px;
+  }
+
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
     margin: 0;
@@ -2520,6 +2658,25 @@
       setTimeout(() => t.classList.remove("show"), 2200);
     }
 
+    // ── Theme application ──
+    function applyTheme(theme) {
+      const validThemes = ["frost", "ember", "violet_dream",
+                           "dark_forest", "ocean", "sunset", "lavender"];
+      document.documentElement.removeAttribute("data-theme");
+      if (theme && validThemes.includes(theme)) {
+        document.documentElement.setAttribute("data-theme", theme);
+      }
+      try { localStorage.setItem("app_theme", theme || "default"); } catch (_) {}
+    }
+
+    // Apply persisted theme immediately on load (before any network call)
+    (function () {
+      try {
+        const saved = localStorage.getItem("app_theme");
+        if (saved) applyTheme(saved);
+      } catch (_) {}
+    })();
+
     // ── Load data ──
     async function loadStats(isRefresh) {
       const initData = tg ? tg.initData : "";
@@ -3835,11 +3992,54 @@
     // ══════════════════════════════════════════════════════════════════
 
     const THEMES = [
-      { id: "default",     emoji: "🌿", label: "Стандарт" },
-      { id: "dark_forest", emoji: "🌲", label: "Лес"      },
-      { id: "ocean",       emoji: "🌊", label: "Океан"    },
-      { id: "sunset",      emoji: "🌅", label: "Закат"    },
-      { id: "lavender",    emoji: "💜", label: "Лаванда"  },
+      {
+        id: "default", emoji: "🌿", label: "Стандарт",
+        desc: "Стандартная тема Telegram",
+        swatch: "linear-gradient(135deg,#f2f2f7,#e5e5ea)",
+        price: 0, free: true,
+      },
+      {
+        id: "frost", emoji: "❄️", label: "Frost",
+        desc: "Ледяной минимализм",
+        swatch: "linear-gradient(135deg,#070d1a 0%,#3b82f6 60%,#6366f1 100%)",
+        price: 500,
+      },
+      {
+        id: "ember", emoji: "🔥", label: "Ember",
+        desc: "Тёплый акцент",
+        swatch: "linear-gradient(135deg,#0e0a07 0%,#f97316 60%,#ef4444 100%)",
+        price: 500,
+      },
+      {
+        id: "violet_dream", emoji: "💜", label: "Violet Dream",
+        desc: "Градиент мечты",
+        swatch: "linear-gradient(135deg,#08040f 0%,#8b5cf6 55%,#ec4899 100%)",
+        price: 750,
+      },
+      {
+        id: "dark_forest", emoji: "🌲", label: "Лес",
+        desc: "Глубокий зелёный лес",
+        swatch: "linear-gradient(135deg,#1a2e1a,#2d4a2d)",
+        price: 100,
+      },
+      {
+        id: "ocean", emoji: "🌊", label: "Океан",
+        desc: "Синяя волна",
+        swatch: "linear-gradient(135deg,#0a1628,#1e40af)",
+        price: 100,
+      },
+      {
+        id: "sunset", emoji: "🌅", label: "Закат",
+        desc: "Тёплый вечер",
+        swatch: "linear-gradient(135deg,#1a0a00,#c2410c)",
+        price: 100,
+      },
+      {
+        id: "lavender", emoji: "💐", label: "Лаванда",
+        desc: "Нежный фиолетовый",
+        swatch: "linear-gradient(135deg,#2e1065,#7c3aed)",
+        price: 100,
+      },
     ];
     const FRAMES = [
       { id: "none",    emoji: "⬜", label: "Нет"    },
@@ -3877,6 +4077,8 @@
       const bal = walletData.balance ?? 0;
       const prices = shopData.prices || {};
       const settings = shopData.settings || {};
+      // Apply the user's active theme immediately
+      applyTheme(settings.theme || "default");
       const boosts   = shopData.active_boosts || [];
       const dxpBoost = boosts.find(b => b.boost_type === "double_xp");
 
@@ -3965,16 +4167,42 @@
         </div>
 
         <!-- Кастомизация -->
-        <div class="shop-section-title">🎨 Кастомизация</div>
-        <div class="section-title" style="font-size:12px;color:var(--hint);margin-top:2px;margin-bottom:6px">Тема · ${prices.theme ?? 100} 🪙</div>
-        <div class="theme-picker">
-          ${THEMES.map(t => `
-            <button class="theme-btn ${settings.theme === t.id ? "active" : ""}"
-              data-theme="${t.id}" id="themBtn_${t.id}"
-              ${bal < (prices.theme ?? 100) && settings.theme !== t.id ? "disabled" : ""}
-              ${settings.theme === t.id ? "disabled" : ""}>
-              ${t.emoji} ${t.label}
-            </button>`).join("")}
+        <div class="shop-section-title">🎨 Темы оформления</div>
+        <div class="theme-card-grid">
+          ${THEMES.map(t => {
+            const owned  = (settings.owned_themes || ["default"]).includes(t.id) || t.free;
+            const active = settings.theme === t.id;
+            const price  = (prices.theme_prices || {})[t.id] ?? t.price ?? 100;
+            const canBuy = bal >= price;
+            let btnText, btnStyle, btnDisabled;
+            if (active) {
+              btnText    = "✓ Активна";
+              btnStyle   = `background:var(--link);color:#fff`;
+              btnDisabled = true;
+            } else if (owned) {
+              btnText    = "Активировать";
+              btnStyle   = `background:rgba(120,120,128,0.12);color:var(--text)`;
+              btnDisabled = false;
+            } else {
+              btnText    = price === 0 ? "Бесплатно" : `${price} 🪙`;
+              btnStyle   = `background:var(--link);color:#fff`;
+              btnDisabled = !canBuy && price > 0;
+            }
+            return `
+            <div class="theme-card${active ? " active-theme" : ""}" data-theme="${t.id}">
+              ${active ? `<div class="theme-card-active-badge">Активна</div>` : ""}
+              <div class="theme-card-swatch" style="background:${t.swatch}"></div>
+              <div class="theme-card-name">${t.emoji} ${t.label}</div>
+              <div class="theme-card-desc">${t.desc}</div>
+              <button class="theme-card-btn"
+                data-theme="${t.id}"
+                data-owned="${owned}"
+                style="${btnStyle}"
+                ${btnDisabled ? "disabled" : ""}>
+                ${btnText}
+              </button>
+            </div>`;
+          }).join("")}
         </div>
         <div class="section-title" style="font-size:12px;color:var(--hint);margin-top:10px;margin-bottom:6px">Рамка профиля · ${prices.frame ?? 150} 🪙</div>
         <div class="frame-picker">
@@ -4051,26 +4279,41 @@
         });
       });
 
-      // Theme buttons
-      document.querySelectorAll(".theme-btn[data-theme]").forEach(btn => {
+      // Theme card buttons (buy or activate)
+      document.querySelectorAll(".theme-card-btn[data-theme]").forEach(btn => {
         btn.addEventListener("click", async () => {
           const theme = btn.dataset.theme;
-          btn.disabled = true;
+          const isOwned = btn.dataset.owned === "true";
+          btn.disabled = true; btn.textContent = "⏳";
           try {
-            const res = await fetch("/app/api/shop/theme", {
+            const endpoint = isOwned
+              ? "/app/api/shop/theme/activate"
+              : "/app/api/shop/theme";
+            const res = await fetch(endpoint, {
               method: "POST", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ initData: currentInitData, theme }),
             });
             if (!res.ok) {
               const e = await res.json().catch(() => ({}));
-              throw new Error({ insufficient_coins: "Недостаточно монет 🪙" }[e.detail] || "Ошибка");
+              throw new Error({
+                insufficient_coins: "Недостаточно монет 🪙",
+                not_owned: "Тема не куплена",
+              }[e.detail] || "Ошибка");
             }
             const data = await res.json();
             if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
-            updateBalanceDisplay(data.new_balance);
-            toastMessage(`🎨 Тема «${THEMES.find(t=>t.id===theme)?.label}» применена!`);
+            if (data.new_balance != null) updateBalanceDisplay(data.new_balance);
+            applyTheme(theme);
+            const label = THEMES.find(t => t.id === theme)?.label ?? theme;
+            toastMessage(isOwned
+              ? `🎨 Тема «${label}» активирована!`
+              : `🎨 Тема «${label}» куплена и применена!`);
             await loadShop();
-          } catch (e) { btn.disabled = false; toastMessage(e.message); }
+          } catch (e) {
+            btn.disabled = false;
+            btn.textContent = isOwned ? "Активировать" : btn.textContent;
+            toastMessage(e.message);
+          }
         });
       });
 

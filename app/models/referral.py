@@ -80,6 +80,10 @@ class Referral(Base):
         BigInteger, nullable=False, unique=True, index=True
     )
 
+    # Human-readable info captured at referral creation time
+    referred_first_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    referred_username: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
     # status: "pending" | "active" | "fraud"
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)
     fraud_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)

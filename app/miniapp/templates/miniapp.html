@@ -4656,14 +4656,19 @@
 
       const recentHtml = d.recent_referrals?.length
         ? d.recent_referrals.map(r => {
-            const idStr = String(r.referred_telegram_id);
-            const bg    = colorFor(idStr);
+            const name    = r.referred_first_name || ("ID " + r.referred_telegram_id);
+            const sub     = r.referred_username ? "@" + r.referred_username : ("#" + r.referred_telegram_id);
+            const initials = name.split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
+            const bg      = colorFor(String(r.referred_telegram_id));
             const statusLabel = r.status === "active" ? "Активен" : "Ожидает";
             const statusCls   = r.status === "active" ? "ref-status-active" : "ref-status-pending";
             return `
               <div class="ref-recent-row">
-                <div class="ref-recent-avatar" style="background:${bg}">${idStr.slice(0,2)}</div>
-                <div class="ref-recent-name">ID ${esc(idStr)}</div>
+                <div class="ref-recent-avatar" style="background:${bg}">${esc(initials)}</div>
+                <div style="flex:1;min-width:0">
+                  <div class="ref-recent-name">${esc(name)}</div>
+                  <div style="font-size:10.5px;color:var(--hint);margin-top:1px">${esc(sub)}</div>
+                </div>
                 <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0">
                   <span class="ref-recent-status ${statusCls}">${statusLabel}</span>
                   <span style="font-size:10px;color:var(--hint)">${r.created_at?.slice(0,10) || ""}</span>

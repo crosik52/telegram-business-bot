@@ -80,7 +80,11 @@ class ReferralRepository:
     # ── Referral creation (called from /start deep-link handler) ─────────────
 
     async def create_referral(
-        self, referrer_telegram_id: int, referred_telegram_id: int
+        self,
+        referrer_telegram_id: int,
+        referred_telegram_id: int,
+        referred_first_name: str | None = None,
+        referred_username: str | None = None,
     ) -> tuple[Referral | None, str]:
         """Create a pending referral.
 
@@ -135,6 +139,8 @@ class ReferralRepository:
             referrer_telegram_id=referrer_telegram_id,
             referred_telegram_id=referred_telegram_id,
             status="pending",
+            referred_first_name=referred_first_name,
+            referred_username=referred_username,
         )
         self._db.add(ref)
         await self._db.flush()
@@ -305,6 +311,8 @@ class ReferralRepository:
             "recent_referrals": [
                 {
                     "referred_telegram_id": r.referred_telegram_id,
+                    "referred_first_name": r.referred_first_name,
+                    "referred_username": r.referred_username,
                     "status": r.status,
                     "created_at": r.created_at.isoformat(),
                     "activated_at": r.activated_at.isoformat() if r.activated_at else None,

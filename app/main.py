@@ -81,6 +81,12 @@ async def lifespan(app: FastAPI):
             await conn.execute(text(
                 "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS owned_themes JSONB"
             ))
+            await conn.execute(text(
+                "ALTER TABLE referrals ADD COLUMN IF NOT EXISTS referred_first_name VARCHAR(128)"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE referrals ADD COLUMN IF NOT EXISTS referred_username VARCHAR(64)"
+            ))
 
     if settings.webhook_base_url:
         from aiogram.types import MenuButtonWebApp, WebAppInfo

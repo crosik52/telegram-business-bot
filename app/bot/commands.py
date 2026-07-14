@@ -86,7 +86,12 @@ async def on_start(message: Message) -> None:
             referred_id = message.from_user.id
             async with session_scope() as db:
                 repo = ReferralRepository(db)
-                ref, reason = await repo.create_referral(referrer_id, referred_id)
+                ref, reason = await repo.create_referral(
+                    referrer_id,
+                    referred_id,
+                    referred_first_name=message.from_user.first_name or None,
+                    referred_username=message.from_user.username or None,
+                )
             if ref:
                 logger.info(
                     "Referral registered: referrer=%s → referred=%s",

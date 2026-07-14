@@ -915,25 +915,11 @@
   }
 
   /* ── Active states — only icon lift, slider provides the bg ── */
-  .tab-item.active         { color: var(--link); }
-  .tab-item.active .tab-icon-wrap      { transform: scale(1.08) translateY(-2px); }
-
-  .tab-item.tab-casino.active          { color: #9333ea; }
-  .tab-item.tab-casino.active .tab-icon-wrap { transform: scale(1.08) translateY(-2px); }
-
-  .tab-item.tab-donate.active          { color: #f59e0b; }
-  .tab-item.tab-donate.active .tab-icon-wrap { transform: scale(1.08) translateY(-2px); }
-
-  /* ── Drag-hover preview (tab highlighted under finger, not yet confirmed) ── */
-  .tab-item.drag-preview         { color: var(--link); }
-  .tab-item.tab-casino.drag-preview { color: #9333ea; }
-  .tab-item.tab-quests.drag-preview { color: var(--green); }
-  .tab-item.tab-donate.drag-preview  { color: #f59e0b; }
-  .tab-item.tab-shop.drag-preview    { color: #e11d48; }
-  .tab-item.drag-preview .tab-icon-wrap { transform: scale(1.05) translateY(-1px); }
-
-  .tab-item.tab-shop.active          { color: #e11d48; }
-  .tab-item.tab-shop.active .tab-icon-wrap { transform: scale(1.08) translateY(-2px); }
+  /* All tabs share one neutral accent — no per-tab rainbow */
+  .tab-item.active,
+  .tab-item.drag-preview            { color: var(--tab-active, #fff); }
+  .tab-item.active .tab-icon-wrap,
+  .tab-item.drag-preview .tab-icon-wrap { transform: scale(1.08) translateY(-2px); }
 
   /* ── Limelight beacon ────────────────────────────────────────────── */
   .tab-limelight {
@@ -1379,8 +1365,6 @@
     font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 8px;
   }
   /* ── Quest tab colours ── */
-  .tab-item.tab-quests.active { color: var(--green); }
-  .tab-item.tab-quests.active .tab-icon-wrap { transform: scale(1.08) translateY(-2px); }
 
   /* ── Quest card ── */
   .quest-card {
@@ -2975,13 +2959,10 @@
       const llBeam    = document.getElementById("tabLimelightBeam");
       const tabItems  = Array.from(bar.querySelectorAll(".tab-item"));
 
-      /* Per-tab accent colours */
+      /* Single neutral style for all tabs — no per-tab rainbow */
+      const NEUTRAL = { bg: "rgba(255,255,255,0.18)", shadow: "rgba(255,255,255,0.18)", rgb: "255,255,255" };
       const SLIDER_STYLES = {
-        stats:    { bg: "rgba(36,129,204,0.24)",  shadow: "rgba(36,129,204,0.24)",  rgb: "36,129,204"   },
-        casino:   { bg: "rgba(147,51,234,0.22)",  shadow: "rgba(147,51,234,0.22)",  rgb: "147,51,234"   },
-        quests:   { bg: "rgba(52,199,89,0.22)",   shadow: "rgba(52,199,89,0.22)",   rgb: "52,199,89"    },
-        donate:   { bg: "rgba(245,158,11,0.22)",  shadow: "rgba(245,158,11,0.22)",  rgb: "245,158,11"   },
-        shop:     { bg: "rgba(225,29,72,0.20)",   shadow: "rgba(225,29,72,0.20)",   rgb: "225,29,72"    },
+        stats: NEUTRAL, casino: NEUTRAL, quests: NEUTRAL, donate: NEUTRAL, shop: NEUTRAL,
       };
 
       /* Place slider + limelight under/above a given tab element */

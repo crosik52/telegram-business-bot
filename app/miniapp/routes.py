@@ -89,6 +89,23 @@ class AdminActionLogRequest(BaseModel):
 GAME_EMOJIS = {"🎲", "🎯", "🏀", "⚽", "🎳", "🎰"}
 
 
+# ── Bot username cache (avoid get_me() on every referral request) ─────────────
+_bot_username_cache: str | None = None
+
+async def _get_cached_bot_username(settings) -> str:
+    global _bot_username_cache
+    if _bot_username_cache:
+        return _bot_username_cache
+    try:
+        bot = get_bot(settings)
+        if bot:
+            me = await bot.get_me()
+            _bot_username_cache = me.username or ""
+    except Exception:
+        pass
+    return _bot_username_cache or ""
+
+
 def _compute_badges(stats) -> list[dict]:
     """Rule-based achievement badges computed from already-aggregated
     per-owner stats — no extra DB queries needed."""
@@ -2284,14 +2301,7 @@ async def referral_info(
         raise HTTPException(status_code=401, detail="Invalid Telegram init data")
     owner_id = int(user["id"])
 
-    bot_username = ""
-    try:
-        bot = get_bot()
-        if bot:
-            me = await bot.get_me()
-            bot_username = me.username or ""
-    except Exception:
-        pass
+    bot_username = await _get_cached_bot_username(settings)
 
     repo = ReferralRepository(session)
     stats = await repo.get_user_stats(owner_id, bot_username)

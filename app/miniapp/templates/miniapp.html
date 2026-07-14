@@ -4701,22 +4701,46 @@
       `;
     }
 
+    // Robust copy — works in Telegram WebView where navigator.clipboard is
+    // blocked (no secure-context focus). Falls back to execCommand('copy').
+    function copyTextRobust(text) {
+      if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(text).catch(() => _execCommandCopy(text));
+      }
+      _execCommandCopy(text);
+    }
+    function _execCommandCopy(text) {
+      try {
+        const el = document.createElement("textarea");
+        el.value = text;
+        el.style.cssText = "position:fixed;top:-9999px;left:-9999px;opacity:0";
+        document.body.appendChild(el);
+        el.focus();
+        el.select();
+        el.setSelectionRange(0, el.value.length);
+        document.execCommand("copy");
+        document.body.removeChild(el);
+      } catch (_) {}
+    }
+
     function attachReferralDonateHandlers() {
       if (!referralData?.ref_link) return;
       const link = referralData.ref_link;
 
       document.getElementById("refCopyBtn")?.addEventListener("click", () => {
-        navigator.clipboard?.writeText(link).catch(() => {});
+        copyTextRobust(link);
         toastMessage("🔗 Ссылка скопирована!");
         if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
       });
 
       document.getElementById("refShareBtn")?.addEventListener("click", () => {
-        const shareText = `🔗 Присоединяйся по моей ссылке и получи бонус!\n${link}`;
+        const shareText = `🔗 Присоединяйся по моей реф-ссылке и получи бонус!\n${link}`;
         if (tg?.openTelegramLink) {
-          tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(shareText)}`);
+          tg.openTelegramLink(
+            `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(shareText)}`
+          );
         } else {
-          navigator.clipboard?.writeText(link).catch(() => {});
+          copyTextRobust(link);
           toastMessage("🔗 Ссылка скопирована!");
         }
       });

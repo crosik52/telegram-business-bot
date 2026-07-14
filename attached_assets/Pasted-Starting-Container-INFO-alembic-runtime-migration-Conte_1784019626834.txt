@@ -1,0 +1,49 @@
+Starting Container
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+2026-07-14T08:59:21+0000 | INFO     | app.main | Database dialect: postgresql (persistent)
+INFO:     Started server process [5]
+INFO:     Waiting for application startup.
+2026-07-14T08:59:21+0000 | INFO     | app.main | Starting Telegram Business Bot (environment=production)
+2026-07-14T08:59:22+0000 | INFO     | app.main | Telegram webhook set to https://telegram-business-bot-production.up.railway.app/webhook
+2026-07-14T08:59:22+0000 | INFO     | app.main | Telegram chat menu button set to open mini app
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+2026-07-14T08:59:26+0000 | INFO     | app.business.handlers | Owner command !mp3 from user=1335699132 in chat=5688354783
+2026-07-14T08:59:26+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745846773
+2026-07-14T08:59:26+0000 | INFO     | app.services.message_service | Stored new business message chat_id=5688354783 message_id=554737 media=text
+2026-07-14T08:59:28+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745846774
+2026-07-14T08:59:28+0000 | INFO     | app.services.message_service | Stored new business message chat_id=1335699132 message_id=1398929 media=text
+2026-07-14T08:59:27+0000 | INFO     | aiogram.event | Update id=745846773 is handled. Duration 1689 ms by bot id=1162707887
+2026-07-14T08:59:28+0000 | INFO     | aiogram.event | Update id=745846774 is handled. Duration 36 ms by bot id=1162707887
+2026-07-14T08:59:28+0000 | INFO     | http | POST /webhook -> 200 (40.1ms)
+2026-07-14T08:59:27+0000 | INFO     | http | POST /webhook -> 200 (1692.6ms)
+2026-07-14T08:59:32+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745846775
+
+[download]   0.0% of    6.45MiB at  Unknown B/s ETA Unknown
+[download]   0.0% of    6.45MiB at  Unknown B/s ETA Unknown
+[download]   0.1% of    6.45MiB at    5.18MiB/s ETA 00:01  
+[download]   0.2% of    6.45MiB at    9.29MiB/s ETA 00:00
+[download]   0.5% of    6.45MiB at   16.67MiB/s ETA 00:00
+[download]   1.0% of    6.45MiB at   24.25MiB/s ETA 00:00
+[download]   1.9% of    6.45MiB at   10.97MiB/s ETA 00:00
+[download]   3.9% of    6.45MiB at    1.02MiB/s ETA 00:06
+[download]   7.7% of    6.45MiB at    2.00MiB/s ETA 00:02
+[download]  15.5% of    6.45MiB at    3.90MiB/s ETA 00:01
+
+[download]  31.0% of    6.45MiB at    7.53MiB/s ETA 00:00
+[download]  62.0% of    6.45MiB at    6.50MiB/s ETA 00:00
+[download] 100.0% of    6.45MiB at    8.20MiB/s ETA 00:00
+[download] 100% of    6.45MiB in 00:00:01 at 5.66MiB/s   
+                                                      
+ERROR: Postprocessing: ffprobe and ffmpeg not found. Please install or provide the path using --ffmpeg-location
+2026-07-14T08:59:34+0000 | WARNING  | app.business.handlers | mp3: download/send failed for https://www.youtube.com/watch?v=gkW5-LW0IOs: ERROR: Postprocessing: ffprobe and ffmpeg not found. Please install or provide the path using --ffmpeg-location
+2026-07-14T08:59:35+0000 | INFO     | aiogram.event | Update id=745846775 is handled. Duration 3004 ms by bot id=1162707887
+2026-07-14T08:59:35+0000 | INFO     | http | POST /webhook -> 200 (3005.7ms)
+2026-07-14T08:59:58+0000 | INFO     | aiogram.event | Update id=745846777 is handled. Duration 30 ms by bot id=1162707887
+2026-07-14T08:59:58+0000 | INFO     | http | POST /webhook -> 200 (32.5ms)
+2026-07-14T09:00:05+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745846778
+2026-07-14T08:59:57+0000 | INFO     | app.business.handlers | Owner command !mp3 from user=1335699132 in chat=5688354783
+2026-07-14T08:59:58+0000 | INFO     | aiogram.event | Update id=745846776 is handled. Duration 1640 ms by bot id=1162707887
+2026-07-14T08:59:58+0000 | INFO     | http | POST /webhook -> 200 (1641.5ms)
+2026-07-14T08:59:58+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745846777

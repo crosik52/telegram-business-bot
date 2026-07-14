@@ -128,26 +128,38 @@ async def search(query: str) -> list[dict]:
 
 # ── Download (sync, runs in executor) ────────────────────────────────────────
 
-def _download_sync(url: str, out_dir: str) -> tuple[Path, str, str, int]:
-    """Download *url* as MP3 into *out_dir*. Returns (path, title, uploader, dur)."""
-    import yt_dlp  # noqa: PLC0415
+_AUDIO_EXTS = {".mp3", ".m4a", ".ogg", ".opus", ".webm", ".aac", ".flac", ".wav"}
 
-    opts = {
+
+def _download_sync(url: str, out_dir: str) -> tuple[Path, str, str, int]:
+    """Download audio into *out_dir*. Returns (path, title, uploader, dur).
+
+    Tries MP3 conversion via FFmpeg first; falls back to the raw bestaudio
+    format (m4a/opus/webm) so it works even without FFmpeg on the server.
+    Telegram natively plays all common audio containers.
+    """
+    import shutil as _shutil  # noqa: PLC0415
+    import yt_dlp             # noqa: PLC0415
+
+    ffmpeg_ok = _shutil.which("ffmpeg") is not None
+
+    opts: dict = {
         "quiet":       True,
         "no_warnings": True,
-        "format":      "bestaudio/best",
+        "format":      "bestaudio[ext=m4a]/bestaudio/best",
         "outtmpl":     os.path.join(out_dir, "%(title)s.%(ext)s"),
-        "postprocessors": [{
-            "key":              "FFmpegExtractAudio",
-            "preferredcodec":   "mp3",
-            "preferredquality": "192",
-        }],
-        "noplaylist": True,
-        # Use the Android client to bypass YouTube bot-detection on server IPs
+        "noplaylist":  True,
         "extractor_args": {
             "youtube": {"player_client": ["android"]},
         },
     }
+    if ffmpeg_ok:
+        opts["postprocessors"] = [{
+            "key":              "FFmpegExtractAudio",
+            "preferredcodec":   "mp3",
+            "preferredquality": "192",
+        }]
+
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
 
@@ -155,15 +167,16 @@ def _download_sync(url: str, out_dir: str) -> tuple[Path, str, str, int]:
     uploader = info.get("uploader") or info.get("channel") or ""
     duration = int(info.get("duration") or 0)
 
-    mp3s = list(Path(out_dir).glob("*.mp3"))
-    if not mp3s:
-        # FFmpeg may not be available — grab whatever was downloaded
-        all_files = [p for p in Path(out_dir).iterdir() if p.is_file()]
-        if not all_files:
-            raise FileNotFoundError("yt-dlp produced no output file")
-        mp3s = all_files
+    # Find the downloaded file (any audio extension)
+    files = [p for p in Path(out_dir).iterdir()
+             if p.is_file() and p.suffix.lower() in _AUDIO_EXTS]
+    if not files:
+        # Last resort — grab whatever is there
+        files = [p for p in Path(out_dir).iterdir() if p.is_file()]
+    if not files:
+        raise FileNotFoundError("yt-dlp produced no output file")
 
-    path = mp3s[0]
+    path = files[0]
     size = path.stat().st_size
     if size > MAX_BYTES:
         path.unlink(missing_ok=True)

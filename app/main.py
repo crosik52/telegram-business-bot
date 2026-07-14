@@ -25,7 +25,7 @@ from app.logging_config import configure_logging, get_logger
 from app.middlewares.logging_middleware import RequestLoggingMiddleware
 from app.miniapp import routes as miniapp_routes
 from app.routers import audio as audio_router
-from app.routers import health, webhook
+from app.routers import health, mockup_proxy, webhook
 
 settings = get_settings()
 configure_logging(settings.log_level)
@@ -147,6 +147,7 @@ app.mount(
 )
 
 app.include_router(health.router)
+app.include_router(mockup_proxy.router)
 app.include_router(audio_router.router)
 app.include_router(webhook.router)
 app.include_router(dashboard_auth.router)

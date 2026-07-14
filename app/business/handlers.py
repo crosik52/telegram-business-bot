@@ -595,9 +595,10 @@ async def on_business_message(message: Message, bot: Bot) -> None:
             _download_tasks.add(_save_task)
             _save_task.add_done_callback(_download_tasks.discard)
 
-        # --- Owner command detection ---
+        # --- Command detection ---
         if has_connection and sender is not None and message.text and message.text.startswith("!"):
             if sender.id == owner_telegram_id:
+                # Full command set for the owner
                 parsed = commands.parse_command(message.text)
                 if parsed:
                     cmd, args = parsed
@@ -607,6 +608,25 @@ async def on_business_message(message: Message, bot: Bot) -> None:
                     )
                     await commands.dispatch(
                         cmd, args,
+                        bot=bot,
+                        owner_id=owner_telegram_id,
+                        chat_id=message.chat.id,
+                        business_connection_id=bc_id,
+                        message_id=message.message_id,
+                        session=session,
+                        can_reply=can_reply,
+                    )
+            else:
+                # Guest Chat Mode — only !mp3 is available to non-owners
+                parsed = commands.parse_command(message.text)
+                if parsed and parsed[0] == "mp3":
+                    _, args = parsed
+                    logger.info(
+                        "Guest !mp3 from user=%s in chat=%s bc=%s",
+                        sender.id, message.chat.id, bc_id,
+                    )
+                    await commands.dispatch(
+                        "mp3", args,
                         bot=bot,
                         owner_id=owner_telegram_id,
                         chat_id=message.chat.id,

@@ -548,6 +548,8 @@
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
+    transform-origin: center bottom;
+    will-change: transform;
 
     /* Glass base */
     background: rgba(255,255,255,0.28);
@@ -570,6 +572,38 @@
     justify-content: space-around;
     padding: 0 6px;
     z-index: 200;
+
+    /* Spring transition for press/release */
+    transition: transform 0.4s cubic-bezier(.34,1.56,.64,1),
+                box-shadow 0.3s ease;
+  }
+
+  /* ── Pressed: bubble lifts and swells ── */
+  .bottom-tab-bar.bar-pressed {
+    transform: scale(1.06) translateY(-5px);
+    box-shadow:
+      0 22px 55px rgba(0,0,0,0.22),
+      0 8px 22px rgba(0,0,0,0.14),
+      0 0 0 0.5px rgba(255,255,255,0.60),
+      inset 0 1px 0 rgba(255,255,255,0.90),
+      inset 0 -0.5px 0 rgba(0,0,0,0.08),
+      inset 1.5px 0 0 rgba(255,255,255,0.50),
+      inset -1.5px 0 0 rgba(255,255,255,0.50),
+      inset 0 0 36px rgba(255,255,255,0.22);
+  }
+
+  /* ── Dragging: JS sets transform directly; only shadow transitions ── */
+  .bottom-tab-bar.bar-dragging {
+    transition: box-shadow 0.15s ease;
+    box-shadow:
+      0 28px 64px rgba(0,0,0,0.26),
+      0 10px 28px rgba(0,0,0,0.18),
+      0 0 0 0.5px rgba(255,255,255,0.65),
+      inset 0 1px 0 rgba(255,255,255,0.92),
+      inset 0 -0.5px 0 rgba(0,0,0,0.06),
+      inset 2px 0 0 rgba(255,255,255,0.55),
+      inset -2px 0 0 rgba(255,255,255,0.55),
+      inset 0 0 40px rgba(255,255,255,0.26);
   }
 
   /* Top specular highlight — simulates glass lens curvature */
@@ -2430,13 +2464,37 @@
         return null;
       }
 
-      let dragging     = false;
-      let hoveredTab   = null;
-      let startX       = 0;
-      let dragStarted  = false; /* becomes true after 6px horizontal movement */
+      let dragging    = false;
+      let hoveredTab  = null;
+      let startX      = 0;
+      let dragStarted = false;
+      let lastMoveX   = 0;
+      let tiltAngle   = 0;  /* smoothed tilt in degrees */
+      let rafId       = null;
 
       function clearDragPreviews() {
         tabItems.forEach(t => t.classList.remove("drag-preview"));
+      }
+
+      /* Apply floating transform during drag (called every rAF frame) */
+      function applyFloat(clientX) {
+        const dx    = clientX - lastMoveX;
+        lastMoveX   = clientX;
+        /* Exponential smoothing: fast lean into direction, spring back */
+        tiltAngle   = tiltAngle * 0.55 + dx * 0.35;
+        const tilt  = Math.max(-5, Math.min(5, tiltAngle));
+        const lift  = 8 + Math.abs(tilt) * 0.4;          /* more tilt → more lift */
+        const scl   = 1.09 + Math.abs(tilt) * 0.002;
+        bar.style.transform =
+          `scale(${scl.toFixed(3)}) translateY(-${lift.toFixed(1)}px) rotate(${tilt.toFixed(2)}deg)`;
+      }
+
+      /* Release: remove inline transform so CSS spring takes over */
+      function releaseBarTransform() {
+        if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+        tiltAngle = 0;
+        bar.classList.remove("bar-pressed", "bar-dragging");
+        bar.style.transform = ""; /* CSS transition springs back to identity */
       }
 
       bar.addEventListener("pointerdown", (e) => {
@@ -2444,8 +2502,14 @@
         dragging    = true;
         dragStarted = false;
         startX      = e.clientX;
+        lastMoveX   = e.clientX;
+        tiltAngle   = 0;
         hoveredTab  = tabAtX(e.clientX);
         bar.setPointerCapture(e.pointerId);
+
+        /* Immediate press lift */
+        bar.classList.remove("bar-dragging");
+        bar.classList.add("bar-pressed");
       }, { passive: true });
 
       bar.addEventListener("pointermove", (e) => {
@@ -2454,11 +2518,18 @@
 
         if (!dragStarted && dx > 6) {
           dragStarted = true;
+          bar.classList.remove("bar-pressed");
+          bar.classList.add("bar-dragging");
           slider.classList.add("dragging");
           if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
         }
 
         if (!dragStarted) return;
+
+        /* Animate float on rAF */
+        const cx = e.clientX;
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(() => applyFloat(cx));
 
         const t = tabAtX(e.clientX);
         if (t && t !== hoveredTab) {
@@ -2475,22 +2546,24 @@
         dragging = false;
         slider.classList.remove("dragging");
         clearDragPreviews();
+        releaseBarTransform();   /* spring back */
 
         const finalTab = dragStarted ? hoveredTab : tabAtX(e ? e.clientX : startX);
         if (finalTab) {
           switchMainTab(finalTab.dataset.tab);
-          snapSliderTo(finalTab, false); /* spring snap */
+          snapSliderTo(finalTab, false);
         }
         dragStarted = false;
         hoveredTab  = null;
       }
 
-      bar.addEventListener("pointerup",     endDrag);
+      bar.addEventListener("pointerup", endDrag);
       bar.addEventListener("pointercancel", () => {
-        dragging = false;
+        dragging    = false;
         dragStarted = false;
         slider.classList.remove("dragging");
         clearDragPreviews();
+        releaseBarTransform();
         const active = bar.querySelector(".tab-item.active");
         if (active) snapSliderTo(active, false);
       });

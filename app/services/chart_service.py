@@ -51,17 +51,17 @@ def _font(weight: int = 400) -> dict:
 
 # ── Palette ───────────────────────────────────────────────────────────────────
 
-BG_PAGE   = "#F8F9FC"
-BG_CARD   = "#FFFFFF"
-C_PRIMARY = "#7C5CFF"
-C_BLUE    = "#5AA7FF"
-C_GREEN   = "#4ADE80"
-C_AMBER   = "#F59E0B"
-C_RED     = "#EF4444"
-C_TEXT    = "#111827"
-C_HINT    = "#6B7280"
-C_BORDER  = "#E5E7EB"
-C_SHADOW  = "#C8CDD8"
+BG_PAGE   = "#0e0e10"
+BG_CARD   = "#1c1c1e"
+C_PRIMARY = "#5856d6"
+C_BLUE    = "#0a84ff"
+C_GREEN   = "#30d158"
+C_AMBER   = "#ffd60a"
+C_RED     = "#ff453a"
+C_TEXT    = "#ffffff"
+C_HINT    = "#8e8e93"
+C_BORDER  = "#2c2c2e"
+C_SHADOW  = "#000000"
 
 # ── Canvas ────────────────────────────────────────────────────────────────────
 
@@ -160,7 +160,7 @@ def render_info_image(stats: InfoStats) -> io.BytesIO:
 
     buf = io.BytesIO()
     try:
-        fig.savefig(buf, format="png", facecolor=BG_PAGE, dpi=DPI)
+        fig.savefig(buf, format="png", facecolor=BG_PAGE, dpi=DPI, bbox_inches="tight")
     finally:
         plt.close(fig)
     buf.seek(0)
@@ -223,7 +223,7 @@ def _card(fig: plt.Figure, x: float, y_top: float,
         boxstyle=f"round,pad=0,rounding_size={r * 1.1}",
         transform=tr,
         facecolor=C_SHADOW, edgecolor="none",
-        linewidth=0, alpha=0.18, zorder=1,
+        linewidth=0, alpha=0.45, zorder=1,
     )
     fig.add_artist(shadow)
 
@@ -408,7 +408,7 @@ def _draw_donut(ax: plt.Axes, stats: InfoStats) -> None:
         # Empty state: grey ring + label
         wedges, _ = ax.pie(
             [1], colors=[C_BORDER], startangle=90,
-            wedgeprops=dict(width=0.52, edgecolor="white", linewidth=3),
+            wedgeprops=dict(width=0.52, edgecolor=BG_PAGE, linewidth=3),
         )
         ax.text(0, 0, "—", ha="center", va="center",
                 color=C_HINT, fontsize=28, fontweight=700,
@@ -427,7 +427,7 @@ def _draw_donut(ax: plt.Axes, stats: InfoStats) -> None:
         colors=colors,
         startangle=90,
         counterclock=False,
-        wedgeprops=dict(width=0.52, edgecolor="white", linewidth=3),
+        wedgeprops=dict(width=0.52, edgecolor=BG_PAGE, linewidth=3),
     )
 
     fd = _font(700)

@@ -29,8 +29,10 @@ from functools import partial
 from pathlib import Path
 from typing import Callable
 
+import time
+
 from aiogram import Bot
-from aiogram.types import FSInputFile
+from aiogram.types import FSInputFile, InputMediaVideo, Message
 
 from app.logging_config import get_logger
 
@@ -206,9 +208,19 @@ def _download_sync(url: str, out_dir: str, progress_hook: Callable | None = None
     return path
 
 
+# ── Progress helpers ──────────────────────────────────────────────────────────
+
+_SPINNERS = ["⏳", "⌛"]
+
+def _build_progress_bar(downloaded: int, total: int | None, width: int = 10) -> str:
+    if not total:
+        return "░" * width + " …%"
+    ratio = min(downloaded / total, 1.0)
+    filled = round(ratio * width)
+    return "█" * filled + "░" * (width - filled) + f" {round(ratio * 100)}%"
+
+
 # ── Main async entry point ────────────────────────────────────────────────────
-
-
 
 async def handle_video_link(
     bot: Bot,
@@ -217,37 +229,104 @@ async def handle_video_link(
     url: str,
     platform: str,
 ) -> None:
-    """Download the video at *url* and send it to the business chat.
-
-    Downloads silently, then sends the video with the platform name as caption.
-    This function is fire-and-forget — all errors are swallowed after logging.
+    """Download *url*, showing live progress in a status message, then replace
+    that same message with the video via edit_message_media — no extra messages,
+    nothing to delete.
     """
     import shutil
 
-    label = _PLATFORM_LABELS.get(platform, platform)
+    label   = _PLATFORM_LABELS.get(platform, platform)
     tmp_dir = tempfile.mkdtemp(prefix="vidbot_")
-    loop = asyncio.get_running_loop()
+    loop    = asyncio.get_running_loop()
+
+    status_msg: Message | None = None
+
+    # ── Send initial status ───────────────────────────────────────────────
+    try:
+        status_msg = await bot.send_message(
+            chat_id=chat_id,
+            business_connection_id=business_connection_id,
+            text=f"⏳ Скачиваю {label}...",
+        )
+    except Exception as exc:
+        logger.warning("Could not send status message to chat_id=%s: %s", chat_id, exc)
+
+    _last_edit:   list[float] = [0.0]
+    _spinner_idx: list[int]   = [0]
+    _EDIT_INTERVAL = 3.0
+
+    async def _edit_status(text: str) -> None:
+        if status_msg is None:
+            return
+        try:
+            await bot.edit_message_text(
+                business_connection_id=business_connection_id,
+                chat_id=status_msg.chat.id,
+                message_id=status_msg.message_id,
+                text=text,
+            )
+        except Exception:
+            pass
+
+    def _progress_hook(d: dict) -> None:
+        now = time.monotonic()
+        if now - _last_edit[0] < _EDIT_INTERVAL:
+            return
+        _last_edit[0] = now
+        if d["status"] != "downloading":
+            return
+        downloaded = d.get("downloaded_bytes") or 0
+        total      = d.get("total_bytes") or d.get("total_bytes_estimate")
+        speed      = d.get("speed")
+        bar        = _build_progress_bar(downloaded, total)
+        speed_str  = ""
+        if speed:
+            speed_str = (
+                f" · {speed / 1024 / 1024:.1f} МБ/с" if speed >= 1_048_576
+                else f" · {speed / 1024:.0f} КБ/с"
+            )
+        _spinner_idx[0] = (_spinner_idx[0] + 1) % len(_SPINNERS)
+        icon = _SPINNERS[_spinner_idx[0]]
+        asyncio.run_coroutine_threadsafe(
+            _edit_status(f"{icon} Скачиваю {label}...\n{bar}{speed_str}"), loop
+        )
 
     try:
         logger.info("Downloading %s video: %s", label, url)
 
         path: Path = await loop.run_in_executor(
-            None, partial(_download_sync, url, tmp_dir, None)
+            None, partial(_download_sync, url, tmp_dir, _progress_hook)
         )
 
         size_mb = path.stat().st_size / 1024 / 1024
         logger.info("Downloaded %s (%.1f MB), uploading to chat %s", path.name, size_mb, chat_id)
 
-        await bot.send_video(
-            chat_id=chat_id,
-            business_connection_id=business_connection_id,
-            video=FSInputFile(path),
-            caption=f"📥 {label}",
-            supports_streaming=True,
-        )
-        logger.info("Video sent to chat_id=%s", chat_id)
+        await _edit_status(f"📤 Загружаю в Telegram...")
 
-    except Exception as exc:  # noqa: BLE001
+        if status_msg is not None:
+            # Replace the text status message with the video in-place
+            await bot.edit_message_media(
+                business_connection_id=business_connection_id,
+                chat_id=status_msg.chat.id,
+                message_id=status_msg.message_id,
+                media=InputMediaVideo(
+                    media=FSInputFile(path),
+                    caption=f"📥 {label}",
+                    supports_streaming=True,
+                ),
+            )
+        else:
+            # Fallback: status message never arrived, just send the video
+            await bot.send_video(
+                chat_id=chat_id,
+                business_connection_id=business_connection_id,
+                video=FSInputFile(path),
+                caption=f"📥 {label}",
+                supports_streaming=True,
+            )
+        logger.info("Video delivered to chat_id=%s", chat_id)
+
+    except Exception as exc:
         logger.warning("Video download/send failed for %s (%s): %s", url, label, exc)
 
     finally:

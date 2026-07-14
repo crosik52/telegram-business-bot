@@ -395,7 +395,7 @@ async def _cmd_mp3(
         return
 
     try:
-        results = await audio_service.search(query)
+        results = await audio_service.search(query, n=audio_service.SEARCH_N)
     except Exception as exc:
         logger.warning("mp3: search failed for %r: %s", query, exc)
         results = []
@@ -412,30 +412,80 @@ async def _cmd_mp3(
             pass
         return
 
-    # Build inline keyboard — one button per result
-    buttons: list[list[InlineKeyboardButton]] = []
+    # Store every result individually (for download); collect session entries
+    entries: list[dict] = []
     for r in results:
         key = audio_service.store(
             r["url"], r["title"], r["uploader"], r["duration"],
             business_connection_id, chat_id,
         )
-        dur   = audio_service.fmt_duration(r["duration"])
-        title = r["title"][:45] + "…" if len(r["title"]) > 45 else r["title"]
-        buttons.append([InlineKeyboardButton(
-            text=f"🎵 {title}  {dur}",
-            callback_data=f"mp3:{key}",
-        )])
+        entries.append({"key": key, "title": r["title"],
+                        "uploader": r["uploader"], "duration": r["duration"]})
+
+    # Paginated session — navigation callbacks rebuild any page from this
+    session_key = audio_service.store_session(entries, query)
+    total_pages = (len(entries) + audio_service.PAGE_SIZE - 1) // audio_service.PAGE_SIZE
 
     try:
         await bot.edit_message_text(
             business_connection_id=business_connection_id,
             chat_id=chat_id,
             message_id=search_msg.message_id,
-            text=f"🎵 <b>{html_escape(query)}</b> — выберите трек:",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+            text=_page_header(query, 0, total_pages),
+            reply_markup=build_page_markup(entries, session_key, page=0),
         )
     except Exception as exc:
         logger.warning("mp3: could not edit search message: %s", exc)
+
+
+def _page_header(query: str, page: int, total_pages: int) -> str:
+    return (
+        f"🎵 <b>{html_escape(query)}</b> — выберите трек:\n"
+        f"<i>страница {page + 1} из {total_pages}</i>"
+    )
+
+
+def build_page_markup(
+    entries: list[dict],
+    session_key: str,
+    page: int,
+) -> InlineKeyboardMarkup:
+    """Build inline keyboard for one page of search results + nav row.
+
+    ``entries`` is the full list from the session:
+    ``[{"key": str, "title": str, "uploader": str, "duration": int}, …]``
+    """
+    ps          = audio_service.PAGE_SIZE
+    total       = len(entries)
+    total_pages = (total + ps - 1) // ps
+
+    page_entries = entries[page * ps : (page + 1) * ps]
+
+    buttons: list[list[InlineKeyboardButton]] = []
+    for e in page_entries:
+        dur   = audio_service.fmt_duration(e["duration"])
+        title = e["title"][:42] + "…" if len(e["title"]) > 42 else e["title"]
+        buttons.append([InlineKeyboardButton(
+            text=f"🎵 {title}  {dur}",
+            callback_data=f"mp3:{e['key']}",
+        )])
+
+    # Navigation row — arrows appear only when prev/next page exists
+    nav: list[InlineKeyboardButton] = []
+    if page > 0:
+        nav.append(InlineKeyboardButton(
+            text="◀️", callback_data=f"mp3n:{session_key}:{page - 1}",
+        ))
+    nav.append(InlineKeyboardButton(
+        text=f"{page + 1}/{total_pages}", callback_data="mp3_noop",
+    ))
+    if page < total_pages - 1:
+        nav.append(InlineKeyboardButton(
+            text="▶️", callback_data=f"mp3n:{session_key}:{page + 1}",
+        ))
+    buttons.append(nav)
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 # ── Dispatch table ────────────────────────────────────────────────────────────

@@ -861,6 +861,67 @@ async def on_deleted_business_messages(deleted: BusinessMessagesDeleted, bot: Bo
 
 # ── Music download callback ───────────────────────────────────────────────────
 
+@router.callback_query(F.data == "mp3_noop")
+async def on_mp3_noop(callback: CallbackQuery) -> None:
+    """Page-counter button — dismiss spinner, do nothing."""
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("mp3n:"))
+async def on_mp3_navigate(callback: CallbackQuery, bot: Bot) -> None:
+    """Navigate between pages of !mp3 search results."""
+    await callback.answer()
+
+    parts = (callback.data or "").split(":")
+    if len(parts) != 3:
+        return
+    _, session_key, page_str = parts
+    try:
+        page = int(page_str)
+    except ValueError:
+        return
+
+    session = audio_service.get_session(session_key)
+    if session is None:
+        try:
+            await callback.message.edit_text(  # type: ignore[union-attr]
+                "⌛ Сессия истекла — выполните поиск заново (<code>!mp3 название</code>)."
+            )
+        except Exception:
+            pass
+        return
+
+    entries     = session.entries
+    total_pages = (len(entries) + audio_service.PAGE_SIZE - 1) // audio_service.PAGE_SIZE
+    page        = max(0, min(page, total_pages - 1))
+
+    markup = commands.build_page_markup(entries, session_key, page)
+
+    # Determine bc_id / chat_id from the first entry's cached result
+    first_result = audio_service.get(entries[0]["key"]) if entries else None
+    bc_id    = first_result.bc_id    if first_result else None
+    chat_id  = first_result.chat_id  if first_result else None
+    msg_id   = callback.message.message_id  # type: ignore[union-attr]
+
+    header = commands._page_header(session.query, page, total_pages)
+
+    try:
+        if bc_id and chat_id:
+            await bot.edit_message_text(
+                business_connection_id=bc_id,
+                chat_id=chat_id,
+                message_id=msg_id,
+                text=header,
+                reply_markup=markup,
+            )
+        else:
+            await callback.message.edit_text(  # type: ignore[union-attr]
+                header, reply_markup=markup,
+            )
+    except Exception as exc:
+        logger.debug("mp3 navigate: edit failed: %s", exc)
+
+
 @router.callback_query(F.data.startswith("mp3:"))
 async def on_mp3_callback(callback: CallbackQuery, bot: Bot) -> None:
     """User picked a track from the !mp3 search results — download and deliver."""

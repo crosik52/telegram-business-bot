@@ -29,6 +29,9 @@ MAX_BYTES         = 48 * 1024 * 1024   # 48 MB — Telegram audio cap
 MAX_DURATION_SECS = 15 * 60            # 15 minutes — skip albums / long mixes
 _CACHE_TTL        = 600                # 10 minutes
 
+PAGE_SIZE  = 5    # results per page shown in inline keyboard
+SEARCH_N   = 15   # total results fetched from YouTube
+
 
 # ── In-memory result cache ────────────────────────────────────────────────────
 
@@ -58,7 +61,7 @@ def _evict() -> None:
 
 def store(url: str, title: str, uploader: str, duration: int,
           bc_id: str, chat_id: int) -> str:
-    """Persist a search result and return its 8-char key."""
+    """Persist a single result and return its 8-char key."""
     _evict()
     key = uuid4().hex[:8]
     _cache[key] = _Result(url, title, uploader, duration, bc_id, chat_id)
@@ -67,6 +70,46 @@ def store(url: str, title: str, uploader: str, duration: int,
 
 def get(key: str) -> _Result | None:
     return _cache.get(key)
+
+
+# ── Search-session cache (for pagination) ─────────────────────────────────────
+# A session holds the ordered list of result-keys for an entire search query.
+# Navigation callbacks reference the session key + page number.
+
+class _Session:
+    """Full results list for one !mp3 search — used for page navigation.
+
+    Each entry: {"key": str, "title": str, "uploader": str, "duration": int}
+    ``key`` maps into ``_cache`` for the actual download URL.
+    """
+    __slots__ = ("entries", "query", "ts")
+
+    def __init__(self, entries: list[dict], query: str) -> None:
+        self.entries = entries   # [{key, title, uploader, duration}, …]
+        self.query   = query
+        self.ts      = time.monotonic()
+
+
+_sessions: dict[str, _Session] = {}
+
+
+def _evict_sessions() -> None:
+    cutoff = time.monotonic() - _CACHE_TTL
+    stale = [k for k, v in _sessions.items() if v.ts < cutoff]
+    for k in stale:
+        del _sessions[k]
+
+
+def store_session(entries: list[dict], query: str) -> str:
+    """Persist a search session and return its 8-char session key."""
+    _evict_sessions()
+    sk = uuid4().hex[:8]
+    _sessions[sk] = _Session(entries, query)
+    return sk
+
+
+def get_session(sk: str) -> _Session | None:
+    return _sessions.get(sk)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -93,7 +136,7 @@ def _search_sync(query: str, n: int = 5) -> list[dict]:
             "youtube": {"player_client": ["android"]},
         },
     }
-    search_url = f"ytsearch{n}:{query}"
+    search_url = f"ytsearch{n or SEARCH_N}:{query}"
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(search_url, download=False)
 
@@ -121,9 +164,9 @@ def _search_sync(query: str, n: int = 5) -> list[dict]:
     return out[:n]
 
 
-async def search(query: str) -> list[dict]:
+async def search(query: str, n: int = SEARCH_N) -> list[dict]:
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, partial(_search_sync, query))
+    return await loop.run_in_executor(None, partial(_search_sync, query, n))
 
 
 # ── Download (sync, runs in executor) ────────────────────────────────────────

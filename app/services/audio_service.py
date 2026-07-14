@@ -85,21 +85,30 @@ def _search_sync(query: str, n: int = 5) -> list[dict]:
     import yt_dlp  # noqa: PLC0415
 
     opts = {
-        "quiet":          True,
-        "no_warnings":    True,
-        "extract_flat":   True,
-        "default_search": f"ytsearch{n}",
-        "noplaylist":     True,
+        "quiet":        True,
+        "no_warnings":  True,
+        "extract_flat": "in_playlist",   # flat entries from search playlist
+        "noplaylist":   False,           # search IS a playlist of results
     }
+    search_url = f"ytsearch{n}:{query}"
     with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(query, download=False)
+        info = ydl.extract_info(search_url, download=False)
+
+    logger.debug("mp3 search raw: type=%s entries=%s",
+                 type(info).__name__,
+                 len((info or {}).get("entries", [])))
 
     out = []
     for e in (info or {}).get("entries", []):
-        dur = e.get("duration") or 0
-        if dur > MAX_DURATION_SECS:
+        if not e:
             continue
-        vid_id = e.get("id") or e.get("url", "")
+        dur    = e.get("duration") or 0
+        vid_id = e.get("id") or ""
+        if not vid_id:
+            continue
+        # Skip only if we have a confirmed duration that's too long
+        if dur and dur > MAX_DURATION_SECS:
+            continue
         out.append({
             "url":      f"https://www.youtube.com/watch?v={vid_id}",
             "title":    e.get("title") or "Без названия",

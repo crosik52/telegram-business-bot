@@ -387,7 +387,11 @@ async def _cmd_mp3(
         logger.warning("mp3: could not send search placeholder: %s", exc)
         return
 
-    results = await audio_service.search(query)
+    try:
+        results = await audio_service.search(query)
+    except Exception as exc:
+        logger.warning("mp3: search failed for %r: %s", query, exc)
+        results = []
 
     if not results:
         try:

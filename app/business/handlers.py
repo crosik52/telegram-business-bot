@@ -1076,47 +1076,48 @@ async def on_chosen_inline_result(result: ChosenInlineResult, bot: Bot) -> None:
         except Exception:
             pass
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        try:
-            path, title, uploader, duration = await audio_service.download(url, tmpdir)
-        except Exception as exc:
-            logger.warning("inline mp3: download failed key=%s: %s", key, exc)
-            if inline_msg_id:
-                try:
-                    await bot.edit_message_text(
-                        inline_message_id=inline_msg_id,
-                        text="❌ <b>Не удалось загрузить трек.</b> Попробуйте другой.",
-                        parse_mode="HTML",
-                    )
-                except Exception:
-                    pass
-            return
+    # Stream audio into memory — no temp files, no disk I/O
+    try:
+        audio_bytes, filename = await audio_service.stream_to_bytes(url)
+    except Exception as exc:
+        logger.warning("inline mp3: stream failed key=%s: %s", key, exc)
+        if inline_msg_id:
+            try:
+                await bot.edit_message_text(
+                    inline_message_id=inline_msg_id,
+                    text="❌ <b>Не удалось загрузить трек.</b> Попробуйте другой.",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+        return
 
-        # Send audio to user's private chat with the bot
-        try:
-            await bot.send_audio(
-                chat_id=user_id,
-                audio=FSInputFile(path),
-                performer=uploader or None,
-                title=title or None,
-                duration=duration or None,
-            )
-            logger.info("inline mp3: audio sent to DM user=%s title=%r", user_id, title)
-        except Exception as exc:
-            logger.warning("inline mp3: send_audio to DM failed user=%s: %s", user_id, exc)
-            if inline_msg_id:
-                try:
-                    await bot.edit_message_text(
-                        inline_message_id=inline_msg_id,
-                        text=(
-                            f"❌ Не удалось отправить трек.\n"
-                            f"<i>Сначала напишите боту в личку, затем повторите поиск.</i>"
-                        ),
-                        parse_mode="HTML",
-                    )
-                except Exception:
-                    pass
-            return
+    # Upload straight from RAM to Telegram
+    try:
+        await bot.send_audio(
+            chat_id=user_id,
+            audio=BufferedInputFile(audio_bytes, filename=filename),
+            performer=uploader or None,
+            title=title or None,
+            duration=cached.duration or None,
+        )
+        logger.info("inline mp3: streamed to DM user=%s title=%r size=%dKB",
+                    user_id, title, len(audio_bytes) // 1024)
+    except Exception as exc:
+        logger.warning("inline mp3: send_audio failed user=%s: %s", user_id, exc)
+        if inline_msg_id:
+            try:
+                await bot.edit_message_text(
+                    inline_message_id=inline_msg_id,
+                    text=(
+                        "❌ Не удалось отправить трек.\n"
+                        "<i>Сначала напишите боту в личку, затем повторите поиск.</i>"
+                    ),
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+        return
 
     # Update inline message to final state
     if inline_msg_id:

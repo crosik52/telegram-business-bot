@@ -176,6 +176,69 @@ async def search(query: str, n: int = SEARCH_N) -> list[dict]:
     return await loop.run_in_executor(None, partial(_search_sync, query, n))
 
 
+# ── Stream directly to memory (no disk) ──────────────────────────────────────
+
+async def stream_to_bytes(url: str) -> tuple[bytes, str]:
+    """Pipe yt-dlp → ffmpeg → RAM.  Returns (audio_bytes, filename).
+
+    No temporary files are created.  The pipeline is:
+      yt-dlp -o -  →  ffmpeg -i pipe:0 -f mp3 pipe:1   (if ffmpeg present)
+      yt-dlp -o -                                        (raw m4a fallback)
+    """
+    import shutil as _shutil  # noqa: PLC0415
+
+    has_ffmpeg = bool(_shutil.which("ffmpeg"))
+
+    ytdlp_args = [
+        "yt-dlp",
+        "--no-playlist",
+        "--extractor-args", "youtube:player_client=android",
+        "--max-filesize", "48m",
+        "--no-part",
+        "-q",
+        "-f", "bestaudio" if has_ffmpeg else "bestaudio[ext=m4a]/bestaudio",
+        "-o", "-",
+        url,
+    ]
+
+    if has_ffmpeg:
+        ytdlp_proc = await asyncio.create_subprocess_exec(
+            *ytdlp_args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        ffmpeg_proc = await asyncio.create_subprocess_exec(
+            "ffmpeg",
+            "-i", "pipe:0",
+            "-vn",
+            "-acodec", "libmp3lame",
+            "-q:a", "2",
+            "-f", "mp3",
+            "pipe:1",
+            stdin=ytdlp_proc.stdout,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        audio_bytes, _ = await ffmpeg_proc.communicate()
+        await ytdlp_proc.wait()
+        filename = "track.mp3"
+    else:
+        ytdlp_proc = await asyncio.create_subprocess_exec(
+            *ytdlp_args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        audio_bytes, _ = await ytdlp_proc.communicate()
+        filename = "track.m4a"
+
+    if not audio_bytes:
+        raise RuntimeError("yt-dlp pipeline produced no output")
+    if len(audio_bytes) > MAX_BYTES:
+        raise ValueError(f"Audio too large: {len(audio_bytes) // (1024*1024)} MB")
+
+    return audio_bytes, filename
+
+
 # ── Download (sync, runs in executor) ────────────────────────────────────────
 
 _AUDIO_EXTS = {".mp3", ".m4a", ".ogg", ".opus", ".webm", ".aac", ".flac", ".wav"}

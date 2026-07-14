@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>Пользовательское соглашение</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #f2f2f7);
+    --secondary-bg: var(--tg-theme-secondary-bg-color, #ffffff);
+    --text: var(--tg-theme-text-color, #17181a);
+    --hint: var(--tg-theme-hint-color, #8a8a8e);
+    --link: var(--tg-theme-link-color, #2481cc);
+    --card-radius: 16px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+    padding: 0 0 env(safe-area-inset-bottom, 24px);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .top-bar {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--secondary-bg);
+    border-bottom: 1px solid rgba(120,120,128,0.15);
+    padding: 14px 16px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .back-btn {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: rgba(120,120,128,0.12);
+    border: none; cursor: pointer; color: var(--link);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  .back-btn:active { background: rgba(120,120,128,0.22); }
+  .top-bar h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.2px; }
+
+  .content {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 20px 16px 40px;
+  }
+
+  .updated {
+    color: var(--hint);
+    font-size: 13px;
+    margin-bottom: 20px;
+  }
+
+  .section {
+    background: var(--secondary-bg);
+    border-radius: var(--card-radius);
+    padding: 18px 16px;
+    margin-bottom: 12px;
+  }
+  .section h2 {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    letter-spacing: -0.1px;
+  }
+  .section p, .section li {
+    font-size: 14px;
+    color: var(--text);
+    line-height: 1.65;
+  }
+  .section ul, .section ol {
+    padding-left: 20px;
+    margin-top: 8px;
+  }
+  .section li { margin-bottom: 6px; }
+  .section a { color: var(--link); text-decoration: none; }
+  .hint-text {
+    font-size: 13px;
+    color: var(--hint);
+    text-align: center;
+    margin-top: 20px;
+    padding: 0 8px;
+    line-height: 1.55;
+  }
+</style>
+</head>
+<body>
+<div class="top-bar">
+  <button class="back-btn" onclick="goBack()">‹</button>
+  <h1>Пользовательское соглашение</h1>
+</div>
+
+<div class="content">
+  <div class="updated">Редакция от 14 июля 2025 г.</div>
+
+  <div class="section">
+    <h2>1. Общие положения</h2>
+    <p>Настоящее Пользовательское соглашение («Соглашение») регулирует использование Telegram-бота («Бот»). Начиная использовать Бота, вы подтверждаете, что прочитали, поняли и согласны с условиями настоящего Соглашения.</p>
+  </div>
+
+  <div class="section">
+    <h2>2. Описание сервиса</h2>
+    <p>Бот предоставляет следующие функции:</p>
+    <ul>
+      <li>Мониторинг входящих и исходящих сообщений в бизнес-чатах через Telegram Business API</li>
+      <li>Уведомления об изменении и удалении сообщений собеседниками</li>
+      <li>Поиск и загрузка аудиозаписей через инлайн-режим (<code>@бот название</code>) и команду <code>!mp3</code></li>
+      <li>Статистика переписки через мини-приложение</li>
+      <li>Система заметок, муттинга и прочих команд управления чатами</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>3. Обязанности пользователя</h2>
+    <p>Используя Бота, вы обязуетесь:</p>
+    <ul>
+      <li>Не использовать Бота в незаконных целях</li>
+      <li>Не нарушать авторские права при загрузке и распространении аудиоматериалов</li>
+      <li>Не применять Бота для слежки, домогательств или иных действий, нарушающих права третьих лиц</li>
+      <li>Соблюдать <a href="https://telegram.org/tos" target="_blank">Условия использования Telegram</a></li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>4. Интеллектуальная собственность и аудио</h2>
+    <p>Функция поиска и загрузки музыки предназначена исключительно для личного некоммерческого использования. Пользователь самостоятельно несёт ответственность за соблюдение авторских прав в своей юрисдикции. Бот не хранит аудиофайлы на своих серверах и не распространяет их — загрузка производится напрямую из открытых источников.</p>
+  </div>
+
+  <div class="section">
+    <h2>5. Ограничение ответственности</h2>
+    <p>Бот предоставляется «как есть» без каких-либо гарантий. Разработчики не несут ответственности за:</p>
+    <ul>
+      <li>Временную недоступность сервиса</li>
+      <li>Потерю данных при технических сбоях</li>
+      <li>Действия третьих лиц, использующих информацию, полученную через Бота</li>
+      <li>Недоступность аудиоконтента в связи с изменениями на стороне источников</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>6. Прекращение доступа</h2>
+    <p>Вы можете прекратить использование Бота в любой момент, отключив его в настройках Telegram для бизнеса или заблокировав. Разработчики вправе ограничить доступ пользователям, нарушающим настоящее Соглашение.</p>
+  </div>
+
+  <div class="section">
+    <h2>7. Изменение условий</h2>
+    <p>Разработчики оставляют за собой право изменять настоящее Соглашение. Продолжение использования Бота после публикации изменений означает ваше согласие с новыми условиями.</p>
+  </div>
+
+  <div class="section">
+    <h2>8. Применимое право</h2>
+    <p>Соглашение регулируется действующим законодательством. Спорные вопросы решаются путём переговоров, а при недостижении договорённости — в установленном законом порядке.</p>
+  </div>
+
+  <p class="hint-text">Если у вас есть вопросы по настоящему Соглашению, напишите нам напрямую через Telegram.</p>
+</div>
+
+<script>
+  if (window.Telegram?.WebApp) {
+    Telegram.WebApp.ready();
+    Telegram.WebApp.BackButton.show();
+    Telegram.WebApp.BackButton.onClick(() => Telegram.WebApp.close());
+  }
+  function goBack() {
+    if (window.Telegram?.WebApp?.BackButton?.isVisible) {
+      Telegram.WebApp.close();
+    } else {
+      history.back();
+    }
+  }
+</script>
+</body>
+</html>

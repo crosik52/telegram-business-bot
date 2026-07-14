@@ -294,6 +294,16 @@ async def miniapp_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "miniapp.html", {})
 
 
+@router.get("/terms", response_model=None)
+async def terms_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "terms.html", {})
+
+
+@router.get("/privacy", response_model=None)
+async def privacy_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "privacy.html", {})
+
+
 @router.get("/app/admin", response_model=None)
 async def admin_page(request: Request) -> HTMLResponse:
     # The page itself is static HTML; the real auth check happens on every

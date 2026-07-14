@@ -1061,78 +1061,55 @@ async def on_chosen_inline_result(result: ChosenInlineResult, bot: Bot) -> None:
     title    = cached.title
     uploader = cached.uploader
 
-    # Update placeholder immediately so user knows download is in progress
-    if inline_msg_id:
+    if not inline_msg_id:
+        # BotFather → Inline Feedback must be set to 100% to receive inline_message_id
+        logger.warning(
+            "inline mp3: no inline_message_id for user=%s — "
+            "enable Inline Feedback 100%% in BotFather", user_id,
+        )
+        return
+
+    # Stream audio: yt-dlp → ffmpeg → RAM (no disk I/O)
+    try:
+        audio_bytes, filename = await audio_service.stream_to_bytes(url)
+    except Exception as exc:
+        logger.warning("inline mp3: stream failed key=%s: %s", key, exc)
+        try:
+            await bot.edit_message_text(
+                inline_message_id=inline_msg_id,
+                text="❌ <b>Не удалось загрузить трек.</b> Попробуйте другой.",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+        return
+
+    # Replace the text placeholder in the original chat with the audio file
+    try:
+        await bot.edit_message_media(
+            inline_message_id=inline_msg_id,
+            media=InputMediaAudio(
+                media=BufferedInputFile(audio_bytes, filename=filename),
+                performer=uploader or None,
+                title=title or None,
+                duration=cached.duration or None,
+            ),
+        )
+        logger.info("inline mp3: sent in-chat user=%s title=%r size=%dKB",
+                    user_id, title, len(audio_bytes) // 1024)
+    except Exception as exc:
+        logger.warning("inline mp3: edit_message_media failed: %s", exc)
         try:
             await bot.edit_message_text(
                 inline_message_id=inline_msg_id,
                 text=(
-                    f"🎵 <b>{html_escape(title)}</b>\n"
-                    f"<i>{html_escape(uploader)}</i>\n\n"
-                    f"⏳ Скачиваю, отправлю в личку…"
+                    f"🎵 <b>{html_escape(title)}</b> — <i>{html_escape(uploader)}</i>\n"
+                    f"❌ Не удалось прикрепить аудио."
                 ),
                 parse_mode="HTML",
             )
         except Exception:
             pass
-
-    # Stream audio into memory — no temp files, no disk I/O
-    try:
-        audio_bytes, filename = await audio_service.stream_to_bytes(url)
-    except Exception as exc:
-        logger.warning("inline mp3: stream failed key=%s: %s", key, exc)
-        if inline_msg_id:
-            try:
-                await bot.edit_message_text(
-                    inline_message_id=inline_msg_id,
-                    text="❌ <b>Не удалось загрузить трек.</b> Попробуйте другой.",
-                    parse_mode="HTML",
-                )
-            except Exception:
-                pass
-        return
-
-    # Upload straight from RAM to Telegram
-    try:
-        await bot.send_audio(
-            chat_id=user_id,
-            audio=BufferedInputFile(audio_bytes, filename=filename),
-            performer=uploader or None,
-            title=title or None,
-            duration=cached.duration or None,
-        )
-        logger.info("inline mp3: streamed to DM user=%s title=%r size=%dKB",
-                    user_id, title, len(audio_bytes) // 1024)
-    except Exception as exc:
-        logger.warning("inline mp3: send_audio failed user=%s: %s", user_id, exc)
-        if inline_msg_id:
-            try:
-                await bot.edit_message_text(
-                    inline_message_id=inline_msg_id,
-                    text=(
-                        "❌ Не удалось отправить трек.\n"
-                        "<i>Сначала напишите боту в личку, затем повторите поиск.</i>"
-                    ),
-                    parse_mode="HTML",
-                )
-            except Exception:
-                pass
-        return
-
-    # Update inline message to final state
-    if inline_msg_id:
-        try:
-            await bot.edit_message_text(
-                inline_message_id=inline_msg_id,
-                text=(
-                    f"🎵 <b>{html_escape(title)}</b>\n"
-                    f"<i>{html_escape(uploader)}</i>\n\n"
-                    f"✅ Трек отправлен в личку бота"
-                ),
-                parse_mode="HTML",
-            )
-        except Exception as exc:
-            logger.debug("inline mp3: final edit failed: %s", exc)
 
 
 @router.pre_checkout_query()

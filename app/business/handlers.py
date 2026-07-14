@@ -618,25 +618,6 @@ async def on_business_message(message: Message, bot: Bot) -> None:
                         session=session,
                         can_reply=can_reply,
                     )
-            else:
-                # Guest Chat Mode — only !mp3 is available to non-owners
-                parsed = commands.parse_command(message.text)
-                if parsed and parsed[0] == "mp3":
-                    _, args = parsed
-                    logger.info(
-                        "Guest !mp3 from user=%s in chat=%s bc=%s",
-                        sender.id, message.chat.id, bc_id,
-                    )
-                    await commands.dispatch(
-                        "mp3", args,
-                        bot=bot,
-                        owner_id=owner_telegram_id,
-                        chat_id=message.chat.id,
-                        business_connection_id=bc_id,
-                        message_id=message.message_id,
-                        session=session,
-                        can_reply=can_reply,
-                    )
 
         # --- Video link detection (Reels / TikTok / YouTube Shorts) ---
         text_to_scan = message.text or message.caption or ""

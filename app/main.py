@@ -87,6 +87,7 @@ async def lifespan(app: FastAPI):
             secret_token=settings.telegram_webhook_secret or None,
             allowed_updates=[
                 "message",
+                "callback_query",
                 "business_connection",
                 "business_message",
                 "edited_business_message",

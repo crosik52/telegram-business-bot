@@ -22,10 +22,11 @@ from __future__ import annotations
 
 import datetime as dt
 import re
+from html import escape as html_escape
 
 from aiogram import Bot
 from aiogram.methods import DeleteMessage
-from aiogram.types import BufferedInputFile
+from aiogram.types import BufferedInputFile, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import Date, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +34,7 @@ from app.logging_config import get_logger
 from app.models.message import Message
 from app.repositories.chat_settings_repository import ChatSettingsRepository
 from app.repositories.contact_note_repository import ContactNoteRepository
+from app.services import audio_service
 from app.services.chart_service import InfoStats, render_info_image
 
 logger = get_logger(__name__)
@@ -103,6 +105,7 @@ _HELP_TEXT = (
     "<code>!mute 30m</code> / <code>2h</code> / <code>1d</code> — "
     "отключить уведомления из этого чата\n"
     "<code>!unmute</code> — включить уведомления обратно\n"
+    "<code>!mp3 название</code> — найти и скачать музыку\n"
     "<code>!help</code> — эта справка\n"
 )
 
@@ -357,6 +360,73 @@ async def _cmd_unmute(
     await _reply(bot, owner_id, "🔔 <b>Уведомления включены</b>")
 
 
+async def _cmd_mp3(
+    *,
+    bot: Bot,
+    owner_id: int,
+    chat_id: int,
+    business_connection_id: str,
+    args: str | None,
+    **_: object,
+) -> None:
+    if not args or not args.strip():
+        await _reply(bot, owner_id,
+                     "🎵 Укажите название: <code>!mp3 название песни</code>")
+        return
+
+    query = args.strip()
+
+    # Send "searching" placeholder to the business chat
+    try:
+        search_msg = await bot.send_message(
+            chat_id=chat_id,
+            business_connection_id=business_connection_id,
+            text=f"🔍 Ищу: <i>{html_escape(query)}</i>…",
+        )
+    except Exception as exc:
+        logger.warning("mp3: could not send search placeholder: %s", exc)
+        return
+
+    results = await audio_service.search(query)
+
+    if not results:
+        try:
+            await bot.edit_message_text(
+                business_connection_id=business_connection_id,
+                chat_id=chat_id,
+                message_id=search_msg.message_id,
+                text="❌ Ничего не найдено. Попробуйте другое название.",
+            )
+        except Exception:
+            pass
+        return
+
+    # Build inline keyboard — one button per result
+    buttons: list[list[InlineKeyboardButton]] = []
+    for r in results:
+        key = audio_service.store(
+            r["url"], r["title"], r["uploader"], r["duration"],
+            business_connection_id, chat_id,
+        )
+        dur   = audio_service.fmt_duration(r["duration"])
+        title = r["title"][:45] + "…" if len(r["title"]) > 45 else r["title"]
+        buttons.append([InlineKeyboardButton(
+            text=f"🎵 {title}  {dur}",
+            callback_data=f"mp3:{key}",
+        )])
+
+    try:
+        await bot.edit_message_text(
+            business_connection_id=business_connection_id,
+            chat_id=chat_id,
+            message_id=search_msg.message_id,
+            text=f"🎵 <b>{html_escape(query)}</b> — выберите трек:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+        )
+    except Exception as exc:
+        logger.warning("mp3: could not edit search message: %s", exc)
+
+
 # ── Dispatch table ────────────────────────────────────────────────────────────
 
 _HANDLERS: dict[str, object] = {
@@ -366,6 +436,7 @@ _HANDLERS: dict[str, object] = {
     "notes":  _cmd_notes,
     "mute":   _cmd_mute,
     "unmute": _cmd_unmute,
+    "mp3":    _cmd_mp3,
 }
 
 

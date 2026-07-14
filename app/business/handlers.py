@@ -33,8 +33,14 @@ from __future__ import annotations
 import asyncio
 from html import escape as html_escape
 
+import shutil
+import tempfile
+
 from aiogram import Bot, F, Router
-from aiogram.types import BufferedInputFile, BusinessConnection, BusinessMessagesDeleted, Message, PreCheckoutQuery
+from aiogram.types import (
+    BufferedInputFile, BusinessConnection, BusinessMessagesDeleted,
+    CallbackQuery, FSInputFile, InputMediaAudio, Message, PreCheckoutQuery,
+)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,7 +52,7 @@ from app.models.business_connection import BusinessConnection as BCModel
 from app.models.message import MediaType, Message as DBMessage
 from app.repositories.chat_settings_repository import ChatSettingsRepository
 from app.repositories.subscription_repository import SubscriptionRepository
-from app.services import media_cache_service
+from app.services import audio_service, media_cache_service
 from app.services.message_service import MessageService
 from app.services.video_service import extract_video_url, handle_video_link
 
@@ -842,6 +848,68 @@ async def on_deleted_business_messages(deleted: BusinessMessagesDeleted, bot: Bo
 
 
 # ── Telegram Stars payment handlers ──────────────────────────────────────────
+
+
+# ── Music download callback ───────────────────────────────────────────────────
+
+@router.callback_query(F.data.startswith("mp3:"))
+async def on_mp3_callback(callback: CallbackQuery, bot: Bot) -> None:
+    """User picked a track from the !mp3 search results — download and deliver."""
+    await callback.answer()  # dismiss the spinner on the button
+
+    key    = (callback.data or "").split(":", 1)[1]
+    result = audio_service.get(key)
+
+    if result is None:
+        # Result expired (>10 min) or unknown key
+        try:
+            await callback.message.edit_text(  # type: ignore[union-attr]
+                "⌛ Сессия истекла — выполните поиск заново (<code>!mp3 название</code>)."
+            )
+        except Exception:
+            pass
+        return
+
+    bc_id    = result.bc_id
+    chat_id  = result.chat_id
+    msg_id   = callback.message.message_id  # type: ignore[union-attr]
+
+    async def _edit_text(text: str) -> None:
+        try:
+            await bot.edit_message_text(
+                business_connection_id=bc_id,
+                chat_id=chat_id,
+                message_id=msg_id,
+                text=text,
+            )
+        except Exception:
+            pass
+
+    await _edit_text(f"⏳ Скачиваю: <i>{html_escape(result.title)}</i>…")
+
+    tmp_dir = tempfile.mkdtemp(prefix="audbot_")
+    try:
+        path, title, uploader, duration = await audio_service.download(result.url, tmp_dir)
+
+        await bot.edit_message_media(
+            business_connection_id=bc_id,
+            chat_id=chat_id,
+            message_id=msg_id,
+            media=InputMediaAudio(
+                media=FSInputFile(path),
+                title=title,
+                performer=uploader or None,
+                duration=duration or None,
+            ),
+        )
+        logger.info("mp3: sent '%s' to chat_id=%s", title, chat_id)
+
+    except Exception as exc:
+        logger.warning("mp3: download/send failed for %s: %s", result.url, exc)
+        await _edit_text("❌ Не удалось скачать трек. Попробуйте другой вариант.")
+
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 @router.pre_checkout_query()

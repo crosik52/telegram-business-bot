@@ -41,7 +41,8 @@ from aiogram.types import (
     BufferedInputFile, BusinessConnection, BusinessMessagesDeleted,
     CallbackQuery, ChosenInlineResult, FSInputFile, InlineQuery,
     InlineKeyboardButton, InlineKeyboardMarkup,
-    InlineQueryResultArticle, InputMediaAudio, InputTextMessageContent,
+    InlineQueryResultArticle, InlineQueryResultCachedAudio,
+    InputMediaAudio, InputTextMessageContent,
     Message, PreCheckoutQuery,
 )
 from sqlalchemy import select
@@ -1008,31 +1009,40 @@ async def on_inline_query(query: InlineQuery, bot: Bot) -> None:
         logger.warning("inline_query: search failed for %r: %s", q, exc)
         results = []
 
-    articles: list[InlineQueryResultArticle] = []
+    articles: list = []
     for r in results:
         key      = audio_service.store(r["url"], r["title"], r["uploader"],
                                        r["duration"], "inline", 0)
         dur      = audio_service.fmt_duration(r["duration"])
         uploader = r["uploader"][:40] if r["uploader"] else ""
 
-        # reply_markup is required to receive inline_message_id in chosen_inline_result
-        articles.append(InlineQueryResultArticle(
-            id=key,
-            title=r["title"][:60],
-            description=f"{dur}  ·  {uploader}" if uploader else dur,
-            thumbnail_url=r.get("thumbnail") or None,
-            input_message_content=InputTextMessageContent(
-                message_text=(
-                    f"🎵 <b>{html_escape(r['title'])}</b>\n"
-                    f"<i>{html_escape(uploader)}  ·  {dur}</i>\n\n"
-                    f"⏳ Загружаю…"
+        cached_fid = audio_service.get_cached_file_id(r["url"])
+        if cached_fid:
+            # Already uploaded — deliver inline instantly, no placeholder needed
+            articles.append(InlineQueryResultCachedAudio(
+                id=key,
+                audio_file_id=cached_fid,
+            ))
+        else:
+            # First time — show placeholder; chosen_inline_result will upload to DM
+            # reply_markup is required to receive inline_message_id in chosen_inline_result
+            articles.append(InlineQueryResultArticle(
+                id=key,
+                title=r["title"][:60],
+                description=f"{dur}  ·  {uploader}" if uploader else dur,
+                thumbnail_url=r.get("thumbnail") or None,
+                input_message_content=InputTextMessageContent(
+                    message_text=(
+                        f"🎵 <b>{html_escape(r['title'])}</b>\n"
+                        f"<i>{html_escape(uploader)}  ·  {dur}</i>\n\n"
+                        f"⏳ Загружаю…"
+                    ),
+                    parse_mode="HTML",
                 ),
-                parse_mode="HTML",
-            ),
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="⏳", callback_data="noop"),
-            ]]),
-        ))
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="⏳", callback_data="noop"),
+                ]]),
+            ))
 
     await query.answer(
         articles,            # type: ignore[arg-type]
@@ -1071,6 +1081,8 @@ async def on_chosen_inline_result(result: ChosenInlineResult, bot: Bot) -> None:
             pass
         return
 
+    user_id = result.from_user.id
+
     # Stream: yt-dlp → ffmpeg → RAM (no disk I/O)
     try:
         audio_bytes, filename = await audio_service.stream_to_bytes(cached.url)
@@ -1086,33 +1098,50 @@ async def on_chosen_inline_result(result: ChosenInlineResult, bot: Bot) -> None:
             pass
         return
 
-    # Replace the placeholder in the chat with the audio file
+    # Send audio to user's DM to obtain a reusable file_id.
+    # edit_message_media cannot change a text inline message into audio —
+    # Telegram only allows this path when the original message already has media.
     try:
-        await bot.edit_message_media(
-            inline_message_id=inline_msg_id,
-            media=InputMediaAudio(
-                media=BufferedInputFile(audio_bytes, filename=filename),
-                performer=cached.uploader or None,
-                title=cached.title or None,
-                duration=cached.duration or None,
-            ),
+        sent = await bot.send_audio(
+            chat_id=user_id,
+            audio=BufferedInputFile(audio_bytes, filename=filename),
+            performer=cached.uploader or None,
+            title=cached.title or None,
+            duration=cached.duration or None,
         )
-        logger.info("inline mp3: sent in-chat key=%s title=%r size=%dKB",
-                    key, cached.title, len(audio_bytes) // 1024)
+        file_id = sent.audio.file_id
+        audio_service.cache_file_id(cached.url, file_id)
+        logger.info("inline mp3: sent to DM user=%s key=%s title=%r size=%dKB",
+                    user_id, key, cached.title, len(audio_bytes) // 1024)
     except Exception as exc:
-        logger.warning("inline mp3: edit_message_media failed: %s", exc)
+        logger.warning("inline mp3: send_audio to DM failed user=%s: %s", user_id, exc)
         try:
             await bot.edit_message_text(
                 inline_message_id=inline_msg_id,
                 text=(
                     f"🎵 <b>{html_escape(cached.title)}</b>"
                     f" — <i>{html_escape(cached.uploader or '')}</i>\n"
-                    f"❌ Не удалось прикрепить аудио."
+                    f"❌ Не удалось отправить трек."
                 ),
                 parse_mode="HTML",
             )
         except Exception:
             pass
+        return
+
+    # Update the in-chat placeholder to confirm delivery
+    try:
+        await bot.edit_message_text(
+            inline_message_id=inline_msg_id,
+            text=(
+                f"🎵 <b>{html_escape(cached.title)}</b>\n"
+                f"<i>{html_escape(cached.uploader or '')}</i>\n\n"
+                f"☝️ Трек отправлен в личку"
+            ),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
 
 
 @router.pre_checkout_query()

@@ -1,0 +1,22 @@
+2026-07-14T10:31:05+0000 | INFO     | http | POST /webhook -> 200 (1038.3ms)
+2026-07-14T10:31:07+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847701
+2026-07-14T10:31:07+0000 | INFO     | app.business.handlers | chosen_inline_result: key=44c8bd17 inline_msg_id=AgAAAC14CAC8Jp1P9hHNyBpNWhM user=1335699132
+2026-07-14T10:31:07+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847702
+2026-07-14T10:31:07+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847703
+2026-07-14T10:31:07+0000 | INFO     | aiogram.event | Update id=745847702 is handled. Duration 10 ms by bot id=1162707887
+2026-07-14T10:31:07+0000 | INFO     | http | POST /webhook -> 200 (11.1ms)
+2026-07-14T10:31:07+0000 | INFO     | app.services.message_service | Stored new business message chat_id=1335699132 message_id=1437278 media=text
+2026-07-14T10:31:07+0000 | INFO     | app.services.message_service | Stored new business message chat_id=6291032910 message_id=555053 media=text
+2026-07-14T10:31:07+0000 | INFO     | aiogram.event | Update id=745847703 is handled. Duration 7 ms by bot id=1162707887
+2026-07-14T10:31:07+0000 | INFO     | http | POST /webhook -> 200 (8.5ms)
+2026-07-14T10:31:12+0000 | WARNING  | app.business.handlers | inline mp3: edit_message_media failed: Telegram server says - Bad Request: invalid message content specified
+2026-07-14T10:31:12+0000 | INFO     | aiogram.event | Update id=745847701 is handled. Duration 5453 ms by bot id=1162707887
+2026-07-14T10:31:12+0000 | INFO     | http | POST /webhook -> 200 (5455.2ms)
+2026-07-14T10:31:12+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847705
+2026-07-14T10:31:12+0000 | INFO     | app.services.message_service | Recorded edit for chat_id=6291032910 message_id=555053 (edit #1)
+2026-07-14T10:31:12+0000 | INFO     | aiogram.event | Update id=745847705 is handled. Duration 14 ms by bot id=1162707887
+2026-07-14T10:31:12+0000 | INFO     | http | POST /webhook -> 200 (16.2ms)
+2026-07-14T10:31:12+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847704
+2026-07-14T10:31:12+0000 | INFO     | app.services.message_service | Recorded edit for chat_id=1335699132 message_id=1437278 (edit #1)
+2026-07-14T10:31:13+0000 | INFO     | aiogram.event | Update id=745847704 is handled. Duration 224 ms by bot id=1162707887
+2026-07-14T10:31:13+0000 | INFO     | http | POST /webhook -> 200 (225.2ms)

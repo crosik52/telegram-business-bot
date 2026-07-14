@@ -359,6 +359,8 @@ class ReferralRepository:
                     "id": r.id,
                     "referrer_telegram_id": r.referrer_telegram_id,
                     "referred_telegram_id": r.referred_telegram_id,
+                    "referred_first_name": r.referred_first_name,
+                    "referred_username": r.referred_username,
                     "status": r.status,
                     "fraud_reason": r.fraud_reason,
                     "created_at": r.created_at.isoformat(),

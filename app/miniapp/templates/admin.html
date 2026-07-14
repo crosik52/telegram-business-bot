@@ -2437,7 +2437,12 @@
             container.innerHTML = data.referrals.map(r => `
               <div class="sub-sub-row" style="gap:10px;flex-wrap:wrap;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(120,120,128,0.1)">
                 <div style="flex:1;min-width:0">
-                  <div style="font-size:12px;font-weight:700">🔗 ${esc(String(r.referrer_telegram_id))} → ${esc(String(r.referred_telegram_id))}</div>
+                  <div style="font-size:12px;font-weight:700">
+                    🔗 <span style="opacity:0.55">${esc(String(r.referrer_telegram_id))}</span>
+                    → 
+                    ${r.referred_first_name ? esc(r.referred_first_name) : ""}${r.referred_username ? ` <span style="color:var(--hint)">@${esc(r.referred_username)}</span>` : ""}
+                    <span style="font-size:10px;color:var(--hint);font-weight:400">#${esc(String(r.referred_telegram_id))}</span>
+                  </div>
                   <div style="font-size:11px;color:${STATUS_COLORS[r.status] || "var(--hint)"}">
                     ${STATUS_LABELS[r.status] || r.status}
                     ${r.fraud_reason ? ` · ${esc(r.fraud_reason)}` : ""}

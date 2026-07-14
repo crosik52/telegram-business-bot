@@ -728,6 +728,7 @@
     <button class="tab-chip" data-tab="log">📜 Журнал</button>
     <button class="tab-chip" data-tab="subscription">⭐ Подписка</button>
     <button class="tab-chip" data-tab="shop">🛒 Магазин</button>
+    <button class="tab-chip" data-tab="referral">🔗 Рефералы</button>
     <button class="tab-chip" id="btnInfographic" onclick="downloadInfographic(this)">📊 Инфографика</button>
   </div>
 
@@ -935,6 +936,7 @@
       else if (tab === "log")       loadActionLog(1);
       else if (tab === "subscription") loadSubscriptionTab();
       else if (tab === "shop")         loadShopAdminTab();
+      else if (tab === "referral")     loadReferralAdminTab();
     }
 
     function render() {
@@ -2215,6 +2217,335 @@
         }
       });
     }
+    // ══════════════════════════════════════════════════════════════════
+    // REFERRAL ADMIN TAB
+    // ══════════════════════════════════════════════════════════════════
+    let referralAdminData = null;
+    let referralAdminConfig = null;
+    let referralAdminPage = 1;
+    let referralAdminStatus = "";
+    let referralAdminSearch = "";
+
+    async function loadReferralAdminTab() {
+      const content = document.getElementById("content");
+      document.getElementById("subtitle").textContent = "🔗 Реферальная программа";
+      content.innerHTML = `<div style="padding:20px;text-align:center;color:var(--hint)">Загружаем…</div>`;
+      try {
+        const [statsRes, cfgRes] = await Promise.all([
+          fetch("/app/api/admin/referral/stats", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ initData }),
+          }),
+          fetch("/app/api/admin/referral/config", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ initData }),
+          }),
+        ]);
+        if (!statsRes.ok || !cfgRes.ok) throw new Error("load");
+        referralAdminData   = await statsRes.json();
+        referralAdminConfig = await cfgRes.json();
+        referralAdminPage   = 1;
+        renderReferralAdminTab();
+      } catch {
+        content.innerHTML = `<div style="padding:20px;text-align:center;color:var(--hint)">Ошибка загрузки</div>`;
+      }
+    }
+
+    function renderReferralAdminTab() {
+      if (currentTab !== "referral") return;
+      const d  = referralAdminData;
+      const cfg = referralAdminConfig;
+      const content = document.getElementById("content");
+
+      // ── Daily sparkline ───────────────────────────────────────────
+      const maxDay = Math.max(1, ...d.daily.map(x => x.count));
+      const sparkBars = d.daily.map(x => {
+        const h = Math.max(4, Math.round(x.count / maxDay * 40));
+        return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1">
+          <div style="width:100%;background:rgba(20,184,166,0.85);border-radius:3px 3px 0 0;height:${h}px"></div>
+          <div style="font-size:8px;color:var(--hint)">${esc(x.date)}</div>
+        </div>`;
+      }).join("");
+
+      // ── Top referrers ─────────────────────────────────────────────
+      const topHtml = d.top_referrers.length
+        ? d.top_referrers.slice(0, 5).map((r, i) => `
+            <div class="sub-sub-row" style="gap:10px">
+              <div style="font-size:18px;width:26px;text-align:center">${["🥇","🥈","🥉","4️⃣","5️⃣"][i] || (i+1)}</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13px;font-weight:700">ID ${esc(String(r.referrer_telegram_id))}</div>
+                <div style="font-size:11px;color:var(--hint)">${r.total} рефералов</div>
+              </div>
+              <button class="action-btn" style="font-size:11px" onclick="adminRefGrant(${r.referrer_telegram_id})">🎁 Бонус</button>
+            </div>`).join("")
+        : `<div style="color:var(--hint);font-size:13px;padding:10px 0">Нет данных</div>`;
+
+      // ── Milestone editor ──────────────────────────────────────────
+      const msHtml = (cfg.milestones || []).map((m, i) => `
+        <div class="dyn-benefit-row" data-ms-idx="${i}" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+          <input type="number" class="ms-count" value="${m.count}" min="1" style="width:60px;border:1.5px solid rgba(120,120,128,0.2);border-radius:8px;padding:5px 8px;font-size:12px;background:var(--bg);color:var(--text)" placeholder="#"/>
+          <select class="ms-type" style="flex:1;min-width:100px;border:1.5px solid rgba(120,120,128,0.2);border-radius:8px;padding:5px 8px;font-size:12px;background:var(--bg);color:var(--text)">
+            <option value="premium_days" ${m.type==="premium_days"?"selected":""}>⭐ Дни Premium</option>
+            <option value="badge"        ${m.type==="badge"?"selected":""}>🏅 Значок</option>
+          </select>
+          <input type="text" class="ms-value" value="${esc(String(m.value))}" style="width:70px;border:1.5px solid rgba(120,120,128,0.2);border-radius:8px;padding:5px 8px;font-size:12px;background:var(--bg);color:var(--text)" placeholder="Значение"/>
+          <input type="text" class="ms-label" value="${esc(m.label)}" style="flex:2;min-width:120px;border:1.5px solid rgba(120,120,128,0.2);border-radius:8px;padding:5px 8px;font-size:12px;background:var(--bg);color:var(--text)" placeholder="Описание"/>
+          <button class="dyn-del-btn" onclick="this.closest('[data-ms-idx]').remove()" title="Удалить">✕</button>
+        </div>`).join("");
+
+      content.innerHTML = `
+        <!-- Stats overview -->
+        <div class="cards">
+          <div class="card" style="background:linear-gradient(135deg,#0d9488,#0f766e);color:#fff">
+            <span class="c-icon">🔗</span><div class="c-val">${d.total}</div><div class="c-lbl" style="color:rgba(255,255,255,0.75)">Всего</div>
+          </div>
+          <div class="card">
+            <span class="c-icon">✅</span><div class="c-val" style="color:var(--green)">${d.active}</div><div class="c-lbl">Активных</div>
+          </div>
+          <div class="card">
+            <span class="c-icon">⏳</span><div class="c-val" style="color:var(--hint)">${d.pending}</div><div class="c-lbl">Ожидают</div>
+          </div>
+          <div class="card">
+            <span class="c-icon">🚨</span><div class="c-val" style="color:var(--danger)">${d.fraud}</div><div class="c-lbl">Фрод</div>
+          </div>
+        </div>
+
+        <!-- Sparkline -->
+        <div class="card" style="margin-bottom:12px">
+          <div style="font-size:13px;font-weight:700;margin-bottom:10px">📅 Рефералы за 7 дней · конверсия ${d.activation_rate}%</div>
+          <div style="display:flex;align-items:flex-end;gap:4px;height:48px">${sparkBars}</div>
+        </div>
+
+        <!-- Top referrers -->
+        <div class="card" style="margin-bottom:12px">
+          <div style="font-size:13px;font-weight:700;margin-bottom:10px">🏆 Топ рефоводов</div>
+          ${topHtml}
+        </div>
+
+        <!-- Manual grant -->
+        <div class="card" style="margin-bottom:12px">
+          <div style="font-size:13px;font-weight:700;margin-bottom:10px">🎁 Начислить бонус вручную</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <input id="ref-grant-uid"   type="number" placeholder="Telegram ID пользователя" style="border:1.5px solid rgba(120,120,128,0.2);border-radius:10px;padding:8px 12px;font-size:13px;background:var(--bg);color:var(--text);width:100%"/>
+            <div style="display:flex;gap:8px">
+              <select id="ref-grant-type" style="flex:1;border:1.5px solid rgba(120,120,128,0.2);border-radius:10px;padding:8px 10px;font-size:13px;background:var(--bg);color:var(--text)">
+                <option value="premium_days">⭐ Дни Premium</option>
+                <option value="badge">🏅 Значок</option>
+              </select>
+              <input id="ref-grant-val" type="text" placeholder="Значение (дни или slug)" style="flex:1;border:1.5px solid rgba(120,120,128,0.2);border-radius:10px;padding:8px 10px;font-size:13px;background:var(--bg);color:var(--text)"/>
+            </div>
+            <input id="ref-grant-label" type="text" placeholder="Комментарий (необязательно)" style="border:1.5px solid rgba(120,120,128,0.2);border-radius:10px;padding:8px 12px;font-size:13px;background:var(--bg);color:var(--text);width:100%"/>
+            <button id="ref-grant-btn" class="action-btn" style="background:var(--green);color:#fff;font-size:13px;padding:9px;border-radius:10px;width:100%;font-weight:700">🎁 Начислить</button>
+          </div>
+        </div>
+
+        <!-- Referral list -->
+        <div class="card" style="margin-bottom:12px">
+          <div style="font-size:13px;font-weight:700;margin-bottom:10px">📋 Список рефералов</div>
+          <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+            <select id="ref-list-status" style="flex:1;min-width:100px;border:1.5px solid rgba(120,120,128,0.2);border-radius:10px;padding:7px 10px;font-size:12px;background:var(--bg);color:var(--text)">
+              <option value="">Все статусы</option>
+              <option value="active">Активные</option>
+              <option value="pending">Ожидают</option>
+              <option value="fraud">Фрод</option>
+            </select>
+            <input id="ref-list-search" type="number" placeholder="Telegram ID" style="flex:1;min-width:100px;border:1.5px solid rgba(120,120,128,0.2);border-radius:10px;padding:7px 10px;font-size:12px;background:var(--bg);color:var(--text)"/>
+            <button id="ref-list-search-btn" class="action-btn" style="font-size:12px;padding:7px 14px">🔍 Найти</button>
+          </div>
+          <div id="ref-list-container" style="min-height:40px">
+            <div style="color:var(--hint);font-size:13px;text-align:center">Нажмите «Найти» для загрузки</div>
+          </div>
+          <div id="ref-list-pagination" style="display:flex;gap:8px;margin-top:10px;justify-content:center"></div>
+        </div>
+
+        <!-- Config card -->
+        <div class="card" style="margin-bottom:12px" id="ref-cfg-card">
+          <div style="font-size:13px;font-weight:700;margin-bottom:12px">⚙️ Настройки программы</div>
+
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <span style="font-size:13px;font-weight:600">Программа включена</span>
+            <input type="checkbox" id="ref-cfg-enabled" ${cfg.is_enabled ? "checked" : ""} style="width:20px;height:20px"/>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+            <div>
+              <div style="font-size:11px;color:var(--hint);margin-bottom:4px">⭐ Пригласивший получает (дней)</div>
+              <input type="number" id="ref-cfg-ref-days" value="${cfg.referrer_reward_days}" min="0" style="width:100%;border:1.5px solid rgba(120,120,128,0.2);border-radius:10px;padding:8px 10px;font-size:13px;background:var(--bg);color:var(--text)"/>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--hint);margin-bottom:4px">🎁 Новый пользователь получает (дней)</div>
+              <input type="number" id="ref-cfg-new-days" value="${cfg.referee_reward_days}" min="0" style="width:100%;border:1.5px solid rgba(120,120,128,0.2);border-radius:10px;padding:8px 10px;font-size:13px;background:var(--bg);color:var(--text)"/>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--hint);margin-bottom:4px">🛡 Мин. возраст аккаунта (дней)</div>
+              <input type="number" id="ref-cfg-min-age" value="${cfg.min_account_age_days}" min="0" style="width:100%;border:1.5px solid rgba(120,120,128,0.2);border-radius:10px;padding:8px 10px;font-size:13px;background:var(--bg);color:var(--text)"/>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--hint);margin-bottom:4px">🚫 Макс. рефералов в день</div>
+              <input type="number" id="ref-cfg-max-day" value="${cfg.max_referrals_per_day}" min="1" style="width:100%;border:1.5px solid rgba(120,120,128,0.2);border-radius:10px;padding:8px 10px;font-size:13px;background:var(--bg);color:var(--text)"/>
+            </div>
+          </div>
+
+          <div style="font-size:12px;font-weight:700;color:var(--hint);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Этапы наград</div>
+          <div id="ref-ms-list">${msHtml}</div>
+          <button id="ref-ms-add" style="width:100%;border:1.5px dashed rgba(120,120,128,0.3);border-radius:10px;padding:8px;font-size:12px;color:var(--hint);background:none;margin:6px 0 12px;touch-action:manipulation">+ Добавить этап</button>
+
+          <button id="ref-cfg-save" class="action-btn" style="width:100%;background:var(--link);color:#fff;font-size:13px;padding:11px;border-radius:12px;font-weight:700">💾 Сохранить настройки</button>
+        </div>
+      `;
+
+      // ── Attach handlers ───────────────────────────────────────────
+      attachReferralAdminHandlers();
+    }
+
+    function attachReferralAdminHandlers() {
+      // Manual grant
+      document.getElementById("ref-grant-btn")?.addEventListener("click", async () => {
+        const uid   = parseInt(document.getElementById("ref-grant-uid").value);
+        const type  = document.getElementById("ref-grant-type").value;
+        const val   = document.getElementById("ref-grant-val").value.trim();
+        const label = document.getElementById("ref-grant-label").value.trim();
+        if (!uid || !val) { showToast("❌ Заполните ID и значение"); return; }
+        try {
+          const res = await fetch("/app/api/admin/referral/grant", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ initData, userTelegramId: uid, rewardType: type, rewardValue: val, label }),
+          });
+          if (!res.ok) throw new Error();
+          showToast("✅ Бонус начислен");
+        } catch { showToast("❌ Ошибка начисления"); }
+      });
+
+      // List search
+      async function loadRefList(page = 1) {
+        const status   = document.getElementById("ref-list-status").value;
+        const searchId = parseInt(document.getElementById("ref-list-search").value) || null;
+        const container = document.getElementById("ref-list-container");
+        container.innerHTML = `<div style="color:var(--hint);text-align:center;font-size:12px">Загрузка…</div>`;
+        try {
+          const res = await fetch("/app/api/admin/referral/list", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ initData, page, status: status || null, searchId }),
+          });
+          if (!res.ok) throw new Error();
+          const data = await res.json();
+          if (!data.referrals.length) {
+            container.innerHTML = `<div style="color:var(--hint);text-align:center;font-size:13px;padding:10px 0">Ничего не найдено</div>`;
+          } else {
+            const STATUS_LABELS = { active: "✅ Активен", pending: "⏳ Ожидает", fraud: "🚨 Фрод" };
+            const STATUS_COLORS = { active: "var(--green)", pending: "var(--hint)", fraud: "var(--danger)" };
+            container.innerHTML = data.referrals.map(r => `
+              <div class="sub-sub-row" style="gap:10px;flex-wrap:wrap;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(120,120,128,0.1)">
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:12px;font-weight:700">🔗 ${esc(String(r.referrer_telegram_id))} → ${esc(String(r.referred_telegram_id))}</div>
+                  <div style="font-size:11px;color:${STATUS_COLORS[r.status] || "var(--hint)"}">
+                    ${STATUS_LABELS[r.status] || r.status}
+                    ${r.fraud_reason ? ` · ${esc(r.fraud_reason)}` : ""}
+                  </div>
+                  <div style="font-size:10px;color:var(--hint)">${r.created_at.slice(0,10)}${r.activated_at ? ` · активирован ${r.activated_at.slice(0,10)}` : ""}</div>
+                </div>
+                <div style="display:flex;gap:6px;flex-shrink:0;align-items:center">
+                  ${r.status !== "active"  ? `<button class="action-btn ref-adj-btn" data-id="${r.id}" data-status="active"  style="font-size:11px;padding:5px 8px">✅</button>` : ""}
+                  ${r.status !== "pending" ? `<button class="action-btn ref-adj-btn" data-id="${r.id}" data-status="pending" style="font-size:11px;padding:5px 8px;background:rgba(120,120,128,0.12);color:var(--hint)">⏳</button>` : ""}
+                  ${r.status !== "fraud"   ? `<button class="action-btn ref-adj-btn" data-id="${r.id}" data-status="fraud"   style="font-size:11px;padding:5px 8px;background:rgba(255,59,48,0.12);color:var(--danger)">🚨</button>` : ""}
+                </div>
+              </div>`).join("");
+            // Pagination
+            const pages = Math.ceil(data.total / data.page_size);
+            const pag   = document.getElementById("ref-list-pagination");
+            pag.innerHTML = pages > 1
+              ? Array.from({ length: Math.min(pages, 10) }, (_, i) => i + 1).map(p =>
+                  `<button class="tab-chip${p === page ? " active" : ""}" data-ref-page="${p}" style="padding:4px 10px;font-size:11px">${p}</button>`
+                ).join("")
+              : "";
+            pag.querySelectorAll("[data-ref-page]").forEach(btn =>
+              btn.addEventListener("click", () => loadRefList(parseInt(btn.dataset.refPage)))
+            );
+          }
+          // Status-adjust buttons
+          container.querySelectorAll(".ref-adj-btn").forEach(btn =>
+            btn.addEventListener("click", async () => {
+              const id     = parseInt(btn.dataset.id);
+              const status = btn.dataset.status;
+              const reason = status === "fraud" ? (prompt("Причина фрода (необязательно):") || "") : "";
+              try {
+                const r2 = await fetch("/app/api/admin/referral/adjust", {
+                  method: "POST", headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ initData, referralId: id, status, reason }),
+                });
+                if (!r2.ok) throw new Error();
+                showToast("✅ Статус изменён");
+                loadRefList(page);
+              } catch { showToast("❌ Ошибка"); }
+            })
+          );
+        } catch { container.innerHTML = `<div style="color:var(--hint);text-align:center">Ошибка загрузки</div>`; }
+      }
+
+      document.getElementById("ref-list-search-btn")?.addEventListener("click", () => loadRefList(1));
+
+      // Top-referrer manual grant shortcut
+      window.adminRefGrant = function(uid) {
+        document.getElementById("ref-grant-uid").value = uid;
+        document.getElementById("ref-grant-uid").scrollIntoView({ behavior: "smooth", block: "center" });
+      };
+
+      // Milestone add
+      document.getElementById("ref-ms-add")?.addEventListener("click", () => {
+        const list = document.getElementById("ref-ms-list");
+        const idx  = list.querySelectorAll("[data-ms-idx]").length;
+        const div  = document.createElement("div");
+        div.className = "dyn-benefit-row";
+        div.dataset.msIdx = idx;
+        div.style.cssText = "display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px";
+        div.innerHTML = `
+          <input type="number" class="ms-count" value="1" min="1" style="width:60px;border:1.5px solid rgba(120,120,128,0.2);border-radius:8px;padding:5px 8px;font-size:12px;background:var(--bg);color:var(--text)" placeholder="#"/>
+          <select class="ms-type" style="flex:1;min-width:100px;border:1.5px solid rgba(120,120,128,0.2);border-radius:8px;padding:5px 8px;font-size:12px;background:var(--bg);color:var(--text)">
+            <option value="premium_days">⭐ Дни Premium</option>
+            <option value="badge">🏅 Значок</option>
+          </select>
+          <input type="text" class="ms-value" value="" style="width:70px;border:1.5px solid rgba(120,120,128,0.2);border-radius:8px;padding:5px 8px;font-size:12px;background:var(--bg);color:var(--text)" placeholder="Значение"/>
+          <input type="text" class="ms-label" value="" style="flex:2;min-width:120px;border:1.5px solid rgba(120,120,128,0.2);border-radius:8px;padding:5px 8px;font-size:12px;background:var(--bg);color:var(--text)" placeholder="Описание"/>
+          <button class="dyn-del-btn" onclick="this.closest('[data-ms-idx]').remove()" title="Удалить">✕</button>
+        `;
+        list.appendChild(div);
+      });
+
+      // Save config
+      document.getElementById("ref-cfg-save")?.addEventListener("click", async btn => {
+        const saveBtn = document.getElementById("ref-cfg-save");
+        saveBtn.disabled = true; saveBtn.textContent = "Сохраняем…";
+        try {
+          // Collect milestones from DOM
+          const milestones = [...document.querySelectorAll("#ref-ms-list [data-ms-idx]")].map(row => ({
+            count: parseInt(row.querySelector(".ms-count").value) || 1,
+            type:  row.querySelector(".ms-type").value,
+            value: row.querySelector(".ms-type").value === "premium_days"
+              ? parseInt(row.querySelector(".ms-value").value) || 0
+              : row.querySelector(".ms-value").value.trim(),
+            label: row.querySelector(".ms-label").value.trim(),
+          }));
+          const body = {
+            initData,
+            isEnabled:           document.getElementById("ref-cfg-enabled").checked,
+            referrerRewardDays:  parseInt(document.getElementById("ref-cfg-ref-days").value) || 0,
+            refereeRewardDays:   parseInt(document.getElementById("ref-cfg-new-days").value) || 0,
+            minAccountAgeDays:   parseInt(document.getElementById("ref-cfg-min-age").value)  || 0,
+            maxReferralsPerDay:  parseInt(document.getElementById("ref-cfg-max-day").value)  || 50,
+            milestones,
+          };
+          const res = await fetch("/app/api/admin/referral/config/update", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) throw new Error();
+          referralAdminConfig = await res.json();
+          showToast("✅ Настройки реферальной программы сохранены");
+        } catch { showToast("❌ Ошибка при сохранении"); }
+        finally { saveBtn.disabled = false; saveBtn.textContent = "💾 Сохранить настройки"; }
+      });
+    }
+
   </script>
 </body>
 </html>

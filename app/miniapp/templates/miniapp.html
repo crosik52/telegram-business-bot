@@ -755,10 +755,94 @@
   .tab-item.tab-quests.drag-preview { color: var(--green); }
   .tab-item.tab-donate.drag-preview  { color: #f59e0b; }
   .tab-item.tab-shop.drag-preview    { color: #e11d48; }
+  .tab-item.tab-referral.drag-preview { color: #14b8a6; }
   .tab-item.drag-preview .tab-icon-wrap { transform: scale(1.05) translateY(-1px); }
 
   .tab-item.tab-shop.active          { color: #e11d48; }
   .tab-item.tab-shop.active .tab-icon-wrap { transform: scale(1.08) translateY(-2px); }
+
+  .tab-item.tab-referral.active          { color: #14b8a6; }
+  .tab-item.tab-referral.active .tab-icon-wrap { transform: scale(1.08) translateY(-2px); }
+
+  /* ══════════════════════════════════════════
+     REFERRAL TAB
+  ══════════════════════════════════════════ */
+  #referralContent {
+    padding: 16px 0 30px;
+  }
+  .ref-hero {
+    background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+    border-radius: 20px; padding: 20px 18px; margin-bottom: 14px;
+    position: relative; overflow: hidden;
+  }
+  .ref-hero::after {
+    content: ""; position: absolute; right: -20px; top: -20px;
+    width: 120px; height: 120px; border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+  }
+  .ref-hero-label { font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 4px; }
+  .ref-level-row  { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .ref-level-badge {
+    font-size: 28px; width: 52px; height: 52px; border-radius: 50%;
+    background: rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .ref-level-name { font-size: 20px; font-weight: 800; color: #fff; }
+  .ref-level-sub  { font-size: 12px; color: rgba(255,255,255,0.7); margin-top: 1px; }
+  .ref-prog-wrap  { margin-bottom: 14px; }
+  .ref-prog-track { height: 6px; border-radius: 4px; background: rgba(255,255,255,0.18); overflow: hidden; }
+  .ref-prog-fill  { height: 100%; border-radius: 4px; background: rgba(255,255,255,0.85); transition: width 0.6s ease; }
+  .ref-prog-label { font-size: 11px; color: rgba(255,255,255,0.65); margin-top: 4px; }
+  .ref-link-wrap  { background: rgba(0,0,0,0.2); border-radius: 12px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; }
+  .ref-link-text  { flex: 1; font-size: 12px; color: rgba(255,255,255,0.9); word-break: break-all; font-family: monospace; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ref-copy-btn   { background: rgba(255,255,255,0.2); border: none; border-radius: 9px; padding: 6px 12px; font-size: 12px; font-weight: 700; color: #fff; flex-shrink: 0; touch-action: manipulation; }
+  .ref-share-btn  { width: 100%; margin-top: 12px; background: rgba(255,255,255,0.95); border: none; border-radius: 12px; padding: 11px; font-size: 14px; font-weight: 700; color: #0d9488; touch-action: manipulation; }
+
+  .ref-stats-row  { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .ref-stat-card  { background: var(--secondary-bg); border-radius: 16px; padding: 14px 10px; text-align: center; box-shadow: var(--shadow); }
+  .ref-stat-val   { font-size: 24px; font-weight: 800; color: #14b8a6; line-height: 1; }
+  .ref-stat-lbl   { font-size: 10.5px; color: var(--hint); margin-top: 3px; }
+
+  .ref-section-title { font-size: 13px; font-weight: 700; color: var(--hint); text-transform: uppercase; letter-spacing: 0.5px; margin: 16px 0 8px; }
+
+  .ref-milestone-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .ref-milestone {
+    background: var(--secondary-bg); border-radius: 14px; padding: 12px 14px;
+    display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow);
+  }
+  .ref-milestone.done { opacity: 0.5; }
+  .ref-milestone.next { border: 1.5px solid rgba(20,184,166,0.5); }
+  .ref-m-icon  { font-size: 24px; flex-shrink: 0; }
+  .ref-m-body  { flex: 1; min-width: 0; }
+  .ref-m-label { font-size: 13px; font-weight: 700; }
+  .ref-m-sub   { font-size: 11px; color: var(--hint); margin-top: 1px; }
+  .ref-m-prog  { display: flex; align-items: center; gap: 7px; margin-top: 6px; }
+  .ref-m-track { flex: 1; height: 4px; border-radius: 3px; background: rgba(120,120,128,0.15); overflow: hidden; }
+  .ref-m-fill  { height: 100%; border-radius: 3px; background: #14b8a6; transition: width 0.5s; }
+  .ref-m-count { font-size: 10px; color: var(--hint); flex-shrink: 0; }
+  .ref-m-done  { font-size: 18px; }
+
+  .ref-recent-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .ref-recent-row  {
+    background: var(--secondary-bg); border-radius: 14px; padding: 11px 14px;
+    display: flex; align-items: center; gap: 11px; box-shadow: var(--shadow);
+  }
+  .ref-recent-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; color: #fff; flex-shrink: 0; }
+  .ref-recent-name   { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ref-recent-status { font-size: 11px; padding: 2px 8px; border-radius: 7px; font-weight: 700; flex-shrink: 0; }
+  .ref-status-active  { background: rgba(52,199,89,0.15); color: var(--green); }
+  .ref-status-pending { background: rgba(120,120,128,0.12); color: var(--hint); }
+
+  .ref-reward-list { display: flex; flex-direction: column; gap: 7px; }
+  .ref-reward-row  {
+    background: var(--secondary-bg); border-radius: 13px; padding: 10px 13px;
+    display: flex; align-items: center; gap: 10px; box-shadow: var(--shadow);
+  }
+  .ref-reward-icon  { font-size: 20px; flex-shrink: 0; }
+  .ref-reward-label { flex: 1; font-size: 12.5px; font-weight: 600; min-width: 0; }
+  .ref-reward-date  { font-size: 10.5px; color: var(--hint); flex-shrink: 0; }
+
+  .ref-empty { text-align: center; color: var(--hint); padding: 24px 0; font-size: 13px; }
 
   /* ══════════════════════════════════════════
      CASINO – DARK MINIMAL THEME
@@ -1491,10 +1575,11 @@
     </div>
   </div>
 
-  <div id="casinoContent" style="display:none"></div>
-  <div id="donateContent" style="display:none"></div>
-  <div id="questContent"  style="display:none"></div>
-  <div id="shopContent"   style="display:none"></div>
+  <div id="casinoContent"   style="display:none"></div>
+  <div id="donateContent"   style="display:none"></div>
+  <div id="questContent"    style="display:none"></div>
+  <div id="shopContent"     style="display:none"></div>
+  <div id="referralContent" style="display:none"></div>
 
   <!-- kept for JS compat, hidden via CSS -->
   <button class="refresh-fab" id="refreshFabLegacy" style="display:none"></button>
@@ -1537,6 +1622,10 @@
     <button class="tab-item tab-shop" data-tab="shop">
       <div class="tab-icon-wrap">🛒</div>
       <span class="tab-label">Магазин</span>
+    </button>
+    <button class="tab-item tab-referral" data-tab="referral">
+      <div class="tab-icon-wrap">🔗</div>
+      <span class="tab-label">Рефералы</span>
     </button>
   </nav>
 
@@ -2511,7 +2600,7 @@
     // ══════════════════════════════════════════════════════════════════
     // MAIN TAB SWITCHING
     // ══════════════════════════════════════════════════════════════════
-    const TAB_HEADER_ICONS  = { stats: "📊", casino: "🎰", quests: "🏆", donate: "💎", shop: "🛒" };
+    const TAB_HEADER_ICONS  = { stats: "📊", casino: "🎰", quests: "🏆", donate: "💎", shop: "🛒", referral: "🔗" };
     const TAB_HEADER_TITLES = { stats: "Моя статистика", casino: "Игры", quests: "Задания и рейтинг", donate: "Поддержать", shop: "Монетный магазин" };
     let shopLoaded = false;
     let shopData   = null;
@@ -2521,11 +2610,12 @@
       document.querySelectorAll(".tab-item").forEach(btn =>
         btn.classList.toggle("active", btn.dataset.tab === tab)
       );
-      document.getElementById("content").style.display       = tab === "stats"  ? "" : "none";
-      document.getElementById("casinoContent").style.display = tab === "casino" ? "" : "none";
-      document.getElementById("questContent").style.display  = tab === "quests" ? "" : "none";
-      document.getElementById("donateContent").style.display = tab === "donate" ? "" : "none";
-      document.getElementById("shopContent").style.display   = tab === "shop"   ? "" : "none";
+      document.getElementById("content").style.display          = tab === "stats"    ? "" : "none";
+      document.getElementById("casinoContent").style.display   = tab === "casino"   ? "" : "none";
+      document.getElementById("questContent").style.display    = tab === "quests"   ? "" : "none";
+      document.getElementById("donateContent").style.display   = tab === "donate"   ? "" : "none";
+      document.getElementById("shopContent").style.display     = tab === "shop"     ? "" : "none";
+      document.getElementById("referralContent").style.display = tab === "referral" ? "" : "none";
 
       // Header refresh button — only on stats
       const headerActions = document.getElementById("headerActions");
@@ -2552,6 +2642,10 @@
         if (!shopLoaded && currentInitData) loadShop();
         else if (shopLoaded) renderShop();
       }
+      if (tab === "referral") {
+        if (!referralLoaded && currentInitData) loadReferral();
+        else if (referralLoaded) renderReferral();
+      }
       if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
       if (window._tabSwitchHook) window._tabSwitchHook(tab);
     }
@@ -2564,11 +2658,12 @@
 
       /* Per-tab accent colours for the slider pill */
       const SLIDER_STYLES = {
-        stats:  { bg: "rgba(36,129,204,0.24)",  shadow: "rgba(36,129,204,0.24)"  },
-        casino: { bg: "rgba(147,51,234,0.22)",  shadow: "rgba(147,51,234,0.22)"  },
-        quests: { bg: "rgba(52,199,89,0.22)",   shadow: "rgba(52,199,89,0.22)"   },
-        donate: { bg: "rgba(245,158,11,0.22)",  shadow: "rgba(245,158,11,0.22)"  },
-        shop:   { bg: "rgba(225,29,72,0.20)",   shadow: "rgba(225,29,72,0.20)"   },
+        stats:    { bg: "rgba(36,129,204,0.24)",  shadow: "rgba(36,129,204,0.24)"  },
+        casino:   { bg: "rgba(147,51,234,0.22)",  shadow: "rgba(147,51,234,0.22)"  },
+        quests:   { bg: "rgba(52,199,89,0.22)",   shadow: "rgba(52,199,89,0.22)"   },
+        donate:   { bg: "rgba(245,158,11,0.22)",  shadow: "rgba(245,158,11,0.22)"  },
+        shop:     { bg: "rgba(225,29,72,0.20)",   shadow: "rgba(225,29,72,0.20)"   },
+        referral: { bg: "rgba(20,184,166,0.22)",  shadow: "rgba(20,184,166,0.22)"  },
       };
 
       /* Place slider under a given tab element (optionally without spring) */
@@ -4063,6 +4158,193 @@
           overlay.remove();
           await onSelect(Number(btn.dataset.chatId), btn.dataset.name);
         });
+      });
+    }
+
+    document.getElementById("refreshBtn").addEventListener("click", () => loadStats(true));
+    loadStats(false);
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  REFERRAL TAB
+    // ══════════════════════════════════════════════════════════════════════
+    let referralLoaded = false;
+    let referralData   = null;
+
+    async function loadReferral() {
+      const container = document.getElementById("referralContent");
+      container.innerHTML = `<div style="text-align:center;padding:40px 0;color:var(--hint)">Загрузка…</div>`;
+      try {
+        const res = await fetch("/app/api/referral/info", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initData: currentInitData }),
+        });
+        if (!res.ok) throw new Error("fetch_error");
+        referralData = await res.json();
+        referralLoaded = true;
+        renderReferral();
+      } catch (e) {
+        container.innerHTML = `<div style="text-align:center;padding:40px 0;color:var(--hint)">Не удалось загрузить данные</div>`;
+      }
+    }
+
+    function renderReferral() {
+      if (!referralData) return;
+      const d = referralData;
+      const container = document.getElementById("referralContent");
+
+      if (!d.enabled) {
+        container.innerHTML = `<div class="ref-empty">🔗 Реферальная программа временно недоступна</div>`;
+        return;
+      }
+
+      const lvl     = d.level     || { name: "Bronze", emoji: "🥉", color: "#CD7F32" };
+      const nextLv  = d.next_level;
+      const nextMs  = d.next_milestone;
+      const active  = d.active_count || 0;
+
+      // Level progress to next level
+      let progPct = 100, progLabel = "Максимальный уровень!";
+      if (nextLv) {
+        const span = nextLv.min - lvl.min;
+        const done = active - lvl.min;
+        progPct  = Math.min(100, Math.round(done / span * 100));
+        progLabel = `${active} / ${nextLv.min} до уровня ${nextLv.name} ${nextLv.emoji}`;
+      }
+
+      // Milestones
+      const milestonesHtml = (d.milestones || []).map(m => {
+        const done  = active >= m.count;
+        const isNext = !done && (!nextMs || m.count === nextMs.count);
+        const pct   = Math.min(100, Math.round(active / m.count * 100));
+        const rewardIcon = m.type === "premium_days" ? "⭐" : "🏅";
+        return `
+          <div class="ref-milestone${done ? " done" : ""}${isNext ? " next" : ""}">
+            <div class="ref-m-icon">${rewardIcon}</div>
+            <div class="ref-m-body">
+              <div class="ref-m-label">${esc(m.label)}</div>
+              <div class="ref-m-sub">${m.count} активных рефералов</div>
+              ${!done ? `<div class="ref-m-prog">
+                <div class="ref-m-track"><div class="ref-m-fill" style="width:${pct}%"></div></div>
+                <div class="ref-m-count">${active}/${m.count}</div>
+              </div>` : ""}
+            </div>
+            ${done ? `<div class="ref-m-done">✅</div>` : ""}
+          </div>`;
+      }).join("");
+
+      // Recent referrals
+      const recentHtml = d.recent_referrals && d.recent_referrals.length
+        ? d.recent_referrals.map(r => {
+            const idStr = String(r.referred_telegram_id);
+            const initl = idStr.slice(0, 2);
+            const bg    = colorFor(idStr);
+            const statusLabel = r.status === "active" ? "Активен" : "Ожидает";
+            const statusCls   = r.status === "active" ? "ref-status-active" : "ref-status-pending";
+            const date = r.created_at ? r.created_at.slice(0, 10) : "";
+            return `
+              <div class="ref-recent-row">
+                <div class="ref-recent-avatar" style="background:${bg}">${initl}</div>
+                <div class="ref-recent-name">ID ${esc(idStr)}</div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0">
+                  <span class="ref-recent-status ${statusCls}">${statusLabel}</span>
+                  <span style="font-size:10px;color:var(--hint)">${esc(date)}</span>
+                </div>
+              </div>`;
+          }).join("")
+        : `<div class="ref-empty">Пока нет приглашённых</div>`;
+
+      // Reward history
+      const REWARD_ICONS = { welcome: "🎁", per_activation: "⭐", milestone: "🏆" };
+      const rewardHtml = d.reward_logs && d.reward_logs.length
+        ? d.reward_logs.map(r => {
+            const icon = REWARD_ICONS[r.reward_type] || "🎁";
+            const date = r.granted_at ? r.granted_at.slice(0, 10) : "";
+            return `
+              <div class="ref-reward-row">
+                <div class="ref-reward-icon">${icon}</div>
+                <div class="ref-reward-label">${esc(r.label)}</div>
+                <div class="ref-reward-date">${esc(date)}</div>
+              </div>`;
+          }).join("")
+        : `<div class="ref-empty">История наград пуста</div>`;
+
+      container.innerHTML = `
+        <!-- Hero card -->
+        <div class="ref-hero">
+          <div class="ref-hero-label">Реферальная программа</div>
+          <div class="ref-level-row">
+            <div class="ref-level-badge">${esc(lvl.emoji || "🥉")}</div>
+            <div>
+              <div class="ref-level-name">${esc(lvl.name)}</div>
+              <div class="ref-level-sub">Уровень участника</div>
+            </div>
+          </div>
+          ${nextLv ? `
+          <div class="ref-prog-wrap">
+            <div class="ref-prog-track">
+              <div class="ref-prog-fill" style="width:${progPct}%"></div>
+            </div>
+            <div class="ref-prog-label">${esc(progLabel)}</div>
+          </div>` : `<div class="ref-prog-label" style="color:rgba(255,255,255,0.7);margin-bottom:12px">💎 Максимальный уровень — Diamond!</div>`}
+          <div class="ref-link-wrap">
+            <div class="ref-link-text" id="refLinkText">${esc(d.ref_link)}</div>
+            <button class="ref-copy-btn" id="refCopyBtn">📋 Копировать</button>
+          </div>
+          <button class="ref-share-btn" id="refShareBtn">🚀 Поделиться ссылкой</button>
+        </div>
+
+        <!-- Stats row -->
+        <div class="ref-stats-row">
+          <div class="ref-stat-card">
+            <div class="ref-stat-val">${d.total_invited}</div>
+            <div class="ref-stat-lbl">Приглашено</div>
+          </div>
+          <div class="ref-stat-card">
+            <div class="ref-stat-val" style="color:var(--green)">${d.active_count}</div>
+            <div class="ref-stat-lbl">Активных</div>
+          </div>
+          <div class="ref-stat-card">
+            <div class="ref-stat-val" style="color:var(--hint)">${d.pending_count}</div>
+            <div class="ref-stat-lbl">Ожидают</div>
+          </div>
+        </div>
+
+        ${d.referrer_reward_days || d.referee_reward_days ? `
+        <div style="background:rgba(20,184,166,0.1);border-radius:14px;padding:12px 14px;margin-bottom:4px;font-size:12.5px;color:var(--text);line-height:1.5">
+          ${d.referrer_reward_days ? `⭐ <b>Ты</b> получаешь +${d.referrer_reward_days} дн. Premium за каждого активного реферала<br>` : ""}
+          ${d.referee_reward_days  ? `🎁 <b>Друг</b> получает +${d.referee_reward_days} дн. Premium при регистрации` : ""}
+        </div>` : ""}
+
+        <!-- Milestones -->
+        <div class="ref-section-title">Награды за количество</div>
+        <div class="ref-milestone-list">${milestonesHtml}</div>
+
+        <!-- Recent -->
+        <div class="ref-section-title">Последние рефералы</div>
+        <div class="ref-recent-list">${recentHtml}</div>
+
+        <!-- Reward history -->
+        <div class="ref-section-title">История начислений</div>
+        <div class="ref-reward-list">${rewardHtml}</div>
+      `;
+
+      // Copy link
+      document.getElementById("refCopyBtn")?.addEventListener("click", () => {
+        navigator.clipboard?.writeText(d.ref_link).catch(() => {});
+        toastMessage("🔗 Ссылка скопирована!");
+        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+      });
+
+      // Share via Telegram
+      document.getElementById("refShareBtn")?.addEventListener("click", () => {
+        const shareText = `🔗 Присоединяйся по моей ссылке и получи бонус!\n${d.ref_link}`;
+        if (tg?.openTelegramLink) {
+          tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(d.ref_link)}&text=${encodeURIComponent(shareText)}`);
+        } else {
+          navigator.clipboard?.writeText(d.ref_link).catch(() => {});
+          toastMessage("🔗 Ссылка скопирована!");
+        }
       });
     }
 

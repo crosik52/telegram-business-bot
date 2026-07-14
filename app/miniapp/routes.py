@@ -30,6 +30,7 @@ from app.repositories.shop_repository import (
     VALID_THEMES, VALID_FRAMES,
 )
 from app.repositories.quest_repository import QUESTS, QuestRepository
+from app.repositories.referral_repository import ReferralRepository
 from app.repositories.subscription_repository import SubscriptionRepository
 from app.repositories.wallet_repository import WalletRepository
 from app.services.admin_chart_service import AdminStats, render_admin_image
@@ -340,6 +341,40 @@ async def miniapp_stats(
     _sub_config = await _sub_repo.get_config()
     _active_sub = await _sub_repo.get_active_subscription(owner_telegram_id)
     is_premium  = _active_sub is not None and _sub_config.is_enabled
+
+    # ── Referral activation trigger ───────────────────────────────────────────
+    # If the user has a pending referral and now has a business connection, activate.
+    if connection_ids:
+        try:
+            _ref_repo = ReferralRepository(session)
+            _ref, _ref_rewards = await _ref_repo.try_activate(
+                owner_telegram_id, has_business_connection=True
+            )
+            if _ref_rewards:
+                await session.commit()
+                # Notify referrer via bot if possible
+                try:
+                    _bot = get_bot()
+                    if _bot:
+                        _cfg = await _ref_repo.get_config()
+                        _active = await _ref_repo._count_active(_ref.referrer_telegram_id)
+                        _next_ms = None
+                        for _m in sorted(_cfg.milestones, key=lambda x: x["count"]):
+                            if _m["count"] > _active:
+                                _next_ms = _m
+                                break
+                        _msg = (
+                            f"🎉 Ваш реферал активирован!\n"
+                            f"Вы получили +{_cfg.referrer_reward_days} дн. Premium.\n"
+                            f"Всего активных рефералов: {_active}"
+                        )
+                        if _next_ms:
+                            _msg += f"\nДо следующей награды «{_next_ms['label']}»: ещё {_next_ms['count'] - _active}"
+                        await _bot.send_message(_ref.referrer_telegram_id, _msg)
+                except Exception:
+                    pass  # Notification is best-effort
+        except Exception:
+            logger.debug("Referral activation check failed for %s", owner_telegram_id)
 
     if not connection_ids:
         return {
@@ -2155,3 +2190,191 @@ async def shop_gift_coins(
         raise HTTPException(status_code=status, detail=code) from exc
     await session.commit()
     return {"ok": True, **result}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  REFERRAL SYSTEM
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ReferralInfoRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    init_data: str = Field(alias="initData")
+
+
+class AdminReferralListRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    init_data: str = Field(alias="initData")
+    page: int = Field(default=1)
+    status: str | None = Field(default=None)
+    search_id: int | None = Field(default=None, alias="searchId")
+
+
+class AdminReferralConfigRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    init_data: str = Field(alias="initData")
+
+
+class AdminReferralConfigUpdateRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    init_data: str = Field(alias="initData")
+    is_enabled: bool | None = Field(default=None, alias="isEnabled")
+    referrer_reward_days: int | None = Field(default=None, alias="referrerRewardDays")
+    referee_reward_days: int | None = Field(default=None, alias="refereeRewardDays")
+    min_account_age_days: int | None = Field(default=None, alias="minAccountAgeDays")
+    max_referrals_per_day: int | None = Field(default=None, alias="maxReferralsPerDay")
+    milestones: list | None = Field(default=None)
+    levels: list | None = Field(default=None)
+
+
+class AdminReferralAdjustRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    init_data: str = Field(alias="initData")
+    referral_id: int = Field(alias="referralId")
+    status: str  # "active" | "pending" | "fraud"
+    reason: str = Field(default="")
+
+
+class AdminReferralGrantRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    init_data: str = Field(alias="initData")
+    user_telegram_id: int = Field(alias="userTelegramId")
+    reward_type: str = Field(default="premium_days", alias="rewardType")
+    reward_value: str = Field(default="7", alias="rewardValue")
+    label: str = Field(default="")
+
+
+@router.post("/app/api/referral/info")
+async def referral_info(
+    payload: ReferralInfoRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Return referral stats and link for the current user."""
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid Telegram init data")
+    owner_id = int(user["id"])
+
+    bot_username = ""
+    try:
+        bot = get_bot()
+        if bot:
+            me = await bot.get_me()
+            bot_username = me.username or ""
+    except Exception:
+        pass
+
+    repo = ReferralRepository(session)
+    stats = await repo.get_user_stats(owner_id, bot_username)
+    return stats
+
+
+@router.post("/app/api/admin/referral/stats")
+async def admin_referral_stats(
+    payload: AdminReferralConfigRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    _require_admin(payload.init_data)
+    repo = ReferralRepository(session)
+    return await repo.admin_stats()
+
+
+@router.post("/app/api/admin/referral/list")
+async def admin_referral_list(
+    payload: AdminReferralListRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    _require_admin(payload.init_data)
+    repo = ReferralRepository(session)
+    return await repo.admin_list(
+        page=payload.page,
+        status_filter=payload.status,
+        search_id=payload.search_id,
+    )
+
+
+@router.post("/app/api/admin/referral/config")
+async def admin_referral_config(
+    payload: AdminReferralConfigRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    _require_admin(payload.init_data)
+    repo = ReferralRepository(session)
+    cfg = await repo.get_config()
+    return {
+        "is_enabled": cfg.is_enabled,
+        "referrer_reward_days": cfg.referrer_reward_days,
+        "referee_reward_days": cfg.referee_reward_days,
+        "min_account_age_days": cfg.min_account_age_days,
+        "max_referrals_per_day": cfg.max_referrals_per_day,
+        "milestones": cfg.milestones,
+        "levels": cfg.levels,
+    }
+
+
+@router.post("/app/api/admin/referral/config/update")
+async def admin_referral_config_update(
+    payload: AdminReferralConfigUpdateRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    _require_admin(payload.init_data)
+    repo = ReferralRepository(session)
+    updates: dict = {}
+    if payload.is_enabled is not None:
+        updates["is_enabled"] = payload.is_enabled
+    if payload.referrer_reward_days is not None:
+        updates["referrer_reward_days"] = payload.referrer_reward_days
+    if payload.referee_reward_days is not None:
+        updates["referee_reward_days"] = payload.referee_reward_days
+    if payload.min_account_age_days is not None:
+        updates["min_account_age_days"] = payload.min_account_age_days
+    if payload.max_referrals_per_day is not None:
+        updates["max_referrals_per_day"] = payload.max_referrals_per_day
+    if payload.milestones is not None:
+        updates["milestones"] = payload.milestones
+    if payload.levels is not None:
+        updates["levels"] = payload.levels
+    cfg = await repo.update_config(**updates)
+    await session.commit()
+    return {
+        "ok": True,
+        "is_enabled": cfg.is_enabled,
+        "referrer_reward_days": cfg.referrer_reward_days,
+        "referee_reward_days": cfg.referee_reward_days,
+        "min_account_age_days": cfg.min_account_age_days,
+        "max_referrals_per_day": cfg.max_referrals_per_day,
+        "milestones": cfg.milestones,
+        "levels": cfg.levels,
+    }
+
+
+@router.post("/app/api/admin/referral/adjust")
+async def admin_referral_adjust(
+    payload: AdminReferralAdjustRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    _require_admin(payload.init_data)
+    if payload.status not in ("active", "pending", "fraud"):
+        raise HTTPException(status_code=400, detail="Invalid status")
+    repo = ReferralRepository(session)
+    ok = await repo.admin_set_status(payload.referral_id, payload.status, payload.reason)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Referral not found")
+    await session.commit()
+    return {"ok": True}
+
+
+@router.post("/app/api/admin/referral/grant")
+async def admin_referral_grant(
+    payload: AdminReferralGrantRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    _require_admin(payload.init_data)
+    repo = ReferralRepository(session)
+    result = await repo.admin_grant_bonus(
+        user_telegram_id=payload.user_telegram_id,
+        reward_type=payload.reward_type,
+        reward_value=payload.reward_value,
+        label=payload.label,
+    )
+    await session.commit()
+    return result

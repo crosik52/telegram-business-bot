@@ -18,7 +18,9 @@ from aiogram.types import (
 )
 
 from app.config import get_settings
+from app.database.session import session_scope
 from app.logging_config import get_logger
+from app.repositories.referral_repository import ReferralRepository
 
 logger = get_logger(__name__)
 router = Router(name="commands")
@@ -74,6 +76,24 @@ async def on_start(message: Message) -> None:
         pass
 
     text = _GREETING.replace("{username}", bot_username)
+
+    # ── Referral deep-link handling ───────────────────────────────────────────
+    parts = (message.text or "").split()
+    start_arg = parts[1] if len(parts) > 1 else None
+    if start_arg and start_arg.startswith("ref_") and message.from_user:
+        try:
+            referrer_id = int(start_arg[4:])
+            referred_id = message.from_user.id
+            async with session_scope() as db:
+                repo = ReferralRepository(db)
+                ref, reason = await repo.create_referral(referrer_id, referred_id)
+            if ref:
+                logger.info(
+                    "Referral registered: referrer=%s → referred=%s",
+                    referrer_id, referred_id,
+                )
+        except (ValueError, Exception) as exc:
+            logger.debug("Referral deep-link error: %s", exc)
 
     keyboard: list[list[InlineKeyboardButton]] = []
 

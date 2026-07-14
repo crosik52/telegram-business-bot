@@ -52,6 +52,7 @@ from app.models.business_connection import BusinessConnection as BCModel
 from app.models.message import MediaType, Message as DBMessage
 from app.repositories.chat_settings_repository import ChatSettingsRepository
 from app.repositories.subscription_repository import SubscriptionRepository
+from app.business import permissions
 from app.services import audio_service, media_cache_service
 from app.services.message_service import MessageService
 from app.services.video_service import extract_video_url, handle_video_link
@@ -62,10 +63,10 @@ _download_tasks: set[asyncio.Task] = set()
 # Global semaphore: at most 3 video downloads run concurrently across all chats.
 _download_semaphore = asyncio.Semaphore(3)
 
-# ── In-memory cache: connection_id → owner_telegram_id ───────────────────────
+# ── In-memory cache: connection_id → (owner_telegram_id, can_reply) ──────────
 # Eliminates one SELECT per incoming message — connections rarely change.
-# Invalidated on every business_connection lifecycle event.
-_bc_cache: dict[str, int] = {}
+# Invalidated / updated on every business_connection lifecycle event.
+_bc_cache: dict[str, tuple[int, bool]] = {}
 
 # Conversation-level dedup: prevents both bots from downloading the same link
 # when both participants have the bot connected.
@@ -509,7 +510,7 @@ async def on_business_connection(connection: BusinessConnection) -> None:
                 _panic_tracker.clear(k)
             _bc_cache.pop(connection.id, None)
         else:
-            _bc_cache[connection.id] = connection.user.id
+            _bc_cache[connection.id] = (connection.user.id, connection.can_reply)
 
     logger.info(
         "Business connection %s enabled=%s can_reply=%s",
@@ -537,21 +538,22 @@ async def on_business_message(message: Message, bot: Bot) -> None:
     # to gate owner-only features (commands, dot-save, video download).
     # The cache avoids one SELECT per message; it is populated by the
     # business_connection lifecycle handler and invalidated on disconnect.
-    cached_owner_id = _bc_cache.get(bc_id)
+    cached = _bc_cache.get(bc_id)
 
     async with session_scope() as session:
-        if cached_owner_id is not None:
-            owner_telegram_id = cached_owner_id
-            has_connection    = True
+        if cached is not None:
+            owner_telegram_id, can_reply = cached
+            has_connection = True
         else:
             conn_result = await session.execute(
                 select(BCModel).where(BCModel.business_connection_id == bc_id)
             )
             conn_row = conn_result.scalar_one_or_none()
             owner_telegram_id = conn_row.user_telegram_id if conn_row else None
+            can_reply         = conn_row.can_reply if conn_row else False
             has_connection    = conn_row is not None
             if owner_telegram_id:
-                _bc_cache[bc_id] = owner_telegram_id
+                _bc_cache[bc_id] = (owner_telegram_id, can_reply)
 
         service = MessageService(session)
         await service.ingest_new_message(
@@ -611,6 +613,7 @@ async def on_business_message(message: Message, bot: Bot) -> None:
                         business_connection_id=bc_id,
                         message_id=message.message_id,
                         session=session,
+                        can_reply=can_reply,
                     )
 
         # --- Video link detection (Reels / TikTok / YouTube Shorts) ---
@@ -626,35 +629,41 @@ async def on_business_message(message: Message, bot: Bot) -> None:
                 lo, hi = sorted((owner_telegram_id, chat_id))
                 key = (lo, hi, url)
                 if key not in _in_flight:
-                    _in_flight.add(key)
                     logger.info(
-                        "Video link detected (%s) in chat=%s, scheduling download",
-                        platform, chat_id,
+                        "Video link detected (%s) in chat=%s can_reply=%s",
+                        platform, chat_id, can_reply,
                     )
+                    if not can_reply:
+                        asyncio.create_task(permissions.notify_missing(
+                            bot, owner_telegram_id, "can_reply",
+                            "автоскачивание видео",
+                        ))
+                    else:
+                        _in_flight.add(key)
 
-                    async def _guarded_download(
-                        _bot=bot,
-                        _chat_id=chat_id,
-                        _conn_id=message.business_connection_id,
-                        _url=url,
-                        _platform=platform,
-                        _key=key,
-                    ) -> None:
-                        async with _download_semaphore:
-                            try:
-                                await handle_video_link(
-                                    bot=_bot,
-                                    chat_id=_chat_id,
-                                    business_connection_id=_conn_id,
-                                    url=_url,
-                                    platform=_platform,
-                                )
-                            finally:
-                                _in_flight.discard(_key)
+                        async def _guarded_download(
+                            _bot=bot,
+                            _chat_id=chat_id,
+                            _conn_id=message.business_connection_id,
+                            _url=url,
+                            _platform=platform,
+                            _key=key,
+                        ) -> None:
+                            async with _download_semaphore:
+                                try:
+                                    await handle_video_link(
+                                        bot=_bot,
+                                        chat_id=_chat_id,
+                                        business_connection_id=_conn_id,
+                                        url=_url,
+                                        platform=_platform,
+                                    )
+                                finally:
+                                    _in_flight.discard(_key)
 
-                    task = asyncio.create_task(_guarded_download())
-                    _download_tasks.add(task)
-                    task.add_done_callback(_download_tasks.discard)
+                        task = asyncio.create_task(_guarded_download())
+                        _download_tasks.add(task)
+                        task.add_done_callback(_download_tasks.discard)
 
 
 # ── Edit handler ──────────────────────────────────────────────────────────────

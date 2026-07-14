@@ -367,8 +367,15 @@ async def _cmd_mp3(
     chat_id: int,
     business_connection_id: str,
     args: str | None,
+    can_reply: bool = True,
     **_: object,
 ) -> None:
+    from app.business import permissions  # noqa: PLC0415
+
+    if not can_reply:
+        await permissions.notify_missing(bot, owner_id, "can_reply", "!mp3")
+        return
+
     if not args or not args.strip():
         await _reply(bot, owner_id,
                      "🎵 Укажите название: <code>!mp3 название песни</code>")
@@ -466,6 +473,7 @@ async def dispatch(
     business_connection_id: str,
     message_id: int,
     session: AsyncSession,
+    can_reply: bool = True,
 ) -> None:
     """Route a parsed command to its handler and then delete the command message."""
     handler = _HANDLERS.get(cmd)
@@ -483,6 +491,7 @@ async def dispatch(
             business_connection_id=business_connection_id,
             session=session,
             args=args,
+            can_reply=can_reply,
         )
 
     # Always attempt to hide the command message from the contact.

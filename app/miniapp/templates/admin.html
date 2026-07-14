@@ -897,7 +897,23 @@
             <div class="stat"><div class="n">${esc(u.edited_messages)}</div><div class="l">Правки</div></div>
             <div class="stat"><div class="n">${esc(u.deleted_messages)}</div><div class="l">Удал.</div></div>
             <div class="stat"><div class="n" style="color:var(--purple)">${u.wallet_balance != null ? u.wallet_balance.toLocaleString("ru-RU") : "—"}</div><div class="l">🪙 Монеты</div></div>
+            <div class="stat"><div class="n" style="color:var(--link)">${(u.referrals || []).filter(r => r.status === "active").length}</div><div class="l">🔗 Реф.</div></div>
           </div>
+
+          ${(() => {
+            const hasSub = !!u.subscription_expires_at;
+            const refs   = u.referrals || [];
+            const active = refs.filter(r => r.status === "active").length;
+            const pending = refs.filter(r => r.status === "pending").length;
+            const chips = [];
+            if (hasSub) {
+              const exp = u.subscription_expires_at.slice(0, 10);
+              chips.push(`<span style="background:rgba(255,214,10,0.18);color:#b8860b;border:1px solid rgba(255,214,10,0.35);border-radius:8px;padding:2px 9px;font-size:11px;font-weight:700">⭐ Premium до ${exp}</span>`);
+            }
+            if (active > 0)  chips.push(`<span style="background:rgba(52,199,89,0.15);color:var(--green);border:1px solid rgba(52,199,89,0.3);border-radius:8px;padding:2px 9px;font-size:11px;font-weight:700">🔗 ${active} акт. реф.</span>`);
+            if (pending > 0) chips.push(`<span style="background:rgba(120,120,128,0.12);color:var(--hint);border:1px solid rgba(120,120,128,0.2);border-radius:8px;padding:2px 9px;font-size:11px;font-weight:600">⏳ ${pending} ожид.</span>`);
+            return chips.length ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 2px">${chips.join("")}</div>` : "";
+          })()}
 
           <div class="actions">
             <button class="action-btn ${u.notifications_enabled ? "on" : ""}" data-action="notifications" data-value="${!u.notifications_enabled}">
@@ -920,6 +936,31 @@
             <div class="detail-row"><span class="dl">Последняя активность</span><span class="dv">${esc(timeAgo(u.last_activity_at))}</span></div>
             <div class="detail-row"><span class="dl">Может отвечать</span><span class="dv">${u.can_reply ? "✓ Да" : "— Нет"}</span></div>
             <div class="detail-row"><span class="dl">Подключение (TG)</span><span class="dv">${u.is_enabled ? "✓ Включено" : "— Выключено"}</span></div>
+            <div class="detail-row"><span class="dl">Подписка</span><span class="dv">${u.subscription_expires_at ? "⭐ до " + u.subscription_expires_at.slice(0,10) : "— нет"}</span></div>
+            ${(() => {
+              const refs = u.referrals || [];
+              if (!refs.length) return `<div class="detail-row"><span class="dl">Рефералы</span><span class="dv" style="color:var(--hint)">нет</span></div>`;
+              const STATUS_CLS = { active: "ref-status-active", pending: "ref-status-pending", fraud: "ref-status-fraud" };
+              const STATUS_LBL = { active: "акт.", pending: "ожид.", fraud: "фрод" };
+              const rows = refs.map(r => {
+                const name = r.referred_first_name || ("#" + r.referred_telegram_id);
+                const uname = r.referred_username ? ` @${r.referred_username}` : "";
+                const ini = name.replace(/^#\d+/, "?").split(/\s+/).map(w=>w[0]).join("").slice(0,2).toUpperCase() || "?";
+                const bg = colorFor(String(r.referred_telegram_id));
+                return `<div style="display:flex;align-items:center;gap:7px;padding:4px 0;border-bottom:1px solid rgba(120,120,128,0.08)">
+                  <div style="width:26px;height:26px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">${esc(ini)}</div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(name)}${esc(uname)}</div>
+                    <div style="font-size:10px;color:var(--hint)">#${r.referred_telegram_id}</div>
+                  </div>
+                  <span class="ref-recent-status ${STATUS_CLS[r.status] || ""}" style="font-size:10px">${STATUS_LBL[r.status] || r.status}</span>
+                </div>`;
+              }).join("");
+              return `<div style="margin-top:6px">
+                <div style="font-size:11px;font-weight:700;color:var(--hint);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Приглашённые (${refs.length})</div>
+                ${rows}
+              </div>`;
+            })()}
           </div>
         </div>
       `;

@@ -1612,6 +1612,47 @@ async def admin_overview(
     stats_service = StatsService(session)
     overview = await stats_service.get_admin_overview()
 
+    user_ids = [u.owner_telegram_id for u in overview.users]
+    now = dt.datetime.now(dt.timezone.utc)
+
+    # ── Bulk: active subscriptions ────────────────────────────────────────────
+    from app.models.subscription import UserSubscription
+    sub_rows = (await session.execute(
+        select(UserSubscription.user_telegram_id, UserSubscription.expires_at)
+        .where(
+            UserSubscription.user_telegram_id.in_(user_ids),
+            UserSubscription.is_active == True,  # noqa: E712
+            UserSubscription.expires_at > now,
+        )
+    )).all()
+    sub_map: dict[int, str] = {row[0]: row[1].isoformat() for row in sub_rows}
+
+    # ── Bulk: referrals sent by each user ─────────────────────────────────────
+    from app.models.referral import Referral
+    ref_rows = (await session.execute(
+        select(
+            Referral.referrer_telegram_id,
+            Referral.referred_telegram_id,
+            Referral.referred_first_name,
+            Referral.referred_username,
+            Referral.status,
+        )
+        .where(
+            Referral.referrer_telegram_id.in_(user_ids),
+            Referral.status != "fraud",
+        )
+        .order_by(Referral.created_at.desc())
+    )).all()
+
+    ref_map: dict[int, list[dict]] = {}
+    for row in ref_rows:
+        ref_map.setdefault(row[0], []).append({
+            "referred_telegram_id": row[1],
+            "referred_first_name": row[2],
+            "referred_username": row[3],
+            "status": row[4],
+        })
+
     return {
         "total_users": overview.total_users,
         "users": [
@@ -1633,6 +1674,8 @@ async def admin_overview(
                     u.last_activity_at.isoformat() if u.last_activity_at else None
                 ),
                 "wallet_balance": u.wallet_balance,
+                "subscription_expires_at": sub_map.get(u.owner_telegram_id),
+                "referrals": ref_map.get(u.owner_telegram_id, []),
             }
             for u in overview.users
         ],

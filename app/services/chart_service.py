@@ -124,12 +124,12 @@ def render_info_image(stats: InfoStats) -> io.BytesIO:
     media_pct = round(stats.media_count / non_del * 100) if non_del else 0
     audio_pct = round(stats.audio_count / non_del * 100) if non_del else 0
     kpis = [
-        (stats.total,    "Всего сообщений",    C_PRIMARY),
-        (stats.outgoing, "Ваших сообщений",    C_BLUE),
-        (stats.incoming, "Сообщений контакта", C_GREEN),
-        (avg,            "В среднем в день",   C_AMBER),
-        (stats.media_count, "Медиа и файлы",     "#6366F1"),
-        (stats.audio_count, "Аудио и голосовые", "#EC4899"),
+        (stats.total,       "Всего сообщений",    "#0a84ff"),   # blue
+        (stats.outgoing,    "Ваших сообщений",    "#30d158"),   # green
+        (stats.incoming,    "Сообщений контакта", "#5ac8fa"),   # cyan
+        (avg,               "В среднем в день",   "#ffd60a"),   # amber
+        (stats.media_count, "Медиа и файлы",      "#ff6b00"),   # orange
+        (stats.audio_count, "Аудио и голосовые",  "#bf5af2"),   # violet
     ]
     for row in range(3):
         for col in range(2):

@@ -1816,7 +1816,7 @@
       <span class="tab-label">Поддержать</span>
     </button>
     <button class="tab-item tab-shop" data-tab="shop">
-      <div class="tab-icon-wrap">🛒</div>
+      <div class="tab-icon-wrap" style="position:relative">🛒<span style="position:absolute;top:-4px;right:-8px;font-size:8px;font-weight:800;background:#f59e0b;color:#fff;border-radius:4px;padding:1px 3px;letter-spacing:0.3px;line-height:1.4">BETA</span></div>
       <span class="tab-label">Магазин</span>
     </button>
   </nav>
@@ -2953,8 +2953,15 @@
         else renderDonate();
       }
       if (tab === "shop") {
-        if (!shopLoaded && currentInitData) loadShop();
-        else if (shopLoaded) renderShop();
+        document.getElementById("shopContent").innerHTML = `
+          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 24px 40px;text-align:center;gap:12px">
+            <div style="font-size:56px;line-height:1">🛒</div>
+            <div style="font-size:18px;font-weight:800;color:var(--text)">Магазин</div>
+            <div style="display:inline-block;background:#f59e0b;color:#fff;font-size:11px;font-weight:800;border-radius:6px;padding:3px 10px;letter-spacing:0.5px">BETA</div>
+            <div style="font-size:14px;color:var(--hint);line-height:1.55;max-width:260px;margin-top:4px">
+              Магазин временно закрыт на доработку.<br>Скоро откроется с новыми скинами и бустами!
+            </div>
+          </div>`;
       }
       if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
       if (window._tabSwitchHook) window._tabSwitchHook(tab);

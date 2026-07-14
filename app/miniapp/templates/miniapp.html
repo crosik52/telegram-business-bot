@@ -2840,6 +2840,45 @@
       } catch (_) {}
     })();
 
+    // ── User avatar (module-level, persists across all tab switches) ──────────
+    function _avatarSetInitials(el, u) {
+      const name = ((u.first_name || "") + " " + (u.last_name || "")).trim() || "?";
+      const ini  = name.split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
+      el.innerHTML    = "";
+      el.textContent  = ini;
+      el.style.background = colorFor(name);
+      el.style.fontSize   = "22px";
+      el.style.fontWeight = "800";
+    }
+
+    function applyUserAvatar() {
+      const u = tg?.initDataUnsafe?.user;
+      if (!u) return;
+      const el = document.getElementById("headerAvatar");
+      if (!el) return;
+      // Update greeting too
+      const greetEl = document.getElementById("greeting");
+      if (greetEl && greetEl.textContent === "Моя статистика") {
+        greetEl.textContent = "Привет, " + (u.first_name || "друг") + "!";
+      }
+      // Already showing photo — don't replace
+      if (el.querySelector("img")) return;
+      if (u.photo_url) {
+        const img = document.createElement("img");
+        img.src   = u.photo_url;
+        img.alt   = u.first_name || "";
+        img.onerror = () => _avatarSetInitials(el, u);
+        el.innerHTML        = "";
+        el.style.background = "";
+        el.appendChild(img);
+      } else {
+        _avatarSetInitials(el, u);
+      }
+    }
+
+    // Apply immediately — before any network call
+    applyUserAvatar();
+
     // ── Load data ──
     async function loadStats(isRefresh) {
       const initData = tg ? tg.initData : "";
@@ -2876,35 +2915,7 @@
         lastWords    = wordsRes  && wordsRes.ok  ? await wordsRes.json()  : null;
         lastDigest   = digestRes && digestRes.ok ? await digestRes.json() : null;
 
-        if (tg?.initDataUnsafe?.user) {
-          const u = tg.initDataUnsafe.user;
-          document.getElementById("greeting").textContent =
-            "Привет, " + (u.first_name || "друг") + "!";
-          // Replace header emoji with user avatar (photo or initials)
-          const avatarEl = document.getElementById("headerAvatar");
-          if (avatarEl) {
-            if (u.photo_url) {
-              const img = document.createElement("img");
-              img.src = u.photo_url;
-              img.alt = u.first_name || "";
-              img.onerror = () => { _setAvatarInitials(avatarEl, u); };
-              avatarEl.innerHTML = "";
-              avatarEl.style.background = "";
-              avatarEl.appendChild(img);
-            } else {
-              _setAvatarInitials(avatarEl, u);
-            }
-          }
-        }
-
-        function _setAvatarInitials(el, u) {
-          const name = ((u.first_name || "") + " " + (u.last_name || "")).trim() || "?";
-          const initials = name.split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
-          el.innerHTML = "";
-          el.textContent = initials;
-          el.style.background = colorFor(name);
-          el.style.fontSize = "22px";
-        }
+        applyUserAvatar();
 
         if (!stats.connected) {
           subtitle.textContent = "Бот ещё не подключён";
@@ -2952,9 +2963,7 @@
       const headerActions = document.getElementById("headerActions");
       if (headerActions) headerActions.style.display = tab === "stats" ? "" : "none";
 
-      // Update header avatar emoji per tab
-      const avatarEl = document.getElementById("headerAvatar");
-      if (avatarEl) avatarEl.textContent = TAB_HEADER_ICONS[tab] || "📊";
+      // Avatar is set once by applyUserAvatar() — never reset on tab switch
 
       if (tab === "casino") {
         if (!casinoLoaded && currentInitData) loadWallet();

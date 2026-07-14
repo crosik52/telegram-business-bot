@@ -219,13 +219,21 @@
     animation: fadeDown 0.4s ease;
   }
   .header .avatar-ring {
-    width: 62px; height: 62px;
+    width: 68px; height: 68px;
     margin: 0 auto 11px;
     border-radius: 50%;
     background: linear-gradient(135deg, var(--link) 0%, #5856d6 50%, var(--green) 100%);
     display: flex; align-items: center; justify-content: center;
-    font-size: 28px;
-    box-shadow: 0 6px 20px rgba(36,129,204,0.35);
+    font-size: 26px; font-weight: 800; color: #fff;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.22);
+    overflow: hidden;
+    position: relative;
+  }
+  .header .avatar-ring img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    display: block;
   }
   .header h1 { font-size: 20px; margin: 0 0 4px; font-weight: 800; letter-spacing: -0.3px; }
   .header p  { margin: 0; color: var(--hint); font-size: 13px; font-weight: 400; }
@@ -2869,8 +2877,33 @@
         lastDigest   = digestRes && digestRes.ok ? await digestRes.json() : null;
 
         if (tg?.initDataUnsafe?.user) {
+          const u = tg.initDataUnsafe.user;
           document.getElementById("greeting").textContent =
-            "Привет, " + (tg.initDataUnsafe.user.first_name || "друг") + "!";
+            "Привет, " + (u.first_name || "друг") + "!";
+          // Replace header emoji with user avatar (photo or initials)
+          const avatarEl = document.getElementById("headerAvatar");
+          if (avatarEl) {
+            if (u.photo_url) {
+              const img = document.createElement("img");
+              img.src = u.photo_url;
+              img.alt = u.first_name || "";
+              img.onerror = () => { _setAvatarInitials(avatarEl, u); };
+              avatarEl.innerHTML = "";
+              avatarEl.style.background = "";
+              avatarEl.appendChild(img);
+            } else {
+              _setAvatarInitials(avatarEl, u);
+            }
+          }
+        }
+
+        function _setAvatarInitials(el, u) {
+          const name = ((u.first_name || "") + " " + (u.last_name || "")).trim() || "?";
+          const initials = name.split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
+          el.innerHTML = "";
+          el.textContent = initials;
+          el.style.background = colorFor(name);
+          el.style.fontSize = "22px";
         }
 
         if (!stats.connected) {

@@ -274,10 +274,12 @@ async def handle_video_link(
         if status_msg is None:
             return
         try:
-            await bot.delete_message(
+            from aiogram.methods import DeleteMessage
+            await bot(DeleteMessage(
                 chat_id=chat_id,
                 message_id=status_msg.message_id,
-            )
+                business_connection_id=business_connection_id,
+            ))
         except Exception as _del_exc:
             logger.warning(
                 "Could not delete status message chat_id=%s msg_id=%s: %s",

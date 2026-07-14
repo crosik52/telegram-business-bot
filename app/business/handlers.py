@@ -40,6 +40,7 @@ from aiogram import Bot, F, Router
 from aiogram.types import (
     BufferedInputFile, BusinessConnection, BusinessMessagesDeleted,
     CallbackQuery, ChosenInlineResult, FSInputFile, InlineQuery,
+    InlineKeyboardButton, InlineKeyboardMarkup,
     InlineQueryResultArticle, InputMediaAudio, InputTextMessageContent,
     Message, PreCheckoutQuery,
 )
@@ -1014,6 +1015,7 @@ async def on_inline_query(query: InlineQuery, bot: Bot) -> None:
         dur      = audio_service.fmt_duration(r["duration"])
         uploader = r["uploader"][:40] if r["uploader"] else ""
 
+        # reply_markup is required to receive inline_message_id in chosen_inline_result
         articles.append(InlineQueryResultArticle(
             id=key,
             title=r["title"][:60],
@@ -1027,6 +1029,9 @@ async def on_inline_query(query: InlineQuery, bot: Bot) -> None:
                 ),
                 parse_mode="HTML",
             ),
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="⏳", callback_data="noop"),
+            ]]),
         ))
 
     await query.answer(
@@ -1036,13 +1041,23 @@ async def on_inline_query(query: InlineQuery, bot: Bot) -> None:
     )
 
 
+@router.callback_query(F.data == "noop")
+async def on_noop(call: CallbackQuery) -> None:
+    await call.answer()
+
+
 @router.chosen_inline_result()
 async def on_chosen_inline_result(result: ChosenInlineResult, bot: Bot) -> None:
     """Stream the chosen track and replace the placeholder with audio in-chat."""
     key           = result.result_id
     inline_msg_id = result.inline_message_id
 
+    logger.info("chosen_inline_result: key=%s inline_msg_id=%s user=%s",
+                key, inline_msg_id, result.from_user.id)
+
     if not inline_msg_id:
+        logger.warning("chosen_inline_result: no inline_message_id — "
+                       "reply_markup missing from InlineQueryResultArticle?")
         return
 
     cached = audio_service.get(key)

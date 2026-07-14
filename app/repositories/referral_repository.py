@@ -4,7 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 
-from sqlalchemy import func, select, update, and_
+from sqlalchemy import case, func, select, update, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.referral import (
@@ -366,7 +366,7 @@ class ReferralRepository:
                 Referral.referrer_telegram_id,
                 func.count().label("total"),
                 func.sum(
-                    func.cast(Referral.status == "active", Integer if False else "int")
+                    case((Referral.status == "active", 1), else_=0)
                 ).label("active"),
             )
             .where(Referral.status != "fraud")
@@ -374,12 +374,12 @@ class ReferralRepository:
             .order_by(func.count().desc())
             .limit(limit)
         )
-        # Fallback approach without cast
         rows = q.all()
         return [
             {
                 "referrer_telegram_id": row.referrer_telegram_id,
                 "total": row.total,
+                "active": row.active or 0,
             }
             for row in rows
         ]

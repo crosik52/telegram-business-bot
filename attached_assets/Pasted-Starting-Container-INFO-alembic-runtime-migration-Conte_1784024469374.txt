@@ -1,0 +1,41 @@
+Starting Container
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO:     Started server process [5]
+INFO:     Waiting for application startup.
+2026-07-14T10:20:06+0000 | INFO     | app.main | Starting Telegram Business Bot (environment=production)
+2026-07-14T10:20:06+0000 | INFO     | app.main | Database dialect: postgresql (persistent)
+2026-07-14T10:20:07+0000 | INFO     | app.main | Telegram webhook set to https://telegram-business-bot-production.up.railway.app/webhook
+2026-07-14T10:20:07+0000 | INFO     | app.main | Telegram chat menu button set to open mini app
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+2026-07-14T10:20:23+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847657
+2026-07-14T10:20:23+0000 | INFO     | aiogram.event | Update id=745847657 is handled. Duration 447 ms by bot id=1162707887
+2026-07-14T10:20:23+0000 | INFO     | http | POST /webhook -> 200 (450.2ms)
+2026-07-14T10:20:27+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847658
+2026-07-14T10:20:28+0000 | INFO     | aiogram.event | Update id=745847658 is handled. Duration 1296 ms by bot id=1162707887
+2026-07-14T10:20:28+0000 | INFO     | http | POST /webhook -> 200 (1297.6ms)
+2026-07-14T10:20:29+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847659
+2026-07-14T10:20:29+0000 | INFO     | app.business.handlers | chosen_inline_result: key=81281543 inline_msg_id=AgAAACl4CAC8Jp1PoEcX919cb1k user=1335699132
+2026-07-14T10:20:29+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847661
+2026-07-14T10:20:29+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847660
+2026-07-14T10:20:29+0000 | INFO     | app.services.message_service | Stored new business message chat_id=6291032910 message_id=555049 media=text
+2026-07-14T10:20:29+0000 | INFO     | aiogram.event | Update id=745847661 is handled. Duration 186 ms by bot id=1162707887
+2026-07-14T10:20:29+0000 | INFO     | http | POST /webhook -> 200 (187.6ms)
+2026-07-14T10:20:29+0000 | INFO     | app.services.message_service | Stored new business message chat_id=1335699132 message_id=1437272 media=text
+2026-07-14T10:20:29+0000 | INFO     | aiogram.event | Update id=745847660 is handled. Duration 61 ms by bot id=1162707887
+2026-07-14T10:20:29+0000 | INFO     | http | POST /webhook -> 200 (63.7ms)
+2026-07-14T10:20:31+0000 | WARNING  | app.business.handlers | inline mp3: stream failed key=81281543: yt-dlp produced no output
+2026-07-14T10:20:32+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847662
+2026-07-14T10:20:32+0000 | INFO     | aiogram.event | Update id=745847659 is handled. Duration 2467 ms by bot id=1162707887
+2026-07-14T10:20:32+0000 | INFO     | http | POST /webhook -> 200 (2470.0ms)
+2026-07-14T10:20:32+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847663
+2026-07-14T10:20:32+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745847664
+2026-07-14T10:20:32+0000 | INFO     | app.services.message_service | Recorded edit for chat_id=1335699132 message_id=1437272 (edit #1)
+2026-07-14T10:20:32+0000 | INFO     | app.services.message_service | Recorded edit for chat_id=6291032910 message_id=555049 (edit #1)
+2026-07-14T10:20:32+0000 | INFO     | aiogram.event | Update id=745847664 is handled. Duration 15 ms by bot id=1162707887
+2026-07-14T10:20:32+0000 | INFO     | http | POST /webhook -> 200 (17.3ms)
+2026-07-14T10:20:32+0000 | INFO     | aiogram.event | Update id=745847663 is handled. Duration 220 ms by bot id=1162707887
+2026-07-14T10:20:32+0000 | INFO     | http | POST /webhook -> 200 (221.5ms)
+2026-07-14T10:20:32+0000 | INFO     | aiogram.event | Update id=745847662 is handled. Duration 621 ms by bot id=1162707887
+2026-07-14T10:20:32+0000 | INFO     | http | POST /webhook -> 200 (622.7ms)

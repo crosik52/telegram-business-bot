@@ -205,14 +205,19 @@ async def stream_to_bytes(url: str) -> tuple[bytes, str]:
 
     has_ffmpeg = bool(_shutil.which("ffmpeg"))
 
+    # Only single-stream formats work with -o - (stdout).
+    # DASH (bestaudio alone) often requires merging and silently fails.
+    # Prefer m4a (AAC) then webm (opus) — both are single-file audio containers.
+    fmt = "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio[acodec!=none]"
+
     ytdlp_args = [
         "yt-dlp",
         "--no-playlist",
-        "--extractor-args", "youtube:player_client=android",
+        "--extractor-args", "youtube:player_client=android,web",
         "--max-filesize", "48m",
         "--no-part",
-        "-q",
-        "-f", "bestaudio" if has_ffmpeg else "bestaudio[ext=m4a]/bestaudio",
+        "--no-warnings",
+        "-f", fmt,
         "-o", "-",
         url,
     ]
@@ -221,12 +226,13 @@ async def stream_to_bytes(url: str) -> tuple[bytes, str]:
     ytdlp_proc = await asyncio.create_subprocess_exec(
         *ytdlp_args,
         stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.PIPE,
     )
-    raw_bytes, _ = await ytdlp_proc.communicate()
+    raw_bytes, ytdlp_stderr = await ytdlp_proc.communicate()
 
     if not raw_bytes:
-        raise RuntimeError("yt-dlp produced no output")
+        err = ytdlp_stderr.decode(errors="replace").strip()
+        raise RuntimeError(f"yt-dlp produced no output: {err}")
 
     if has_ffmpeg:
         # Step 2: raw bytes → ffmpeg stdin → mp3 bytes

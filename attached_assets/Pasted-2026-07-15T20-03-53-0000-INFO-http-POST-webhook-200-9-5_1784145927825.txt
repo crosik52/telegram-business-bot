@@ -1,0 +1,114 @@
+2026-07-15T20:03:53+0000 | INFO     | http | POST /webhook -> 200 (9.5ms)
+2026-07-15T20:03:56+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855535
+2026-07-15T20:03:56+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855536
+2026-07-15T20:03:56+0000 | INFO     | app.services.message_service | Marked message deleted chat_id=544652654 message_id=556691
+2026-07-15T20:03:56+0000 | INFO     | app.services.message_service | Marked message deleted chat_id=1335699132 message_id=1025486
+2026-07-15T20:03:56+0000 | INFO     | aiogram.event | Update id=745855535 is handled. Duration 16 ms by bot id=1162707887
+2026-07-15T20:03:56+0000 | INFO     | http | POST /webhook -> 200 (18.3ms)
+2026-07-15T20:03:57+0000 | INFO     | aiogram.event | Update id=745855536 is handled. Duration 461 ms by bot id=1162707887
+2026-07-15T20:03:57+0000 | INFO     | http | POST /webhook -> 200 (463.0ms)
+2026-07-15T20:03:57+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855537
+2026-07-15T20:03:57+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=216862 media=text
+2026-07-15T20:03:57+0000 | WARNING  | app.business.handlers | Streak success notification task failed: type object 'TelegramUser' has no attribute 'telegram_id'
+2026-07-15T20:03:57+0000 | INFO     | aiogram.event | Update id=745855537 is handled. Duration 13 ms by bot id=1162707887
+2026-07-15T20:03:57+0000 | INFO     | http | POST /webhook -> 200 (16.6ms)
+2026-07-15T20:04:13+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855538
+2026-07-15T20:04:13+0000 | INFO     | app.services.message_service | Stored new business message chat_id=6399230546 message_id=1009449 media=text
+2026-07-15T20:04:13+0000 | INFO     | aiogram.event | Update id=745855538 is handled. Duration 14 ms by bot id=1162707887
+2026-07-15T20:04:13+0000 | INFO     | http | POST /webhook -> 200 (15.2ms)
+2026-07-15T20:04:14+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855539
+2026-07-15T20:04:14+0000 | INFO     | app.services.message_service | Stored new business message chat_id=5765947130 message_id=1401625 media=text
+2026-07-15T20:04:14+0000 | INFO     | aiogram.event | Update id=745855539 is handled. Duration 7 ms by bot id=1162707887
+2026-07-15T20:04:14+0000 | INFO     | http | POST /webhook -> 200 (9.1ms)
+2026-07-15T20:04:17+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855540
+2026-07-15T20:04:17+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=216863 media=text
+2026-07-15T20:04:17+0000 | INFO     | aiogram.event | Update id=745855540 is handled. Duration 16 ms by bot id=1162707887
+2026-07-15T20:04:17+0000 | INFO     | http | POST /webhook -> 200 (18.4ms)
+2026-07-15T20:04:17+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855541
+2026-07-15T20:04:17+0000 | INFO     | app.services.message_service | Stored new business message chat_id=5765947130 message_id=1401626 media=text
+2026-07-15T20:04:17+0000 | INFO     | aiogram.event | Update id=745855541 is handled. Duration 7 ms by bot id=1162707887
+2026-07-15T20:04:17+0000 | INFO     | http | POST /webhook -> 200 (7.6ms)
+2026-07-15T20:04:20+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855542
+2026-07-15T20:04:20+0000 | INFO     | app.services.message_service | Stored new business message chat_id=5688354783 message_id=556692 media=text
+2026-07-15T20:04:20+0000 | WARNING  | app.business.handlers | Streak success notification task failed: type object 'TelegramUser' has no attribute 'telegram_id'
+2026-07-15T20:04:20+0000 | INFO     | aiogram.event | Update id=745855542 is handled. Duration 9 ms by bot id=1162707887
+2026-07-15T20:04:20+0000 | INFO     | http | POST /webhook -> 200 (10.5ms)
+2026-07-15T20:04:20+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855543
+2026-07-15T20:04:20+0000 | INFO     | app.services.message_service | Stored new business message chat_id=1335699132 message_id=1401627 media=text
+2026-07-15T20:04:20+0000 | INFO     | aiogram.event | Update id=745855543 is handled. Duration 6 ms by bot id=1162707887
+2026-07-15T20:04:20+0000 | INFO     | http | POST /webhook -> 200 (7.8ms)
+2026-07-15T20:04:24+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855544
+2026-07-15T20:04:24+0000 | INFO     | app.services.message_service | Stored new business message chat_id=6399230546 message_id=1009450 media=text
+2026-07-15T20:04:24+0000 | INFO     | aiogram.event | Update id=745855544 is handled. Duration 16 ms by bot id=1162707887
+2026-07-15T20:04:24+0000 | INFO     | http | POST /webhook -> 200 (18.1ms)
+2026-07-15T20:04:31+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855545
+2026-07-15T20:04:31+0000 | INFO     | app.services.message_service | Stored new business message chat_id=6399230546 message_id=1009451 media=text
+2026-07-15T20:04:31+0000 | INFO     | aiogram.event | Update id=745855545 is handled. Duration 11 ms by bot id=1162707887
+2026-07-15T20:04:31+0000 | INFO     | http | POST /webhook -> 200 (13.2ms)
+2026-07-15T20:04:32+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855546
+2026-07-15T20:04:32+0000 | INFO     | app.services.message_service | Stored new business message chat_id=5765947130 message_id=1401628 media=text
+2026-07-15T20:04:32+0000 | WARNING  | app.business.handlers | Streak success notification task failed: type object 'TelegramUser' has no attribute 'telegram_id'
+2026-07-15T20:04:32+0000 | INFO     | aiogram.event | Update id=745855546 is handled. Duration 9 ms by bot id=1162707887
+2026-07-15T20:04:32+0000 | INFO     | http | POST /webhook -> 200 (11.3ms)
+2026-07-15T20:04:41+0000 | INFO     | app.services.message_service | Stored new business message chat_id=8268018520 message_id=1401629 media=sticker
+2026-07-15T20:04:41+0000 | WARNING  | app.business.handlers | Streak success notification task failed: type object 'TelegramUser' has no attribute 'telegram_id'
+2026-07-15T20:04:41+0000 | INFO     | aiogram.event | Update id=745855547 is handled. Duration 15 ms by bot id=1162707887
+2026-07-15T20:04:41+0000 | INFO     | http | POST /webhook -> 200 (16.2ms)
+2026-07-15T20:04:41+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855547
+2026-07-15T20:04:44+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855548
+2026-07-15T20:04:44+0000 | INFO     | app.services.message_service | Stored new business message chat_id=8268018520 message_id=1401630 media=text
+2026-07-15T20:04:44+0000 | WARNING  | app.business.handlers | Streak success notification task failed: type object 'TelegramUser' has no attribute 'telegram_id'
+2026-07-15T20:04:44+0000 | INFO     | aiogram.event | Update id=745855548 is handled. Duration 10 ms by bot id=1162707887
+2026-07-15T20:04:44+0000 | INFO     | http | POST /webhook -> 200 (10.7ms)
+2026-07-15T20:04:45+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855549
+2026-07-15T20:04:45+0000 | INFO     | app.services.message_service | Stored new business message chat_id=7525787284 message_id=1009452 media=sticker
+2026-07-15T20:04:45+0000 | INFO     | app.business.handlers | dot-save: triggered owner=6731288454 chat=7525787284 reply_to=1009447
+2026-07-15T20:04:45+0000 | INFO     | app.business.handlers | dot-save: message 1009447 has no sendable media (type=MediaType.TEXT)
+2026-07-15T20:04:45+0000 | INFO     | aiogram.event | Update id=745855549 is handled. Duration 239 ms by bot id=1162707887
+2026-07-15T20:04:45+0000 | INFO     | http | POST /webhook -> 200 (240.8ms)
+2026-07-15T20:04:47+0000 | INFO     | http | POST /webhook -> 200 (12.8ms)
+2026-07-15T20:04:47+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855550
+2026-07-15T20:04:47+0000 | INFO     | app.services.message_service | Stored new business message chat_id=8268018520 message_id=1401631 media=text
+2026-07-15T20:04:47+0000 | INFO     | aiogram.event | Update id=745855550 is handled. Duration 10 ms by bot id=1162707887
+2026-07-15T20:04:58+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855551
+2026-07-15T20:04:58+0000 | INFO     | app.services.message_service | Stored new business message chat_id=8268018520 message_id=1401632 media=text
+2026-07-15T20:04:58+0000 | WARNING  | app.business.handlers | Streak success notification task failed: type object 'TelegramUser' has no attribute 'telegram_id'
+2026-07-15T20:04:58+0000 | INFO     | aiogram.event | Update id=745855551 is handled. Duration 9 ms by bot id=1162707887
+2026-07-15T20:04:58+0000 | INFO     | http | POST /webhook -> 200 (10.5ms)
+2026-07-15T20:05:02+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855552
+2026-07-15T20:05:02+0000 | INFO     | app.services.message_service | Stored new business message chat_id=5765947130 message_id=1401633 media=text
+2026-07-15T20:05:02+0000 | INFO     | aiogram.event | Update id=745855552 is handled. Duration 9 ms by bot id=1162707887
+2026-07-15T20:05:02+0000 | INFO     | http | POST /webhook -> 200 (10.7ms)
+2026-07-15T20:05:03+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855553
+2026-07-15T20:05:03+0000 | INFO     | app.services.message_service | Stored new business message chat_id=8268018520 message_id=1401634 media=text
+2026-07-15T20:05:03+0000 | WARNING  | app.business.handlers | Streak success notification task failed: type object 'TelegramUser' has no attribute 'telegram_id'
+2026-07-15T20:05:03+0000 | INFO     | aiogram.event | Update id=745855553 is handled. Duration 9 ms by bot id=1162707887
+2026-07-15T20:05:03+0000 | INFO     | http | POST /webhook -> 200 (10.3ms)
+2026-07-15T20:05:04+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855554
+2026-07-15T20:05:04+0000 | INFO     | app.services.message_service | Stored new business message chat_id=8268018520 message_id=1401635 media=text
+2026-07-15T20:05:04+0000 | INFO     | aiogram.event | Update id=745855554 is handled. Duration 8 ms by bot id=1162707887
+2026-07-15T20:05:04+0000 | INFO     | http | POST /webhook -> 200 (9.2ms)
+2026-07-15T20:05:05+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855555
+2026-07-15T20:05:05+0000 | INFO     | app.services.message_service | Stored new business message chat_id=8268018520 message_id=1401636 media=text
+2026-07-15T20:05:05+0000 | WARNING  | app.business.handlers | Streak success notification task failed: type object 'TelegramUser' has no attribute 'telegram_id'
+2026-07-15T20:05:05+0000 | INFO     | aiogram.event | Update id=745855555 is handled. Duration 7 ms by bot id=1162707887
+2026-07-15T20:05:05+0000 | INFO     | http | POST /webhook -> 200 (7.9ms)
+2026-07-15T20:05:07+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855556
+2026-07-15T20:05:07+0000 | INFO     | app.services.message_service | Stored new business message chat_id=8268018520 message_id=1401637 media=text
+2026-07-15T20:05:07+0000 | INFO     | aiogram.event | Update id=745855556 is handled. Duration 9 ms by bot id=1162707887
+2026-07-15T20:05:07+0000 | INFO     | http | POST /webhook -> 200 (11.4ms)
+2026-07-15T20:05:11+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855557
+2026-07-15T20:05:11+0000 | INFO     | app.services.message_service | Stored new business message chat_id=886717658 message_id=1354471 media=text
+2026-07-15T20:05:11+0000 | WARNING  | app.business.handlers | Streak success notification task failed: type object 'TelegramUser' has no attribute 'telegram_id'
+2026-07-15T20:05:11+0000 | INFO     | aiogram.event | Update id=745855557 is handled. Duration 10 ms by bot id=1162707887
+2026-07-15T20:05:11+0000 | INFO     | http | POST /webhook -> 200 (12.0ms)
+2026-07-15T20:05:12+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855558
+2026-07-15T20:05:12+0000 | INFO     | app.services.message_service | Stored new business message chat_id=8268018520 message_id=1401638 media=text
+2026-07-15T20:05:12+0000 | WARNING  | app.business.handlers | Streak success notification task failed: type object 'TelegramUser' has no attribute 'telegram_id'
+2026-07-15T20:05:12+0000 | INFO     | aiogram.event | Update id=745855558 is handled. Duration 8 ms by bot id=1162707887
+2026-07-15T20:05:12+0000 | INFO     | http | POST /webhook -> 200 (10.5ms)
+2026-07-15T20:05:15+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745855559
+2026-07-15T20:05:15+0000 | INFO     | app.services.message_service | Stored new business message chat_id=8268018520 message_id=1401639 media=text
+2026-07-15T20:05:15+0000 | WARNING  | app.business.handlers | Streak success notification task failed: type object 'TelegramUser' has no attribute 'telegram_id'
+2026-07-15T20:05:15+0000 | INFO     | aiogram.event | Update id=745855559 is handled. Duration 12 ms by bot id=1162707887
+2026-07-15T20:05:15+0000 | INFO     | http | POST /webhook -> 200 (12.5ms)

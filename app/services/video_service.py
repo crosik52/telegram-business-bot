@@ -1,4 +1,4 @@
-"""Video/photo download service — detects Reels / TikTok / YouTube Shorts links
+"""Video/photo download service — detects Reels / TikTok / YouTube links
 and sends the downloaded media back into the business chat.
 
 Supported platforms
@@ -7,7 +7,7 @@ Supported platforms
 - Instagram Posts  (instagram.com/p/…)        ← photos / carousels
 - TikTok           (tiktok.com/… | vm.tiktok.com/… | vt.tiktok.com/…)
   including photo slideshows
-- YouTube Shorts   (youtube.com/shorts/…)
+- YouTube          (youtube.com/shorts/… | youtube.com/watch?v=… | youtu.be/…)
 
 Limits
 ------
@@ -49,7 +49,7 @@ MAX_PHOTOS = 10                # Telegram album cap
 _PLATFORM_LABELS = {
     "instagram": "Instagram",
     "tiktok":    "TikTok",
-    "youtube":   "YouTube Shorts",
+    "youtube":   "YouTube",
 }
 
 # ── URL detection ─────────────────────────────────────────────────────────────
@@ -64,7 +64,8 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         re.IGNORECASE,
     )),
     ("youtube", re.compile(
-        r"https?://(?:www\.)?youtube\.com/shorts/[A-Za-z0-9_-]+/?[^\s]*",
+        r"https?://(?:www\.)?youtube\.com/(?:shorts/[A-Za-z0-9_-]+|watch\?[^\s]*?v=[A-Za-z0-9_-]+)[^\s]*"
+        r"|https?://youtu\.be/[A-Za-z0-9_-]+[^\s]*",
         re.IGNORECASE,
     )),
 ]
@@ -244,11 +245,13 @@ def _download_sync(
     is_tiktok = "tiktok.com" in url.lower()
 
     # ── Attempt 1: video ──────────────────────────────────────────────────────
+    MAX_DURATION = 1200  # 20 minutes — anything longer won't fit in 45 MB anyway
     opts_video = {
         **_build_base_opts(out_dir, MAX_BYTES),
-        "format": "best[ext=mp4]/best",
+        "format": "best[ext=mp4][height<=720]/best[ext=mp4]/best",
         "match_filter": lambda info, *, incomplete=False: (
-            "Video too long (> 3 min)" if (info.get("duration") or 0) > 180 else None
+            f"Video too long (> {MAX_DURATION // 60} min)"
+            if (info.get("duration") or 0) > MAX_DURATION else None
         ),
     }
     if progress_hook:

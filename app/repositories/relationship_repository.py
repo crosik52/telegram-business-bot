@@ -266,12 +266,16 @@ class RelationshipRepository:
         await self._session.flush()
         return rel
 
-    async def break_rel(self, user_id: int, partner_id: int) -> None:
+    async def break_rel(self, user_id: int, partner_id: int) -> Relationship:
+        """Break an active or pending relationship. Returns the relationship
+        (with its pre-break ``rel_type``) so the caller can react (e.g. notify
+        the other party when a marriage ends)."""
         rel = await self.get_between(user_id, partner_id)
         if not rel:
             raise ValueError("not_related")
         rel.status = "broken"
         await self._session.flush()
+        return rel
 
     # ── Wallet helper ─────────────────────────────────────────────────────────
 

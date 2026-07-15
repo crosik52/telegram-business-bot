@@ -866,11 +866,12 @@ async def wallet_claim_daily(
 
     # Marriage daily bonus — each active marriage adds MARRIAGE_DAILY_BONUS coins
     _marriage_bonus = 0
+    _marriages      = 0
     try:
-        _rel_repo_dc = RelationshipRepository(session)
-        _marriages   = await _rel_repo_dc.count_marriages(owner_id)
+        _rel_repo_dc    = RelationshipRepository(session)
+        _marriages      = await _rel_repo_dc.count_marriages(owner_id)
         _marriage_bonus = MARRIAGE_DAILY_BONUS * _marriages
-        premium_bonus += _marriage_bonus
+        premium_bonus  += _marriage_bonus
     except Exception:
         pass
 
@@ -893,6 +894,7 @@ async def wallet_claim_daily(
         "premium_multiplier": result.premium_multiplier,
         "premium_bonus": result.premium_bonus,
         "marriage_bonus": _marriage_bonus,
+        "marriage_count": _marriages,
     }
 
 

@@ -607,7 +607,7 @@ async def _cmd_friend(
 
     # Resolve owner's display name
     owner_row = (await session.execute(
-        select(TelegramUser).where(TelegramUser.telegram_id == owner_id)
+        select(TelegramUser).where(TelegramUser.telegram_user_id == owner_id)
     )).scalar_one_or_none()
     owner_parts = [p for p in [
         owner_row.first_name if owner_row else None,

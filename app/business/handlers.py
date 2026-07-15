@@ -596,7 +596,7 @@ async def on_business_message(message: Message, bot: Bot) -> None:
                     async for _sess in _gds():
                         # Resolve contact display name
                         _u = (await _sess.execute(
-                            select(_TU).where(_TU.telegram_id == _chat)
+                            select(_TU).where(_TU.telegram_user_id == _chat)
                         )).scalar_one_or_none()
                         _parts = [p for p in [
                             _u.first_name if _u else None,
@@ -1168,7 +1168,7 @@ async def on_rel_friend_respond(callback: CallbackQuery, bot: Bot) -> None:
 
         # Resolve names for notification texts
         resp_row = (await session.execute(
-            select(TelegramUser).where(TelegramUser.telegram_id == responder_id)
+            select(TelegramUser).where(TelegramUser.telegram_user_id == responder_id)
         )).scalar_one_or_none()
         resp_parts = [p for p in [
             resp_row.first_name if resp_row else None,

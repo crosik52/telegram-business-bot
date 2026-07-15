@@ -1573,12 +1573,12 @@ async def rel_list(
     if partner_ids:
         for _u in (
             await session.execute(
-                select(_TU).where(_TU.telegram_id.in_(partner_ids))
+                select(_TU).where(_TU.telegram_user_id.in_(partner_ids))
             )
         ).scalars():
             parts = [p for p in [_u.first_name, _u.last_name] if p]
-            name_map[_u.telegram_id] = {
-                "name":     " ".join(parts) or f"#{_u.telegram_id}",
+            name_map[_u.telegram_user_id] = {
+                "name":     " ".join(parts) or f"#{_u.telegram_user_id}",
                 "username": _u.username,
             }
 
@@ -1609,7 +1609,7 @@ async def rel_request(
             if _bot:
                 from app.models.user import TelegramUser as _TU
                 _me = (await session.execute(
-                    select(_TU).where(_TU.telegram_id == owner_id)
+                    select(_TU).where(_TU.telegram_user_id == owner_id)
                 )).scalar_one_or_none()
                 _parts = [p for p in [
                     _me.first_name if _me else None,
@@ -1672,7 +1672,7 @@ async def rel_respond(
                 if _bot:
                     from app.models.user import TelegramUser as _TU
                     _me = (await session.execute(
-                        select(_TU).where(_TU.telegram_id == owner_id)
+                        select(_TU).where(_TU.telegram_user_id == owner_id)
                     )).scalar_one_or_none()
                     _parts = [p for p in [
                         _me.first_name if _me else None,
@@ -1739,7 +1739,7 @@ async def rel_upgrade(
                 from app.models.relationship import TIER_LABELS as _TL
                 from app.models.user import TelegramUser as _TU
                 _me = (await session.execute(
-                    select(_TU).where(_TU.telegram_id == owner_id)
+                    select(_TU).where(_TU.telegram_user_id == owner_id)
                 )).scalar_one_or_none()
                 _parts = [p for p in [
                     _me.first_name if _me else None,
@@ -1782,7 +1782,7 @@ async def rel_break(
                 if _bot:
                     from app.models.user import TelegramUser as _TU
                     _me = (await session.execute(
-                        select(_TU).where(_TU.telegram_id == owner_id)
+                        select(_TU).where(_TU.telegram_user_id == owner_id)
                     )).scalar_one_or_none()
                     _parts = [p for p in [
                         _me.first_name if _me else None,

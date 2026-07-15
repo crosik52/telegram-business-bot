@@ -234,7 +234,7 @@ async def run_reminder_check(bot: Any) -> None:
 
                 # Resolve contact name
                 user_row = await session.execute(
-                    select(TelegramUser).where(TelegramUser.telegram_id == best_chat_id)
+                    select(TelegramUser).where(TelegramUser.telegram_user_id == best_chat_id)
                 )
                 user_obj = user_row.scalar_one_or_none()
                 if user_obj:

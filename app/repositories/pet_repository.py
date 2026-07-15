@@ -41,6 +41,7 @@ from app.models.business_connection import BusinessConnection
 from app.models.message import Message
 from app.models.pet import ChatPet
 from app.models.wallet import UserWallet
+from app.repositories.relationship_repository import RelationshipRepository
 
 # ── Catalogue ─────────────────────────────────────────────────────────────────
 
@@ -621,10 +622,13 @@ class PetRepository:
         else:
             pet.feed_streak = 1
 
-        # XP: food multiplier × xp_boost skill × subscription/shop multiplier
+        # XP: food multiplier × xp_boost skill × subscription/shop multiplier × relationship bonus
         ups = _get_upgrades(pet)
         skill_xp_mult = 1.0 + ups.get("xp_boost", 0) * 0.30
-        total_mult    = food["xp_mult"] * skill_xp_mult * max(1.0, xp_multiplier)
+        rel_repo      = RelationshipRepository(self._session)
+        rel_tier      = await rel_repo.get_active_tier(owner_telegram_id, pet.chat_id)
+        rel_mult      = rel_repo.rel_xp_multiplier(rel_tier)
+        total_mult    = food["xp_mult"] * skill_xp_mult * max(1.0, xp_multiplier) * rel_mult
         xp_gained     = round(FEED_XP * total_mult)
 
         pet.last_fed_at    = now
@@ -676,7 +680,10 @@ class PetRepository:
 
         ups = _get_upgrades(pet)
         skill_xp_mult = 1.0 + ups.get("xp_boost", 0) * 0.30
-        xp_gained     = round(PLAY_XP * skill_xp_mult * max(1.0, xp_multiplier))
+        rel_repo      = RelationshipRepository(self._session)
+        rel_tier      = await rel_repo.get_active_tier(owner_telegram_id, pet.chat_id)
+        rel_mult      = rel_repo.rel_xp_multiplier(rel_tier)
+        xp_gained     = round(PLAY_XP * skill_xp_mult * max(1.0, xp_multiplier) * rel_mult)
         pet.xp       += xp_gained
         pet.level     = _compute_level(pet.xp)
 
@@ -723,7 +730,10 @@ class PetRepository:
 
         ups = _get_upgrades(pet)
         skill_xp_mult = 1.0 + ups.get("xp_boost", 0) * 0.30
-        xp_gained     = round(CUDDLE_XP * skill_xp_mult * max(1.0, xp_multiplier))
+        rel_repo      = RelationshipRepository(self._session)
+        rel_tier      = await rel_repo.get_active_tier(owner_telegram_id, pet.chat_id)
+        rel_mult      = rel_repo.rel_xp_multiplier(rel_tier)
+        xp_gained     = round(CUDDLE_XP * skill_xp_mult * max(1.0, xp_multiplier) * rel_mult)
         pet.xp       += xp_gained
         pet.level     = _compute_level(pet.xp)
 

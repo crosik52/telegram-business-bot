@@ -45,6 +45,13 @@ UPGRADE_MIN_LEVEL: dict[str, int] = {
 
 MARRIAGE_DAILY_BONUS = 100  # extra coins in daily claim per active marriage
 
+# Pet XP bonus multipliers per relationship tier (applied to feed/play/cuddle)
+REL_XP_BONUS: dict[str, float] = {
+    "friends": 1.05,
+    "dating":  1.10,
+    "married": 1.15,
+}
+
 
 class Relationship(Base):
     """One row per unique user pair.  user_a_id < user_b_id always."""

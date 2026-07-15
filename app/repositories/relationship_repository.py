@@ -13,6 +13,7 @@ from app.models.relationship import (
     GIFT_TO_PARTNER,
     GIFT_XP,
     MAX_REL_LEVEL,
+    REL_XP_BONUS,
     REQUEST_COST,
     TIER_ORDER,
     UPGRADE_COSTS,
@@ -89,6 +90,23 @@ class RelationshipRepository:
         return sum(
             1 for r in rels if r.rel_type == "married" and r.status == "active"
         )
+
+    async def get_active_tier(self, user1: int, user2: int) -> str | None:
+        """Return rel_type of the active relationship between user1 and user2, or None."""
+        a, b = self._pair(user1, user2)
+        return (
+            await self._session.execute(
+                select(Relationship.rel_type).where(
+                    Relationship.user_a_id == a,
+                    Relationship.user_b_id == b,
+                    Relationship.status == "active",
+                )
+            )
+        ).scalar_one_or_none()
+
+    def rel_xp_multiplier(self, tier: str | None) -> float:
+        """Return the pet XP multiplier for the given relationship tier (1.0 if none)."""
+        return REL_XP_BONUS.get(tier, 1.0) if tier else 1.0
 
     def to_dict(self, rel: Relationship, viewer_id: int) -> dict:
         """Serialise a Relationship for API responses."""

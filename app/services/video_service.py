@@ -94,30 +94,114 @@ def _build_base_opts(out_dir: str, max_bytes: int) -> dict:
     }
 
 
+def _json_cookies_to_netscape(raw: str) -> str:
+    """Convert a JSON cookie array (exported by browser extensions such as
+    'Cookie Editor' or 'EditThisCookie') to Netscape/Mozilla cookie file format
+    that yt-dlp accepts via ``cookiefile``.
+
+    Returns an empty string if *raw* is not valid JSON or not a list.
+    """
+    import json as _json
+    import time as _time
+
+    try:
+        cookies = _json.loads(raw)
+        if not isinstance(cookies, list):
+            return ""
+    except (_json.JSONDecodeError, ValueError):
+        return ""
+
+    lines = [
+        "# Netscape HTTP Cookie File",
+        "# Converted from JSON by video_service",
+    ]
+    for c in cookies:
+        if not isinstance(c, dict):
+            continue
+        domain = str(c.get("domain") or "")
+        if not domain:
+            continue
+        if not domain.startswith("."):
+            domain = "." + domain
+        include_sub = "TRUE"
+        path       = str(c.get("path") or "/")
+        secure     = "TRUE" if c.get("secure") else "FALSE"
+        expiry     = str(int(c.get("expirationDate") or int(_time.time()) + 86_400 * 365))
+        name       = str(c.get("name") or "")
+        value      = str(c.get("value") or "")
+        lines.append(f"{domain}\t{include_sub}\t{path}\t{secure}\t{expiry}\t{name}\t{value}")
+
+    return "\n".join(lines)
+
+
 def _apply_tiktok_opts(ydl_opts: dict, url: str, out_dir: str) -> None:
-    """Mutate *ydl_opts* in-place with TikTok-specific settings."""
+    """Mutate *ydl_opts* in-place with TikTok-specific settings.
+
+    Supported TIKTOK_COOKIES formats (tried in order):
+      1. Netscape cookie file (7 tab-separated columns per row)
+      2. Netscape file stored with ``\\n`` escape sequences instead of real newlines
+      3. JSON array exported by browser extensions (Cookie Editor, EditThisCookie, …)
+      4. Raw HTTP Cookie header string  (name=val; name2=val2)
+         → injected via http_headers["Cookie"]
+    """
     import logging as _logging
     _tlog = _logging.getLogger(__name__)
 
-    cookies_content = os.environ.get("TIKTOK_COOKIES", "").strip()
-    if not cookies_content:
-        _tlog.warning("TikTok: TIKTOK_COOKIES env var is empty or not set")
-    else:
-        if "\n" not in cookies_content and "\\n" in cookies_content:
-            cookies_content = cookies_content.replace("\\n", "\n")
+    raw = os.environ.get("TIKTOK_COOKIES", "").strip()
+    if not raw:
+        _tlog.warning("TikTok: TIKTOK_COOKIES is empty — downloads may fail for private/age-gated content")
+        _apply_tiktok_ua(ydl_opts)
+        return
 
-        data_lines = [l for l in cookies_content.splitlines()
-                      if l.strip() and not l.strip().startswith("#")]
-        good_lines = [l for l in data_lines if len(l.split("\t")) == 7]
-        if good_lines:
+    # ── Normalise escaped newlines ─────────────────────────────────────────────
+    if "\n" not in raw and "\\n" in raw:
+        raw = raw.replace("\\n", "\n")
+
+    # ── 1. Netscape cookie file ────────────────────────────────────────────────
+    data_lines = [l for l in raw.splitlines() if l.strip() and not l.strip().startswith("#")]
+    netscape_lines = [l for l in data_lines if len(l.split("\t")) == 7]
+    if netscape_lines:
+        cookie_path = os.path.join(out_dir, "_cookies.txt")
+        with open(cookie_path, "w", encoding="utf-8") as fh:
+            fh.write(raw)
+        ydl_opts["cookiefile"] = cookie_path
+        _tlog.info("TikTok: Netscape cookiefile set (%d valid rows)", len(netscape_lines))
+        _apply_tiktok_ua(ydl_opts)
+        return
+
+    # ── 2. JSON array (browser extension export) ───────────────────────────────
+    if raw.lstrip().startswith("["):
+        netscape_str = _json_cookies_to_netscape(raw)
+        if netscape_str:
             cookie_path = os.path.join(out_dir, "_cookies.txt")
             with open(cookie_path, "w", encoding="utf-8") as fh:
-                fh.write(cookies_content)
+                fh.write(netscape_str)
             ydl_opts["cookiefile"] = cookie_path
-            _tlog.info("TikTok: cookiefile set (%d bytes)", len(cookies_content))
-        else:
-            _tlog.warning("TikTok: cookie content has no valid Netscape lines, skipping auth")
+            _tlog.info("TikTok: JSON→Netscape cookiefile set (%d bytes)", len(netscape_str))
+            _apply_tiktok_ua(ydl_opts)
+            return
+        _tlog.warning("TikTok: TIKTOK_COOKIES looks like JSON but failed to parse")
 
+    # ── 3. Raw HTTP Cookie header  (name=val; name2=val2) ──────────────────────
+    # Heuristic: no newlines, contains "=", no tabs, does NOT start with "#"
+    # (to avoid mis-detecting a collapsed Netscape file).
+    if "=" in raw and "\n" not in raw and "\t" not in raw and not raw.startswith("#"):
+        ydl_opts.setdefault("http_headers", {})
+        ydl_opts["http_headers"]["Cookie"] = raw
+        _tlog.info("TikTok: raw Cookie header injected (%d chars)", len(raw))
+        _apply_tiktok_ua(ydl_opts)
+        return
+
+    _tlog.warning(
+        "TikTok: TIKTOK_COOKIES present (%d bytes) but no recognised format "
+        "(Netscape / JSON / Cookie header). Downloads will proceed without auth.",
+        len(raw),
+    )
+    _apply_tiktok_ua(ydl_opts)
+
+
+def _apply_tiktok_ua(ydl_opts: dict) -> None:
+    """Inject a realistic browser User-Agent (always applied for TikTok)."""
     ydl_opts.setdefault("http_headers", {})
     ydl_opts["http_headers"]["User-Agent"] = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "

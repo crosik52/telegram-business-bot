@@ -1340,94 +1340,169 @@
   .cgp-label { font-size: 11px; font-weight: 600; letter-spacing: 0.2px; }
 
   /* ── Mines ── */
-  .mines-config { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+  .mines-config { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
   .mines-config-row { display: flex; align-items: center; gap: 10px; }
-  .mines-config-label { font-size: 12px; color: var(--ci-muted); width: 48px; flex-shrink: 0; }
+  .mines-config-label {
+    font-size: 10.5px; color: var(--ci-muted); width: 42px; flex-shrink: 0;
+    text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
+  }
   .mines-preset-group { display: flex; gap: 5px; flex: 1; }
   .mines-preset-btn {
-    flex: 1; padding: 7px 2px;
-    background: var(--ci-s2); border: 1px solid var(--ci-border); border-radius: 8px;
-    color: var(--ci-muted); font-family: 'Geist', system-ui, sans-serif;
-    font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s;
+    flex: 1; padding: 8px 2px;
+    background: var(--ci-s2); border: 1px solid rgba(255,255,255,0.08); border-radius: 9px;
+    color: rgba(245,245,245,0.45); font-family: 'Geist', system-ui, sans-serif;
+    font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s;
   }
   .mines-preset-btn.sel {
-    background: rgba(124,108,255,0.12); border-color: rgba(124,108,255,0.30);
-    color: var(--ci-accent);
+    background: rgba(124,108,255,0.16); border-color: rgba(124,108,255,0.42);
+    color: #c5baff;
   }
+  .mines-preset-btn:active { transform: scale(0.92); }
   .mines-grid {
     display: grid; grid-template-columns: repeat(5,1fr);
-    gap: 6px; margin-bottom: 12px;
+    gap: 5px; margin-bottom: 12px;
   }
   .mines-cell {
-    aspect-ratio: 1; background: var(--ci-s2);
-    border: 1px solid var(--ci-border); border-radius: 10px;
+    aspect-ratio: 1;
+    background: linear-gradient(145deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 22px; cursor: pointer; transition: background 0.15s, border-color 0.15s;
+    font-size: 20px; cursor: pointer;
+    transition: background 0.12s, border-color 0.12s, transform 0.1s, box-shadow 0.12s;
     user-select: none; -webkit-tap-highlight-color: transparent;
+    color: transparent; /* hide placeholder text */
   }
-  .mines-cell:not(.safe):not(.mine):not(.mine-end):active { transform: scale(0.9); }
-  .mines-cell.inactive { cursor: default; }
+  .mines-cell:not(.safe):not(.mine):not(.mine-end):not(.inactive):hover {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.15);
+  }
+  .mines-cell:not(.safe):not(.mine):not(.mine-end):not(.inactive):active {
+    transform: scale(0.86);
+    background: rgba(124,108,255,0.18);
+    border-color: rgba(124,108,255,0.35);
+  }
+  .mines-cell.inactive { cursor: default; opacity: 0.38; }
   .mines-cell.safe {
-    background: rgba(52,199,89,0.12); border-color: rgba(52,199,89,0.35);
-    animation: popIn 0.22s ease; cursor: default;
+    background: rgba(52,199,89,0.16);
+    border-color: rgba(52,199,89,0.55);
+    box-shadow: 0 0 10px rgba(52,199,89,0.18);
+    animation: mRevealSafe 0.3s cubic-bezier(.34,1.56,.64,1) forwards;
+    cursor: default; color: initial;
+  }
+  @keyframes mRevealSafe {
+    0%   { transform: scale(0.6); opacity: 0.2; }
+    60%  { transform: scale(1.14); }
+    100% { transform: scale(1); opacity: 1; }
   }
   .mines-cell.mine {
-    background: rgba(255,69,58,0.18); border-color: rgba(255,69,58,0.45);
-    animation: popIn 0.22s ease; cursor: default;
+    background: rgba(255,69,58,0.24);
+    border-color: rgba(255,69,58,0.7);
+    box-shadow: 0 0 14px rgba(255,69,58,0.3);
+    animation: mExplode 0.45s ease forwards;
+    cursor: default; color: initial;
+  }
+  @keyframes mExplode {
+    0%   { transform: scale(1); }
+    18%  { transform: scale(1.35) rotate(-7deg); }
+    36%  { transform: scale(0.82) rotate(7deg); }
+    55%  { transform: scale(1.16) rotate(-4deg); }
+    75%  { transform: scale(0.96) rotate(2deg); }
+    100% { transform: scale(1) rotate(0); }
   }
   .mines-cell.mine-end {
-    background: rgba(255,69,58,0.06); border-color: rgba(255,69,58,0.18);
-    cursor: default;
+    background: rgba(255,69,58,0.07);
+    border-color: rgba(255,69,58,0.24);
+    animation: mRevealEnd 0.25s ease forwards;
+    cursor: default; color: initial;
+  }
+  @keyframes mRevealEnd {
+    0%   { transform: scale(0.85); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
   }
   .mines-status {
     display: flex; justify-content: space-between; align-items: center;
-    background: var(--ci-s2); border: 1px solid var(--ci-border);
+    background: linear-gradient(135deg, rgba(124,108,255,0.10), rgba(124,108,255,0.04));
+    border: 1px solid rgba(124,108,255,0.22);
     border-radius: 14px; padding: 12px 16px; margin-bottom: 10px;
   }
-  .mines-mult   { font-size: 24px; font-weight: 800; color: var(--ci-accent); line-height: 1; }
-  .mines-payout { font-size: 11px; color: var(--ci-muted); margin-top: 3px; }
-  .mines-cashout-btn {
-    border: 1px solid rgba(52,199,89,0.3); border-radius: 10px; padding: 9px 16px;
-    background: rgba(52,199,89,0.12); color: #34c759;
-    font-family: 'Geist', system-ui, sans-serif; font-size: 13px; font-weight: 600;
-    cursor: pointer; transition: all 0.15s;
+  .mines-mult {
+    font-size: 30px; font-weight: 900; color: #c5baff; line-height: 1;
+    transition: color 0.4s, text-shadow 0.4s;
+    text-shadow: 0 0 18px rgba(124,108,255,0.4);
   }
-  .mines-cashout-btn:active { transform: scale(0.95); }
-  .mines-cashout-btn:disabled { opacity: 0.35; cursor: default; }
-  .mines-result { text-align: center; font-size: 15px; font-weight: 700; min-height: 24px; margin-top: 8px; }
+  .mines-mult.tier2 { color: #fbbf24; text-shadow: 0 0 18px rgba(251,191,36,0.45); }
+  .mines-mult.tier3 { color: #f97316; text-shadow: 0 0 22px rgba(249,115,22,0.55); }
+  .mines-payout { font-size: 11px; color: var(--ci-muted); margin-top: 4px; }
+  .mines-cashout-btn {
+    border: 1px solid rgba(52,199,89,0.35); border-radius: 12px; padding: 10px 18px;
+    background: rgba(52,199,89,0.12); color: #34c759;
+    font-family: 'Geist', system-ui, sans-serif; font-size: 13px; font-weight: 700;
+    cursor: pointer; transition: all 0.18s;
+  }
+  .mines-cashout-btn:not(:disabled):active { transform: scale(0.95); }
+  .mines-cashout-btn:not(:disabled):hover { background: rgba(52,199,89,0.22); box-shadow: 0 4px 12px rgba(52,199,89,0.2); }
+  .mines-cashout-btn:disabled { opacity: 0.28; cursor: default; }
+  .mines-result { text-align: center; font-size: 16px; font-weight: 700; min-height: 24px; margin-top: 8px; }
 
   /* ── Crash / Rocket ── */
   .crash-display {
     position: relative; height: 148px;
-    background: var(--ci-s2); border: 1px solid var(--ci-border);
-    border-radius: 14px; margin-bottom: 14px; overflow: hidden;
+    background: linear-gradient(180deg, #0b0b14 0%, #0d0d0d 100%);
+    border: 1px solid rgba(124,108,255,0.18);
+    border-radius: 16px; margin-bottom: 14px; overflow: hidden;
+  }
+  .crash-display::before {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+      linear-gradient(rgba(124,108,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(124,108,255,0.04) 1px, transparent 1px);
+    background-size: 55px 37px;
+    pointer-events: none;
   }
   .crash-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
   .crash-rocket {
-    position: absolute; font-size: 26px; line-height: 1;
+    position: absolute; font-size: 24px; line-height: 1;
     left: 6px; bottom: 10px;
-    filter: drop-shadow(0 0 6px rgba(124,108,255,.55));
-    transition: none; transform: rotate(45deg);
+    filter: drop-shadow(0 0 8px rgba(124,108,255,.8));
+    transform: rotate(45deg);
   }
   .crash-mult-display {
-    position: absolute; top: 50%; left: 50%;
-    transform: translate(-50%,-50%);
-    font-size: 38px; font-weight: 900; letter-spacing: -1.5px;
-    color: var(--ci-text); pointer-events: none;
-    text-shadow: 0 2px 12px rgba(0,0,0,.6);
+    position: absolute; bottom: 10px; right: 12px;
+    font-size: 34px; font-weight: 900; letter-spacing: -1.5px;
+    color: rgba(245,245,245,0.65); pointer-events: none;
+    text-shadow: 0 2px 10px rgba(0,0,0,.8);
+    transition: color 0.3s, text-shadow 0.3s;
   }
-  .crash-mult-display.won  { color: #34c759; animation: popIn 0.3s ease; }
-  .crash-mult-display.lost { color: #ff453a; animation: popIn 0.3s ease; }
+  .crash-mult-display.flying {
+    color: #c5baff;
+    text-shadow: 0 0 22px rgba(124,108,255,0.55), 0 2px 10px rgba(0,0,0,.8);
+    animation: crashMPulse 1.1s ease-in-out infinite;
+  }
+  @keyframes crashMPulse { 0%,100%{opacity:1} 50%{opacity:0.78} }
+  .crash-mult-display.won  { color: #34c759; text-shadow: 0 0 24px rgba(52,199,89,0.55); animation: popIn 0.3s ease; }
+  .crash-mult-display.lost { color: #ff453a; text-shadow: 0 0 24px rgba(255,69,58,0.55); animation: mExplode 0.4s ease; }
   .crash-cashout-btn {
-    width: 100%; border: 1px solid rgba(52,199,89,0.3); border-radius: 14px; padding: 14px;
-    background: rgba(52,199,89,0.12); color: #34c759;
+    width: 100%; border: 1px solid rgba(52,199,89,0.30); border-radius: 14px; padding: 14px;
+    background: rgba(52,199,89,0.10); color: #34c759;
     font-family: 'Geist', system-ui, sans-serif; font-size: 15px; font-weight: 700;
     cursor: pointer; transition: all 0.2s; margin-bottom: 8px;
   }
-  .crash-cashout-btn:active   { transform: scale(0.97); }
+  .crash-cashout-btn.live {
+    border-color: rgba(52,199,89,0.55);
+    background: rgba(52,199,89,0.16);
+    animation: cashoutGlow 1.4s ease-in-out infinite;
+  }
+  @keyframes cashoutGlow {
+    0%,100% { box-shadow: 0 0 0 0 rgba(52,199,89,0.35); }
+    50%     { box-shadow: 0 0 0 5px rgba(52,199,89,0); }
+  }
+  .crash-cashout-btn:not(:disabled):active { transform: scale(0.97); }
   .crash-cashout-btn:disabled {
-    opacity: 0.35; cursor: default;
-    background: rgba(255,255,255,0.04); color: var(--ci-muted); border-color: var(--ci-border);
+    opacity: 0.28; cursor: default;
+    background: rgba(255,255,255,0.03); color: var(--ci-muted);
+    border-color: var(--ci-border); animation: none;
   }
   .crash-start-btn {
     width: 100%; border: 1px solid rgba(124,108,255,0.25); border-radius: 14px; padding: 14px;
@@ -1435,10 +1510,13 @@
     font-family: 'Geist', system-ui, sans-serif; font-size: 14px; font-weight: 600;
     cursor: pointer; transition: all 0.2s;
   }
-  .crash-start-btn:hover   { background: rgba(124,108,255,0.18); }
-  .crash-start-btn:active  { transform: scale(0.97); }
+  .crash-start-btn:not(:disabled):hover   { background: rgba(124,108,255,0.18); }
+  .crash-start-btn:not(:disabled):active  { transform: scale(0.97); }
   .crash-start-btn:disabled { opacity: 0.45; cursor: default; }
-  .crash-result-msg { text-align: center; font-size: 14px; font-weight: 600; min-height: 22px; margin-top: 8px; }
+  .crash-result-msg { text-align: center; font-size: 15px; font-weight: 700; min-height: 22px; margin-top: 8px; }
+  .crash-bet-row { display: flex; gap: 6px; margin-bottom: 10px; align-items: center; }
+  .crash-presets { display: flex; gap: 5px; margin-bottom: 10px; }
+  .crash-presets .mines-preset-btn { min-width: 40px; }
 
   /* ══════════════════════════════════════════
      DONATE / SUPPORT
@@ -3688,25 +3766,34 @@
 
     // ── New game render functions ─────────────────────────────────────────────
 
+    function _minesRiskLabel(n) {
+      if (n <= 3) return {t:"Низкий риск", c:"#34c759"};
+      if (n <= 7) return {t:"Средний",    c:"#fbbf24"};
+      if (n <= 10) return {t:"Высокий",   c:"#f97316"};
+      return {t:"Экстрим",               c:"#ff453a"};
+    }
+
     function renderMinesCard() {
       const balance = walletData?.balance || 0;
       const maxBet  = Math.min(500, balance);
       const selBet  = Math.min(minesBet, maxBet);
+      const risk    = _minesRiskLabel(minesCount);
       const cells   = Array.from({length: 25}, (_, i) =>
-        `<div class="mines-cell inactive" id="mCell${i}" data-index="${i}">·</div>`
+        `<div class="mines-cell inactive" id="mCell${i}" onclick="revealMinesCell(${i})"></div>`
       ).join("");
       return `
         <div class="casino-card">
           <div class="casino-card-header">
             <span class="casino-card-title">💣 Мины</span>
-            <span class="casino-card-sub">Открывай, не взорвись</span>
+            <span class="casino-card-sub" style="color:${risk.c}">${risk.t}</span>
           </div>
           <div class="mines-config">
             <div class="mines-config-row">
               <span class="mines-config-label">Мин</span>
               <div class="mines-preset-group" id="minesCountBtns">
                 ${[3,5,7,10,15].map(n =>
-                  `<button class="mines-preset-btn${n===minesCount?" sel":""}" data-mines="${n}">${n}</button>`
+                  `<button class="mines-preset-btn${n===minesCount?" sel":""}"
+                     onclick="selectMinesCount(${n})">${n}</button>`
                 ).join("")}
               </div>
             </div>
@@ -3714,9 +3801,11 @@
               <span class="mines-config-label">Ставка</span>
               <div class="mines-preset-group" id="minesBetBtns">
                 ${[10,25,50,100].filter(v=>v<=maxBet).map(v =>
-                  `<button class="mines-preset-btn${v===selBet?" sel":""}" data-bet="${v}">${v}</button>`
+                  `<button class="mines-preset-btn${v===selBet?" sel":""}"
+                     onclick="selectMinesBet(${v})">${v}</button>`
                 ).join("")}
-                ${maxBet>=10?`<button class="mines-preset-btn${selBet===maxBet&&maxBet>100?" sel":""}" data-bet="${maxBet}">Всё</button>`:""}
+                ${maxBet>=10?`<button class="mines-preset-btn${selBet===maxBet&&maxBet>100?" sel":""}"
+                  onclick="selectMinesBet(${maxBet})">Всё</button>`:""}
               </div>
             </div>
           </div>
@@ -3724,15 +3813,43 @@
           <div class="mines-status" id="minesStatus" style="display:none">
             <div>
               <div class="mines-mult" id="minesMultEl">1.00×</div>
-              <div class="mines-payout" id="minesPayoutEl">Забрать 0 монет</div>
+              <div class="mines-payout" id="minesPayoutEl">Открой клетку</div>
             </div>
-            <button class="mines-cashout-btn" id="minesCashoutBtn" disabled>Забрать</button>
+            <button class="mines-cashout-btn" id="minesCashoutBtn"
+                    onclick="minesCashout()" disabled>Забрать</button>
           </div>
-          <button class="casino-spin-btn" id="minesStartBtn">
-            💣 Начать игру за ${selBet} монет
+          <button class="casino-spin-btn" id="minesStartBtn" onclick="startMines()">
+            💣 Начать за ${selBet} 🪙
           </button>
           <div class="mines-result" id="minesResult"></div>
         </div>`;
+    }
+
+    function selectMinesCount(n) {
+      if (minesGameActive) return;
+      minesCount = n;
+      const risk = _minesRiskLabel(n);
+      document.querySelectorAll("#minesCountBtns .mines-preset-btn").forEach(b => {
+        b.classList.toggle("sel", parseInt(b.textContent) === n);
+      });
+      const sub = document.querySelector(".casino-card-sub");
+      if (sub) { sub.textContent = risk.t; sub.style.color = risk.c; }
+    }
+
+    function selectMinesBet(v) {
+      if (minesGameActive) return;
+      minesBet = v;
+      document.querySelectorAll("#minesBetBtns .mines-preset-btn").forEach(b => {
+        const bv = b.onclick?.toString().match(/selectMinesBet\((\d+)\)/)?.[1];
+        b.classList.toggle("sel", bv && parseInt(bv) === v);
+      });
+      const sb = document.getElementById("minesStartBtn");
+      if (sb) sb.textContent = `💣 Начать за ${v} 🪙`;
+    }
+
+    function setCrashBet(v) {
+      const inp = document.getElementById("crashBet");
+      if (inp) { inp.value = v; }
     }
 
     function renderCrashCard() {
@@ -3747,22 +3864,27 @@
           <div class="crash-display" id="crashDisplay">
             <svg class="crash-svg" id="crashSvg" viewBox="0 0 300 148" preserveAspectRatio="none">
               <defs>
-                <linearGradient id="crashGrad" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stop-color="rgba(124,108,255,0.3)"/>
-                  <stop offset="100%" stop-color="rgba(124,108,255,0.8)"/>
+                <linearGradient id="crashFillGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="rgba(124,108,255,0.28)"/>
+                  <stop offset="100%" stop-color="rgba(124,108,255,0.0)"/>
+                </linearGradient>
+                <linearGradient id="crashLineGrad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stop-color="rgba(124,108,255,0.5)"/>
+                  <stop offset="100%" stop-color="rgba(197,186,255,1)"/>
                 </linearGradient>
               </defs>
-              <polyline id="crashPolyline" fill="none" stroke="url(#crashGrad)"
-                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="0,148"/>
+              <polygon id="crashFill" fill="url(#crashFillGrad)" points="0,148 0,148"/>
+              <polyline id="crashPolyline" fill="none" stroke="url(#crashLineGrad)"
+                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="0,148"/>
             </svg>
             <div class="crash-rocket" id="crashRocket">🚀</div>
             <div class="crash-mult-display" id="crashMultDisplay">1.00×</div>
           </div>
-          <div class="flip-presets" style="margin-bottom:10px">
+          <div class="crash-presets">
             ${[10,25,50,100].filter(v=>v<=maxBet).map(v=>
-              `<button class="flip-preset-btn" data-crash-preset="${v}">${v}</button>`
+              `<button class="mines-preset-btn" onclick="setCrashBet(${v})">${v}</button>`
             ).join("")}
-            ${maxBet>=10?`<button class="flip-preset-btn" data-crash-preset="${maxBet}">Всё</button>`:""}
+            ${maxBet>=10?`<button class="mines-preset-btn" onclick="setCrashBet(${maxBet})">Всё</button>`:""}
           </div>
           <div class="flip-bet-row" style="margin-bottom:10px">
             <span class="flip-bet-label">Ставка</span>
@@ -3770,8 +3892,10 @@
             <input type="number" id="crashBet" class="flip-bet-input"
               min="10" max="${maxBet}" value="${Math.min(50,maxBet)}"/>
           </div>
-          <button class="crash-cashout-btn" id="crashCashoutBtn" disabled>🚀 Забрать</button>
-          <button class="crash-start-btn"   id="crashStartBtn">🚀 Запустить</button>
+          <button class="crash-cashout-btn" id="crashCashoutBtn"
+                  onclick="doCrashCashout()" disabled>🚀 Забрать</button>
+          <button class="crash-start-btn" id="crashStartBtn"
+                  onclick="startCrash()">🚀 Запустить</button>
           <div class="crash-result-msg" id="crashResult"></div>
         </div>`;
     }
@@ -3800,54 +3924,7 @@
         if (btn) btn.addEventListener("click", () => doFlip(btn.dataset.choice));
       });
 
-      // ── Mines: mine count presets ──
-      document.querySelectorAll("#minesCountBtns .mines-preset-btn").forEach(btn => {
-        btn.addEventListener("click", () => {
-          minesCount = parseInt(btn.dataset.mines);
-          document.querySelectorAll("#minesCountBtns .mines-preset-btn")
-            .forEach(b => b.classList.remove("sel"));
-          btn.classList.add("sel");
-        });
-      });
-      // ── Mines: bet presets ──
-      document.querySelectorAll("#minesBetBtns .mines-preset-btn").forEach(btn => {
-        btn.addEventListener("click", () => {
-          minesBet = parseInt(btn.dataset.bet);
-          document.querySelectorAll("#minesBetBtns .mines-preset-btn")
-            .forEach(b => b.classList.remove("sel"));
-          btn.classList.add("sel");
-          const sb = document.getElementById("minesStartBtn");
-          if (sb) sb.textContent = `💣 Начать игру за ${minesBet} монет`;
-        });
-      });
-      // ── Mines: start / cashout / grid ──
-      const msBtn = document.getElementById("minesStartBtn");
-      if (msBtn) msBtn.addEventListener("click", startMines);
-      const mcBtn = document.getElementById("minesCashoutBtn");
-      if (mcBtn) mcBtn.addEventListener("click", minesCashout);
-      const mGrid = document.getElementById("minesGrid");
-      if (mGrid) {
-        mGrid.addEventListener("click", e => {
-          const cell = e.target.closest(".mines-cell");
-          if (!cell || !minesGameActive) return;
-          if (cell.classList.contains("safe") || cell.classList.contains("mine")
-              || cell.classList.contains("mine-end") || cell.classList.contains("inactive")) return;
-          revealMinesCell(parseInt(cell.dataset.index));
-        });
-      }
-
-      // ── Crash: bet presets ──
-      document.querySelectorAll("[data-crash-preset]").forEach(btn => {
-        btn.addEventListener("click", () => {
-          const inp = document.getElementById("crashBet");
-          if (inp) inp.value = btn.dataset.crashPreset;
-        });
-      });
-      // ── Crash: start / cashout ──
-      const csBtn = document.getElementById("crashStartBtn");
-      if (csBtn) csBtn.addEventListener("click", startCrash);
-      const ccBtn = document.getElementById("crashCashoutBtn");
-      if (ccBtn) ccBtn.addEventListener("click", doCrashCashout);
+      // Mines + Crash buttons now use inline onclick — no listeners needed here
     }
 
     function updateBalanceDisplay(newBalance) {
@@ -4046,18 +4123,19 @@
         updateBalanceDisplay(balance - bet);
 
         // Reset and activate grid cells
+        const mGrid0 = document.getElementById("minesGrid");
+        if (mGrid0) mGrid0.style.pointerEvents = "";    // ← KEY FIX: restore grid
         document.querySelectorAll(".mines-cell").forEach(cell => {
           cell.classList.remove("inactive", "safe", "mine", "mine-end");
-          cell.textContent = "·";
-          cell.style.pointerEvents = "";
+          cell.textContent = "";
         });
         const resultEl2 = document.getElementById("minesResult");
         if (resultEl2) resultEl2.innerHTML = "";
         const multEl0 = document.getElementById("minesMultEl");
         const payEl0  = document.getElementById("minesPayoutEl");
         const cbtn0   = document.getElementById("minesCashoutBtn");
-        if (multEl0) multEl0.textContent = "1.00×";
-        if (payEl0)  payEl0.textContent  = "Забрать 0 монет";
+        if (multEl0) { multEl0.textContent = "1.00×"; multEl0.className = "mines-mult"; }
+        if (payEl0)  payEl0.textContent  = "Открой клетку";
         if (cbtn0)   cbtn0.disabled = true;
         const statusEl = document.getElementById("minesStatus");
         if (statusEl) statusEl.style.display = "";
@@ -4090,20 +4168,23 @@
 
         if (data.is_mine) {
           minesGameActive = false;
+          if (grid) grid.style.pointerEvents = "none";  // keep disabled during reveal animation
           cell.classList.add("mine");
           cell.textContent = "💣";
-          // Reveal all other mines
-          (data.mines_indices || []).forEach(idx => {
+          // Cascade reveal of other mines with staggered delay
+          (data.mines_indices || []).forEach((idx, i) => {
             if (idx === index) return;
-            const mc = document.getElementById(`mCell${idx}`);
-            if (mc) { mc.classList.add("mine-end"); mc.textContent = "💣"; }
+            setTimeout(() => {
+              const mc = document.getElementById(`mCell${idx}`);
+              if (mc) { mc.classList.add("mine-end"); mc.textContent = "💣"; }
+            }, 60 + i * 35);
           });
           if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
           const statusEl = document.getElementById("minesStatus");
           if (statusEl) statusEl.style.display = "none";
           const resultEl = document.getElementById("minesResult");
-          if (resultEl) resultEl.innerHTML = `<span class="flip-lost">💣 Взрыв! Ставка потеряна.</span>`;
-          setTimeout(_minesShowRestart, 700);
+          if (resultEl) resultEl.innerHTML = `<span class="flip-lost">💥 Взрыв! Ставка потеряна.</span>`;
+          setTimeout(_minesShowRestart, 900);
         } else {
           cell.classList.add("safe");
           cell.textContent = "💎";
@@ -4111,8 +4192,11 @@
           const multEl    = document.getElementById("minesMultEl");
           const payoutEl  = document.getElementById("minesPayoutEl");
           const cashoutBtn= document.getElementById("minesCashoutBtn");
-          if (multEl)    multEl.textContent   = `${data.multiplier.toFixed(2)}×`;
-          if (payoutEl)  payoutEl.textContent = `Забрать ${data.potential_payout} монет`;
+          if (multEl) {
+            multEl.textContent = `${data.multiplier.toFixed(2)}×`;
+            multEl.className = "mines-mult" + (data.multiplier >= 5 ? " tier3" : data.multiplier >= 2.5 ? " tier2" : "");
+          }
+          if (payoutEl)  payoutEl.textContent = `Забрать ${data.potential_payout} 🪙`;
           if (cashoutBtn) cashoutBtn.disabled = false;
           if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
           if (grid) grid.style.pointerEvents = "";
@@ -4153,13 +4237,15 @@
     }
 
     function _minesShowRestart() {
+      const grid = document.getElementById("minesGrid");
+      if (grid) grid.style.pointerEvents = "";          // ← KEY FIX: always restore
       document.querySelectorAll(".mines-cell").forEach(c => c.classList.add("inactive"));
       const startBtn = document.getElementById("minesStartBtn");
       const maxBet   = Math.min(500, walletData?.balance || 0);
       if (startBtn) {
         startBtn.style.display = "";
         startBtn.disabled      = false;
-        startBtn.textContent   = `💣 Начать игру за ${Math.min(minesBet, maxBet)} монет`;
+        startBtn.textContent   = `💣 Начать за ${Math.min(minesBet, maxBet)} 🪙`;
       }
     }
 
@@ -4201,15 +4287,21 @@
         updateBalanceDisplay(data.new_balance);
 
         btn.style.display = "none";
-        if (cashout) { cashout.disabled = false; cashout.textContent = `🚀 Забрать ${bet} монет`; }
+        if (cashout) {
+          cashout.disabled = false;
+          cashout.classList.add("live");
+          cashout.textContent = `🚀 Забрать ${bet} 🪙`;
+        }
 
         // Reset SVG path and rocket
         const poly   = document.getElementById("crashPolyline");
+        const fill   = document.getElementById("crashFill");
         const rocket = document.getElementById("crashRocket");
         const multD  = document.getElementById("crashMultDisplay");
         if (poly)   { poly.setAttribute("points", "0,148"); }
+        if (fill)   { fill.setAttribute("points", "0,148 0,148"); }
         if (rocket) { rocket.textContent = "🚀"; rocket.style.left = "6px"; rocket.style.bottom = "10px"; }
-        if (multD)  { multD.className = "crash-mult-display"; multD.textContent = "1.00×"; }
+        if (multD)  { multD.className = "crash-mult-display flying"; multD.textContent = "1.00×"; }
 
         crashStartTime = performance.now();
         crashAnimFrame = requestAnimationFrame(_crashTick.bind(null, bet));
@@ -4243,15 +4335,25 @@
         rocket.style.left   = `${rX}px`;
         rocket.style.bottom = `${H - rY - 28}px`;
 
-        // Throttle SVG path updates to every 150ms
-        if (now - crashLastPathT > 150) {
+        // Throttle SVG path updates to every 120ms
+        if (now - crashLastPathT > 120) {
           crashLastPathT = now;
           const poly = document.getElementById("crashPolyline");
+          const fill = document.getElementById("crashFill");
+          const multD = document.getElementById("crashMultDisplay");
           if (poly) {
             const vx = xFrac * 300;
             const vy = 148 - (1 - (rY + 14) / H) * 148;
             const pts = poly.getAttribute("points");
-            poly.setAttribute("points", `${pts} ${vx.toFixed(1)},${vy.toFixed(1)}`);
+            const newPts = `${pts} ${vx.toFixed(1)},${vy.toFixed(1)}`;
+            poly.setAttribute("points", newPts);
+            if (fill) fill.setAttribute("points", `${newPts} ${vx.toFixed(1)},148 0,148`);
+          }
+          // Update multiplier colour tier
+          if (multD && multD.classList.contains("flying")) {
+            if (crashMultiplier >= 5)        multD.style.color = "#f97316";
+            else if (crashMultiplier >= 2.5) multD.style.color = "#fbbf24";
+            else                             multD.style.color = "#c5baff";
           }
         }
       }
@@ -4281,14 +4383,19 @@
         const startBtn = document.getElementById("crashStartBtn");
         const rocket   = document.getElementById("crashRocket");
 
+        // Reset animated classes
+        const cashoutBtn2 = document.getElementById("crashCashoutBtn");
+        if (cashoutBtn2) cashoutBtn2.classList.remove("live");
+        if (multD) { multD.classList.remove("flying"); multD.style.color = ""; }
+
         if (data.won) {
-          if (multD)  { multD.className = "crash-mult-display won"; }
+          if (multD) { multD.className = "crash-mult-display won"; }
           if (resultEl) resultEl.innerHTML =
-            `<span class="flip-won">💰 +${data.payout} монет! (×${data.multiplier.toFixed(2)})</span>`;
+            `<span class="flip-won">💰 +${data.payout} 🪙 (×${data.multiplier.toFixed(2)})</span>`;
           if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
           toastMessage(`🚀 +${data.payout} монет!`);
         } else {
-          if (multD)  { multD.className = "crash-mult-display lost"; multD.textContent = `💥 ${data.crash_at.toFixed(2)}×`; }
+          if (multD) { multD.className = "crash-mult-display lost"; multD.textContent = `💥 ${data.crash_at.toFixed(2)}×`; }
           if (rocket) rocket.textContent = "💥";
           if (resultEl) resultEl.innerHTML =
             `<span class="flip-lost">💥 Краш на ${data.crash_at.toFixed(2)}× — ставка потеряна!</span>`;

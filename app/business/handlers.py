@@ -569,6 +569,58 @@ async def on_business_message(message: Message, bot: Bot) -> None:
             owner_telegram_id=owner_telegram_id,
         )
 
+        # ── Streak success notification (fire-and-forget) ─────────────────────
+        # Notify the owner via DM when the first incoming message of the day
+        # from a contact continues a streak of ≥ 3 days.
+        _sender = message.from_user
+        _is_incoming = (
+            owner_telegram_id is not None
+            and _sender is not None
+            and _sender.id != owner_telegram_id
+        )
+        if _is_incoming:
+            _chat_id = message.chat.id
+
+            async def _notify_streak(
+                _bot=bot,
+                _owner=owner_telegram_id,
+                _bc_id=bc_id,
+                _chat=_chat_id,
+            ) -> None:
+                try:
+                    from app.database.session import get_db_session as _gds
+                    from app.models.user import TelegramUser as _TU
+                    from app.services.streak_notification_service import (
+                        maybe_notify_streak_continued,
+                    )
+                    async for _sess in _gds():
+                        # Resolve contact display name
+                        _u = (await _sess.execute(
+                            select(_TU).where(_TU.telegram_id == _chat)
+                        )).scalar_one_or_none()
+                        _parts = [p for p in [
+                            _u.first_name if _u else None,
+                            _u.last_name  if _u else None,
+                        ] if p]
+                        _name = " ".join(_parts) or f"#{_chat}"
+                        # Get all connection_ids for this owner
+                        from app.models.business_connection import BusinessConnection as _BCM
+                        _cids = [r[0] for r in (await _sess.execute(
+                            select(_BCM.business_connection_id).where(
+                                _BCM.user_telegram_id == _owner,
+                                _BCM.is_blocked.is_(False),
+                            )
+                        )).fetchall()]
+                        await maybe_notify_streak_continued(
+                            _bot, _sess, _owner, _cids, _chat, _name
+                        )
+                except Exception as _exc:
+                    logger.warning("Streak success notification task failed: %s", _exc)
+
+            _streak_task = asyncio.create_task(_notify_streak())
+            _download_tasks.add(_streak_task)
+            _streak_task.add_done_callback(_download_tasks.discard)
+
         # ── Immediate media download (self-destructing media support) ─────────
         # Schedule a background task to cache the file bytes right now, before
         # the message can disappear and the file_id expires.  The task uses its

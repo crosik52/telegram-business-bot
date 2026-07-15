@@ -671,21 +671,14 @@
 
   /* ── Row action buttons ── */
   .row-action-btns { display: flex; flex-wrap: nowrap; gap: 6px; margin-top: 7px; overflow: hidden; }
-  .game-btn, .remind-btn {
+  .game-btn {
     border: none; border-radius: 20px;
     padding: 4px 10px; font-size: 11px; font-weight: 600;
     display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; cursor: pointer;
-  }
-  .game-btn {
     background: rgba(10,132,255,0.12);
     color: var(--link);
   }
-  .remind-btn {
-    background: rgba(255,107,0,0.12);
-    color: #ff6b00;
-  }
-  .game-btn:active, .remind-btn:active { opacity: 0.72; }
-  .remind-btn.sent { background: rgba(120,120,128,0.10); color: var(--hint); }
+  .game-btn:active { opacity: 0.72; }
   .game-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.45);
     display: flex; align-items: flex-end; z-index: 1000;
@@ -2924,9 +2917,7 @@
         const gameBtn = s.mutual_connected
           ? `<button class="game-btn" data-game-chat="${s.chat_id}" data-game-name="${s.display_name}">🎮 Игра</button>`
           : "";
-        const remindBtn = (s.mutual_connected && s.streak_days >= 2)
-          ? `<button class="remind-btn" data-remind-chat="${s.chat_id}" data-remind-streak="${s.streak_days}" data-remind-name="${s.display_name}">🔥 Серия</button>`
-          : "";
+        const remindBtn = "";
         const relBtn = s.mutual_connected
           ? `<button class="rel-btn" data-rel-open="${s.chat_id}" data-rel-name="${s.display_name}">❤️ Отношения</button>`
           : "";
@@ -3010,18 +3001,6 @@
         btn.addEventListener("click", (e) => {
           e.stopPropagation();
           openGamePicker(btn.dataset.gameChat, btn.dataset.gameName);
-        });
-      });
-      document.querySelectorAll(".remind-btn").forEach(btn => {
-        btn.addEventListener("click", async (e) => {
-          e.stopPropagation();
-          if (btn.disabled) return;
-          await sendStreakRemind(
-            btn.dataset.remindChat,
-            Number(btn.dataset.remindStreak),
-            btn.dataset.remindName,
-            btn
-          );
         });
       });
       // ── Relationship buttons ──────────────────────────────────────────────
@@ -3308,29 +3287,6 @@
         if (tg && tg.showAlert) tg.showAlert(`${emoji} Игра отправлена в чат!`);
       } catch {
         if (tg && tg.showAlert) tg.showAlert("Не удалось отправить игру.");
-      }
-    }
-
-    // ── Streak remind ──
-    async function sendStreakRemind(chatId, streakDays, name, btn) {
-      btn.disabled = true;
-      btn.textContent = "⏳ Отправляю…";
-      try {
-        if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred("medium");
-        const res = await fetch("/app/api/streak/remind", {
-          method: "POST",
-          headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({initData: currentInitData, chatId: Number(chatId), streakDays}),
-        });
-        if (!res.ok) throw new Error("failed");
-        btn.textContent = "✅ Отправлено!";
-        btn.classList.add("sent");
-        if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
-        toastMessage(`🔥 Напоминание отправлено ${name}!`);
-      } catch {
-        btn.disabled = false;
-        btn.textContent = "🔥 Напомнить о серии";
-        if (tg && tg.showAlert) tg.showAlert("Не удалось отправить напоминание. Попробуй ещё раз.");
       }
     }
 

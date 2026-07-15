@@ -32,6 +32,22 @@ configure_logging(settings.log_level)
 logger = get_logger(__name__)
 
 _CLEANUP_INTERVAL_HOURS = 6
+_STREAK_REMINDER_INTERVAL_MINUTES = 60
+
+
+async def _streak_reminder_loop() -> None:
+    """Background task: check for at-risk streaks and send bot DMs every hour."""
+    await asyncio.sleep(120)  # Let the app fully start first
+    while True:
+        try:
+            from app.business.dispatcher import get_bot
+            from app.services.streak_notification_service import run_reminder_check
+            bot = get_bot(settings)
+            if bot:
+                await run_reminder_check(bot)
+        except Exception:
+            logger.exception("Streak reminder check failed — will retry next cycle")
+        await asyncio.sleep(_STREAK_REMINDER_INTERVAL_MINUTES * 60)
 
 
 async def _cleanup_loop() -> None:
@@ -129,12 +145,19 @@ async def lifespan(app: FastAPI):
 
     # ── Periodic DB cleanup task ──────────────────────────────────────────────
     cleanup_task = asyncio.create_task(_cleanup_loop())
+    # ── Streak reminder background task ───────────────────────────────────────
+    streak_task = asyncio.create_task(_streak_reminder_loop())
 
     yield
 
     cleanup_task.cancel()
+    streak_task.cancel()
     try:
         await cleanup_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await streak_task
     except asyncio.CancelledError:
         pass
 

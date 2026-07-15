@@ -146,14 +146,6 @@ class GameRequest(BaseModel):
     emoji: str
 
 
-class StreakRemindRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    init_data: str = Field(alias="initData")
-    chat_id: int = Field(alias="chatId")
-    streak_days: int = Field(alias="streakDays")
-
-
 class WalletRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -804,106 +796,6 @@ async def send_game(
 
     value = sent.dice.value if sent.dice else None
     return {"sent": True, "value": value}
-
-
-@router.post("/app/api/streak/remind")
-async def streak_remind(
-    payload: StreakRemindRequest, session: AsyncSession = Depends(get_db_session)
-) -> dict:
-    """Send a streak-reminder message from the caller to a mutual contact.
-
-    Both parties must have an active business connection to the bot and the
-    caller must have an existing chat with the counterpart (authorization check).
-    """
-    settings = get_settings()
-    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
-    if user is None:
-        raise HTTPException(status_code=401, detail="Invalid Telegram init data")
-
-    owner_telegram_id = int(user["id"])
-
-    # Caller's active connections
-    result = await session.execute(
-        select(BusinessConnection).where(
-            BusinessConnection.user_telegram_id == owner_telegram_id,
-            BusinessConnection.is_blocked.is_(False),
-        )
-    )
-    connections = result.scalars().all()
-    if not connections:
-        raise HTTPException(status_code=403, detail="No active business connection")
-    connection_ids = [c.business_connection_id for c in connections]
-
-    # Counterpart must also be a connected bot user
-    counterpart_result = await session.execute(
-        select(BusinessConnection.business_connection_id).where(
-            BusinessConnection.user_telegram_id == payload.chat_id,
-            BusinessConnection.is_blocked.is_(False),
-        )
-    )
-    if counterpart_result.first() is None:
-        raise HTTPException(status_code=403, detail="Counterpart is not connected to the bot")
-
-    # Caller must actually have this chat in their history
-    stats_service = StatsService(session)
-    owns_chat = await stats_service.owner_has_chat(
-        connection_ids=connection_ids, chat_id=payload.chat_id
-    )
-    if not owns_chat:
-        raise HTTPException(status_code=403, detail="No shared chat with this user")
-
-    streak = max(payload.streak_days, 0)
-    text = _build_streak_remind_text(streak)
-
-    from app.business.dispatcher import get_bot
-
-    bot = get_bot(settings)
-    try:
-        await bot.send_message(
-            business_connection_id=connection_ids[0],
-            chat_id=payload.chat_id,
-            text=text,
-            parse_mode="HTML",
-        )
-    except Exception as exc:
-        logger.warning(
-            "Failed to send streak reminder to chat_id=%s: %s", payload.chat_id, exc
-        )
-        raise HTTPException(status_code=502, detail="Failed to send reminder") from exc
-
-    return {"sent": True, "streak_days": streak}
-
-
-def _build_streak_remind_text(streak_days: int) -> str:
-    """Pick a reminder message based on how long the streak already is."""
-    from app.bot import emoji as E
-    days = streak_days
-    if days >= 100:
-        return (
-            f"{E.DIAMOND} {days} дней общения подряд — это легенда! "
-            f"Пишу, чтобы не прерывать наш рекорд {E.CROWN}"
-        )
-    if days >= 30:
-        return (
-            f"{E.ROCKET} {days} дней подряд! Это уже марафон — "
-            "не хочу останавливаться 💪"
-        )
-    if days >= 14:
-        return (
-            f"{E.FIRE}{E.FIRE} Уже {days} дней подряд общаемся! "
-            "Напоминаю о себе, чтобы серия не прервалась 😄"
-        )
-    if days >= 7:
-        return (
-            f"{E.FIRE} Неделя или больше подряд — {days} дней! "
-            "Держим стрик? Напиши что-нибудь 😊"
-        )
-    if days >= 2:
-        return (
-            f"👋 У нас уже {days} дня подряд! "
-            f"Напоминаю о себе — держим серию? {E.FIRE}"
-        )
-    return "👋 Привет! Просто напоминаю о себе 😊"
 
 
 @router.post("/app/api/wallet/info")

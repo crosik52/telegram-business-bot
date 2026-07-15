@@ -1321,22 +1321,23 @@
   /* ── Casino game picker ── */
   .casino-game-picker {
     display: grid; grid-template-columns: repeat(4,1fr);
-    gap: 6px; margin-bottom: 12px;
+    gap: 8px; margin-bottom: 16px;
   }
   .cgp-btn {
-    display: flex; flex-direction: column; align-items: center; gap: 4px;
-    padding: 10px 4px; background: var(--ci-s1);
-    border: 1px solid var(--ci-border); border-radius: 14px;
-    cursor: pointer; transition: all 0.18s; color: var(--ci-muted);
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+    padding: 12px 4px; background: var(--ci-s2);
+    border: 1px solid rgba(255,255,255,0.12); border-radius: 14px;
+    cursor: pointer; transition: all 0.18s; color: rgba(245,245,245,0.7);
     font-family: 'Geist', system-ui, sans-serif;
   }
   .cgp-btn.active {
-    background: rgba(124,108,255,0.10);
-    border-color: rgba(124,108,255,0.35); color: var(--ci-accent);
+    background: rgba(124,108,255,0.18);
+    border-color: rgba(124,108,255,0.5); color: #c5baff;
+    box-shadow: 0 0 0 1px rgba(124,108,255,0.3) inset;
   }
   .cgp-btn:active { transform: scale(0.94); }
-  .cgp-icon  { font-size: 20px; line-height: 1; }
-  .cgp-label { font-size: 11px; font-weight: 500; }
+  .cgp-icon  { font-size: 22px; line-height: 1; }
+  .cgp-label { font-size: 11px; font-weight: 600; letter-spacing: 0.2px; }
 
   /* ── Mines ── */
   .mines-config { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
@@ -3374,10 +3375,15 @@
       }
       subData = walletData.subscription || null;
       const el = document.getElementById("casinoContent");
-      el.innerHTML = renderPetsSection() + renderWalletCard()
-                   + renderCasinoGamePicker() + renderActiveGameCard();
-      attachCasinoHandlers();
-      attachPetHandlers();
+      try {
+        el.innerHTML = renderPetsSection() + renderWalletCard()
+                     + renderCasinoGamePicker() + renderActiveGameCard();
+        attachCasinoHandlers();
+        attachPetHandlers();
+      } catch (err) {
+        console.error("[renderCasino] error:", err);
+        el.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Ошибка рендера: ${err.message}<br><small>Открой консоль для деталей.</small></div>`;
+      }
     }
 
     function renderCasinoGamePicker() {

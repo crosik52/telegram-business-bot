@@ -178,6 +178,41 @@ class FlipRequest(BaseModel):
     choice: str  # "heads" or "tails"
 
 
+class MinesStartRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    init_data:   str = Field(alias="initData")
+    bet:         int
+    mines_count: int = Field(alias="minesCount", ge=3, le=15)
+
+
+class MinesRevealRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    init_data:  str = Field(alias="initData")
+    cell_index: int = Field(alias="cellIndex", ge=0, lt=25)
+
+
+class MinesCashoutRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    init_data: str = Field(alias="initData")
+
+
+class CrashStartRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    init_data: str = Field(alias="initData")
+    bet:       int
+
+
+class CrashCashoutRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    init_data:  str   = Field(alias="initData")
+    multiplier: float
+
+
 class QuestClaimRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -985,6 +1020,113 @@ async def wallet_flip(
         "server_side": result.server_side,
         "won": result.won,
         "amount_change": result.amount_change,
+        "new_balance": result.new_balance,
+    }
+
+
+# ── Mines ─────────────────────────────────────────────────────────────────────
+
+@router.post("/app/api/wallet/mines/start")
+async def wallet_mines_start(
+    payload: MinesStartRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid init data")
+    repo = WalletRepository(session)
+    try:
+        result = await repo.mines_start(int(user["id"]), payload.bet, payload.mines_count)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return {
+        "grid_size":   result.grid_size,
+        "mines_count": result.mines_count,
+        "safe_count":  result.safe_count,
+    }
+
+
+@router.post("/app/api/wallet/mines/reveal")
+async def wallet_mines_reveal(
+    payload: MinesRevealRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid init data")
+    repo = WalletRepository(session)
+    try:
+        result = await repo.mines_reveal(int(user["id"]), payload.cell_index)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return {
+        "is_mine":          result.is_mine,
+        "revealed_indices": result.revealed_indices,
+        "mines_indices":    result.mines_indices,
+        "revealed_count":   result.revealed_count,
+        "multiplier":       result.multiplier,
+        "potential_payout": result.potential_payout,
+        "new_balance":      result.new_balance,
+    }
+
+
+@router.post("/app/api/wallet/mines/cashout")
+async def wallet_mines_cashout(
+    payload: MinesCashoutRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid init data")
+    repo = WalletRepository(session)
+    try:
+        result = await repo.mines_cashout(int(user["id"]))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return {
+        "payout":        result.payout,
+        "multiplier":    result.multiplier,
+        "revealed_count": result.revealed_count,
+        "new_balance":   result.new_balance,
+    }
+
+
+# ── Crash ─────────────────────────────────────────────────────────────────────
+
+@router.post("/app/api/wallet/crash/start")
+async def wallet_crash_start(
+    payload: CrashStartRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid init data")
+    repo = WalletRepository(session)
+    try:
+        result = await repo.crash_start(int(user["id"]), payload.bet)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return {"ok": result.ok, "new_balance": result.new_balance}
+
+
+@router.post("/app/api/wallet/crash/cashout")
+async def wallet_crash_cashout(
+    payload: CrashCashoutRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid init data")
+    repo = WalletRepository(session)
+    try:
+        result = await repo.crash_cashout(int(user["id"]), payload.multiplier)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return {
+        "won":        result.won,
+        "crash_at":   result.crash_at,
+        "multiplier": result.multiplier,
+        "payout":     result.payout,
         "new_balance": result.new_balance,
     }
 

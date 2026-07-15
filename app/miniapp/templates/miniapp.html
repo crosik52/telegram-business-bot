@@ -1318,6 +1318,127 @@
   .flip-won  { color: #34c759;          animation: popIn 0.4s ease; }
   .flip-lost { color: var(--ci-accent2); animation: popIn 0.4s ease; }
 
+  /* ── Casino game picker ── */
+  .casino-game-picker {
+    display: grid; grid-template-columns: repeat(4,1fr);
+    gap: 6px; margin-bottom: 12px;
+  }
+  .cgp-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 10px 4px; background: var(--ci-s1);
+    border: 1px solid var(--ci-border); border-radius: 14px;
+    cursor: pointer; transition: all 0.18s; color: var(--ci-muted);
+    font-family: 'Geist', system-ui, sans-serif;
+  }
+  .cgp-btn.active {
+    background: rgba(124,108,255,0.10);
+    border-color: rgba(124,108,255,0.35); color: var(--ci-accent);
+  }
+  .cgp-btn:active { transform: scale(0.94); }
+  .cgp-icon  { font-size: 20px; line-height: 1; }
+  .cgp-label { font-size: 11px; font-weight: 500; }
+
+  /* ── Mines ── */
+  .mines-config { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+  .mines-config-row { display: flex; align-items: center; gap: 10px; }
+  .mines-config-label { font-size: 12px; color: var(--ci-muted); width: 48px; flex-shrink: 0; }
+  .mines-preset-group { display: flex; gap: 5px; flex: 1; }
+  .mines-preset-btn {
+    flex: 1; padding: 7px 2px;
+    background: var(--ci-s2); border: 1px solid var(--ci-border); border-radius: 8px;
+    color: var(--ci-muted); font-family: 'Geist', system-ui, sans-serif;
+    font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s;
+  }
+  .mines-preset-btn.sel {
+    background: rgba(124,108,255,0.12); border-color: rgba(124,108,255,0.30);
+    color: var(--ci-accent);
+  }
+  .mines-grid {
+    display: grid; grid-template-columns: repeat(5,1fr);
+    gap: 6px; margin-bottom: 12px;
+  }
+  .mines-cell {
+    aspect-ratio: 1; background: var(--ci-s2);
+    border: 1px solid var(--ci-border); border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; cursor: pointer; transition: background 0.15s, border-color 0.15s;
+    user-select: none; -webkit-tap-highlight-color: transparent;
+  }
+  .mines-cell:not(.safe):not(.mine):not(.mine-end):active { transform: scale(0.9); }
+  .mines-cell.inactive { cursor: default; }
+  .mines-cell.safe {
+    background: rgba(52,199,89,0.12); border-color: rgba(52,199,89,0.35);
+    animation: popIn 0.22s ease; cursor: default;
+  }
+  .mines-cell.mine {
+    background: rgba(255,69,58,0.18); border-color: rgba(255,69,58,0.45);
+    animation: popIn 0.22s ease; cursor: default;
+  }
+  .mines-cell.mine-end {
+    background: rgba(255,69,58,0.06); border-color: rgba(255,69,58,0.18);
+    cursor: default;
+  }
+  .mines-status {
+    display: flex; justify-content: space-between; align-items: center;
+    background: var(--ci-s2); border: 1px solid var(--ci-border);
+    border-radius: 14px; padding: 12px 16px; margin-bottom: 10px;
+  }
+  .mines-mult   { font-size: 24px; font-weight: 800; color: var(--ci-accent); line-height: 1; }
+  .mines-payout { font-size: 11px; color: var(--ci-muted); margin-top: 3px; }
+  .mines-cashout-btn {
+    border: 1px solid rgba(52,199,89,0.3); border-radius: 10px; padding: 9px 16px;
+    background: rgba(52,199,89,0.12); color: #34c759;
+    font-family: 'Geist', system-ui, sans-serif; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .mines-cashout-btn:active { transform: scale(0.95); }
+  .mines-cashout-btn:disabled { opacity: 0.35; cursor: default; }
+  .mines-result { text-align: center; font-size: 15px; font-weight: 700; min-height: 24px; margin-top: 8px; }
+
+  /* ── Crash / Rocket ── */
+  .crash-display {
+    position: relative; height: 148px;
+    background: var(--ci-s2); border: 1px solid var(--ci-border);
+    border-radius: 14px; margin-bottom: 14px; overflow: hidden;
+  }
+  .crash-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .crash-rocket {
+    position: absolute; font-size: 26px; line-height: 1;
+    left: 6px; bottom: 10px;
+    filter: drop-shadow(0 0 6px rgba(124,108,255,.55));
+    transition: none; transform: rotate(45deg);
+  }
+  .crash-mult-display {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    font-size: 38px; font-weight: 900; letter-spacing: -1.5px;
+    color: var(--ci-text); pointer-events: none;
+    text-shadow: 0 2px 12px rgba(0,0,0,.6);
+  }
+  .crash-mult-display.won  { color: #34c759; animation: popIn 0.3s ease; }
+  .crash-mult-display.lost { color: #ff453a; animation: popIn 0.3s ease; }
+  .crash-cashout-btn {
+    width: 100%; border: 1px solid rgba(52,199,89,0.3); border-radius: 14px; padding: 14px;
+    background: rgba(52,199,89,0.12); color: #34c759;
+    font-family: 'Geist', system-ui, sans-serif; font-size: 15px; font-weight: 700;
+    cursor: pointer; transition: all 0.2s; margin-bottom: 8px;
+  }
+  .crash-cashout-btn:active   { transform: scale(0.97); }
+  .crash-cashout-btn:disabled {
+    opacity: 0.35; cursor: default;
+    background: rgba(255,255,255,0.04); color: var(--ci-muted); border-color: var(--ci-border);
+  }
+  .crash-start-btn {
+    width: 100%; border: 1px solid rgba(124,108,255,0.25); border-radius: 14px; padding: 14px;
+    background: rgba(124,108,255,0.10); color: var(--ci-accent);
+    font-family: 'Geist', system-ui, sans-serif; font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .crash-start-btn:hover   { background: rgba(124,108,255,0.18); }
+  .crash-start-btn:active  { transform: scale(0.97); }
+  .crash-start-btn:disabled { opacity: 0.45; cursor: default; }
+  .crash-result-msg { text-align: center; font-size: 14px; font-weight: 600; min-height: 22px; margin-top: 8px; }
+
   /* ══════════════════════════════════════════
      DONATE / SUPPORT
   ══════════════════════════════════════════ */
@@ -1864,6 +1985,18 @@
     let petData      = null;
     let subData      = null;   // subscription config + user status
     let statsPremium = false;  // whether user has active subscription (from stats API)
+
+    // ── Casino game state ─────────────────────────────────────────────────────
+    let currentCasinoGame = "slots";   // persists across renderCasino() calls
+    let minesCount     = 5;
+    let minesBet       = 50;
+    let minesGameActive   = false;
+    let minesRevealedCount = 0;
+    let crashGameActive   = false;
+    let crashMultiplier   = 1.0;
+    let crashAnimFrame    = null;
+    let crashStartTime    = null;
+    let crashLastPathT    = 0;         // throttle SVG path updates
     let lastWords  = null;     // /app/api/stats/words response
     let lastDigest = null;     // /app/api/stats/digest response
     const FREE_TOP_LIMIT = 5;  // free users see top N contacts
@@ -3234,11 +3367,42 @@
 
     function renderCasino() {
       if (!walletData) return;
+      // Don't clobber the UI while a game is in progress
+      if (minesGameActive || crashGameActive) {
+        updateBalanceDisplay(walletData.balance);
+        return;
+      }
       subData = walletData.subscription || null;
       const el = document.getElementById("casinoContent");
-      el.innerHTML = renderPetsSection() + renderWalletCard() + renderSlotsCard() + renderFlipCard();
+      el.innerHTML = renderPetsSection() + renderWalletCard()
+                   + renderCasinoGamePicker() + renderActiveGameCard();
       attachCasinoHandlers();
       attachPetHandlers();
+    }
+
+    function renderCasinoGamePicker() {
+      const games = [
+        { id: "slots", icon: "🎰", label: "Слоты"   },
+        { id: "flip",  icon: "🪙", label: "Монетка" },
+        { id: "mines", icon: "💣", label: "Мины"    },
+        { id: "crash", icon: "🚀", label: "Краш"    },
+      ];
+      return `<div class="casino-game-picker">
+        ${games.map(g => `
+          <button class="cgp-btn${currentCasinoGame === g.id ? " active" : ""}" data-game="${g.id}">
+            <span class="cgp-icon">${g.icon}</span>
+            <span class="cgp-label">${g.label}</span>
+          </button>`).join("")}
+      </div>`;
+    }
+
+    function renderActiveGameCard() {
+      switch (currentCasinoGame) {
+        case "flip":  return renderFlipCard();
+        case "mines": return renderMinesCard();
+        case "crash": return renderCrashCard();
+        default:      return renderSlotsCard();
+      }
     }
 
     // ── Subscription section ─────────────────────────────────────────────────
@@ -3509,6 +3673,98 @@
       `;
     }
 
+    // ── New game render functions ─────────────────────────────────────────────
+
+    function renderMinesCard() {
+      const balance = walletData?.balance || 0;
+      const maxBet  = Math.min(500, balance);
+      const selBet  = Math.min(minesBet, maxBet);
+      const cells   = Array.from({length: 25}, (_, i) =>
+        `<div class="mines-cell inactive" id="mCell${i}" data-index="${i}">·</div>`
+      ).join("");
+      return `
+        <div class="casino-card">
+          <div class="casino-card-header">
+            <span class="casino-card-title">💣 Мины</span>
+            <span class="casino-card-sub">Открывай, не взорвись</span>
+          </div>
+          <div class="mines-config">
+            <div class="mines-config-row">
+              <span class="mines-config-label">Мин</span>
+              <div class="mines-preset-group" id="minesCountBtns">
+                ${[3,5,7,10,15].map(n =>
+                  `<button class="mines-preset-btn${n===minesCount?" sel":""}" data-mines="${n}">${n}</button>`
+                ).join("")}
+              </div>
+            </div>
+            <div class="mines-config-row">
+              <span class="mines-config-label">Ставка</span>
+              <div class="mines-preset-group" id="minesBetBtns">
+                ${[10,25,50,100].filter(v=>v<=maxBet).map(v =>
+                  `<button class="mines-preset-btn${v===selBet?" sel":""}" data-bet="${v}">${v}</button>`
+                ).join("")}
+                ${maxBet>=10?`<button class="mines-preset-btn${selBet===maxBet&&maxBet>100?" sel":""}" data-bet="${maxBet}">Всё</button>`:""}
+              </div>
+            </div>
+          </div>
+          <div class="mines-grid" id="minesGrid">${cells}</div>
+          <div class="mines-status" id="minesStatus" style="display:none">
+            <div>
+              <div class="mines-mult" id="minesMultEl">1.00×</div>
+              <div class="mines-payout" id="minesPayoutEl">Забрать 0 монет</div>
+            </div>
+            <button class="mines-cashout-btn" id="minesCashoutBtn" disabled>Забрать</button>
+          </div>
+          <button class="casino-spin-btn" id="minesStartBtn">
+            💣 Начать игру за ${selBet} монет
+          </button>
+          <div class="mines-result" id="minesResult"></div>
+        </div>`;
+    }
+
+    function renderCrashCard() {
+      const balance = walletData?.balance || 0;
+      const maxBet  = Math.min(500, balance);
+      return `
+        <div class="casino-card">
+          <div class="casino-card-header">
+            <span class="casino-card-title">🚀 Краш</span>
+            <span class="casino-card-sub">Забери до взрыва</span>
+          </div>
+          <div class="crash-display" id="crashDisplay">
+            <svg class="crash-svg" id="crashSvg" viewBox="0 0 300 148" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="crashGrad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stop-color="rgba(124,108,255,0.3)"/>
+                  <stop offset="100%" stop-color="rgba(124,108,255,0.8)"/>
+                </linearGradient>
+              </defs>
+              <polyline id="crashPolyline" fill="none" stroke="url(#crashGrad)"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="0,148"/>
+            </svg>
+            <div class="crash-rocket" id="crashRocket">🚀</div>
+            <div class="crash-mult-display" id="crashMultDisplay">1.00×</div>
+          </div>
+          <div class="flip-presets" style="margin-bottom:10px">
+            ${[10,25,50,100].filter(v=>v<=maxBet).map(v=>
+              `<button class="flip-preset-btn" data-crash-preset="${v}">${v}</button>`
+            ).join("")}
+            ${maxBet>=10?`<button class="flip-preset-btn" data-crash-preset="${maxBet}">Всё</button>`:""}
+          </div>
+          <div class="flip-bet-row" style="margin-bottom:10px">
+            <span class="flip-bet-label">Ставка</span>
+            <div class="flip-bet-sep"></div>
+            <input type="number" id="crashBet" class="flip-bet-input"
+              min="10" max="${maxBet}" value="${Math.min(50,maxBet)}"/>
+          </div>
+          <button class="crash-cashout-btn" id="crashCashoutBtn" disabled>🚀 Забрать</button>
+          <button class="crash-start-btn"   id="crashStartBtn">🚀 Запустить</button>
+          <div class="crash-result-msg" id="crashResult"></div>
+        </div>`;
+    }
+
+    // ── Casino handlers ───────────────────────────────────────────────────────
+
     function attachCasinoHandlers() {
       // Daily claim
       const claimBtn = document.getElementById("claimDailyBtn");
@@ -3522,7 +3778,7 @@
       document.querySelectorAll(".flip-preset-btn").forEach(btn => {
         btn.addEventListener("click", () => {
           const inp = document.getElementById("flipBet");
-          if (inp) inp.value = btn.dataset.preset;
+          if (inp && btn.dataset.preset) inp.value = btn.dataset.preset;
         });
       });
       // Flip buttons
@@ -3530,6 +3786,65 @@
         const btn = document.getElementById(id);
         if (btn) btn.addEventListener("click", () => doFlip(btn.dataset.choice));
       });
+
+      // ── Game picker ──
+      document.querySelectorAll(".cgp-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const g = btn.dataset.game;
+          if (g === currentCasinoGame) return;
+          currentCasinoGame = g;
+          renderCasino();
+        });
+      });
+
+      // ── Mines: mine count presets ──
+      document.querySelectorAll("#minesCountBtns .mines-preset-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          minesCount = parseInt(btn.dataset.mines);
+          document.querySelectorAll("#minesCountBtns .mines-preset-btn")
+            .forEach(b => b.classList.remove("sel"));
+          btn.classList.add("sel");
+        });
+      });
+      // ── Mines: bet presets ──
+      document.querySelectorAll("#minesBetBtns .mines-preset-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          minesBet = parseInt(btn.dataset.bet);
+          document.querySelectorAll("#minesBetBtns .mines-preset-btn")
+            .forEach(b => b.classList.remove("sel"));
+          btn.classList.add("sel");
+          const sb = document.getElementById("minesStartBtn");
+          if (sb) sb.textContent = `💣 Начать игру за ${minesBet} монет`;
+        });
+      });
+      // ── Mines: start / cashout / grid ──
+      const msBtn = document.getElementById("minesStartBtn");
+      if (msBtn) msBtn.addEventListener("click", startMines);
+      const mcBtn = document.getElementById("minesCashoutBtn");
+      if (mcBtn) mcBtn.addEventListener("click", minesCashout);
+      const mGrid = document.getElementById("minesGrid");
+      if (mGrid) {
+        mGrid.addEventListener("click", e => {
+          const cell = e.target.closest(".mines-cell");
+          if (!cell || !minesGameActive) return;
+          if (cell.classList.contains("safe") || cell.classList.contains("mine")
+              || cell.classList.contains("mine-end") || cell.classList.contains("inactive")) return;
+          revealMinesCell(parseInt(cell.dataset.index));
+        });
+      }
+
+      // ── Crash: bet presets ──
+      document.querySelectorAll("[data-crash-preset]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const inp = document.getElementById("crashBet");
+          if (inp) inp.value = btn.dataset.crashPreset;
+        });
+      });
+      // ── Crash: start / cashout ──
+      const csBtn = document.getElementById("crashStartBtn");
+      if (csBtn) csBtn.addEventListener("click", startCrash);
+      const ccBtn = document.getElementById("crashCashoutBtn");
+      if (ccBtn) ccBtn.addEventListener("click", doCrashCashout);
     }
 
     function updateBalanceDisplay(newBalance) {
@@ -3690,6 +4005,287 @@
         if (coinEl) { coinEl.classList.remove("flipping"); coinEl.textContent = "🪙"; }
         if (resultEl) resultEl.textContent = "Ошибка. Попробуй ещё раз.";
         [headsBtn, tailsBtn].forEach(b => { if (b) b.disabled = false; });
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // MINES GAME
+    // ══════════════════════════════════════════════════════════════════
+
+    async function startMines() {
+      const btn = document.getElementById("minesStartBtn");
+      if (!btn || btn.disabled) return;
+      const balance = walletData?.balance || 0;
+      const bet = Math.max(10, Math.min(minesBet, 500, balance));
+      if (balance < bet) { toastMessage("Недостаточно монет!"); return; }
+
+      btn.disabled = true;
+      btn.textContent = "⏳ Запускаем…";
+      const resultEl = document.getElementById("minesResult");
+      if (resultEl) resultEl.innerHTML = "";
+
+      try {
+        const res = await fetch("/app/api/wallet/mines/start", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData: currentInitData, bet, minesCount}),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(()=>({}));
+          toastMessage(err.detail === "insufficient_balance"
+            ? "Недостаточно монет!" : "Ошибка. Попробуй ещё раз.");
+          btn.disabled = false;
+          btn.textContent = `💣 Начать игру за ${bet} монет`;
+          return;
+        }
+
+        minesGameActive    = true;
+        minesRevealedCount = 0;
+        updateBalanceDisplay(balance - bet);
+
+        // Activate grid cells
+        document.querySelectorAll(".mines-cell").forEach(cell => {
+          cell.classList.remove("inactive");
+          cell.textContent = "·";
+        });
+        const statusEl = document.getElementById("minesStatus");
+        if (statusEl) statusEl.style.display = "";
+        btn.style.display = "none";
+
+        if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("medium");
+      } catch {
+        btn.disabled = false;
+        btn.textContent = `💣 Начать игру за ${bet} монет`;
+        toastMessage("Ошибка. Попробуй ещё раз.");
+      }
+    }
+
+    async function revealMinesCell(index) {
+      if (!minesGameActive) return;
+      const cell = document.getElementById(`mCell${index}`);
+      if (!cell || cell.classList.contains("safe") || cell.classList.contains("mine")) return;
+
+      // Disable grid during request
+      const grid = document.getElementById("minesGrid");
+      if (grid) grid.style.pointerEvents = "none";
+
+      try {
+        const res = await fetch("/app/api/wallet/mines/reveal", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData: currentInitData, cellIndex: index}),
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+
+        if (data.is_mine) {
+          minesGameActive = false;
+          cell.classList.add("mine");
+          cell.textContent = "💣";
+          // Reveal all other mines
+          (data.mines_indices || []).forEach(idx => {
+            if (idx === index) return;
+            const mc = document.getElementById(`mCell${idx}`);
+            if (mc) { mc.classList.add("mine-end"); mc.textContent = "💣"; }
+          });
+          if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
+          const statusEl = document.getElementById("minesStatus");
+          if (statusEl) statusEl.style.display = "none";
+          const resultEl = document.getElementById("minesResult");
+          if (resultEl) resultEl.innerHTML = `<span class="flip-lost">💣 Взрыв! Ставка потеряна.</span>`;
+          setTimeout(_minesShowRestart, 700);
+        } else {
+          cell.classList.add("safe");
+          cell.textContent = "💎";
+          minesRevealedCount = data.revealed_count;
+          const multEl    = document.getElementById("minesMultEl");
+          const payoutEl  = document.getElementById("minesPayoutEl");
+          const cashoutBtn= document.getElementById("minesCashoutBtn");
+          if (multEl)    multEl.textContent   = `${data.multiplier.toFixed(2)}×`;
+          if (payoutEl)  payoutEl.textContent = `Забрать ${data.potential_payout} монет`;
+          if (cashoutBtn) cashoutBtn.disabled = false;
+          if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
+          if (grid) grid.style.pointerEvents = "";
+        }
+      } catch {
+        if (grid) grid.style.pointerEvents = "";
+        toastMessage("Ошибка. Попробуй ещё раз.");
+      }
+    }
+
+    async function minesCashout() {
+      if (!minesGameActive || minesRevealedCount === 0) return;
+      const btn = document.getElementById("minesCashoutBtn");
+      if (btn) btn.disabled = true;
+
+      try {
+        const res = await fetch("/app/api/wallet/mines/cashout", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData: currentInitData}),
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+
+        minesGameActive = false;
+        updateBalanceDisplay(data.new_balance);
+        const statusEl = document.getElementById("minesStatus");
+        if (statusEl) statusEl.style.display = "none";
+        const resultEl = document.getElementById("minesResult");
+        if (resultEl) resultEl.innerHTML =
+          `<span class="flip-won">💰 +${data.payout} монет! (×${data.multiplier.toFixed(2)})</span>`;
+        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+        toastMessage(`💰 +${data.payout} монет!`);
+        setTimeout(_minesShowRestart, 700);
+      } catch {
+        if (btn) btn.disabled = false;
+        toastMessage("Ошибка. Попробуй ещё раз.");
+      }
+    }
+
+    function _minesShowRestart() {
+      document.querySelectorAll(".mines-cell").forEach(c => c.classList.add("inactive"));
+      const startBtn = document.getElementById("minesStartBtn");
+      const maxBet   = Math.min(500, walletData?.balance || 0);
+      if (startBtn) {
+        startBtn.style.display = "";
+        startBtn.disabled      = false;
+        startBtn.textContent   = `💣 Начать игру за ${Math.min(minesBet, maxBet)} монет`;
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // CRASH / ROCKET GAME
+    // ══════════════════════════════════════════════════════════════════
+
+    async function startCrash() {
+      const btn      = document.getElementById("crashStartBtn");
+      const cashout  = document.getElementById("crashCashoutBtn");
+      if (!btn || btn.disabled) return;
+      const betInput = document.getElementById("crashBet");
+      const balance  = walletData?.balance || 0;
+      const bet      = Math.max(10, Math.min(Number(betInput?.value) || 50, 500, balance));
+      if (balance < bet) { toastMessage("Недостаточно монет!"); return; }
+
+      btn.disabled = true;
+      btn.textContent = "⏳ Запуск…";
+      const resultEl = document.getElementById("crashResult");
+      if (resultEl) resultEl.innerHTML = "";
+
+      try {
+        const res = await fetch("/app/api/wallet/crash/start", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData: currentInitData, bet}),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(()=>({}));
+          toastMessage(err.detail === "insufficient_balance"
+            ? "Недостаточно монет!" : "Ошибка.");
+          btn.disabled = false; btn.textContent = "🚀 Запустить";
+          return;
+        }
+        const data = await res.json();
+
+        crashGameActive  = true;
+        crashMultiplier  = 1.0;
+        crashLastPathT   = 0;
+        updateBalanceDisplay(data.new_balance);
+
+        btn.style.display = "none";
+        if (cashout) { cashout.disabled = false; cashout.textContent = `🚀 Забрать ${bet} монет`; }
+
+        // Reset SVG path and rocket
+        const poly   = document.getElementById("crashPolyline");
+        const rocket = document.getElementById("crashRocket");
+        const multD  = document.getElementById("crashMultDisplay");
+        if (poly)   { poly.setAttribute("points", "0,148"); }
+        if (rocket) { rocket.textContent = "🚀"; rocket.style.left = "6px"; rocket.style.bottom = "10px"; }
+        if (multD)  { multD.className = "crash-mult-display"; multD.textContent = "1.00×"; }
+
+        crashStartTime = performance.now();
+        crashAnimFrame = requestAnimationFrame(_crashTick.bind(null, bet));
+        if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("medium");
+      } catch {
+        btn.disabled = false; btn.textContent = "🚀 Запустить";
+        toastMessage("Ошибка. Попробуй ещё раз.");
+      }
+    }
+
+    function _crashTick(bet, now) {
+      if (!crashGameActive) return;
+      const elapsed  = (now - crashStartTime) / 1000;
+      crashMultiplier = parseFloat(Math.exp(0.055 * elapsed).toFixed(2));
+
+      const multD   = document.getElementById("crashMultDisplay");
+      const cashout = document.getElementById("crashCashoutBtn");
+      if (multD)   multD.textContent = `${crashMultiplier.toFixed(2)}×`;
+      if (cashout) cashout.textContent = `🚀 Забрать ${Math.floor(bet * crashMultiplier)} монет`;
+
+      // Move rocket along the display
+      const display = document.getElementById("crashDisplay");
+      const rocket  = document.getElementById("crashRocket");
+      if (display && rocket) {
+        const W = display.clientWidth  || 300;
+        const H = display.clientHeight || 148;
+        const xFrac   = Math.min(elapsed / 22, 0.88);
+        const yFrac   = Math.min((crashMultiplier - 1) / 8, 0.88);
+        const rX = xFrac * (W - 36);
+        const rY = 10 + (1 - yFrac) * (H - 46);
+        rocket.style.left   = `${rX}px`;
+        rocket.style.bottom = `${H - rY - 28}px`;
+
+        // Throttle SVG path updates to every 150ms
+        if (now - crashLastPathT > 150) {
+          crashLastPathT = now;
+          const poly = document.getElementById("crashPolyline");
+          if (poly) {
+            const vx = xFrac * 300;
+            const vy = 148 - (1 - (rY + 14) / H) * 148;
+            const pts = poly.getAttribute("points");
+            poly.setAttribute("points", `${pts} ${vx.toFixed(1)},${vy.toFixed(1)}`);
+          }
+        }
+      }
+
+      crashAnimFrame = requestAnimationFrame(_crashTick.bind(null, bet));
+    }
+
+    async function doCrashCashout() {
+      if (!crashGameActive) return;
+      crashGameActive = false;
+      if (crashAnimFrame) { cancelAnimationFrame(crashAnimFrame); crashAnimFrame = null; }
+      const cashout = document.getElementById("crashCashoutBtn");
+      if (cashout) cashout.disabled = true;
+      const multToSend = crashMultiplier;
+
+      try {
+        const res = await fetch("/app/api/wallet/crash/cashout", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData: currentInitData, multiplier: multToSend}),
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+
+        updateBalanceDisplay(data.new_balance);
+        const multD    = document.getElementById("crashMultDisplay");
+        const resultEl = document.getElementById("crashResult");
+        const startBtn = document.getElementById("crashStartBtn");
+        const rocket   = document.getElementById("crashRocket");
+
+        if (data.won) {
+          if (multD)  { multD.className = "crash-mult-display won"; }
+          if (resultEl) resultEl.innerHTML =
+            `<span class="flip-won">💰 +${data.payout} монет! (×${data.multiplier.toFixed(2)})</span>`;
+          if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+          toastMessage(`🚀 +${data.payout} монет!`);
+        } else {
+          if (multD)  { multD.className = "crash-mult-display lost"; multD.textContent = `💥 ${data.crash_at.toFixed(2)}×`; }
+          if (rocket) rocket.textContent = "💥";
+          if (resultEl) resultEl.innerHTML =
+            `<span class="flip-lost">💥 Краш на ${data.crash_at.toFixed(2)}× — ставка потеряна!</span>`;
+          if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
+        }
+        if (startBtn) { startBtn.style.display = ""; startBtn.disabled = false; startBtn.textContent = "🚀 Запустить"; }
+      } catch {
+        if (cashout) { cashout.disabled = false; }
+        toastMessage("Ошибка. Попробуй ещё раз.");
       }
     }
 

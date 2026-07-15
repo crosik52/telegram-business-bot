@@ -42,6 +42,21 @@ SLOT_THREE_PAYOUTS: dict[str, int] = {
 }
 SLOT_TWO_PAYOUT = 5
 
+MINES_GRID_SIZE = 25
+MINES_MIN_COUNT = 3
+MINES_MAX_COUNT = 15
+MINES_BET_MIN   = 10
+MINES_BET_MAX   = 500
+MINES_HOUSE_EDGE = 0.97   # 3 % edge
+
+CRASH_BET_MIN   = 10
+CRASH_BET_MAX   = 500
+CRASH_HOUSE_EDGE = 0.99   # 1 % edge
+
+# ── Per-process game sessions (single Railway instance → fine) ──────────────
+_mines_sessions: dict[int, dict] = {}   # owner_id → session
+_crash_sessions: dict[int, dict] = {}   # owner_id → session
+
 
 # ── Internal helpers ────────────────────────────────────────────────────────
 def _pick_symbol() -> str:
@@ -62,6 +77,25 @@ def _clamp_wallet(wallet: UserWallet) -> None:
     wallet.total_spent  = max(0, wallet.total_spent)
 
 
+def _mines_multiplier(mines: int, revealed: int) -> float:
+    """Expected payout multiplier with house edge for `revealed` safe cells."""
+    if revealed == 0:
+        return 1.0
+    safe = MINES_GRID_SIZE - mines
+    p = 1.0
+    for i in range(revealed):
+        p *= (safe - i) / (MINES_GRID_SIZE - i)
+    return round(MINES_HOUSE_EDGE / p, 2)
+
+
+def _generate_crash_point() -> float:
+    """Generate crash multiplier. Distribution: ~50 % crash at ≤ 2×, house edge ~1 %."""
+    r = random.random()
+    if r < 0.01:
+        r = 0.01        # clamp so result ≤ 99 with 99 % edge
+    return round(max(1.0, CRASH_HOUSE_EDGE / r), 2)
+
+
 # ── Result dataclasses ──────────────────────────────────────────────────────
 @dataclass
 class SlotResult:
@@ -77,6 +111,47 @@ class FlipResult:
     server_side: str
     won: bool
     amount_change: int
+    new_balance: int
+
+
+@dataclass
+class MinesStartResult:
+    grid_size:  int
+    mines_count: int
+    safe_count: int
+
+
+@dataclass
+class MinesRevealResult:
+    is_mine:         bool
+    revealed_indices: list[int]
+    mines_indices:   list[int]   # non-empty only on mine hit
+    revealed_count:  int
+    multiplier:      float
+    potential_payout: int
+    new_balance:     int
+
+
+@dataclass
+class MinesCashoutResult:
+    payout:        int
+    multiplier:    float
+    revealed_count: int
+    new_balance:   int
+
+
+@dataclass
+class CrashStartResult:
+    ok:          bool
+    new_balance: int
+
+
+@dataclass
+class CrashCashoutResult:
+    won:        bool
+    crash_at:   float
+    multiplier: float
+    payout:     int
     new_balance: int
 
 
@@ -259,6 +334,156 @@ class WalletRepository:
         _clamp_wallet(wallet)
         await self.session.flush()
         return wallet.balance
+
+    # ── Mines (mutation) ──────────────────────────────────────────────────
+    async def mines_start(
+        self, owner_telegram_id: int, bet: int, mines_count: int
+    ) -> "MinesStartResult":
+        bet         = max(MINES_BET_MIN, min(bet, MINES_BET_MAX))
+        mines_count = max(MINES_MIN_COUNT, min(mines_count, MINES_MAX_COUNT))
+
+        wallet = await self._get_for_update(owner_telegram_id)
+        if wallet.balance < bet:
+            raise ValueError("insufficient_balance")
+
+        wallet.balance     -= bet
+        wallet.total_spent += bet
+        _clamp_wallet(wallet)
+        await self.session.flush()
+
+        positions = list(range(MINES_GRID_SIZE))
+        random.shuffle(positions)
+        mines_set = set(positions[:mines_count])
+
+        _mines_sessions[owner_telegram_id] = {
+            "bet": bet,
+            "mines": mines_set,
+            "revealed": [],
+            "mines_count": mines_count,
+        }
+        return MinesStartResult(
+            grid_size=MINES_GRID_SIZE,
+            mines_count=mines_count,
+            safe_count=MINES_GRID_SIZE - mines_count,
+        )
+
+    async def mines_reveal(
+        self, owner_telegram_id: int, cell_index: int
+    ) -> "MinesRevealResult":
+        sess = _mines_sessions.get(owner_telegram_id)
+        if not sess:
+            raise ValueError("no_active_game")
+        if not (0 <= cell_index < MINES_GRID_SIZE):
+            raise ValueError("invalid_cell")
+        if cell_index in sess["revealed"]:
+            raise ValueError("already_revealed")
+
+        is_mine = cell_index in sess["mines"]
+
+        if is_mine:
+            bet        = sess["bet"]
+            mines_list = sorted(sess["mines"])
+            revealed   = list(sess["revealed"])
+            del _mines_sessions[owner_telegram_id]
+            wallet = await self._get_for_update(owner_telegram_id)
+            return MinesRevealResult(
+                is_mine=True,
+                revealed_indices=revealed,
+                mines_indices=mines_list,
+                revealed_count=len(revealed),
+                multiplier=0.0,
+                potential_payout=0,
+                new_balance=wallet.balance,
+            )
+
+        sess["revealed"].append(cell_index)
+        revealed_count = len(sess["revealed"])
+        mult   = _mines_multiplier(sess["mines_count"], revealed_count)
+        payout = round(sess["bet"] * mult)
+        wallet = await self._get_for_update(owner_telegram_id)
+        return MinesRevealResult(
+            is_mine=False,
+            revealed_indices=list(sess["revealed"]),
+            mines_indices=[],
+            revealed_count=revealed_count,
+            multiplier=mult,
+            potential_payout=payout,
+            new_balance=wallet.balance,
+        )
+
+    async def mines_cashout(self, owner_telegram_id: int) -> "MinesCashoutResult":
+        sess = _mines_sessions.get(owner_telegram_id)
+        if not sess:
+            raise ValueError("no_active_game")
+        if not sess["revealed"]:
+            raise ValueError("no_cells_revealed")
+
+        revealed_count = len(sess["revealed"])
+        mult   = _mines_multiplier(sess["mines_count"], revealed_count)
+        payout = round(sess["bet"] * mult)
+        del _mines_sessions[owner_telegram_id]
+
+        wallet = await self._get_for_update(owner_telegram_id)
+        wallet.balance      += payout
+        wallet.total_earned += payout
+        _clamp_wallet(wallet)
+        await self.session.flush()
+
+        return MinesCashoutResult(
+            payout=payout, multiplier=mult,
+            revealed_count=revealed_count, new_balance=wallet.balance,
+        )
+
+    # ── Crash (mutation) ──────────────────────────────────────────────────
+    async def crash_start(
+        self, owner_telegram_id: int, bet: int
+    ) -> "CrashStartResult":
+        bet = max(CRASH_BET_MIN, min(bet, CRASH_BET_MAX))
+
+        wallet = await self._get_for_update(owner_telegram_id)
+        if wallet.balance < bet:
+            raise ValueError("insufficient_balance")
+
+        wallet.balance     -= bet
+        wallet.total_spent += bet
+        _clamp_wallet(wallet)
+        await self.session.flush()
+
+        crash_at = _generate_crash_point()
+        _crash_sessions[owner_telegram_id] = {
+            "bet": bet, "crash_at": crash_at,
+            "started_at": dt.datetime.now(dt.timezone.utc),
+        }
+        return CrashStartResult(ok=True, new_balance=wallet.balance)
+
+    async def crash_cashout(
+        self, owner_telegram_id: int, multiplier: float
+    ) -> "CrashCashoutResult":
+        sess = _crash_sessions.get(owner_telegram_id)
+        if not sess:
+            raise ValueError("no_active_game")
+
+        crash_at   = sess["crash_at"]
+        bet        = sess["bet"]
+        multiplier = max(1.0, min(round(multiplier, 2), 200.0))
+        del _crash_sessions[owner_telegram_id]
+
+        won = multiplier <= crash_at
+
+        wallet = await self._get_for_update(owner_telegram_id)
+        if won:
+            payout = round(bet * multiplier)
+            wallet.balance      += payout
+            wallet.total_earned += payout
+        else:
+            payout = 0
+        _clamp_wallet(wallet)
+        await self.session.flush()
+
+        return CrashCashoutResult(
+            won=won, crash_at=crash_at, multiplier=multiplier,
+            payout=payout, new_balance=wallet.balance,
+        )
 
     # ── Coin flip (mutation) ───────────────────────────────────────────────
     async def flip_coin(

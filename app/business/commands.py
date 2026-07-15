@@ -615,7 +615,7 @@ async def _cmd_friend(
     ] if p]
     owner_name = " ".join(owner_parts) or f"#{owner_id}"
 
-    # Send DM with inline Accept / Decline buttons to the partner
+    # Send inline Accept / Decline buttons directly in the business chat
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="✅ Принять", callback_data=f"rel_accept:{owner_id}"),
         InlineKeyboardButton(text="❌ Отказать", callback_data=f"rel_decline:{owner_id}"),
@@ -627,14 +627,12 @@ async def _cmd_friend(
             f"Прими или отклони запрос:",
             parse_mode="HTML",
             reply_markup=kb,
+            business_connection_id=business_connection_id,
         )
-        await _reply(bot, owner_id, f"💌 Запрос дружбы отправлен — ждём ответа!")
+        await _reply(bot, owner_id, "💌 Запрос дружбы отправлен — ждём ответа!")
     except Exception as exc:
-        logger.warning("Failed to send friend request DM to %s: %s", chat_id, exc)
-        await _reply(
-            bot, owner_id,
-            "❌ Не удалось отправить запрос: собеседник ещё не запустил бота в личных сообщениях.",
-        )
+        logger.warning("Failed to send friend request in business chat %s: %s", chat_id, exc)
+        await _reply(bot, owner_id, "❌ Не удалось отправить запрос дружбы.")
 
 
 _HANDLERS: dict[str, object] = {

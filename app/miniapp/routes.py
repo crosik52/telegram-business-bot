@@ -1617,16 +1617,37 @@ async def rel_request(
                 ] if p]
                 _name = " ".join(_parts) or f"#{owner_id}"
                 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+                from app.models.message import Message as _Msg
                 _kb = InlineKeyboardMarkup(inline_keyboard=[[
                     InlineKeyboardButton(text="✅ Принять", callback_data=f"rel_accept:{owner_id}"),
                     InlineKeyboardButton(text="❌ Отказать", callback_data=f"rel_decline:{owner_id}"),
                 ]])
+                # Try to find the business_connection_id for this owner↔partner chat
+                # so the request appears in their conversation, not in bot DMs.
+                _bc_id: str | None = None
+                try:
+                    _conn_ids = (await session.execute(
+                        select(BusinessConnection.business_connection_id).where(
+                            BusinessConnection.user_telegram_id == owner_id,
+                            BusinessConnection.is_enabled.is_(True),
+                        )
+                    )).scalars().all()
+                    if _conn_ids:
+                        _bc_id = (await session.execute(
+                            select(_Msg.business_connection_id).where(
+                                _Msg.business_connection_id.in_(_conn_ids),
+                                _Msg.chat_id == payload.partner_id,
+                            ).limit(1)
+                        )).scalar_one_or_none()
+                except Exception:
+                    _bc_id = None
                 await _bot.send_message(
                     payload.partner_id,
                     f"💌 <b>{_name}</b> хочет с тобой подружиться!\n\n"
                     f"Прими или отклони запрос:",
                     parse_mode="HTML",
                     reply_markup=_kb,
+                    **( {"business_connection_id": _bc_id} if _bc_id else {} ),
                 )
         except Exception:
             pass

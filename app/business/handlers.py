@@ -1176,18 +1176,40 @@ async def on_rel_friend_respond(callback: CallbackQuery, bot: Bot) -> None:
         ] if p]
         resp_name = " ".join(resp_parts) or f"#{responder_id}"
 
-    if accept:
-        # Edit the original invitation message
+    # Determine whether the original message lives in a business chat
+    bc_id = getattr(callback.message, "business_connection_id", None) if callback.message else None
+
+    async def _edit(text: str, parse_mode: str | None = None) -> None:
+        """Edit the original invitation message, handling both bot-DM and business-chat cases."""
+        if not callback.message:
+            return
         try:
-            await callback.message.edit_text(
-                f"✅ Вы приняли запрос дружбы от <b>{callback.message.text.split('<b>')[1].split('</b>')[0] if callback.message and callback.message.text else '...'}</b>!\n\n"
-                f"Откройте мини-приложение, чтобы отправить подарок 🎁",
-                parse_mode="HTML",
-            )
+            if bc_id:
+                await bot.edit_message_text(
+                    chat_id=callback.message.chat.id,
+                    message_id=callback.message.message_id,
+                    business_connection_id=bc_id,
+                    text=text,
+                    parse_mode=parse_mode,
+                )
+            else:
+                await callback.message.edit_text(text, parse_mode=parse_mode)
         except Exception:
             pass
+
+    if accept:
+        sender_name = (
+            callback.message.text.split("<b>")[1].split("</b>")[0]
+            if callback.message and callback.message.text and "<b>" in callback.message.text
+            else "..."
+        )
+        await _edit(
+            f"✅ Вы приняли запрос дружбы от <b>{sender_name}</b>!\n\n"
+            f"Откройте мини-приложение, чтобы отправить подарок 🎁",
+            parse_mode="HTML",
+        )
         await callback.answer("✅ Запрос принят!")
-        # Notify the requester
+        # Notify the requester via bot DM
         try:
             await bot.send_message(
                 requester_id,
@@ -1198,12 +1220,9 @@ async def on_rel_friend_respond(callback: CallbackQuery, bot: Bot) -> None:
         except Exception:
             pass
     else:
-        try:
-            await callback.message.edit_text("❌ Запрос на дружбу отклонён.")
-        except Exception:
-            pass
+        await _edit("❌ Запрос на дружбу отклонён.")
         await callback.answer("Запрос отклонён.")
-        # Notify the requester
+        # Notify the requester via bot DM
         try:
             await bot.send_message(
                 requester_id,

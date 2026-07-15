@@ -587,22 +587,31 @@ async def _cmd_friend(
 
     repo = RelationshipRepository(session)
 
+    async def _chat_reply(text: str) -> None:
+        """Send a message in the business chat so it appears right in the conversation."""
+        await bot.send_message(
+            chat_id,
+            text,
+            parse_mode="HTML",
+            business_connection_id=business_connection_id,
+        )
+
     # Check for existing relationship
     existing = await repo.get_between(owner_id, chat_id)
     if existing and existing.status == "active":
         tier_labels = {"friends": "друзья 💛", "dating": "встречаетесь 💕", "married": "женаты 💍"}
         label = tier_labels.get(existing.rel_type, existing.rel_type)
-        await _reply(bot, owner_id, f"У вас уже есть отношения с этим собеседником: {label}.")
+        await _chat_reply(f"У нас уже есть отношения: {label}.")
         return
     if existing and existing.status == "pending":
-        await _reply(bot, owner_id, "💌 Запрос уже отправлен — ожидай ответа.")
+        await _chat_reply("💌 Запрос уже отправлен — ожидаю ответа.")
         return
 
     try:
         await repo.send_request(owner_id, chat_id)
         await session.commit()
     except ValueError as exc:
-        await _reply(bot, owner_id, f"❌ {exc}")
+        await _chat_reply(f"❌ {exc}")
         return
 
     # Resolve owner's display name
@@ -629,10 +638,9 @@ async def _cmd_friend(
             reply_markup=kb,
             business_connection_id=business_connection_id,
         )
-        await _reply(bot, owner_id, "💌 Запрос дружбы отправлен — ждём ответа!")
     except Exception as exc:
         logger.warning("Failed to send friend request in business chat %s: %s", chat_id, exc)
-        await _reply(bot, owner_id, "❌ Не удалось отправить запрос дружбы.")
+        await _chat_reply("❌ Не удалось отправить запрос дружбы.")
 
 
 _HANDLERS: dict[str, object] = {

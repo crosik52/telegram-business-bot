@@ -29,6 +29,7 @@ Security
 from __future__ import annotations
 
 import datetime as dt
+import json
 import math
 import random
 
@@ -101,6 +102,65 @@ PLAY_MESSAGES = [
     "🧩 {name} разобрал пазл. Собирать не стал — зачем?",
 ]
 
+# ── Food catalogue ─────────────────────────────────────────────────────────────
+
+FOOD_CATALOG: dict[str, dict] = {
+    "kibble": {
+        "name": "Корм",      "emoji": "🥣", "cost": 20,
+        "xp_mult": 1.0, "mood_bonus": 0,
+        "desc": "Обычная еда",
+    },
+    "fish": {
+        "name": "Рыбка",     "emoji": "🐟", "cost": 40,
+        "xp_mult": 1.5, "mood_bonus": 8,
+        "desc": "+50% XP · настрой +8",
+    },
+    "steak": {
+        "name": "Стейк",     "emoji": "🥩", "cost": 80,
+        "xp_mult": 2.0, "mood_bonus": 15,
+        "desc": "+100% XP · настрой +15",
+    },
+    "cake": {
+        "name": "Тортик",    "emoji": "🎂", "cost": 150,
+        "xp_mult": 3.0, "mood_bonus": 25,
+        "desc": "+200% XP · настрой +25",
+    },
+    "divine": {
+        "name": "Звёздный",  "emoji": "✨", "cost": 300,
+        "xp_mult": 5.0, "mood_bonus": 40,
+        "desc": "+400% XP · настрой +40",
+    },
+}
+
+# ── Skill catalogue ────────────────────────────────────────────────────────────
+
+SKILL_CATALOG: dict[str, dict] = {
+    "xp_boost": {
+        "name": "Умник", "emoji": "🧠",
+        "desc": "+30% к XP за каждый уровень прокачки",
+        "costs": [100, 250, 500],
+        "max_level": 3,
+    },
+    "hunger_resist": {
+        "name": "Сытость", "emoji": "🍽️",
+        "desc": "Голод падает на 25% медленнее за уровень",
+        "costs": [150, 350, 700],
+        "max_level": 3,
+    },
+    "mood_resist": {
+        "name": "Оптимизм", "emoji": "😊",
+        "desc": "Настроение падает на 25% медленнее за уровень",
+        "costs": [150, 350, 700],
+        "max_level": 3,
+    },
+    "lucky_paw": {
+        "name": "Удача", "emoji": "🍀",
+        "desc": "15% шанс найти монеты во время игры",
+        "costs": [200, 500],
+        "max_level": 2,
+    },
+}
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -136,6 +196,9 @@ def _compute_hunger(pet: ChatPet, now: dt.datetime) -> int:
     ref = pet.last_fed_at or pet.born_at
     hours = max(0.0, (now - ref).total_seconds() / 3600)
     decay_h = _personality_hunger_hours(pet.personality)
+    # hunger_resist skill: +25% decay time per level → hunger falls slower
+    ups = _get_upgrades(pet)
+    decay_h *= 1.0 + ups.get("hunger_resist", 0) * 0.25
     return max(0, round(100 - hours / decay_h * 100))
 
 
@@ -149,6 +212,9 @@ def _compute_mood(pet: ChatPet, now: dt.datetime) -> int:
     ref = pet.last_cuddled_at or pet.last_played_at or pet.born_at
     hours = max(0.0, (now - ref).total_seconds() / 3600)
     decay_h = _personality_mood_hours(pet.personality)
+    # mood_resist skill: +25% decay time per level → mood falls slower
+    ups = _get_upgrades(pet)
+    decay_h *= 1.0 + ups.get("mood_resist", 0) * 0.25
     return max(0, round(pet.mood - hours / decay_h * 100))
 
 
@@ -216,6 +282,7 @@ def _pet_dict(pet: ChatPet, now: dt.datetime) -> dict:
         "play_cooldown_secs":   _cooldown_secs(pet.last_played_at, _personality_play_cooldown(pet.personality), now),
         "cuddle_cooldown_secs": _cooldown_secs(pet.last_cuddled_at, CUDDLE_COOLDOWN_HOURS, now),
         "feed_cooldown_secs":   _cooldown_secs(pet.last_fed_at, _personality_feed_cooldown(pet.personality), now),
+        "upgrades":             _get_upgrades(pet),
     }
 
 
@@ -225,6 +292,20 @@ def _cooldown_secs(last_at: dt.datetime | None, hours: float, now: dt.datetime) 
     elapsed = (now - last_at).total_seconds()
     remaining = hours * 3600 - elapsed
     return max(0, int(remaining))
+
+
+def _get_upgrades(pet: "ChatPet") -> dict:
+    if not pet.upgrades:
+        return {"xp_boost": 0, "hunger_resist": 0, "mood_resist": 0, "lucky_paw": 0}
+    try:
+        d = json.loads(pet.upgrades)
+        return {k: int(d.get(k, 0)) for k in ("xp_boost", "hunger_resist", "mood_resist", "lucky_paw")}
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return {"xp_boost": 0, "hunger_resist": 0, "mood_resist": 0, "lucky_paw": 0}
+
+
+def _set_upgrades(pet: "ChatPet", upgrades: dict) -> None:
+    pet.upgrades = json.dumps(upgrades)
 
 
 # ── Repository ────────────────────────────────────────────────────────────────
@@ -504,11 +585,13 @@ class PetRepository:
         owner_telegram_id: int,
         pet_id: int,
         *,
+        food_type: str = "kibble",
         feed_free: bool = False,
         xp_multiplier: float = 1.0,
     ) -> dict:
-        now = dt.datetime.now(dt.timezone.utc)
-        pet = await self._get_alive_pet(owner_telegram_id, pet_id)
+        food = FOOD_CATALOG.get(food_type) or FOOD_CATALOG["kibble"]
+        now  = dt.datetime.now(dt.timezone.utc)
+        pet  = await self._get_alive_pet(owner_telegram_id, pet_id)
 
         cooldown = _personality_feed_cooldown(pet.personality)
         if pet.last_fed_at:
@@ -516,7 +599,7 @@ class PetRepository:
             if hours_since < cooldown:
                 raise ValueError("already_fed")
 
-        cost = 0 if feed_free else _personality_feed_cost(pet.personality)
+        cost = 0 if feed_free else food["cost"]
         wallet = await self._lock_wallet(owner_telegram_id)
         if wallet is None:
             raise ValueError("insufficient_coins")
@@ -534,61 +617,93 @@ class PetRepository:
         else:
             pet.feed_streak = 1
 
+        # XP: food multiplier × xp_boost skill × subscription/shop multiplier
+        ups = _get_upgrades(pet)
+        skill_xp_mult = 1.0 + ups.get("xp_boost", 0) * 0.30
+        total_mult    = food["xp_mult"] * skill_xp_mult * max(1.0, xp_multiplier)
+        xp_gained     = round(FEED_XP * total_mult)
+
         pet.last_fed_at    = now
         pet.total_feedings += 1
-        pet.xp             += round(FEED_XP * max(1.0, xp_multiplier))
+        pet.xp             += xp_gained
         pet.level          = _compute_level(pet.xp)
+
+        # Mood bonus from premium food (update ref timestamp so mood doesn't re-decay)
+        current_mood = _compute_mood(pet, now)
+        new_mood     = current_mood
+        if food["mood_bonus"] > 0:
+            new_mood = min(100, current_mood + food["mood_bonus"])
+            pet.mood            = new_mood
+            pet.last_cuddled_at = now
 
         await self._session.flush()
         return {
             "hunger":      100,
-            "mood":        _compute_mood(pet, now),
+            "mood":        new_mood,
             "xp":          pet.xp,
             "level":       pet.level,
             "feed_streak": pet.feed_streak,
             "new_balance": wallet.balance,
             "feed_cost":   cost,
+            "food_type":   food_type,
+            "food_emoji":  food["emoji"],
+            "xp_gained":   xp_gained,
         }
 
     async def play(self, owner_telegram_id: int, pet_id: int, *, xp_multiplier: float = 1.0) -> dict:
         now = dt.datetime.now(dt.timezone.utc)
         pet = await self._get_alive_pet(owner_telegram_id, pet_id)
 
-        # Cooldown checked against REAL last_played_at (never backdated)
         cooldown = _personality_play_cooldown(pet.personality)
         if pet.last_played_at:
             hours_since = (now - pet.last_played_at).total_seconds() / 3600
             if hours_since < cooldown:
                 raise ValueError("play_cooldown")
 
-        mood_gain   = _personality_play_mood(pet.personality)
+        mood_gain    = _personality_play_mood(pet.personality)
         current_mood = _compute_mood(pet, now)
-        new_mood    = min(100, current_mood + mood_gain)
+        new_mood     = min(100, current_mood + mood_gain)
 
-        # Store new mood value and REAL timestamp (decoupled from mood math)
-        pet.mood           = new_mood
-        pet.last_played_at = now   # real time — used for cooldown only
-        # Also update cuddle ref so mood decays from this moment forward
+        pet.mood            = new_mood
+        pet.last_played_at  = now
         pet.last_cuddled_at = now
 
         pet.total_plays += 1
-        pet.xp          += round(PLAY_XP * max(1.0, xp_multiplier))
-        pet.level        = _compute_level(pet.xp)
+
+        ups = _get_upgrades(pet)
+        skill_xp_mult = 1.0 + ups.get("xp_boost", 0) * 0.30
+        xp_gained     = round(PLAY_XP * skill_xp_mult * max(1.0, xp_multiplier))
+        pet.xp       += xp_gained
+        pet.level     = _compute_level(pet.xp)
+
+        # Lucky Paw: chance to earn coins while playing
+        coins_found = 0
+        new_balance: int | None = None
+        lucky_level = ups.get("lucky_paw", 0)
+        if lucky_level > 0 and random.random() < lucky_level * 0.15:
+            coins_found = random.randint(5 * lucky_level, 15 * lucky_level)
+            wallet = await self._lock_wallet(owner_telegram_id)
+            if wallet is not None:
+                wallet.balance      = min(999_999, wallet.balance + coins_found)
+                wallet.total_earned = max(0, wallet.total_earned + coins_found)
+                new_balance         = wallet.balance
 
         play_msg = random.choice(PLAY_MESSAGES).format(name=pet.pet_name)
         await self._session.flush()
         return {
-            "mood":     new_mood,
-            "xp":       pet.xp,
-            "level":    pet.level,
-            "play_msg": play_msg,
+            "mood":        new_mood,
+            "xp":          pet.xp,
+            "level":       pet.level,
+            "xp_gained":   xp_gained,
+            "play_msg":    play_msg,
+            "coins_found": coins_found,
+            "new_balance": new_balance,
         }
 
     async def cuddle(self, owner_telegram_id: int, pet_id: int, *, xp_multiplier: float = 1.0) -> dict:
         now = dt.datetime.now(dt.timezone.utc)
         pet = await self._get_alive_pet(owner_telegram_id, pet_id)
 
-        # Cooldown checked against REAL last_cuddled_at (never backdated)
         if pet.last_cuddled_at:
             hours_since = (now - pet.last_cuddled_at).total_seconds() / 3600
             if hours_since < CUDDLE_COOLDOWN_HOURS:
@@ -598,19 +713,22 @@ class PetRepository:
         current_mood = _compute_mood(pet, now)
         new_mood     = min(100, current_mood + mood_gain)
 
-        # Store new mood value and REAL timestamp
         pet.mood            = new_mood
-        pet.last_cuddled_at = now   # real time — used for cooldown + mood decay ref
+        pet.last_cuddled_at = now
+        pet.total_cuddles   += 1
 
-        pet.total_cuddles += 1
-        pet.xp            += round(CUDDLE_XP * max(1.0, xp_multiplier))
-        pet.level          = _compute_level(pet.xp)
+        ups = _get_upgrades(pet)
+        skill_xp_mult = 1.0 + ups.get("xp_boost", 0) * 0.30
+        xp_gained     = round(CUDDLE_XP * skill_xp_mult * max(1.0, xp_multiplier))
+        pet.xp       += xp_gained
+        pet.level     = _compute_level(pet.xp)
 
         await self._session.flush()
         return {
-            "mood":  new_mood,
-            "xp":    pet.xp,
-            "level": pet.level,
+            "mood":      new_mood,
+            "xp":        pet.xp,
+            "level":     pet.level,
+            "xp_gained": xp_gained,
         }
 
     async def rename(self, owner_telegram_id: int, pet_id: int, new_name: str) -> dict:
@@ -631,6 +749,67 @@ class PetRepository:
 
         await self._session.flush()
         return {"pet_name": pet.pet_name, "new_balance": wallet.balance}
+
+    async def buy_upgrade(self, owner_telegram_id: int, pet_id: int, skill: str) -> dict:
+        """Purchase one level of a skill upgrade for a pet."""
+        if skill not in SKILL_CATALOG:
+            raise ValueError("invalid_skill")
+
+        pet = await self._get_alive_pet(owner_telegram_id, pet_id)
+        ups = _get_upgrades(pet)
+        current_level = ups.get(skill, 0)
+        catalog       = SKILL_CATALOG[skill]
+
+        if current_level >= catalog["max_level"]:
+            raise ValueError("max_level_reached")
+
+        cost   = catalog["costs"][current_level]
+        wallet = await self._lock_wallet(owner_telegram_id)
+        if wallet is None or wallet.balance < cost:
+            raise ValueError("insufficient_coins")
+
+        wallet.balance     = max(0, wallet.balance - cost)
+        wallet.total_spent = max(0, wallet.total_spent + cost)
+
+        ups[skill] = current_level + 1
+        _set_upgrades(pet, ups)
+
+        await self._session.flush()
+        return {
+            "skill":       skill,
+            "new_level":   ups[skill],
+            "new_balance": wallet.balance,
+            "upgrades":    ups,
+        }
+
+    async def get_leaderboard(self, limit: int = 20) -> list[dict]:
+        """Return top `limit` alive pets ordered by XP descending."""
+        now  = dt.datetime.now(dt.timezone.utc)
+        rows = list(
+            (await self._session.execute(
+                select(ChatPet)
+                .where(ChatPet.is_alive.is_(True))
+                .order_by(ChatPet.xp.desc())
+                .limit(limit)
+            )).scalars().all()
+        )
+        result: list[dict] = []
+        for rank, pet in enumerate(rows, 1):
+            sp    = SPECIES.get(pet.species, {})
+            stage = _compute_stage(pet.born_at, now)
+            emoji = (sp.get("stages") or ["🐾"])[min(stage - 1, 4)]
+            p_info = PERSONALITIES.get(pet.personality, {})
+            result.append({
+                "rank":              rank,
+                "pet_name":          pet.pet_name,
+                "species_emoji":     emoji,
+                "species_label":     sp.get("label", ""),
+                "level":             _compute_level(pet.xp),
+                "xp":                pet.xp,
+                "days_alive":        (now - pet.born_at).days,
+                "personality_emoji": p_info.get("emoji", ""),
+            })
+        return result
 
     # ── Private helpers ───────────────────────────────────────────────────────
 

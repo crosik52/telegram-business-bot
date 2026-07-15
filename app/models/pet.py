@@ -39,3 +39,7 @@ class ChatPet(Base):
     total_plays: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_cuddles: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     feed_streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # ── v3 fields ────────────────────────────────────────────────────────────
+    # JSON-encoded dict of skill upgrade levels, e.g. {"xp_boost":1,"lucky_paw":0,...}
+    upgrades: Mapped[str | None] = mapped_column(String(400), nullable=True)

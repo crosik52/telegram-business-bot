@@ -251,6 +251,15 @@ class PetFeedRequest(BaseModel):
 
     init_data: str = Field(alias="initData")
     pet_id: int = Field(alias="petId")
+    food_type: str = Field(alias="foodType", default="kibble")
+
+
+class PetUpgradeRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    init_data: str = Field(alias="initData")
+    pet_id: int = Field(alias="petId")
+    skill: str
 
 
 class PetPlayRequest(BaseModel):
@@ -1472,6 +1481,7 @@ async def miniapp_pet_feed(
     try:
         result = await repo.feed(
             owner_id, payload.pet_id,
+            food_type=payload.food_type,
             feed_free=benefits["feed_free"],
             xp_multiplier=benefits["xp_multiplier"],
         )
@@ -1551,6 +1561,42 @@ async def miniapp_pet_rename(
 
     await session.commit()
     return {"ok": True, **result}
+
+
+@router.post("/app/api/pet/upgrade")
+async def miniapp_pet_upgrade(
+    payload: PetUpgradeRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Buy a skill upgrade for a pet."""
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid Telegram init data")
+
+    owner_id = int(user["id"])
+    repo = PetRepository(session)
+    try:
+        result = await repo.buy_upgrade(owner_id, payload.pet_id, payload.skill)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    await session.commit()
+    return {"ok": True, **result}
+
+
+@router.post("/app/api/pet/leaderboard")
+async def miniapp_pet_leaderboard(
+    payload: StatsRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Return top 20 pets by XP (leaderboard)."""
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid Telegram init data")
+
+    repo = PetRepository(session)
+    leaderboard = await repo.get_leaderboard(limit=20)
+    return {"leaderboard": leaderboard}
 
 
 # ── Subscription endpoints ────────────────────────────────────────────────────

@@ -100,6 +100,7 @@ async def lifespan(app: FastAPI):
             secret_token=settings.telegram_webhook_secret or None,
             allowed_updates=[
                 "message",
+                "pre_checkout_query",   # required: approve Stars payment before charge
                 "callback_query",
                 "inline_query",
                 "chosen_inline_result",

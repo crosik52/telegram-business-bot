@@ -1464,9 +1464,10 @@
   .crash-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
   .crash-rocket {
     position: absolute; font-size: 24px; line-height: 1;
-    left: 6px; bottom: 10px;
-    filter: drop-shadow(0 0 8px rgba(124,108,255,.8));
-    transform: rotate(45deg);
+    left: 0; top: 0;
+    filter: drop-shadow(0 0 10px rgba(197,186,255,.9));
+    transform: rotate(51deg);   /* updated each frame by JS */
+    will-change: transform, left, top;
   }
   .crash-mult-display {
     position: absolute; bottom: 10px; right: 12px;
@@ -4295,15 +4296,25 @@
           cashout.textContent = `🚀 Забрать ${bet} 🪙`;
         }
 
-        // Reset SVG path and rocket
+        // Reset SVG path and rocket to start position (svgX=4, svgY=138 at mult=1)
         const poly   = document.getElementById("crashPolyline");
         const fill   = document.getElementById("crashFill");
         const rocket = document.getElementById("crashRocket");
         const multD  = document.getElementById("crashMultDisplay");
-        if (poly)   { poly.setAttribute("points", "0,148"); }
-        if (fill)   { fill.setAttribute("points", "0,148 0,148"); }
-        if (rocket) { rocket.textContent = "🚀"; rocket.style.left = "6px"; rocket.style.bottom = "10px"; }
-        if (multD)  { multD.className = "crash-mult-display flying"; multD.textContent = "1.00×"; }
+        const _disp  = document.getElementById("crashDisplay");
+        const _W0    = _disp?.clientWidth  || 300;
+        const _H0    = _disp?.clientHeight || 148;
+        if (poly)   { poly.setAttribute("points", "4,138"); }
+        if (fill)   { fill.setAttribute("points", "4,138 4,143 4,143"); }
+        if (rocket) {
+          rocket.textContent   = "🚀";
+          rocket.style.left    = `${(4 / 300 * _W0 - 13).toFixed(0)}px`;
+          rocket.style.top     = `${(138 / 148 * _H0 - 13).toFixed(0)}px`;
+          rocket.style.bottom  = "";
+          rocket.style.transform = "rotate(51deg)";
+        }
+        if (multD)  { multD.className = "crash-mult-display flying"; multD.textContent = "1.00×";
+                      multD.style.color = "#c5baff"; }
 
         crashStartTime = performance.now();
         crashAnimFrame = requestAnimationFrame(_crashTick.bind(null, bet));
@@ -4316,63 +4327,83 @@
 
     function _crashTick(bet, now) {
       if (!crashGameActive) return;
-      const elapsed  = (now - crashStartTime) / 1000;
+      const elapsed = (now - crashStartTime) / 1000;
       crashMultiplier = parseFloat(Math.exp(0.055 * elapsed).toFixed(2));
 
-      const multD   = document.getElementById("crashMultDisplay");
-      const cashout = document.getElementById("crashCashoutBtn");
-      if (multD)   multD.textContent = `${crashMultiplier.toFixed(2)}×`;
-      if (cashout) cashout.textContent = `🚀 Забрать ${Math.floor(bet * crashMultiplier)} монет`;
-
-      // Move rocket along the display
-      const display = document.getElementById("crashDisplay");
-      const rocket  = document.getElementById("crashRocket");
-      if (display && rocket) {
-        const W = display.clientWidth  || 300;
-        const H = display.clientHeight || 148;
-        const xFrac   = Math.min(elapsed / 22, 0.88);
-        const yFrac   = Math.min((crashMultiplier - 1) / 8, 0.88);
-        const rX = xFrac * (W - 36);
-        const rY = 10 + (1 - yFrac) * (H - 46);
-        rocket.style.left   = `${rX}px`;
-        rocket.style.bottom = `${H - rY - 28}px`;
-
-        // Throttle SVG path updates to every 120ms
-        if (now - crashLastPathT > 120) {
-          crashLastPathT = now;
-          const poly = document.getElementById("crashPolyline");
-          const fill = document.getElementById("crashFill");
-          const multD = document.getElementById("crashMultDisplay");
-          if (poly) {
-            const vx = xFrac * 300;
-            const vy = 148 - (1 - (rY + 14) / H) * 148;
-            const pts = poly.getAttribute("points");
-            const newPts = `${pts} ${vx.toFixed(1)},${vy.toFixed(1)}`;
-            poly.setAttribute("points", newPts);
-            if (fill) fill.setAttribute("points", `${newPts} ${vx.toFixed(1)},148 0,148`);
-          }
-          // Update multiplier colour tier
-          if (multD && multD.classList.contains("flying")) {
-            if (crashMultiplier >= 5)        multD.style.color = "#f97316";
-            else if (crashMultiplier >= 2.5) multD.style.color = "#fbbf24";
-            else                             multD.style.color = "#c5baff";
-          }
-        }
-      }
-
-      // Auto-crash: server-side crash point reached
+      // ── 1. Auto-crash check FIRST (before any render) ────────────────────
       if (crashMultiplier >= crashPointAt) {
         crashGameActive = false;
-        cancelAnimationFrame(crashAnimFrame);
-        crashAnimFrame = null;
-        // Show explosion immediately, then finalize with server
-        const rocketEl = document.getElementById("crashRocket");
+        cancelAnimationFrame(crashAnimFrame); crashAnimFrame = null;
+        const rocketEl  = document.getElementById("crashRocket");
         const cashoutEl = document.getElementById("crashCashoutBtn");
-        if (rocketEl) rocketEl.textContent = "💥";
+        if (rocketEl)  rocketEl.textContent = "💥";
         if (cashoutEl) { cashoutEl.disabled = true; cashoutEl.classList.remove("live"); }
         if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
         _finalizeCrashLost(bet);
         return;
+      }
+
+      // ── 2. Text + colour ──────────────────────────────────────────────────
+      const multD   = document.getElementById("crashMultDisplay");
+      const cashout = document.getElementById("crashCashoutBtn");
+      if (multD) {
+        multD.textContent = `${crashMultiplier.toFixed(2)}×`;
+        if (multD.classList.contains("flying")) {
+          if      (crashMultiplier >= 5)   multD.style.color = "#f97316";
+          else if (crashMultiplier >= 2.5) multD.style.color = "#fbbf24";
+          else                             multD.style.color = "#c5baff";
+        }
+      }
+      if (cashout) cashout.textContent = `🚀 Забрать ${Math.floor(bet * crashMultiplier)} 🪙`;
+
+      // ── 3. Rocket position + curve ────────────────────────────────────────
+      const display = document.getElementById("crashDisplay");
+      if (!display) { crashAnimFrame = requestAnimationFrame(_crashTick.bind(null, bet)); return; }
+      const W = display.clientWidth  || 300;
+      const H = display.clientHeight || 148;
+
+      // x: linear with time — 35 s fills the screen
+      const T     = 35;
+      const xFrac = Math.min(elapsed / T, 0.93);
+
+      // y: 1 − 1/mult → starts rising steeply, then flattens asymptotically
+      // 1× = 0 %  |  2× = 50 %  |  4× = 75 %  |  10× = 90 %
+      const yFrac = Math.min(1 - 1 / Math.max(crashMultiplier, 1.001), 0.93);
+
+      // SVG coords  (viewBox "0 0 300 148";  y = 0 top,  y = 148 bottom)
+      const svgX = 4   + xFrac * 290;   // 4 px left margin
+      const svgY = 138 - yFrac * 128;   // 138 = start (near bottom), 10 = near top
+
+      // Rocket: sits at the EXACT curve tip (same maths as SVG)
+      const rocket = document.getElementById("crashRocket");
+      if (rocket) {
+        const pxX = (svgX / 300) * W;
+        const pxY = (svgY / 148) * H;
+        rocket.style.left   = `${(pxX - 13).toFixed(0)}px`;
+        rocket.style.top    = `${(pxY - 13).toFixed(0)}px`;
+        rocket.style.bottom = "";
+
+        // Rotation: tangent of curve in screen-pixel space
+        //   dx/dt = (290/300 · W) / T            (px/s, rightward)
+        //   dy/dt = (0.055/mult) · 128 · (H/148) (px/s, upward)
+        //   angle = CW from vertical (🚀 default = up = 0°, right = +90°)
+        const dxPx     = (290 / 300 * W) / T;
+        const dyPx     = (0.055 / crashMultiplier) * 128 * (H / 148);
+        const angleDeg = Math.atan2(dxPx, dyPx) * 180 / Math.PI;
+        rocket.style.transform = `rotate(${angleDeg.toFixed(1)}deg)`;
+      }
+
+      // SVG path update (throttled to 80 ms)
+      if (now - crashLastPathT > 80) {
+        crashLastPathT = now;
+        const poly = document.getElementById("crashPolyline");
+        const fill = document.getElementById("crashFill");
+        if (poly) {
+          const pts    = poly.getAttribute("points") || "";
+          const newPts = `${pts} ${svgX.toFixed(1)},${svgY.toFixed(1)}`;
+          poly.setAttribute("points", newPts);
+          fill?.setAttribute("points", `${newPts} ${svgX.toFixed(1)},143 4,143`);
+        }
       }
 
       crashAnimFrame = requestAnimationFrame(_crashTick.bind(null, bet));

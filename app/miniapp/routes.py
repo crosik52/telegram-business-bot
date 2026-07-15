@@ -429,53 +429,65 @@ async def miniapp_stats(
             )
             if _ref_rewards:
                 await session.commit()
-                # Notify both sides via bot (best-effort)
+                # Notify both sides via bot (best-effort — each send is individually guarded)
+                _settings = get_settings()
+                _bot = get_bot(_settings)
+                _cfg = await _ref_repo.get_config()
+                _active = await _ref_repo._count_active(_ref.referrer_telegram_id)
+
+                # Build referred user display name
+                _who = _ref.referred_first_name or ""
+                if _ref.referred_username:
+                    _who += f" (@{_ref.referred_username})"
+                _who = _who.strip() or f"#{_ref.referred_telegram_id}"
+
+                # Next milestone hint
+                _next_ms = next(
+                    (m for m in sorted(_cfg.milestones, key=lambda x: x["count"])
+                     if m["count"] > _active),
+                    None,
+                )
+
+                from app.bot import emoji as E
+
+                # ── Notify referrer ──────────────────────────────────────────
+                _ref_msg = (
+                    f"{E.CHECK} <b>{_who}</b> подключил бота и стал активным рефералом!\n\n"
+                )
+                if _cfg.referrer_reward_days > 0:
+                    _ref_msg += f"{E.STAR} +{_cfg.referrer_reward_days} дн. Premium начислено тебе\n"
+                _ref_msg += f"👥 Всего активных рефералов: <b>{_active}</b>"
+                if _next_ms:
+                    _need = _next_ms["count"] - _active
+                    _ref_msg += (
+                        f"\n\n{E.TARGET} До награды «{_next_ms['label']}» — ещё <b>{_need}</b>"
+                    )
                 try:
-                    _settings = get_settings()
-                    _bot = get_bot(_settings)
-                    _cfg = await _ref_repo.get_config()
-                    _active = await _ref_repo._count_active(_ref.referrer_telegram_id)
-
-                    # Build referred user display name
-                    _who = _ref.referred_first_name or ""
-                    if _ref.referred_username:
-                        _who += f" (@{_ref.referred_username})"
-                    _who = _who.strip() or f"#{_ref.referred_telegram_id}"
-
-                    # Next milestone hint
-                    _next_ms = next(
-                        (m for m in sorted(_cfg.milestones, key=lambda x: x["count"])
-                         if m["count"] > _active),
-                        None,
-                    )
-
-                    # ── Notify referrer ──────────────────────────────────────
-                    from app.bot import emoji as E
-                    _ref_msg = (
-                        f"{E.CHECK} <b>{_who}</b> подключил бота и стал активным рефералом!\n\n"
-                    )
-                    if _cfg.referrer_reward_days > 0:
-                        _ref_msg += f"{E.STAR} +{_cfg.referrer_reward_days} дн. Premium начислено тебе\n"
-                    _ref_msg += f"👥 Всего активных рефералов: <b>{_active}</b>"
-                    if _next_ms:
-                        _need = _next_ms["count"] - _active
-                        _ref_msg += (
-                            f"\n\n{E.TARGET} До награды «{_next_ms['label']}» — ещё <b>{_need}</b>"
-                        )
                     await _bot.send_message(
                         _ref.referrer_telegram_id, _ref_msg, parse_mode="HTML"
                     )
+                except Exception as _exc:
+                    logger.warning(
+                        "Referral activation: failed to notify referrer %s "
+                        "(referred=%s): %s",
+                        _ref.referrer_telegram_id, owner_telegram_id, _exc,
+                    )
 
-                    # ── Notify referred user (welcome bonus) ─────────────────
-                    if _cfg.referee_reward_days > 0:
+                # ── Notify referred user (welcome bonus) ─────────────────────
+                if _cfg.referee_reward_days > 0:
+                    try:
                         await _bot.send_message(
                             owner_telegram_id,
                             f"{E.PARTY} Ты подключил бота по реферальной ссылке — "
                             f"<b>+{_cfg.referee_reward_days} дн. Premium</b> уже у тебя!",
                             parse_mode="HTML",
                         )
-                except Exception:
-                    pass  # Notification is best-effort
+                    except Exception as _exc:
+                        logger.warning(
+                            "Referral activation: failed to notify referred user %s "
+                            "(referrer=%s): %s",
+                            owner_telegram_id, _ref.referrer_telegram_id, _exc,
+                        )
         except Exception:
             logger.debug("Referral activation check failed for %s", owner_telegram_id)
 

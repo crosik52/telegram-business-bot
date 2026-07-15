@@ -417,6 +417,70 @@ async def test_upgrade_tier_not_related_blocked(session):
 
 
 # ---------------------------------------------------------------------------
+# Cooldown reset after tier upgrade
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_gift_cooldown_resets_after_upgrade(session):
+    """upgrade_tier() zeroes last_gift_a/b so the sender can gift immediately.
+
+    Flow:
+      1. A and B are active friends at the minimum upgrade level.
+      2. A sends a gift → cooldown is now active.
+      3. A's second gift is blocked by the cooldown (sanity check).
+      4. A upgrades the tier (friends → dating).
+      5. A can gift again immediately — no cooldown error.
+      6. B can also gift immediately (their cooldown was also reset).
+    """
+    from sqlalchemy import select as sa_select
+
+    USER_A, USER_B = 22001, 22002
+
+    # Enough coins for: gift + upgrade + second gift (+ B's gift)
+    balance = GIFT_COST + UPGRADE_COSTS["friends"] + GIFT_COST * 2 + 100
+    await _seed_wallet(session, USER_A, balance)
+    await _seed_wallet(session, USER_B, balance)
+
+    min_lvl  = UPGRADE_MIN_LEVEL["friends"]
+    xp_start = (min_lvl - 1) * 200   # puts us at exactly min_lvl before any gift
+
+    await _seed_active_rel(
+        session, USER_A, USER_B,
+        rel_type="friends",
+        level=min_lvl,
+        xp=xp_start,
+    )
+
+    repo = RelationshipRepository(session)
+
+    # Step 2 — first gift works, cooldown starts
+    await repo.gift(USER_A, USER_B)
+
+    # Step 3 — immediate second gift is blocked (sanity: cooldown IS active)
+    with pytest.raises(ValueError, match="gift_cooldown:"):
+        await repo.gift(USER_A, USER_B)
+
+    # Step 4 — upgrade resets both cooldown timestamps
+    upgraded = await repo.upgrade_tier(USER_A, USER_B)
+    assert upgraded.rel_type == "dating", "Tier should advance to 'dating'"
+    assert upgraded.last_gift_a is None, "last_gift_a must be None after upgrade"
+    assert upgraded.last_gift_b is None, "last_gift_b must be None after upgrade"
+
+    # Step 5 — A can gift again immediately (no cooldown error)
+    result_a = await repo.gift(USER_A, USER_B)
+    assert result_a["new_xp"] == GIFT_XP, (
+        "First gift after upgrade should succeed and record XP"
+    )
+
+    # Step 6 — B's cooldown was also reset; B can gift A right away
+    result_b = await repo.gift(USER_B, USER_A)
+    assert result_b["new_xp"] == GIFT_XP * 2, (
+        "B's gift after upgrade should also succeed (cooldown was reset for both sides)"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Concurrency: duplicate send_request for the same pair
 # ---------------------------------------------------------------------------
 

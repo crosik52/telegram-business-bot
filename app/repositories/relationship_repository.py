@@ -222,9 +222,13 @@ class RelationshipRepository:
 
         now  = dt.datetime.now(dt.timezone.utc)
         last = self._last_gift(rel, sender_id)
-        if last and (now - last).total_seconds() < GIFT_COOLDOWN_H * 3600:
-            secs = int(GIFT_COOLDOWN_H * 3600 - (now - last).total_seconds())
-            raise ValueError(f"gift_cooldown:{secs}")
+        if last:
+            # SQLite/aiosqlite may return naive datetimes; normalise to UTC.
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=dt.timezone.utc)
+            if (now - last).total_seconds() < GIFT_COOLDOWN_H * 3600:
+                secs = int(GIFT_COOLDOWN_H * 3600 - (now - last).total_seconds())
+                raise ValueError(f"gift_cooldown:{secs}")
 
         sender_w = await self._get_wallet(sender_id,  lock=True)
         if sender_w.balance < GIFT_COST:

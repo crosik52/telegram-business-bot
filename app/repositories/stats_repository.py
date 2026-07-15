@@ -148,7 +148,7 @@ class StatsRepository:
         *,
         connection_ids: list[str],
         owner_telegram_id: int,
-        top_n: int = 10,
+        top_n: int = 15,
     ) -> OwnerStats:
         """Per-chat activity for one connection owner, for the mini app.
 

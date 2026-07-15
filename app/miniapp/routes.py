@@ -1801,8 +1801,12 @@ async def rel_break(
                         f"Ежедневный бонус 💍 +{MARRIAGE_DAILY_BONUS}🪙 больше не начисляется.",
                         parse_mode="HTML",
                     )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(
+                    "Failed to send marriage break-up notification to partner %s: %s",
+                    payload.partner_id,
+                    exc,
+                )
 
         return {"ok": True}
     except ValueError as e:

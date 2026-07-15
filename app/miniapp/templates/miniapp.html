@@ -636,9 +636,10 @@
 
   /* ── Relationship button ── */
   .rel-btn {
-    border: none; background: rgba(10,132,255,0.12); color: var(--link);
-    border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 700;
+    border: none; background: rgba(255,59,96,0.11); color: #e0365a;
+    border-radius: 20px; padding: 4px 10px; font-size: 11px; font-weight: 600;
     cursor: pointer; white-space: nowrap; flex-shrink: 0;
+    display: inline-flex; align-items: center; gap: 3px;
   }
   .rel-btn:active { opacity: 0.72; }
 
@@ -669,22 +670,22 @@
   .rel-modal-btn:disabled { opacity: 0.40; cursor: default; }
 
   /* ── Row action buttons ── */
-  .row-action-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+  .row-action-btns { display: flex; flex-wrap: nowrap; gap: 6px; margin-top: 7px; overflow: hidden; }
   .game-btn, .remind-btn {
-    border: none; border-radius: 10px;
-    padding: 5px 11px; font-size: 12px; font-weight: 700;
-    display: inline-block; flex-shrink: 0;
+    border: none; border-radius: 20px;
+    padding: 4px 10px; font-size: 11px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; cursor: pointer;
   }
   .game-btn {
-    background: linear-gradient(90deg, var(--link), var(--green));
-    color: #fff;
+    background: rgba(10,132,255,0.12);
+    color: var(--link);
   }
   .remind-btn {
-    background: linear-gradient(90deg, #ff6b00, #ff3b30);
-    color: #fff;
+    background: rgba(255,107,0,0.12);
+    color: #ff6b00;
   }
-  .game-btn:active, .remind-btn:active { opacity: 0.78; }
-  .remind-btn.sent { background: rgba(120,120,128,0.15); color: var(--hint); }
+  .game-btn:active, .remind-btn:active { opacity: 0.72; }
+  .remind-btn.sent { background: rgba(120,120,128,0.10); color: var(--hint); }
   .game-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.45);
     display: flex; align-items: flex-end; z-index: 1000;
@@ -2924,7 +2925,7 @@
           ? `<button class="game-btn" data-game-chat="${s.chat_id}" data-game-name="${s.display_name}">🎮 Игра</button>`
           : "";
         const remindBtn = (s.mutual_connected && s.streak_days >= 2)
-          ? `<button class="remind-btn" data-remind-chat="${s.chat_id}" data-remind-streak="${s.streak_days}" data-remind-name="${s.display_name}">🔥 Напомнить о серии</button>`
+          ? `<button class="remind-btn" data-remind-chat="${s.chat_id}" data-remind-streak="${s.streak_days}" data-remind-name="${s.display_name}">🔥 Серия</button>`
           : "";
         const relBtn = s.mutual_connected
           ? `<button class="rel-btn" data-rel-open="${s.chat_id}" data-rel-name="${s.display_name}">❤️ Отношения</button>`

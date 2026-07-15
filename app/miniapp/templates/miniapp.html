@@ -1926,6 +1926,19 @@
   .pet-tab-btn:active { transform: scale(0.94); }
 
   /* achievements */
+  .pet-rel-bonus-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; font-weight: 700;
+    padding: 3px 9px; border-radius: 8px;
+    background: rgba(255,200,60,0.15); color: #c8960a;
+    margin-bottom: 7px;
+  }
+  [data-theme="dark"] .pet-rel-bonus-badge,
+  [data-theme="frost"] .pet-rel-bonus-badge,
+  [data-theme="ember"] .pet-rel-bonus-badge,
+  [data-theme="violet_dream"] .pet-rel-bonus-badge { color: #f5c842; background: rgba(245,200,66,0.18); }
+  .pet-rel-bonus-label { font-weight: 400; opacity: 0.75; }
+
   .pet-achievements-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
   .pet-achievement {
     font-size: 10px; font-weight: 700; padding: 2px 7px;
@@ -5088,6 +5101,11 @@
       if (p.days_alive >= 30)     badges.push("⏳ Старожил");
       if (p.level >= 20)          badges.push("⚡ Легенда");
 
+      const REL_BADGE = { friends: "💛 +5% XP", dating: "💕 +10% XP", married: "💍 +15% XP" };
+      const relBadgeHtml = p.rel_tier && REL_BADGE[p.rel_tier]
+        ? `<div class="pet-rel-bonus-badge">${REL_BADGE[p.rel_tier]} <span class="pet-rel-bonus-label">бонус связи</span></div>`
+        : "";
+
       const badgesHtml = badges.length
         ? `<div class="pet-achievements-row">${badges.map(b=>`<span class="pet-achievement">${b}</span>`).join("")}</div>`
         : "";
@@ -5116,6 +5134,7 @@
             <span class="pet-stat-lbl" style="color:${statColor(p.mood)}">${p.mood}%</span>
           </div>
         </div>
+        ${relBadgeHtml}
         ${badgesHtml}
         <div class="pet-actions">
           <button class="pet-action-btn pet-btn-feed" data-pet-id="${p.id}" data-action="feed" data-food-type="kibble" ${feedCd?"disabled":""}>
@@ -5362,7 +5381,9 @@
         if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
         updateBalanceDisplay(data.new_balance);
         const xpMsg = data.xp_gained ? ` +${data.xp_gained} XP` : "";
-        toastMessage(`${food.emoji} Накормлен!${xpMsg}`);
+        const REL_FEED_LABEL = { friends: " 💛", dating: " 💕", married: " 💍" };
+        const relSuffix = data.rel_tier ? (REL_FEED_LABEL[data.rel_tier] || "") : "";
+        toastMessage(`${food.emoji} Накормлен!${xpMsg}${relSuffix}`);
         await _refreshPets();
       } catch {
         if (btn) { btn.disabled=false; btn.innerHTML=origHtml||""; }
@@ -5387,13 +5408,15 @@
         }
         const data = await res.json();
         if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+        const REL_ACTION_ICON = { friends: " 💛", dating: " 💕", married: " 💍" };
+        const relIcon = data.rel_tier ? (REL_ACTION_ICON[data.rel_tier] || "") : "";
         if (data.coins_found > 0 && data.new_balance != null) {
           updateBalanceDisplay(data.new_balance);
           toastMessage(`🍀 Удача! +${data.coins_found} 🪙 нашёл питомец!`);
         } else {
           const TOASTS = {
-            play:   data.play_msg || `🎮 Поиграли! +${data.xp_gained||0} XP`,
-            cuddle: `🤗 Обнял питомца! ❤️ +${data.xp_gained||0} XP`,
+            play:   (data.play_msg || `🎮 Поиграли! +${data.xp_gained||0} XP`) + relIcon,
+            cuddle: `🤗 Обнял питомца! ❤️ +${data.xp_gained||0} XP${relIcon}`,
           };
           toastMessage(TOASTS[action]||"✅ Готово!");
         }

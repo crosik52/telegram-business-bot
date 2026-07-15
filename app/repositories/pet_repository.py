@@ -245,12 +245,14 @@ def _display_name(first, last, username, chat_id: int) -> str:
     return f"Собеседник {chat_id}"
 
 
-def _pet_dict(pet: ChatPet, now: dt.datetime) -> dict:
+def _pet_dict(pet: ChatPet, now: dt.datetime, rel_tier: str | None = None) -> dict:
     hunger = _compute_hunger(pet, now) if pet.is_alive else 0
     mood   = _compute_mood(pet, now)   if pet.is_alive else 0
     level  = _compute_level(pet.xp)
     next_xp = _xp_for_next_level(level)
     p_info  = PERSONALITIES.get(pet.personality, {"emoji": "❓", "label": "?"})
+    from app.models.relationship import REL_XP_BONUS
+    rel_bonus = REL_XP_BONUS.get(rel_tier, 1.0) if rel_tier else 1.0
     return {
         "id":               pet.id,
         "chat_id":          pet.chat_id,
@@ -284,6 +286,9 @@ def _pet_dict(pet: ChatPet, now: dt.datetime) -> dict:
         "cuddle_cooldown_secs": _cooldown_secs(pet.last_cuddled_at, CUDDLE_COOLDOWN_HOURS, now),
         "feed_cooldown_secs":   _cooldown_secs(pet.last_fed_at, _personality_feed_cooldown(pet.personality), now),
         "upgrades":             _get_upgrades(pet),
+        # Relationship XP bonus for this pet's chat
+        "rel_tier":         rel_tier,
+        "rel_bonus":        rel_bonus,
     }
 
 
@@ -377,7 +382,20 @@ class PetRepository:
         alive_out = [p for p in pets if p.is_alive]
         dead_out  = [p for p in pets if not p.is_alive][:3]
 
-        pets_out = [_pet_dict(p, now) for p in alive_out + dead_out]
+        # Fetch relationship tiers for alive pets so the card can show the XP bonus badge
+        rel_tier_map: dict[int, str] = {}
+        if alive_out:
+            rel_repo = RelationshipRepository(self._session)
+            owner_rels = await rel_repo.get_for_user(owner_telegram_id)
+            for r in owner_rels:
+                if r.status == "active":
+                    partner = r.user_b_id if r.user_a_id == owner_telegram_id else r.user_a_id
+                    rel_tier_map[partner] = r.rel_type
+
+        pets_out = [
+            _pet_dict(p, now, rel_tier=rel_tier_map.get(p.chat_id) if p.is_alive else None)
+            for p in alive_out + dead_out
+        ]
 
         # Available chats
         alive_pet_chats: set[int] = {p.chat_id for p in alive_out}
@@ -656,6 +674,8 @@ class PetRepository:
             "food_type":   food_type,
             "food_emoji":  food["emoji"],
             "xp_gained":   xp_gained,
+            "rel_tier":    rel_tier,
+            "rel_bonus":   rel_mult,
         }
 
     async def play(self, owner_telegram_id: int, pet_id: int, *, xp_multiplier: float = 1.0) -> dict:
@@ -709,6 +729,8 @@ class PetRepository:
             "play_msg":    play_msg,
             "coins_found": coins_found,
             "new_balance": new_balance,
+            "rel_tier":    rel_tier,
+            "rel_bonus":   rel_mult,
         }
 
     async def cuddle(self, owner_telegram_id: int, pet_id: int, *, xp_multiplier: float = 1.0) -> dict:
@@ -743,6 +765,8 @@ class PetRepository:
             "xp":        pet.xp,
             "level":     pet.level,
             "xp_gained": xp_gained,
+            "rel_tier":  rel_tier,
+            "rel_bonus": rel_mult,
         }
 
     async def rename(self, owner_telegram_id: int, pet_id: int, new_name: str) -> dict:

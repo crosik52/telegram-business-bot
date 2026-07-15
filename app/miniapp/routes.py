@@ -425,16 +425,17 @@ async def miniapp_stats(
                     )
 
                     # ── Notify referrer ──────────────────────────────────────
+                    from app.bot import emoji as E
                     _ref_msg = (
-                        f"✅ <b>{_who}</b> подключил бота и стал активным рефералом!\n\n"
+                        f"{E.CHECK} <b>{_who}</b> подключил бота и стал активным рефералом!\n\n"
                     )
                     if _cfg.referrer_reward_days > 0:
-                        _ref_msg += f"⭐ +{_cfg.referrer_reward_days} дн. Premium начислено тебе\n"
+                        _ref_msg += f"{E.STAR} +{_cfg.referrer_reward_days} дн. Premium начислено тебе\n"
                     _ref_msg += f"👥 Всего активных рефералов: <b>{_active}</b>"
                     if _next_ms:
                         _need = _next_ms["count"] - _active
                         _ref_msg += (
-                            f"\n\n🎯 До награды «{_next_ms['label']}» — ещё <b>{_need}</b>"
+                            f"\n\n{E.TARGET} До награды «{_next_ms['label']}» — ещё <b>{_need}</b>"
                         )
                     await _bot.send_message(
                         _ref.referrer_telegram_id, _ref_msg, parse_mode="HTML"
@@ -444,7 +445,7 @@ async def miniapp_stats(
                     if _cfg.referee_reward_days > 0:
                         await _bot.send_message(
                             owner_telegram_id,
-                            f"🎁 Ты подключил бота по реферальной ссылке — "
+                            f"{E.PARTY} Ты подключил бота по реферальной ссылке — "
                             f"<b>+{_cfg.referee_reward_days} дн. Premium</b> уже у тебя!",
                             parse_mode="HTML",
                         )
@@ -849,6 +850,7 @@ async def streak_remind(
             business_connection_id=connection_ids[0],
             chat_id=payload.chat_id,
             text=text,
+            parse_mode="HTML",
         )
     except Exception as exc:
         logger.warning(
@@ -861,31 +863,32 @@ async def streak_remind(
 
 def _build_streak_remind_text(streak_days: int) -> str:
     """Pick a reminder message based on how long the streak already is."""
+    from app.bot import emoji as E
     days = streak_days
     if days >= 100:
         return (
-            f"💎 {days} дней общения подряд — это легенда! "
-            "Пишу, чтобы не прерывать наш рекорд 👑"
+            f"{E.DIAMOND} {days} дней общения подряд — это легенда! "
+            f"Пишу, чтобы не прерывать наш рекорд {E.CROWN}"
         )
     if days >= 30:
         return (
-            f"🚀 {days} дней подряд! Это уже марафон — "
+            f"{E.ROCKET} {days} дней подряд! Это уже марафон — "
             "не хочу останавливаться 💪"
         )
     if days >= 14:
         return (
-            f"🔥🔥 Уже {days} дней подряд общаемся! "
+            f"{E.FIRE}{E.FIRE} Уже {days} дней подряд общаемся! "
             "Напоминаю о себе, чтобы серия не прервалась 😄"
         )
     if days >= 7:
         return (
-            f"🔥 Неделя или больше подряд — {days} дней! "
+            f"{E.FIRE} Неделя или больше подряд — {days} дней! "
             "Держим стрик? Напиши что-нибудь 😊"
         )
     if days >= 2:
         return (
             f"👋 У нас уже {days} дня подряд! "
-            "Напоминаю о себе — держим серию? 🔥"
+            f"Напоминаю о себе — держим серию? {E.FIRE}"
         )
     return "👋 Привет! Просто напоминаю о себе 😊"
 
@@ -1976,11 +1979,12 @@ async def admin_wallet_set(
     try:
         from app.business.dispatcher import get_bot
         bot = get_bot(get_settings())
+        from app.bot import emoji as E
         await bot.send_message(
             chat_id=payload.owner_telegram_id,
             text=(
-                f"💰 Ваш баланс изменён администратором.\n"
-                f"Новый баланс: <b>{new_balance:,} 🪙</b>"
+                f"{E.MONEY_BAG} Ваш баланс изменён администратором.\n"
+                f"Новый баланс: <b>{new_balance:,} {E.COIN}</b>"
             ).replace(",", "\u202f"),
             parse_mode="HTML",
         )
@@ -2015,16 +2019,17 @@ async def admin_wallet_adjust(
     try:
         from app.business.dispatcher import get_bot
         bot = get_bot(get_settings())
+        from app.bot import emoji as E
         if payload.delta >= 0:
-            delta_line = f"Начислено: <b>+{payload.delta:,} 🪙</b>".replace(",", "\u202f")
+            delta_line = f"Начислено: <b>+{payload.delta:,} {E.COIN}</b>".replace(",", "\u202f")
         else:
-            delta_line = f"Списано: <b>{payload.delta:,} 🪙</b>".replace(",", "\u202f")
+            delta_line = f"Списано: <b>{payload.delta:,} {E.COIN}</b>".replace(",", "\u202f")
         await bot.send_message(
             chat_id=payload.owner_telegram_id,
             text=(
-                f"💰 Ваш баланс изменён администратором.\n"
+                f"{E.MONEY_BAG} Ваш баланс изменён администратором.\n"
                 f"{delta_line}\n"
-                f"Новый баланс: <b>{new_balance:,} 🪙</b>"
+                f"Новый баланс: <b>{new_balance:,} {E.COIN}</b>"
             ).replace(",", "\u202f"),
             parse_mode="HTML",
         )

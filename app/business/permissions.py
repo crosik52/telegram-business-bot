@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from aiogram import Bot
 
+from app.bot import emoji as E
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -21,11 +22,11 @@ _SETTINGS_PATH = (
 # Maps Telegram BusinessBotRights field names → human-readable explanation.
 _MESSAGES: dict[str, str] = {
     "can_reply": (
-        "⚠️ <b>Нет разрешения «Ответы на сообщения»</b>\n\n"
+        f"{E.WARNING} <b>Нет разрешения «Ответы на сообщения»</b>\n\n"
         "Функция <b>{feature}</b> отправляет сообщения в чат от твоего имени "
         "и требует соответствующего разрешения.\n\n"
         "Как включить:\n"
-        f"<b>{_SETTINGS_PATH}</b> → ✅ <b>Ответы на сообщения</b>\n\n"
+        f"<b>{_SETTINGS_PATH}</b> → {E.CHECK} <b>Ответы на сообщения</b>\n\n"
         "После включения функция заработает сразу."
     ),
 }
@@ -49,7 +50,7 @@ async def notify_missing(
     """
     template = _MESSAGES.get(
         permission,
-        f"⚠️ Для функции <b>{{feature}}</b> нужно разрешение "
+        f"{E.WARNING} Для функции <b>{{feature}}</b> нужно разрешение "
         f"<code>{permission}</code>.\n\n"
         f"Открой: <b>{_SETTINGS_PATH}</b>",
     )

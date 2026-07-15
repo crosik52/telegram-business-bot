@@ -48,6 +48,7 @@ from aiogram.types import (
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.bot import emoji as E
 from app.business import commands
 from app.business.panic_tracker import PanicTracker
 from app.config import get_settings
@@ -242,10 +243,11 @@ async def _handle_dot_save(
                 await bot.send_message(
                     chat_id=owner_id,
                     text=(
-                        "⚠️ Не удалось сохранить медиа — "
+                        f"{E.WARNING} Не удалось сохранить медиа — "
                         "Telegram заблокировал доступ к файлу.\n"
                         "Самоудаляющиеся медиа с таймером защищены на уровне API."
                     ),
+                    parse_mode="HTML",
                 )
 
     except Exception:
@@ -378,13 +380,13 @@ async def _send_single_delete_notification(
     text_part = _preview(removed.text or removed.caption)
 
     if has_media and text_part:
-        notification = f"🗑 {counterpart} удалил(а) {media_lbl}:\n\n«{text_part}»"
+        notification = f"{E.TRASH} {counterpart} удалил(а) {media_lbl}:\n\n«{text_part}»"
     elif has_media:
-        notification = f"🗑 {counterpart} удалил(а) {media_lbl}."
+        notification = f"{E.TRASH} {counterpart} удалил(а) {media_lbl}."
     elif text_part:
-        notification = f"🗑 {counterpart} удалил(а) сообщение:\n\n«{text_part}»"
+        notification = f"{E.TRASH} {counterpart} удалил(а) сообщение:\n\n«{text_part}»"
     else:
-        notification = f"🗑 {counterpart} удалил(а) сообщение."
+        notification = f"{E.TRASH} {counterpart} удалил(а) сообщение."
 
     try:
         await bot.send_message(chat_id=owner_id, text=notification, parse_mode="HTML")
@@ -411,7 +413,7 @@ async def _send_panic_bulk(
     """One grouped panic notification for a simultaneous bulk-delete event."""
     n = len(messages)
     lines: list[str] = [
-        f"⚠️ <b>Паник-удаление!</b>\n\n"
+        f"{E.WARNING} <b>Паник-удаление!</b>\n\n"
         f"{counterpart} удалил(а) <b>{n} сообщений</b> разом:\n"
     ]
     # (media_type, file_id, caption, file_unique_id)
@@ -462,7 +464,7 @@ async def _send_cross_event_panic(
 ) -> None:
     """Additional alert when rapid sequential deletions cross the threshold."""
     text = (
-        f"⚠️ <b>Паник-детект:</b> {counterpart} удалил(а) уже "
+        f"{E.WARNING} <b>Паник-детект:</b> {counterpart} удалил(а) уже "
         f"<b>{total} сообщений</b> за последнюю минуту."
     )
     try:
@@ -741,19 +743,19 @@ async def on_edited_business_message(message: Message, bot: Bot) -> None:
 
     if has_media and not prev_text_part and not new_text_part:
         notification = (
-            f"✏️ {counterpart} отредактировал(а) {media_lbl}.\n"
+            f"{E.PENCIL} {counterpart} отредактировал(а) {media_lbl}.\n"
             f"<i>(подпись не изменилась)</i>"
         )
     elif has_media:
         notification = (
-            f"✏️ {counterpart} отредактировал(а) {media_lbl}:\n\n"
-            f"🔍 <b>Прошлая подпись:</b>\n«{prev_text_part or '—'}»\n\n"
+            f"{E.PENCIL} {counterpart} отредактировал(а) {media_lbl}:\n\n"
+            f"{E.MAGNIFIER} <b>Прошлая подпись:</b>\n«{prev_text_part or '—'}»\n\n"
             f"📝 <b>Новая подпись:</b>\n«{new_text_part or '—'}»"
         )
     else:
         notification = (
-            f"✏️ {counterpart} отредактировал(а) сообщение:\n\n"
-            f"🔍 <b>Прошлое значение:</b>\n«{prev_text_part or '—'}»\n\n"
+            f"{E.PENCIL} {counterpart} отредактировал(а) сообщение:\n\n"
+            f"{E.MAGNIFIER} <b>Прошлое значение:</b>\n«{prev_text_part or '—'}»\n\n"
             f"📝 <b>Новое значение:</b>\n«{new_text_part or '—'}»"
         )
 

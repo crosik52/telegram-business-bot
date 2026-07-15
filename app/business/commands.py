@@ -30,6 +30,7 @@ from aiogram.types import BufferedInputFile, InlineKeyboardButton, InlineKeyboar
 from sqlalchemy import Date, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.bot import emoji as E
 from app.logging_config import get_logger
 from app.models.message import Message
 from app.repositories.chat_settings_repository import ChatSettingsRepository
@@ -98,15 +99,15 @@ async def _delete_cmd_msg(
 # ── Command implementations ───────────────────────────────────────────────────
 
 _HELP_TEXT = (
-    "📋 <b>Доступные команды</b> (пишите прямо в чате):\n\n"
-    "<code>!info</code> · <code>!инфо</code> — статистика по собеседнику\n"
-    "<code>!note текст</code> · <code>!заметка текст</code> — сохранить заметку\n"
-    "<code>!notes</code> · <code>!заметки</code> — показать все заметки\n"
-    "<code>!mute 30m</code> · <code>!мут 30m</code> / <code>2h</code> / <code>1d</code> — "
-    "отключить уведомления из этого чата\n"
-    "<code>!unmute</code> · <code>!размут</code> — включить уведомления обратно\n"
-    "<code>!mp3 название</code> · <code>!мп3 название</code> — найти и скачать музыку\n"
-    "<code>!help</code> · <code>!помощь</code> — эта справка\n"
+    f"📋 <b>Доступные команды</b> (пишите прямо в чате):\n\n"
+    f"<code>!info</code> · <code>!инфо</code> — статистика по собеседнику\n"
+    f"<code>!note текст</code> · <code>!заметка текст</code> — сохранить заметку\n"
+    f"<code>!notes</code> · <code>!заметки</code> — показать все заметки\n"
+    f"<code>!mute 30m</code> · <code>!мут 30m</code> / <code>2h</code> / <code>1d</code> — "
+    f"отключить уведомления из этого чата\n"
+    f"<code>!unmute</code> · <code>!размут</code> — включить уведомления обратно\n"
+    f"<code>!mp3 название</code> · <code>!мп3 название</code> — найти и скачать музыку\n"
+    f"<code>!help</code> · <code>!помощь</code> — эта справка\n"
 )
 
 
@@ -263,14 +264,14 @@ async def _cmd_info(
         )
         await _reply(
             bot, owner_id,
-            "📊 <b>Статистика чата</b>\n\n"
-            f"💬 Сообщений: <b>{total}</b>\n"
-            f"🗑 Удалено: <b>{deleted}</b> ({del_pct}%)\n"
-            f"✏️ Отредактировано: <b>{edited}</b>\n"
+            f"{E.CHART_BAR} <b>Статистика чата</b>\n\n"
+            f"{E.BUBBLE} Сообщений: <b>{total}</b>\n"
+            f"{E.TRASH} Удалено: <b>{deleted}</b> ({del_pct}%)\n"
+            f"{E.PENCIL} Отредактировано: <b>{edited}</b>\n"
             f"📅 Первое: {first_str}\n"
             f"🕐 Последнее: {last_str}"
             f"{notes_line}{muted_line}\n\n"
-            "<i>Учитываются только сообщения с момента подключения бота.</i>",
+            f"<i>Учитываются только сообщения с момента подключения бота.</i>",
         )
 
 
@@ -287,12 +288,12 @@ async def _cmd_note(
     if not args or not args.strip():
         await _reply(
             bot, owner_id,
-            "❌ Укажите текст: <code>!note текст заметки</code>",
+            f"{E.CROSS} Укажите текст: <code>!note текст заметки</code>",
         )
         return
     repo = ContactNoteRepository(session)
     note = await repo.add(business_connection_id, chat_id, args.strip())
-    await _reply(bot, owner_id, f"✅ <b>Заметка сохранена:</b>\n\n«{note.text}»")
+    await _reply(bot, owner_id, f"{E.CHECK} <b>Заметка сохранена:</b>\n\n«{note.text}»")
 
 
 async def _cmd_notes(
@@ -330,12 +331,12 @@ async def _cmd_mute(
     if not args or not args.strip():
         await _reply(
             bot, owner_id,
-            "❌ Укажите длительность: <code>!mute 30m</code> / <code>2h</code> / <code>1d</code>",
+            f"{E.CROSS} Укажите длительность: <code>!mute 30m</code> / <code>2h</code> / <code>1d</code>",
         )
         return
     delta = _parse_duration(args.strip())
     if delta is None:
-        await _reply(bot, owner_id, "❌ Неверный формат. Примеры: <code>30m</code>, <code>2h</code>, <code>1d</code>")
+        await _reply(bot, owner_id, f"{E.CROSS} Неверный формат. Примеры: <code>30m</code>, <code>2h</code>, <code>1d</code>")
         return
     until = dt.datetime.now(dt.UTC) + delta
     repo = ChatSettingsRepository(session)
@@ -357,7 +358,7 @@ async def _cmd_unmute(
 ) -> None:
     repo = ChatSettingsRepository(session)
     await repo.set_muted_until(business_connection_id, chat_id, None)
-    await _reply(bot, owner_id, "🔔 <b>Уведомления включены</b>")
+    await _reply(bot, owner_id, f"{E.BELL} <b>Уведомления включены</b>")
 
 
 async def _cmd_mp3(
@@ -378,7 +379,7 @@ async def _cmd_mp3(
 
     if not args or not args.strip():
         await _reply(bot, owner_id,
-                     "🎵 Укажите название: <code>!mp3 название песни</code>")
+                     f"🎵 Укажите название: <code>!mp3 название песни</code>")
         return
 
     query = args.strip()
@@ -539,8 +540,8 @@ async def dispatch(
     if handler is None:
         await _reply(
             bot, owner_id,
-            f"❓ Неизвестная команда <code>!{cmd}</code>. "
-            "Введите <code>!help</code> для справки.",
+            f"{E.QUESTION} Неизвестная команда <code>!{cmd}</code>. "
+            f"Введите <code>!help</code> для справки.",
         )
     else:
         await handler(  # type: ignore[operator]

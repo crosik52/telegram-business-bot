@@ -310,3 +310,94 @@ async def test_second_marriage_bonus_unaffected_by_unrelated_breakup(session):
     assert await rel_repo.count_marriages(user_a) == 1
     bonus = MARRIAGE_DAILY_BONUS * await rel_repo.count_marriages(user_a)
     assert bonus == MARRIAGE_DAILY_BONUS
+
+
+# ---------------------------------------------------------------------------
+# Re-marriage scenario: bonus reappears after break-up with previous partner
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_marriage_bonus_reappears_after_remarriage(session):
+    """Marriage bonus comes back when A re-marries a new partner after a break-up.
+
+    The broken row for A–B must not shadow the fresh active row for A–C.
+
+    Flow:
+      1. A and B are married → count_marriages(A) == 1, bonus > 0.
+      2. A breaks up with B  → count_marriages(A) == 0, bonus == 0.
+      3. A and C get married  → count_marriages(A) == 1, bonus == MARRIAGE_DAILY_BONUS.
+    """
+    user_a, user_b, user_c = 8400, 8401, 8402
+
+    rel_repo = RelationshipRepository(session)
+
+    # Step 1 — A and B are married
+    await _seed_marriage(session, user_a, user_b)
+    assert await rel_repo.count_marriages(user_a) == 1
+
+    # Step 2 — break-up; broken row must not be counted
+    await rel_repo.break_rel(user_a, user_b)
+    assert await rel_repo.count_marriages(user_a) == 0
+
+    # Step 3 — A marries C (completely independent pair, no UniqueConstraint clash)
+    await _seed_marriage(session, user_a, user_c)
+
+    marriages_after = await rel_repo.count_marriages(user_a)
+    bonus_after = MARRIAGE_DAILY_BONUS * marriages_after
+
+    assert marriages_after == 1, (
+        "count_marriages must return 1 after re-marrying a new partner"
+    )
+    assert bonus_after == MARRIAGE_DAILY_BONUS, (
+        "Marriage bonus must equal MARRIAGE_DAILY_BONUS after re-marriage"
+    )
+    # Broken row with B must not contribute
+    assert await rel_repo.count_marriages(user_b) == 0, (
+        "Ex-partner B's count must remain 0 after the break-up"
+    )
+
+
+@pytest.mark.asyncio
+async def test_remarriage_daily_claim_includes_bonus(session):
+    """claim_daily after re-marrying a new partner pays the full marriage bonus.
+
+    Wires RelationshipRepository + WalletRepository together the same way
+    the route handler does to confirm the end-to-end coin reward is correct.
+
+    Steps:
+      1. A–B married, then broken → marriage_bonus == 0.
+      2. A–C married              → marriage_bonus == MARRIAGE_DAILY_BONUS.
+      3. Claim daily for A        → earned > base (marriage bonus included).
+    """
+    user_a, user_b, user_c = 8500, 8501, 8502
+
+    await _seed_wallet(session, user_a)
+    await _seed_marriage(session, user_a, user_b)
+
+    rel_repo    = RelationshipRepository(session)
+    wallet_repo = WalletRepository(session)
+
+    # Break up with B
+    await rel_repo.break_rel(user_a, user_b)
+    assert await rel_repo.count_marriages(user_a) == 0
+
+    # Re-marry C
+    await _seed_marriage(session, user_a, user_c)
+    marriages = await rel_repo.count_marriages(user_a)
+    marriage_bonus = MARRIAGE_DAILY_BONUS * marriages
+
+    assert marriage_bonus == MARRIAGE_DAILY_BONUS, (
+        "marriage_bonus must be MARRIAGE_DAILY_BONUS after re-marrying"
+    )
+
+    result = await wallet_repo.claim_daily(
+        user_a,
+        streak_days=0,
+        premium_multiplier=1.0,
+        premium_bonus=marriage_bonus,
+    )
+    assert result.premium_bonus == MARRIAGE_DAILY_BONUS
+    assert result.earned > result.base, (
+        "Earned coins must exceed base when re-marriage bonus is applied"
+    )

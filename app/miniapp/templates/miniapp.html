@@ -2073,6 +2073,7 @@
     let minesRevealedCount = 0;
     let crashGameActive   = false;
     let crashMultiplier   = 1.0;
+    let crashPointAt      = Infinity;  // server-side crash point received on start
     let crashAnimFrame    = null;
     let crashStartTime    = null;
     let crashLastPathT    = 0;         // throttle SVG path updates
@@ -4283,6 +4284,7 @@
 
         crashGameActive  = true;
         crashMultiplier  = 1.0;
+        crashPointAt     = data.crash_at || Infinity;
         crashLastPathT   = 0;
         updateBalanceDisplay(data.new_balance);
 
@@ -4358,7 +4360,51 @@
         }
       }
 
+      // Auto-crash: server-side crash point reached
+      if (crashMultiplier >= crashPointAt) {
+        crashGameActive = false;
+        cancelAnimationFrame(crashAnimFrame);
+        crashAnimFrame = null;
+        // Show explosion immediately, then finalize with server
+        const rocketEl = document.getElementById("crashRocket");
+        const cashoutEl = document.getElementById("crashCashoutBtn");
+        if (rocketEl) rocketEl.textContent = "💥";
+        if (cashoutEl) { cashoutEl.disabled = true; cashoutEl.classList.remove("live"); }
+        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
+        _finalizeCrashLost(bet);
+        return;
+      }
+
       crashAnimFrame = requestAnimationFrame(_crashTick.bind(null, bet));
+    }
+
+    async function _finalizeCrashLost(bet) {
+      const multD    = document.getElementById("crashMultDisplay");
+      const resultEl = document.getElementById("crashResult");
+      const startBtn = document.getElementById("crashStartBtn");
+      const crashAt  = crashPointAt;
+
+      // Reset multiplier display immediately
+      if (multD) { multD.classList.remove("flying"); multD.style.color = ""; multD.className = "crash-mult-display lost"; multD.textContent = `💥 ${crashAt.toFixed(2)}×`; }
+
+      try {
+        const res = await fetch("/app/api/wallet/crash/cashout", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData: currentInitData, multiplier: crashAt}),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const at = (data.crash_at || crashAt).toFixed(2);
+          if (multD) { multD.className = "crash-mult-display lost"; multD.textContent = `💥 ${at}×`; }
+          if (resultEl) resultEl.innerHTML = `<span class="flip-lost">💥 Краш на ${at}× — ставка потеряна!</span>`;
+          updateBalanceDisplay(data.new_balance);
+        } else {
+          if (resultEl) resultEl.innerHTML = `<span class="flip-lost">💥 Краш на ${crashAt.toFixed(2)}×!</span>`;
+        }
+      } catch {
+        if (resultEl) resultEl.innerHTML = `<span class="flip-lost">💥 Краш на ${crashAt.toFixed(2)}×!</span>`;
+      }
+      if (startBtn) { startBtn.style.display = ""; startBtn.disabled = false; startBtn.textContent = "🚀 Запустить"; }
     }
 
     async function doCrashCashout() {

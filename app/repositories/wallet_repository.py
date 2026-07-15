@@ -144,6 +144,7 @@ class MinesCashoutResult:
 class CrashStartResult:
     ok:          bool
     new_balance: int
+    crash_at:    float
 
 
 @dataclass
@@ -454,7 +455,7 @@ class WalletRepository:
             "bet": bet, "crash_at": crash_at,
             "started_at": dt.datetime.now(dt.timezone.utc),
         }
-        return CrashStartResult(ok=True, new_balance=wallet.balance)
+        return CrashStartResult(ok=True, new_balance=wallet.balance, crash_at=crash_at)
 
     async def crash_cashout(
         self, owner_telegram_id: int, multiplier: float

@@ -1466,7 +1466,7 @@
     position: absolute; font-size: 24px; line-height: 1;
     left: 0; top: 0;
     filter: drop-shadow(0 0 10px rgba(197,186,255,.9));
-    transform: rotate(51deg);   /* updated each frame by JS */
+    transform: rotate(45deg);
     will-change: transform, left, top;
   }
   .crash-mult-display {
@@ -4311,7 +4311,7 @@
           rocket.style.left    = `${(4 / 300 * _W0 - 13).toFixed(0)}px`;
           rocket.style.top     = `${(138 / 148 * _H0 - 13).toFixed(0)}px`;
           rocket.style.bottom  = "";
-          rocket.style.transform = "rotate(51deg)";
+          rocket.style.transform = "rotate(45deg)";
         }
         if (multD)  { multD.className = "crash-mult-display flying"; multD.textContent = "1.00×";
                       multD.style.color = "#c5baff"; }
@@ -4383,14 +4383,8 @@
         rocket.style.top    = `${(pxY - 13).toFixed(0)}px`;
         rocket.style.bottom = "";
 
-        // Rotation: tangent of curve in screen-pixel space
-        //   dx/dt = (290/300 · W) / T            (px/s, rightward)
-        //   dy/dt = (0.055/mult) · 128 · (H/148) (px/s, upward)
-        //   angle = CW from vertical (🚀 default = up = 0°, right = +90°)
-        const dxPx     = (290 / 300 * W) / T;
-        const dyPx     = (0.055 / crashMultiplier) * 128 * (H / 148);
-        const angleDeg = Math.atan2(dxPx, dyPx) * 180 / Math.PI;
-        rocket.style.transform = `rotate(${angleDeg.toFixed(1)}deg)`;
+        // Fixed northeast orientation (matches original working behaviour)
+        rocket.style.transform = "rotate(45deg)";
       }
 
       // SVG path update (throttled to 80 ms)

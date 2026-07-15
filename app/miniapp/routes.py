@@ -1109,7 +1109,7 @@ async def wallet_crash_start(
         result = await repo.crash_start(int(user["id"]), payload.bet)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    return {"ok": result.ok, "new_balance": result.new_balance}
+    return {"ok": result.ok, "new_balance": result.new_balance, "crash_at": result.crash_at}
 
 
 @router.post("/app/api/wallet/crash/cashout")

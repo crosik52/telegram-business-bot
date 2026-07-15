@@ -1135,6 +1135,85 @@ async def on_noop(call: CallbackQuery) -> None:
     await call.answer()
 
 
+# ── Relationship friend-request inline buttons ────────────────────────────────
+
+@router.callback_query(F.data.startswith("rel_accept:") | F.data.startswith("rel_decline:"))
+async def on_rel_friend_respond(callback: CallbackQuery, bot: Bot) -> None:
+    """Handle Accept / Decline buttons on a friend-request DM."""
+    if not callback.from_user or not callback.data:
+        await callback.answer()
+        return
+
+    accept    = callback.data.startswith("rel_accept:")
+    suffix    = "rel_accept:" if accept else "rel_decline:"
+    try:
+        requester_id = int(callback.data[len(suffix):])
+    except ValueError:
+        await callback.answer("Неверный запрос.")
+        return
+
+    responder_id = callback.from_user.id
+
+    from app.repositories.relationship_repository import RelationshipRepository
+    from app.models.user import TelegramUser
+
+    async with session_scope() as session:
+        repo = RelationshipRepository(session)
+        try:
+            rel = await repo.respond(responder_id, requester_id, accept)
+            await session.commit()
+        except ValueError as exc:
+            await callback.answer(str(exc), show_alert=True)
+            return
+
+        # Resolve names for notification texts
+        resp_row = (await session.execute(
+            select(TelegramUser).where(TelegramUser.telegram_id == responder_id)
+        )).scalar_one_or_none()
+        resp_parts = [p for p in [
+            resp_row.first_name if resp_row else None,
+            resp_row.last_name  if resp_row else None,
+        ] if p]
+        resp_name = " ".join(resp_parts) or f"#{responder_id}"
+
+    if accept:
+        # Edit the original invitation message
+        try:
+            await callback.message.edit_text(
+                f"✅ Вы приняли запрос дружбы от <b>{callback.message.text.split('<b>')[1].split('</b>')[0] if callback.message and callback.message.text else '...'}</b>!\n\n"
+                f"Откройте мини-приложение, чтобы отправить подарок 🎁",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+        await callback.answer("✅ Запрос принят!")
+        # Notify the requester
+        try:
+            await bot.send_message(
+                requester_id,
+                f"💛 <b>{resp_name}</b> принял(а) твой запрос дружбы!\n"
+                f"Откройте мини-приложение, чтобы отправить подарок 🎁",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+    else:
+        try:
+            await callback.message.edit_text("❌ Запрос на дружбу отклонён.")
+        except Exception:
+            pass
+        await callback.answer("Запрос отклонён.")
+        # Notify the requester
+        try:
+            await bot.send_message(
+                requester_id,
+                f"😔 <b>{resp_name}</b> отклонил(а) твой запрос дружбы.",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
+
 @router.chosen_inline_result()
 async def on_chosen_inline_result(result: ChosenInlineResult, bot: Bot) -> None:
     """Record the chosen track in the user's history for next empty-query open."""

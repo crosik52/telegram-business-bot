@@ -109,6 +109,7 @@ _HELP_TEXT = (
     f"<code>!mp3 название</code> · <code>!мп3 название</code> — найти и скачать музыку\n"
     f"<code>!card</code> · <code>!открытка</code> — отправить открытку партнёру по отношениям\n"
     f"<code>!card текст</code> · <code>!открытка текст</code> — открытка с личным текстом\n"
+    f"<code>!friend</code> · <code>!друг</code> — предложить дружбу этому собеседнику\n"
     f"<code>!help</code> · <code>!помощь</code> — эта справка\n"
 )
 
@@ -570,6 +571,72 @@ async def _cmd_card(
 
 # ── Dispatch table ────────────────────────────────────────────────────────────
 
+async def _cmd_friend(
+    *,
+    bot: Bot,
+    owner_id: int,
+    chat_id: int,
+    business_connection_id: str,
+    session: AsyncSession,
+    args: str | None,
+    can_reply: bool = True,
+) -> None:
+    """Send a friend request to the current business-chat partner via DM with inline buttons."""
+    from app.repositories.relationship_repository import RelationshipRepository  # noqa: PLC0415
+    from app.models.user import TelegramUser  # noqa: PLC0415
+
+    repo = RelationshipRepository(session)
+
+    # Check for existing relationship
+    existing = await repo.get_between(owner_id, chat_id)
+    if existing and existing.status == "active":
+        tier_labels = {"friends": "друзья 💛", "dating": "встречаетесь 💕", "married": "женаты 💍"}
+        label = tier_labels.get(existing.rel_type, existing.rel_type)
+        await _reply(bot, owner_id, f"У вас уже есть отношения с этим собеседником: {label}.")
+        return
+    if existing and existing.status == "pending":
+        await _reply(bot, owner_id, "💌 Запрос уже отправлен — ожидай ответа.")
+        return
+
+    try:
+        await repo.send_request(owner_id, chat_id)
+        await session.commit()
+    except ValueError as exc:
+        await _reply(bot, owner_id, f"❌ {exc}")
+        return
+
+    # Resolve owner's display name
+    owner_row = (await session.execute(
+        select(TelegramUser).where(TelegramUser.telegram_id == owner_id)
+    )).scalar_one_or_none()
+    owner_parts = [p for p in [
+        owner_row.first_name if owner_row else None,
+        owner_row.last_name  if owner_row else None,
+    ] if p]
+    owner_name = " ".join(owner_parts) or f"#{owner_id}"
+
+    # Send DM with inline Accept / Decline buttons to the partner
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Принять", callback_data=f"rel_accept:{owner_id}"),
+        InlineKeyboardButton(text="❌ Отказать", callback_data=f"rel_decline:{owner_id}"),
+    ]])
+    try:
+        await bot.send_message(
+            chat_id,
+            f"💌 <b>{html_escape(owner_name)}</b> хочет с тобой подружиться!\n\n"
+            f"Прими или отклони запрос:",
+            parse_mode="HTML",
+            reply_markup=kb,
+        )
+        await _reply(bot, owner_id, f"💌 Запрос дружбы отправлен — ждём ответа!")
+    except Exception as exc:
+        logger.warning("Failed to send friend request DM to %s: %s", chat_id, exc)
+        await _reply(
+            bot, owner_id,
+            "❌ Не удалось отправить запрос: собеседник ещё не запустил бота в личных сообщениях.",
+        )
+
+
 _HANDLERS: dict[str, object] = {
     # English
     "help":     _cmd_help,
@@ -580,6 +647,7 @@ _HANDLERS: dict[str, object] = {
     "unmute":   _cmd_unmute,
     "mp3":      _cmd_mp3,
     "card":     _cmd_card,
+    "friend":   _cmd_friend,
     # Russian aliases
     "помощь":   _cmd_help,
     "инфо":     _cmd_info,
@@ -589,6 +657,7 @@ _HANDLERS: dict[str, object] = {
     "размут":   _cmd_unmute,
     "мп3":      _cmd_mp3,
     "открытка": _cmd_card,
+    "друг":     _cmd_friend,
 }
 
 

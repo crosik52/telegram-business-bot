@@ -1614,12 +1614,17 @@ async def rel_request(
                     _me.last_name  if _me else None,
                 ] if p]
                 _name = " ".join(_parts) or f"#{owner_id}"
+                from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+                _kb = InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="✅ Принять", callback_data=f"rel_accept:{owner_id}"),
+                    InlineKeyboardButton(text="❌ Отказать", callback_data=f"rel_decline:{owner_id}"),
+                ]])
                 await _bot.send_message(
                     payload.partner_id,
                     f"💌 <b>{_name}</b> хочет с тобой подружиться!\n\n"
-                    f"Открой мини-приложение → Статистика → Контакты, "
-                    f"чтобы принять или отклонить запрос.",
+                    f"Прими или отклони запрос:",
                     parse_mode="HTML",
+                    reply_markup=_kb,
                 )
         except Exception:
             pass

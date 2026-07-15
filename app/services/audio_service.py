@@ -79,6 +79,29 @@ def _apply_youtube_cookies(ydl_opts: dict, out_dir: str) -> None:
     if "\n" not in raw and "\\n" in raw:
         raw = raw.replace("\\n", "\n")
 
+    # If a Netscape file was pasted with spaces replacing tabs + newlines,
+    # reconstruct it: find every cookie record via the 7-column pattern.
+    if "\n" not in raw and raw.lstrip().startswith("#"):
+        import re as _re
+        # Each cookie record: domain TRUE|FALSE /path TRUE|FALSE expiry name value
+        # Values rarely contain spaces in YouTube cookies so this covers ≥95% of cases.
+        pattern = _re.compile(
+            r'(\.[^\s]+)'           # domain
+            r'\s+(TRUE|FALSE)'      # include_subdomain
+            r'\s+(/[^\s]*)'         # path
+            r'\s+(TRUE|FALSE)'      # secure
+            r'\s+(\d{5,11})'        # expiry (unix ts)
+            r'\s+(\S+)'             # name
+            r'\s+(\S+)'             # value (no-space heuristic)
+        )
+        reconstructed = ["# Netscape HTTP Cookie File"]
+        for m in pattern.finditer(raw):
+            reconstructed.append("\t".join(m.groups()))
+        if len(reconstructed) > 1:
+            raw = "\n".join(reconstructed)
+            logger.info("YouTube: reconstructed %d cookies from space-collapsed Netscape file",
+                        len(reconstructed) - 1)
+
     # 1. Netscape file
     data_lines = [l for l in raw.splitlines() if l.strip() and not l.strip().startswith("#")]
     if [l for l in data_lines if len(l.split("\t")) == 7]:
@@ -387,50 +410,88 @@ async def stream_to_bytes(url: str) -> tuple[bytes, str]:
 _AUDIO_EXTS = {".mp3", ".m4a", ".ogg", ".opus", ".webm", ".aac", ".flac", ".wav"}
 
 
-def _download_sync(url: str, out_dir: str) -> tuple[Path, str, str, int]:
+def _download_sync(
+    url: str,
+    out_dir: str,
+    *,
+    fallback_title: str | None = None,
+    fallback_uploader: str | None = None,
+) -> tuple[Path, str, str, int]:
     """Download audio into *out_dir*. Returns (path, title, uploader, dur).
+
+    Primary source: YouTube URL supplied by the caller.
+    Fallback: SoundCloud search using ``fallback_title`` + ``fallback_uploader``
+    when YouTube blocks the download (datacenter IP / po_token requirement).
 
     Tries MP3 conversion via FFmpeg first; falls back to the raw bestaudio
     format (m4a/opus/webm) so it works even without FFmpeg on the server.
-    Telegram natively plays all common audio containers.
     """
     import shutil as _shutil  # noqa: PLC0415
     import yt_dlp             # noqa: PLC0415
 
     ffmpeg_ok = _shutil.which("ffmpeg") is not None
 
-    opts: dict = {
-        "quiet":       True,
-        "no_warnings": True,
-        "format":      "bestaudio[ext=m4a]/bestaudio/best",
-        "outtmpl":     os.path.join(out_dir, "%(title)s.%(ext)s"),
-        "noplaylist":  True,
-        "extractor_args": {
-            "youtube": {"player_client": ["android"]},
-        },
-    }
-    if ffmpeg_ok:
-        opts["postprocessors"] = [{
-            "key":              "FFmpegExtractAudio",
-            "preferredcodec":   "mp3",
-            "preferredquality": "192",
-        }]
+    def _base_opts(out_dir_: str) -> dict:
+        o: dict = {
+            "quiet":       True,
+            "no_warnings": True,
+            "format":      "bestaudio[ext=m4a]/bestaudio/best",
+            "outtmpl":     os.path.join(out_dir_, "%(title)s.%(ext)s"),
+            "noplaylist":  True,
+        }
+        if ffmpeg_ok:
+            o["postprocessors"] = [{
+                "key":              "FFmpegExtractAudio",
+                "preferredcodec":   "mp3",
+                "preferredquality": "192",
+            }]
+        return o
 
-    _apply_youtube_cookies(opts, out_dir)
+    # ── 1. Try YouTube ────────────────────────────────────────────────────────
+    yt_opts = _base_opts(out_dir)
+    yt_opts["extractor_args"] = {"youtube": {"player_client": ["android"]}}
+    _apply_youtube_cookies(yt_opts, out_dir)
 
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
+    yt_error: Exception | None = None
+    try:
+        with yt_dlp.YoutubeDL(yt_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+    except Exception as exc:
+        yt_error = exc
+        logger.warning("mp3: YouTube download failed (%s), trying SoundCloud fallback", exc)
 
-    title    = info.get("title")    or "Unknown"
-    uploader = info.get("uploader") or info.get("channel") or ""
-    duration = int(info.get("duration") or 0)
+    if yt_error is None:
+        # YouTube succeeded — collect file below
+        title    = info.get("title")    or "Unknown"
+        uploader = info.get("uploader") or info.get("channel") or ""
+        duration = int(info.get("duration") or 0)
+    else:
+        # ── 2. SoundCloud fallback ────────────────────────────────────────────
+        if not fallback_title:
+            raise yt_error  # nothing to search with
+
+        query_parts = [p for p in [fallback_uploader, fallback_title] if p]
+        sc_query    = "scsearch1:" + " ".join(query_parts)
+        sc_opts     = _base_opts(out_dir)
+
+        with yt_dlp.YoutubeDL(sc_opts) as ydl:
+            info = ydl.extract_info(sc_query, download=True)
+            # scsearch returns a playlist wrapper — unwrap it
+            if info and "entries" in info:
+                entries = [e for e in (info.get("entries") or []) if e]
+                info = entries[0] if entries else info
+
+        title    = info.get("title")    or fallback_title
+        uploader = info.get("uploader") or info.get("channel") or fallback_uploader or ""
+        duration = int(info.get("duration") or 0)
+        logger.info("mp3: SoundCloud fallback succeeded for %r", fallback_title)
 
     # Find the downloaded file (any audio extension)
     files = [p for p in Path(out_dir).iterdir()
-             if p.is_file() and p.suffix.lower() in _AUDIO_EXTS]
+             if p.is_file() and p.suffix.lower() in _AUDIO_EXTS
+             and not p.name.startswith("_")]
     if not files:
-        # Last resort — grab whatever is there
-        files = [p for p in Path(out_dir).iterdir() if p.is_file()]
+        files = [p for p in Path(out_dir).iterdir() if p.is_file() and not p.name.startswith("_")]
     if not files:
         raise FileNotFoundError("yt-dlp produced no output file")
 
@@ -443,6 +504,17 @@ def _download_sync(url: str, out_dir: str) -> tuple[Path, str, str, int]:
     return path, title, uploader, duration
 
 
-async def download(url: str, out_dir: str) -> tuple[Path, str, str, int]:
+async def download(
+    url: str,
+    out_dir: str,
+    *,
+    fallback_title: str | None = None,
+    fallback_uploader: str | None = None,
+) -> tuple[Path, str, str, int]:
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, partial(_download_sync, url, out_dir))
+    return await loop.run_in_executor(
+        None,
+        partial(_download_sync, url, out_dir,
+                fallback_title=fallback_title,
+                fallback_uploader=fallback_uploader),
+    )

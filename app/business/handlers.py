@@ -1019,7 +1019,11 @@ async def on_mp3_callback(callback: CallbackQuery, bot: Bot) -> None:
 
     tmp_dir = tempfile.mkdtemp(prefix="audbot_")
     try:
-        path, title, uploader, duration = await audio_service.download(result.url, tmp_dir)
+        path, title, uploader, duration = await audio_service.download(
+            result.url, tmp_dir,
+            fallback_title=result.title,
+            fallback_uploader=result.uploader,
+        )
 
         await bot.edit_message_media(
             business_connection_id=bc_id,

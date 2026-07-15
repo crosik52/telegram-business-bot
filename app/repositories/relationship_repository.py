@@ -7,6 +7,7 @@ import logging
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.business_connection import BusinessConnection
 from app.models.relationship import (
     GIFT_COOLDOWN_H,
     GIFT_COST,
@@ -92,7 +93,24 @@ class RelationshipRepository:
         )
 
     async def get_active_tier(self, user1: int, user2: int) -> str | None:
-        """Return rel_type of the active relationship between user1 and user2, or None."""
+        """Return rel_type of the active relationship between user1 and user2, or None.
+
+        Returns None if either party no longer has an active BusinessConnection
+        (i.e. the partner has disconnected the bot), so the XP bonus silently
+        drops to 1.0 rather than persisting after a disconnect.
+        """
+        for uid in (user1, user2):
+            connected = (
+                await self._session.execute(
+                    select(BusinessConnection.id).where(
+                        BusinessConnection.user_telegram_id == uid,
+                        BusinessConnection.is_enabled.is_(True),
+                    ).limit(1)
+                )
+            ).scalar_one_or_none()
+            if connected is None:
+                return None
+
         a, b = self._pair(user1, user2)
         return (
             await self._session.execute(

@@ -382,15 +382,33 @@ class PetRepository:
         alive_out = [p for p in pets if p.is_alive]
         dead_out  = [p for p in pets if not p.is_alive][:3]
 
-        # Fetch relationship tiers for alive pets so the card can show the XP bonus badge
+        # Fetch relationship tiers for alive pets so the card can show the XP bonus badge.
+        # Only include the bonus when the partner still has an active BusinessConnection;
+        # if they've disconnected the bot, the tier is present but the bonus silently drops.
         rel_tier_map: dict[int, str] = {}
         if alive_out:
             rel_repo = RelationshipRepository(self._session)
             owner_rels = await rel_repo.get_for_user(owner_telegram_id)
+            raw_map: dict[int, str] = {}
             for r in owner_rels:
                 if r.status == "active":
                     partner = r.user_b_id if r.user_a_id == owner_telegram_id else r.user_a_id
-                    rel_tier_map[partner] = r.rel_type
+                    raw_map[partner] = r.rel_type
+
+            if raw_map:
+                partner_ids = list(raw_map.keys())
+                connected_ids: set[int] = {
+                    r[0]
+                    for r in (
+                        await self._session.execute(
+                            select(BusinessConnection.user_telegram_id).where(
+                                BusinessConnection.user_telegram_id.in_(partner_ids),
+                                BusinessConnection.is_enabled.is_(True),
+                            )
+                        )
+                    ).all()
+                }
+                rel_tier_map = {k: v for k, v in raw_map.items() if k in connected_ids}
 
         pets_out = [
             _pet_dict(p, now, rel_tier=rel_tier_map.get(p.chat_id) if p.is_alive else None)

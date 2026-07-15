@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.business.dispatcher import get_bot
@@ -63,6 +63,12 @@ class AdminUserStatsRequest(BaseModel):
 
     init_data: str = Field(alias="initData")
     owner_telegram_id: int = Field(alias="ownerTelegramId")
+
+
+class AdminInitDataOnlyRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    init_data: str = Field(alias="initData")
 
 
 class AdminMessagesRequest(BaseModel):
@@ -2885,3 +2891,49 @@ async def admin_referral_grant(
     )
     await session.commit()
     return result
+
+
+@router.post("/app/api/admin/relationships/cancel-pending")
+async def admin_cancel_pending_relationships(
+    payload: AdminInitDataOnlyRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Admin one-shot: mark all stuck 'pending' relationship rows as 'broken'.
+
+    Use this to clean up requests that were saved to DB but whose notification
+    never reached the partner (e.g. due to the reply_markup/business-chat bug).
+    After this call users can send fresh friend requests to the same people.
+    """
+    admin_user = _require_admin(payload.init_data)
+
+    result = await session.execute(
+        text(
+            "UPDATE relationships SET status = 'broken' "
+            "WHERE status = 'pending' "
+            "RETURNING id, user_a_id, user_b_id, initiator_id"
+        )
+    )
+    rows = result.fetchall()
+    cancelled = len(rows)
+
+    session.add(AdminActionLog(
+        admin_username=admin_user.get("username", "?"),
+        action="cancel_pending_relationships",
+        target_owner_telegram_id=None,
+        details=f"cancelled {cancelled} pending relationship requests",
+    ))
+    await session.commit()
+
+    logger.info(
+        "Admin %s cancelled %d pending relationship requests",
+        admin_user.get("username", "?"),
+        cancelled,
+    )
+    return {
+        "ok": True,
+        "cancelled": cancelled,
+        "rows": [
+            {"id": r.id, "user_a_id": r.user_a_id, "user_b_id": r.user_b_id,
+             "initiator_id": r.initiator_id}
+            for r in rows
+        ],
+    }

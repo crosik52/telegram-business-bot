@@ -107,6 +107,8 @@ _HELP_TEXT = (
     f"отключить уведомления из этого чата\n"
     f"<code>!unmute</code> · <code>!размут</code> — включить уведомления обратно\n"
     f"<code>!mp3 название</code> · <code>!мп3 название</code> — найти и скачать музыку\n"
+    f"<code>!card</code> · <code>!открытка</code> — отправить открытку партнёру по отношениям\n"
+    f"<code>!card текст</code> · <code>!открытка текст</code> — открытка с личным текстом\n"
     f"<code>!help</code> · <code>!помощь</code> — эта справка\n"
 )
 
@@ -489,25 +491,104 @@ def build_page_markup(
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
+# ── Greeting card command ─────────────────────────────────────────────────────
+
+import random as _random
+
+_CARD_TEMPLATES: dict[str, list[tuple[str, str, str]]] = {
+    "friends": [
+        ("💛 Другу",            "Ты — один из лучших людей в моей жизни!",           "С дружбой и теплом ✨"),
+        ("🤝 Привет, друг!",    "Спасибо, что ты есть. С тобой всегда весело!",      "Твой друг 💛"),
+        ("💛 Специально для тебя", "Дружба с тобой — настоящее сокровище.",          "Ценю тебя 💛"),
+    ],
+    "dating": [
+        ("❤️ Моему человеку",   "Ты занимаешь особое место в моей жизни.",           "С любовью ❤️"),
+        ("💌 Только для тебя",  "С тобой всё становится ярче и интереснее.",         "Твой(я) ❤️"),
+        ("❤️ Тебе",             "Каждый день рядом с тобой — это подарок.",          "Люблю ❤️"),
+    ],
+    "married": [
+        ("💍 Моей второй половинке", "Ты — моё всё. Каждый день с тобой — счастье.", "Навсегда твой(я) 💍"),
+        ("💑 Любимому человеку",     "С тобой я дома, где бы мы ни были.",           "С вечной любовью 💍"),
+        ("💍 Для тебя",              "Благодарю судьбу за то, что привела меня к тебе.", "Твой(я) навсегда 💍"),
+    ],
+}
+
+
+def _build_card(rel_type: str, custom_text: str | None) -> str:
+    templates = _CARD_TEMPLATES.get(rel_type, _CARD_TEMPLATES["friends"])
+    header, default_body, footer = _random.choice(templates)
+    body = custom_text.strip() if custom_text else default_body
+    sep  = "━" * 22
+    return (
+        f"<b>{header}</b>\n"
+        f"{sep}\n\n"
+        f"<i>«{body}»</i>\n\n"
+        f"{sep}\n"
+        f"<i>{footer}</i>"
+    )
+
+
+async def _cmd_card(
+    *,
+    bot: Bot,
+    owner_id: int,
+    chat_id: int,
+    business_connection_id: str,
+    session: AsyncSession,
+    args: str | None,
+    can_reply: bool = True,
+) -> None:
+    """Send a greeting card visible in the business chat to a relationship partner."""
+    from app.repositories.relationship_repository import RelationshipRepository  # noqa: PLC0415
+
+    rel_repo = RelationshipRepository(session)
+    rel = await rel_repo.get_between(owner_id, chat_id)
+
+    if not rel or rel.status != "active":
+        await _reply(
+            bot, owner_id,
+            "💔 Нет активных отношений с этим собеседником.\n\n"
+            "Сначала предложи дружбу в мини-приложении → "
+            "Статистика → Контакты.",
+        )
+        return
+
+    card_text = _build_card(rel.rel_type, args)
+    try:
+        await bot.send_message(
+            chat_id=chat_id,
+            business_connection_id=business_connection_id,
+            text=card_text,
+            parse_mode="HTML",
+        )
+    except Exception as exc:
+        logger.warning(
+            "Failed to send relationship card to chat %s: %s", chat_id, exc
+        )
+        await _reply(bot, owner_id, "❌ Не удалось отправить открытку. Попробуй ещё раз.")
+
+
 # ── Dispatch table ────────────────────────────────────────────────────────────
 
 _HANDLERS: dict[str, object] = {
     # English
-    "help":    _cmd_help,
-    "info":    _cmd_info,
-    "note":    _cmd_note,
-    "notes":   _cmd_notes,
-    "mute":    _cmd_mute,
-    "unmute":  _cmd_unmute,
-    "mp3":     _cmd_mp3,
+    "help":     _cmd_help,
+    "info":     _cmd_info,
+    "note":     _cmd_note,
+    "notes":    _cmd_notes,
+    "mute":     _cmd_mute,
+    "unmute":   _cmd_unmute,
+    "mp3":      _cmd_mp3,
+    "card":     _cmd_card,
     # Russian aliases
-    "помощь":  _cmd_help,
-    "инфо":    _cmd_info,
-    "заметка": _cmd_note,
-    "заметки": _cmd_notes,
-    "мут":     _cmd_mute,
-    "размут":  _cmd_unmute,
-    "мп3":     _cmd_mp3,
+    "помощь":   _cmd_help,
+    "инфо":     _cmd_info,
+    "заметка":  _cmd_note,
+    "заметки":  _cmd_notes,
+    "мут":      _cmd_mute,
+    "размут":   _cmd_unmute,
+    "мп3":      _cmd_mp3,
+    "открытка": _cmd_card,
 }
 
 

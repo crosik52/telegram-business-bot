@@ -628,8 +628,45 @@
   }
   .chip.edited  { color: var(--orange); background: rgba(255,159,10,0.13); }
   .chip.deleted { color: var(--red);    background: rgba(255,69,58,0.13); }
-  .chip.mutual  { color: var(--green);  background: rgba(52,199,89,0.13); }
-  .chip.at-risk { color: var(--orange); background: rgba(255,159,10,0.13); animation: pulse 1.5s ease-in-out infinite; }
+  .chip.mutual    { color: var(--green);  background: rgba(52,199,89,0.13); }
+  .chip.at-risk   { color: var(--orange); background: rgba(255,159,10,0.13); animation: pulse 1.5s ease-in-out infinite; }
+  .chip.rel-friends { color: #d4962a; background: rgba(245,166,35,0.14); }
+  .chip.rel-dating  { color: #e0365a; background: rgba(255,77,109,0.14); }
+  .chip.rel-married { color: #9c4cc4; background: rgba(168,85,247,0.14); }
+
+  /* ── Relationship button ── */
+  .rel-btn {
+    border: none; background: rgba(10,132,255,0.12); color: var(--link);
+    border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 700;
+    cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  }
+  .rel-btn:active { opacity: 0.72; }
+
+  /* ── Pending requests block ── */
+  .rel-pending-block  { margin-bottom: 14px; }
+  .rel-pending-row    {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 12px; background: var(--card); border-radius: 14px; margin-bottom: 6px;
+  }
+  .rel-pending-name   { flex: 1; font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rel-accept-btn     { background: var(--green); color: #fff; border: none; border-radius: 12px; padding: 5px 14px; font-size: 12px; cursor: pointer; font-weight: 700; flex-shrink: 0; }
+  .rel-decline-btn    { background: rgba(255,59,48,0.12); color: var(--red); border: none; border-radius: 12px; padding: 5px 10px; font-size: 12px; cursor: pointer; flex-shrink: 0; }
+  .rel-accept-btn:active, .rel-decline-btn:active { opacity: 0.72; }
+
+  /* ── Relationship modal ── */
+  .rel-xp-track  { height: 7px; background: var(--separator); border-radius: 4px; margin-bottom: 16px; overflow: hidden; }
+  .rel-xp-fill   { height: 100%; background: linear-gradient(90deg, #f5a623, #e0365a); border-radius: 4px; transition: width .4s; }
+  .rel-modal-actions { display: flex; flex-direction: column; gap: 9px; }
+  .rel-modal-btn {
+    border: none; border-radius: 14px; padding: 13px 16px;
+    font-size: 14px; font-weight: 600; cursor: pointer; width: 100%; text-align: center;
+  }
+  .rel-modal-btn.gift    { background: rgba(245,166,35,0.14); color: #d4962a; }
+  .rel-modal-btn.upgrade { background: rgba(10,132,255,0.12); color: var(--link); }
+  .rel-modal-btn.propose { background: var(--link); color: #fff; }
+  .rel-modal-btn.cancel  { background: rgba(255,59,48,0.10); color: var(--red); }
+  .rel-modal-btn.break-rel { background: rgba(255,59,48,0.08); color: var(--red); font-weight: 400; font-size: 13px; }
+  .rel-modal-btn:disabled { opacity: 0.40; cursor: default; }
 
   /* ── Row action buttons ── */
   .row-action-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
@@ -2204,6 +2241,7 @@
     let minesGameActive   = false;
     let minesRevealedCount = 0;
     let crashGameActive   = false;
+    let lastRelationships = {};   // partner_id → rel dict from /api/relationships/list
     let crashMultiplier   = 1.0;
     let crashPointAt      = Infinity;  // server-side crash point received on start
     let crashAnimFrame    = null;
@@ -2650,6 +2688,174 @@
       return `<div class="row-streak-badge ${cls}">${emoji}${riskMark} ${s.streak_days} дн</div>`;
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    // RELATIONSHIP SYSTEM
+    // ══════════════════════════════════════════════════════════════════
+
+    function _relTierCls(type) {
+      return { friends: "rel-friends", dating: "rel-dating", married: "rel-married" }[type] || "";
+    }
+    function _relTierLabel(type) {
+      return { friends: "💛 Друзья", dating: "❤️ Отношения", married: "💍 Брак" }[type] || type;
+    }
+    function _esc(s) {
+      return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+    }
+
+    async function fetchRelationships() {
+      const initData = tg ? tg.initData : currentInitData;
+      if (!initData) return;
+      try {
+        const res = await fetch("/app/api/relationships/list", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initData }),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        lastRelationships = {};
+        for (const r of (data.relationships || [])) lastRelationships[r.partner_id] = r;
+      } catch {}
+    }
+
+    function renderPendingRelRequests() {
+      const pending = Object.values(lastRelationships).filter(r => r.status === "pending" && !r.is_initiator);
+      if (!pending.length) return "";
+      const rows = pending.map(r => {
+        const nm = _esc(r.partner_name || `#${r.partner_id}`);
+        const av = nm.replace(/[^А-ЯA-Z]/gi, "").slice(0, 2).toUpperCase() || nm.slice(0, 2).toUpperCase();
+        const bg = colorFor(r.partner_name || String(r.partner_id));
+        return `
+          <div class="rel-pending-row">
+            <div class="avatar" style="background:${bg};width:36px;height:36px;line-height:36px;font-size:14px;flex-shrink:0">${av}</div>
+            <div style="flex:1;min-width:0">
+              <div class="rel-pending-name">${nm}</div>
+              <div style="font-size:11px;color:var(--hint)">хочет с тобой подружиться 💛</div>
+            </div>
+            <button class="rel-accept-btn"  data-rel-respond="${r.partner_id}" data-accept="true">✓ Принять</button>
+            <button class="rel-decline-btn" data-rel-respond="${r.partner_id}" data-accept="false">✗</button>
+          </div>`;
+      }).join("");
+      return `<div class="rel-pending-block"><div class="section-title">💌 Запросы дружбы</div>${rows}</div>`;
+    }
+
+    function openRelModal(chatId, partnerName) {
+      const rel      = lastRelationships[chatId] || null;
+      const initData = tg ? tg.initData : currentInitData;
+      const UP_LABEL = { friends: "❤️ Отношения", dating: "💍 Брак" };
+      const UP_COST  = { friends: 300, dating: 1000 };
+      const UP_MINLV = { friends: 3, dating: 5 };
+
+      const overlay = document.createElement("div");
+      overlay.className = "balance-overlay";
+
+      let inner = `<div style="text-align:center;font-size:17px;font-weight:700;margin-bottom:14px">${_esc(partnerName)}</div>`;
+
+      if (!rel) {
+        inner += `
+          <p style="text-align:center;color:var(--hint);font-size:13px;margin-bottom:18px">
+            Предложи дружбу — начало особых отношений между вами ✨
+          </p>
+          <button class="rel-modal-btn propose" id="rBtnPropose">💌 Предложить дружбу (50🪙)</button>`;
+      } else if (rel.status === "pending") {
+        if (rel.is_initiator) {
+          inner += `
+            <p style="text-align:center;color:var(--hint);font-size:14px;margin-bottom:18px">⏳ Запрос отправлен, ждём ответа…</p>
+            <button class="rel-modal-btn cancel" id="rBtnCancel">❌ Отменить запрос (+50🪙 вернутся)</button>`;
+        } else {
+          inner += `
+            <p style="text-align:center;font-size:14px;margin-bottom:18px">${_esc(partnerName)} хочет с тобой подружиться! 💛</p>
+            <div class="rel-modal-actions">
+              <button class="rel-modal-btn propose" id="rBtnAccept">✅ Принять</button>
+              <button class="rel-modal-btn cancel"  id="rBtnDecline">❌ Отклонить</button>
+            </div>`;
+        }
+      } else {
+        const tierLabel = _relTierLabel(rel.rel_type);
+        const lvStr     = rel.rel_type !== "married" ? ` · Уровень ${rel.level}/5` : "";
+        const xpHtml    = rel.rel_type !== "married"
+          ? `<div style="font-size:11px;color:var(--hint);text-align:center;margin-bottom:4px">XP: ${rel.xp_in_level} / 200</div>
+             <div class="rel-xp-track"><div class="rel-xp-fill" style="width:${rel.xp_pct}%"></div></div>`
+          : `<div style="font-size:12px;color:var(--hint);text-align:center;margin-bottom:14px">+100🪙 к ежедневной награде 💍</div>`;
+        const giftDis = rel.gift_ready ? "" : "disabled";
+        const giftLbl = rel.gift_ready
+          ? "🎁 Подарить (−50🪙, партнёру +40🪙, +100 XP обоим)"
+          : "🎁 Подарок уже отправлен сегодня";
+        const upgradeHtml = rel.can_upgrade
+          ? `<button class="rel-modal-btn upgrade" id="rBtnUpgrade">⬆️ До ${UP_LABEL[rel.rel_type]} (${UP_COST[rel.rel_type]}🪙)</button>`
+          : (rel.rel_type !== "married"
+              ? `<div style="font-size:12px;color:var(--hint);text-align:center;padding:4px 0">Нужен уровень ${UP_MINLV[rel.rel_type]} для перехода</div>`
+              : "");
+        inner += `
+          <div style="font-size:24px;font-weight:700;text-align:center;margin-bottom:2px">${tierLabel}</div>
+          <div style="font-size:13px;color:var(--hint);text-align:center;margin-bottom:12px">${lvStr}</div>
+          ${xpHtml}
+          <div class="rel-modal-actions">
+            <button class="rel-modal-btn gift" id="rBtnGift" ${giftDis}>${giftLbl}</button>
+            ${upgradeHtml}
+            <button class="rel-modal-btn break-rel" id="rBtnBreak">💔 Разорвать отношения</button>
+          </div>`;
+      }
+
+      overlay.innerHTML = `
+        <div class="balance-sheet" style="max-height:80vh;overflow-y:auto">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-size:13px;color:var(--hint)">Отношения</span>
+            <button id="rBtnClose" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--hint);line-height:1">✕</button>
+          </div>
+          ${inner}
+        </div>`;
+
+      document.body.appendChild(overlay);
+      const close = () => overlay.remove();
+      overlay.addEventListener("click", e => { if (e.target === overlay) close(); });
+      overlay.querySelector("#rBtnClose")?.addEventListener("click", close);
+
+      async function relAction(url, extra, cb) {
+        overlay.remove();
+        try {
+          const res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ initData, partnerId: chatId, ...extra }),
+          });
+          const d = await res.json();
+          if (!res.ok) {
+            const MSGS = {
+              insufficient_funds: "Недостаточно монет 🪙",
+              request_pending:    "Запрос уже отправлен",
+              already_related:    "Вы уже связаны",
+              cannot_self_request:"Нельзя добавить себя",
+              need_level_3:       "Нужен уровень 3",
+              need_level_5:       "Нужен уровень 5",
+              already_max_tier:   "Это максимальный уровень",
+              gift_cooldown:      "Подарок уже отправлен сегодня",
+            };
+            toastMessage(MSGS[d.detail] || `Ошибка: ${d.detail}`);
+            return;
+          }
+          cb(d);
+          await fetchRelationships();
+          renderContent();
+        } catch { toastMessage("Ошибка, попробуй снова"); }
+      }
+
+      overlay.querySelector("#rBtnPropose")?.addEventListener("click", () =>
+        relAction("/app/api/relationships/request", {}, () => toastMessage("💌 Запрос дружбы отправлен!")));
+      overlay.querySelector("#rBtnCancel")?.addEventListener("click", () =>
+        relAction("/app/api/relationships/cancel", {}, () => toastMessage("Запрос отменён, монеты возвращены.")));
+      overlay.querySelector("#rBtnAccept")?.addEventListener("click", () =>
+        relAction("/app/api/relationships/respond", { accept: true }, () => toastMessage("💛 Вы теперь друзья!")));
+      overlay.querySelector("#rBtnDecline")?.addEventListener("click", () =>
+        relAction("/app/api/relationships/respond", { accept: false }, () => toastMessage("Запрос отклонён.")));
+      overlay.querySelector("#rBtnGift")?.addEventListener("click", () =>
+        relAction("/app/api/relationships/gift", {}, () => toastMessage("🎁 Подарок отправлен! +100 XP обоим.")));
+      overlay.querySelector("#rBtnUpgrade")?.addEventListener("click", () =>
+        relAction("/app/api/relationships/upgrade", {}, d => toastMessage(`🎉 Теперь вы: ${_relTierLabel(d.rel_type)}!`)));
+      overlay.querySelector("#rBtnBreak")?.addEventListener("click", () =>
+        relAction("/app/api/relationships/break", {}, () => toastMessage("💔 Отношения разорваны.")));
+    }
+
     function renderTop(stats) {
       if (!stats.top_interlocutors.length) {
         return `<div class="empty"><span class="big-emoji">💬</span>Пока нет сообщений для статистики.<br>Как только в подключённом Business-чате появятся сообщения — здесь будет топ собеседников.</div>`;
@@ -2704,11 +2910,24 @@
         const longestNote = (s.longest_streak > s.streak_days && s.longest_streak > 2)
           ? `<span class="chip">💎 рекорд ${s.longest_streak} дн</span>` : "";
 
+        // Relationship chip
+        const _rel = lastRelationships[s.chat_id];
+        if (_rel) {
+          if (_rel.status === "active") {
+            chips.push(`<span class="chip ${_relTierCls(_rel.rel_type)}">${_relTierLabel(_rel.rel_type)} Ур.${_rel.level}</span>`);
+          } else if (_rel.status === "pending") {
+            chips.push(`<span class="chip" style="color:var(--orange)">${_rel.is_initiator ? "💌 ожидание" : "💌 ответить"}</span>`);
+          }
+        }
+
         const gameBtn = s.mutual_connected
           ? `<button class="game-btn" data-game-chat="${s.chat_id}" data-game-name="${s.display_name}">🎮 Игра</button>`
           : "";
         const remindBtn = (s.mutual_connected && s.streak_days >= 2)
           ? `<button class="remind-btn" data-remind-chat="${s.chat_id}" data-remind-streak="${s.streak_days}" data-remind-name="${s.display_name}">🔥 Напомнить о серии</button>`
+          : "";
+        const relBtn = s.mutual_connected
+          ? `<button class="rel-btn" data-rel-open="${s.chat_id}" data-rel-name="${s.display_name}">❤️ Отношения</button>`
           : "";
 
         return `
@@ -2725,7 +2944,7 @@
               </div>
               <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
               <div class="row-action-btns">
-                ${gameBtn}${remindBtn}
+                ${gameBtn}${remindBtn}${relBtn}
               </div>
             </div>
             <div class="row-right">
@@ -2751,6 +2970,7 @@
       const totalAll   = stats.top_interlocutors.length;
       return `
         ${controls}
+        ${renderPendingRelRequests()}
         <div class="section-title">🏆 Топ собеседников <span class="sub">${totalShown}${!statsPremium && hiddenCount > 0 ? " из " + totalAll : " из " + totalAll}</span></div>
         <div class="list">${rows}</div>
         ${premiumMoreHtml}
@@ -2801,6 +3021,41 @@
             btn.dataset.remindName,
             btn
           );
+        });
+      });
+      // ── Relationship buttons ──────────────────────────────────────────────
+      document.querySelectorAll("[data-rel-open]").forEach(btn => {
+        btn.addEventListener("click", e => {
+          e.stopPropagation();
+          openRelModal(parseInt(btn.dataset.relOpen), btn.dataset.relName || "Собеседник");
+        });
+      });
+      // Inline accept/decline of pending requests (in pending block)
+      document.querySelectorAll("[data-rel-respond]").forEach(btn => {
+        btn.addEventListener("click", async e => {
+          e.stopPropagation();
+          if (btn.disabled) return;
+          btn.disabled = true;
+          const partnerId = parseInt(btn.dataset.relRespond);
+          const accept    = btn.dataset.accept === "true";
+          const initData  = tg ? tg.initData : currentInitData;
+          try {
+            const res = await fetch("/app/api/relationships/respond", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ initData, partnerId, accept }),
+            });
+            const d = await res.json();
+            if (res.ok) {
+              lastRelationships[partnerId] = d;
+              toastMessage(accept ? "💛 Вы теперь друзья!" : "Запрос отклонён.");
+              await fetchRelationships();
+              renderContent();
+            } else {
+              toastMessage("Ошибка, попробуй снова");
+              btn.disabled = false;
+            }
+          } catch { btn.disabled = false; toastMessage("Ошибка, попробуй снова"); }
         });
       });
       const shareBtn = document.getElementById("shareBtn");
@@ -3305,11 +3560,12 @@
         const hdr  = {"Content-Type": "application/json"};
         const post = (url) => fetch(url, {method:"POST", headers:hdr, body}).catch(()=>null);
 
-        const [statsRes, actRes, wordsRes, digestRes] = await Promise.all([
+        const [statsRes, actRes, wordsRes, digestRes, relRes] = await Promise.all([
           post("/app/api/stats"),
           post("/app/api/activity"),
           post("/app/api/stats/words"),
           post("/app/api/stats/digest"),
+          post("/app/api/relationships/list"),
         ]);
 
         if (!statsRes.ok) throw new Error("bad_status");
@@ -3318,6 +3574,13 @@
         lastActivity = actRes  && actRes.ok  ? ((await actRes.json()).activity || {}) : {};
         lastWords    = wordsRes  && wordsRes.ok  ? await wordsRes.json()  : null;
         lastDigest   = digestRes && digestRes.ok ? await digestRes.json() : null;
+        if (relRes && relRes.ok) {
+          try {
+            const _rd = await relRes.json();
+            lastRelationships = {};
+            for (const _r of (_rd.relationships || [])) lastRelationships[_r.partner_id] = _r;
+          } catch {}
+        }
 
         applyUserAvatar();
 

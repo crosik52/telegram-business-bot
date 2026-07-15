@@ -21,6 +21,7 @@ from app.miniapp.auth import verify_init_data
 from app.models.admin_action_log import AdminActionLog
 from app.models.business_connection import BusinessConnection
 from app.models.message import MediaType, Message
+from app.models.relationship import MARRIAGE_DAILY_BONUS
 from app.repositories.message_repository import MessageFilters, MessageRepository
 from app.repositories.pet_repository import FEED_COST, RENAME_COST, SPECIES as PET_SPECIES_CATALOGUE, PetRepository
 from app.repositories.shop_repository import (
@@ -31,6 +32,7 @@ from app.repositories.shop_repository import (
 )
 from app.repositories.quest_repository import QUESTS, QuestRepository
 from app.repositories.referral_repository import ReferralRepository
+from app.repositories.relationship_repository import RelationshipRepository
 from app.repositories.subscription_repository import SubscriptionRepository
 from app.repositories.wallet_repository import WalletRepository
 from app.services.admin_chart_service import AdminStats, render_admin_image
@@ -260,6 +262,21 @@ class PetUpgradeRequest(BaseModel):
     init_data: str = Field(alias="initData")
     pet_id: int = Field(alias="petId")
     skill: str = Field(min_length=1, max_length=30, pattern=r"^[a-z_]+$")
+
+
+class RelPartnerRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    init_data:  str = Field(alias="initData")
+    partner_id: int = Field(alias="partnerId")
+
+
+class RelRespondRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    init_data:  str  = Field(alias="initData")
+    partner_id: int  = Field(alias="partnerId")
+    accept:     bool
 
 
 class PetPlayRequest(BaseModel):
@@ -514,23 +531,9 @@ async def miniapp_stats(
             "best_streak": stats.best_streak,
             "best_streak_name": stats.best_streak_name,
             "global_longest_streak": stats.global_longest_streak,
-            "top_interlocutors": [
-                {
-                    "chat_id": s.chat_id,
-                    "display_name": s.display_name,
-                    "username": s.username,
-                    "message_count": s.message_count,
-                    "edited_count": s.edited_count,
-                    "deleted_count": s.deleted_count,
-                    "last_message_at": (
-                        s.last_message_at.isoformat() if s.last_message_at else None
-                    ),
-                    "streak_days": s.streak_days,
-                    "longest_streak": s.longest_streak,
-                    "mutual_connected": s.mutual_connected,
-                }
-                for s in stats.top_interlocutors
-            ],
+            "top_interlocutors": await _enrich_interlocutors(
+                session, owner_telegram_id, stats.top_interlocutors
+            ),
             "badges": _compute_badges(stats),
         }
     except Exception:
@@ -968,6 +971,14 @@ async def wallet_claim_daily(
         b                  = config.benefits or {}
         premium_multiplier = float(b.get("daily_multiplier", 1.0))
         premium_bonus      = int(b.get("daily_bonus_coins", 0))
+
+    # Marriage daily bonus — each active marriage adds MARRIAGE_DAILY_BONUS coins
+    try:
+        _rel_repo_dc = RelationshipRepository(session)
+        _marriages   = await _rel_repo_dc.count_marriages(owner_id)
+        premium_bonus += MARRIAGE_DAILY_BONUS * _marriages
+    except Exception:
+        pass
 
     repo = WalletRepository(session)
     try:
@@ -1597,6 +1608,248 @@ async def miniapp_pet_leaderboard(
     repo = PetRepository(session)
     leaderboard = await repo.get_leaderboard(limit=20)
     return {"leaderboard": leaderboard}
+
+
+# ── Relationship helpers ──────────────────────────────────────────────────────
+
+
+def _verify_rel_init(init_data: str, settings) -> int:
+    user = verify_init_data(init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid init data")
+    return int(user["id"])
+
+
+async def _enrich_interlocutors(
+    session, owner_id: int, interlocutors
+) -> list[dict]:
+    """Build the top_interlocutors list annotated with relationship data."""
+    try:
+        _rel_repo = RelationshipRepository(session)
+        _rels     = await _rel_repo.get_for_user(owner_id)
+        _by_pid   = {
+            (_r.user_b_id if _r.user_a_id == owner_id else _r.user_a_id):
+            _rel_repo.to_dict(_r, owner_id)
+            for _r in _rels
+        }
+    except Exception:
+        _by_pid = {}
+
+    return [
+        {
+            "chat_id":          s.chat_id,
+            "display_name":     s.display_name,
+            "username":         s.username,
+            "message_count":    s.message_count,
+            "edited_count":     s.edited_count,
+            "deleted_count":    s.deleted_count,
+            "last_message_at": (
+                s.last_message_at.isoformat() if s.last_message_at else None
+            ),
+            "streak_days":      s.streak_days,
+            "longest_streak":   s.longest_streak,
+            "mutual_connected": s.mutual_connected,
+            "relationship":     _by_pid.get(s.chat_id),
+        }
+        for s in interlocutors
+    ]
+
+
+# ── Relationship endpoints ────────────────────────────────────────────────────
+
+
+@router.post("/app/api/relationships/list")
+async def rel_list(
+    payload: StatsRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    owner_id = _verify_rel_init(payload.init_data, settings)
+    repo = RelationshipRepository(session)
+    rels = await repo.get_for_user(owner_id)
+
+    # Fetch partner display names
+    from app.models.user import TelegramUser as _TU
+    partner_ids = [
+        (r.user_b_id if r.user_a_id == owner_id else r.user_a_id) for r in rels
+    ]
+    name_map: dict[int, dict] = {}
+    if partner_ids:
+        for _u in (
+            await session.execute(
+                select(_TU).where(_TU.telegram_id.in_(partner_ids))
+            )
+        ).scalars():
+            parts = [p for p in [_u.first_name, _u.last_name] if p]
+            name_map[_u.telegram_id] = {
+                "name":     " ".join(parts) or f"#{_u.telegram_id}",
+                "username": _u.username,
+            }
+
+    result = []
+    for r in rels:
+        d = repo.to_dict(r, owner_id)
+        info = name_map.get(d["partner_id"], {})
+        d["partner_name"]     = info.get("name", f"#{d['partner_id']}")
+        d["partner_username"] = info.get("username")
+        result.append(d)
+
+    return {"relationships": result}
+
+
+@router.post("/app/api/relationships/request")
+async def rel_request(
+    payload: RelPartnerRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    owner_id = _verify_rel_init(payload.init_data, settings)
+    repo     = RelationshipRepository(session)
+    try:
+        rel = await repo.send_request(owner_id, payload.partner_id)
+        await session.commit()
+        # Best-effort push notification to addressee
+        try:
+            _bot = get_bot(settings)
+            if _bot:
+                from app.models.user import TelegramUser as _TU
+                _me = (await session.execute(
+                    select(_TU).where(_TU.telegram_id == owner_id)
+                )).scalar_one_or_none()
+                _parts = [p for p in [
+                    _me.first_name if _me else None,
+                    _me.last_name  if _me else None,
+                ] if p]
+                _name = " ".join(_parts) or f"#{owner_id}"
+                await _bot.send_message(
+                    payload.partner_id,
+                    f"💌 <b>{_name}</b> хочет с тобой подружиться!\n\n"
+                    f"Открой мини-приложение → Статистика → Контакты, "
+                    f"чтобы принять или отклонить запрос.",
+                    parse_mode="HTML",
+                )
+        except Exception:
+            pass
+        return repo.to_dict(rel, owner_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/app/api/relationships/respond")
+async def rel_respond(
+    payload: RelRespondRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    owner_id = _verify_rel_init(payload.init_data, settings)
+    repo     = RelationshipRepository(session)
+    try:
+        rel = await repo.respond(owner_id, payload.partner_id, payload.accept)
+        await session.commit()
+        if payload.accept:
+            try:
+                _bot = get_bot(settings)
+                if _bot:
+                    from app.models.user import TelegramUser as _TU
+                    _me = (await session.execute(
+                        select(_TU).where(_TU.telegram_id == owner_id)
+                    )).scalar_one_or_none()
+                    _parts = [p for p in [
+                        _me.first_name if _me else None,
+                        _me.last_name  if _me else None,
+                    ] if p]
+                    _name = " ".join(_parts) or f"#{owner_id}"
+                    await _bot.send_message(
+                        payload.partner_id,
+                        f"💛 <b>{_name}</b> принял(а) твой запрос дружбы!\n"
+                        f"Открой мини-приложение, чтобы отправить подарок.",
+                        parse_mode="HTML",
+                    )
+            except Exception:
+                pass
+        return repo.to_dict(rel, owner_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/app/api/relationships/cancel")
+async def rel_cancel(
+    payload: RelPartnerRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    owner_id = _verify_rel_init(payload.init_data, settings)
+    repo     = RelationshipRepository(session)
+    try:
+        await repo.cancel_request(owner_id, payload.partner_id)
+        await session.commit()
+        return {"ok": True}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/app/api/relationships/gift")
+async def rel_gift(
+    payload: RelPartnerRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    owner_id = _verify_rel_init(payload.init_data, settings)
+    repo     = RelationshipRepository(session)
+    try:
+        result = await repo.gift(owner_id, payload.partner_id)
+        await session.commit()
+        return result
+    except ValueError as e:
+        detail = str(e).split(":")[0]
+        raise HTTPException(status_code=400, detail=detail) from e
+
+
+@router.post("/app/api/relationships/upgrade")
+async def rel_upgrade(
+    payload: RelPartnerRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    owner_id = _verify_rel_init(payload.init_data, settings)
+    repo     = RelationshipRepository(session)
+    try:
+        rel = await repo.upgrade_tier(owner_id, payload.partner_id)
+        await session.commit()
+        try:
+            _bot = get_bot(settings)
+            if _bot:
+                from app.models.relationship import TIER_LABELS as _TL
+                from app.models.user import TelegramUser as _TU
+                _me = (await session.execute(
+                    select(_TU).where(_TU.telegram_id == owner_id)
+                )).scalar_one_or_none()
+                _parts = [p for p in [
+                    _me.first_name if _me else None,
+                    _me.last_name  if _me else None,
+                ] if p]
+                _name = " ".join(_parts) or f"#{owner_id}"
+                await _bot.send_message(
+                    payload.partner_id,
+                    f"🎉 <b>{_name}</b> развил(а) ваши отношения "
+                    f"до <b>{_TL.get(rel.rel_type, rel.rel_type)}</b>!\n"
+                    f"Открой мини-приложение, чтобы посмотреть детали.",
+                    parse_mode="HTML",
+                )
+        except Exception:
+            pass
+        return repo.to_dict(rel, owner_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/app/api/relationships/break")
+async def rel_break(
+    payload: RelPartnerRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    owner_id = _verify_rel_init(payload.init_data, settings)
+    repo     = RelationshipRepository(session)
+    try:
+        await repo.break_rel(owner_id, payload.partner_id)
+        await session.commit()
+        return {"ok": True}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 # ── Subscription endpoints ────────────────────────────────────────────────────

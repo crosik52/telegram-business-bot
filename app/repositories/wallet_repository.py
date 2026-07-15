@@ -265,21 +265,23 @@ class WalletRepository:
         )
 
     # ── Slots spin (mutation) ──────────────────────────────────────────────
-    async def spin_slots(self, owner_telegram_id: int) -> SlotResult:
+    async def spin_slots(self, owner_telegram_id: int, bet: int = SLOT_COST) -> SlotResult:
+        bet = max(SLOT_COST, min(bet, 100))   # clamp to allowed range
         wallet = await self._get_for_update(owner_telegram_id)
 
-        if wallet.balance < SLOT_COST:
+        if wallet.balance < bet:
             raise ValueError("insufficient_balance")
 
-        wallet.balance      -= SLOT_COST
-        wallet.total_spent  += SLOT_COST
+        wallet.balance      -= bet
+        wallet.total_spent  += bet
 
         reels  = [_pick_symbol() for _ in range(3)]
         payout = 0
         if reels[0] == reels[1] == reels[2]:
-            payout = SLOT_THREE_PAYOUTS.get(reels[0], 0)
+            base = SLOT_THREE_PAYOUTS.get(reels[0], 0)
+            payout = int(base * bet / SLOT_COST)
         elif reels[0] == reels[1] or reels[1] == reels[2] or reels[0] == reels[2]:
-            payout = SLOT_TWO_PAYOUT
+            payout = int(SLOT_TWO_PAYOUT * bet / SLOT_COST)
 
         if payout > 0:
             wallet.balance      += payout
@@ -289,7 +291,7 @@ class WalletRepository:
         await self.session.flush()
 
         return SlotResult(
-            reels=reels, payout=payout, net=payout - SLOT_COST,
+            reels=reels, payout=payout, net=payout - bet,
             is_jackpot=(reels == ["💎", "💎", "💎"]),
             new_balance=wallet.balance,
         )

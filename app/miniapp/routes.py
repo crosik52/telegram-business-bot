@@ -168,6 +168,7 @@ class SlotSpinRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     init_data: str = Field(alias="initData")
+    bet: int = 10
 
 
 class FlipRequest(BaseModel):
@@ -991,7 +992,7 @@ async def wallet_slots(
     owner_id = int(user["id"])
     repo = WalletRepository(session)
     try:
-        result = await repo.spin_slots(owner_id)
+        result = await repo.spin_slots(owner_id, payload.bet)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return {
@@ -1000,6 +1001,7 @@ async def wallet_slots(
         "net": result.net,
         "is_jackpot": result.is_jackpot,
         "new_balance": result.new_balance,
+        "bet": payload.bet,
     }
 
 

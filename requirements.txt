@@ -15,3 +15,6 @@ Pillow
 yt-dlp
 gallery-dl
 httpx
+aiosqlite
+pytest
+pytest-asyncio

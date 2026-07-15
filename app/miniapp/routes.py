@@ -168,14 +168,14 @@ class SlotSpinRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     init_data: str = Field(alias="initData")
-    bet: int = 10
+    bet: int = Field(default=10, ge=10, le=100)
 
 
 class FlipRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     init_data: str = Field(alias="initData")
-    bet: int
+    bet: int = Field(ge=1, le=500)
     choice: str  # "heads" or "tails"
 
 
@@ -183,7 +183,7 @@ class MinesStartRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     init_data:   str = Field(alias="initData")
-    bet:         int
+    bet:         int = Field(ge=1, le=500)
     mines_count: int = Field(alias="minesCount", ge=3, le=15)
 
 
@@ -204,14 +204,14 @@ class CrashStartRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     init_data: str = Field(alias="initData")
-    bet:       int
+    bet:       int = Field(ge=1, le=500)
 
 
 class CrashCashoutRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     init_data:  str   = Field(alias="initData")
-    multiplier: float
+    multiplier: float = Field(ge=1.0, le=200.0)
 
 
 class QuestClaimRequest(BaseModel):
@@ -259,7 +259,7 @@ class PetUpgradeRequest(BaseModel):
 
     init_data: str = Field(alias="initData")
     pet_id: int = Field(alias="petId")
-    skill: str
+    skill: str = Field(min_length=1, max_length=30, pattern=r"^[a-z_]+$")
 
 
 class PetPlayRequest(BaseModel):

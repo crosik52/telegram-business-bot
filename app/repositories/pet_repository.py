@@ -599,7 +599,11 @@ class PetRepository:
             if hours_since < cooldown:
                 raise ValueError("already_fed")
 
-        cost = 0 if feed_free else food["cost"]
+        # feed_free (subscription / boost perk) only waives the base kibble
+        # cost.  Premium food always costs its own price to prevent a trivial
+        # exploit where a subscriber passes food_type="divine" to get 5× XP
+        # and +40 mood for 0 coins.
+        cost = 0 if (feed_free and food_type == "kibble") else food["cost"]
         wallet = await self._lock_wallet(owner_telegram_id)
         if wallet is None:
             raise ValueError("insufficient_coins")
@@ -814,12 +818,17 @@ class PetRepository:
     # ── Private helpers ───────────────────────────────────────────────────────
 
     async def _get_alive_pet(self, owner_telegram_id: int, pet_id: int) -> ChatPet:
+        # with_for_update() prevents concurrent mutations to the same pet row
+        # (XP, mood, level, upgrades).  Lock order: pet → wallet (consistent
+        # across all callers) to avoid deadlocks.
         pet = (
             await self._session.execute(
-                select(ChatPet).where(
+                select(ChatPet)
+                .where(
                     ChatPet.id == pet_id,
                     ChatPet.owner_telegram_id == owner_telegram_id,
                 )
+                .with_for_update()
             )
         ).scalar_one_or_none()
         if not pet:

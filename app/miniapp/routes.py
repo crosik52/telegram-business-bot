@@ -1304,7 +1304,13 @@ async def miniapp_pet_list(
     repo = PetRepository(session)
     pets, available_chats = await repo.get_pets(owner_id)
     await session.commit()  # persist any death updates flushed by get_pets
-    return {"pets": pets, "available_chats": available_chats, "feed_cost": FEED_COST}
+    benefits = await _get_pet_sub_benefits(session, owner_id)
+    return {
+        "pets": pets,
+        "available_chats": available_chats,
+        "feed_cost": FEED_COST,
+        "xp_multiplier": benefits["xp_multiplier"],
+    }
 
 
 @router.post("/app/api/pet/adopt")

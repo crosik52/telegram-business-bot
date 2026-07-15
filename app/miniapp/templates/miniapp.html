@@ -5014,12 +5014,22 @@
 
     // ── Pet v3 constants ──────────────────────────────────────────────────────
     const FOOD_CATALOG_JS = {
-      kibble: { name:"Корм",      emoji:"🥣", cost:20,  bonusText:"обычный XP",       mood:0  },
-      fish:   { name:"Рыбка",     emoji:"🐟", cost:40,  bonusText:"+50% XP · +8 😊",  mood:8  },
-      steak:  { name:"Стейк",     emoji:"🥩", cost:80,  bonusText:"+100% XP · +15 😊",mood:15 },
-      cake:   { name:"Тортик",    emoji:"🎂", cost:150, bonusText:"+200% XP · +25 😊",mood:25 },
-      divine: { name:"Звёздный",  emoji:"✨", cost:300, bonusText:"+400% XP · +40 😊",mood:40 },
+      kibble: { name:"Корм",      emoji:"🥣", cost:20,  xp_mult:1.0, mood:0  },
+      fish:   { name:"Рыбка",     emoji:"🐟", cost:40,  xp_mult:1.5, mood:8  },
+      steak:  { name:"Стейк",     emoji:"🥩", cost:80,  xp_mult:2.0, mood:15 },
+      cake:   { name:"Тортик",    emoji:"🎂", cost:150, xp_mult:3.0, mood:25 },
+      divine: { name:"Звёздный",  emoji:"✨", cost:300, xp_mult:5.0, mood:40 },
     };
+    const FEED_XP_BASE = 15;
+    function calcFoodXP(foodType, p) {
+      const f = FOOD_CATALOG_JS[foodType];
+      if (!f) return 0;
+      const skillMult  = 1.0 + ((p.upgrades && p.upgrades.xp_boost) || 0) * 0.30;
+      // xp_multiplier from pet/list already combines subscription + double_xp boost
+      const xpMult     = Math.max(1.0, parseFloat((petData && petData.xp_multiplier) || 1));
+      const relMult    = parseFloat(p.rel_bonus || 1.0);
+      return Math.round(FEED_XP_BASE * f.xp_mult * skillMult * xpMult * relMult);
+    }
     const SKILL_CATALOG_JS = {
       xp_boost:      { name:"Умник",    emoji:"🧠", maxLevel:3, desc:"+30% к XP за каждый уровень",              costs:[100,250,500] },
       hunger_resist: { name:"Сытость",  emoji:"🍽️", maxLevel:3, desc:"Голод падает на 25% медленнее за уровень", costs:[150,350,700] },
@@ -5165,10 +5175,12 @@
       const bal = walletData?.balance || 0;
       const foods = Object.entries(FOOD_CATALOG_JS).map(([type, f]) => {
         const dis = feedCd || bal < f.cost;
+        const xpGain = calcFoodXP(type, p);
+        const moodHint = f.mood > 0 ? ` · +${f.mood} 😊` : "";
         return `<div class="pet-food-item${feedCd?' on-cd':''}">
           <div class="pet-food-emoji">${f.emoji}</div>
           <div class="pet-food-name">${f.name}</div>
-          <div class="pet-food-bonus">${f.bonusText}</div>
+          <div class="pet-food-bonus">${xpGain} XP${moodHint}</div>
           <button class="pet-food-buy" data-pet-id="${p.id}" data-food-type="${type}" ${dis?"disabled":""}>
             ${f.cost} 🪙${feedCd?` · ${feedCd}`:""}
           </button>

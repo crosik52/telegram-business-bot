@@ -25,6 +25,94 @@ from app.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+
+# ── YouTube cookie helpers ────────────────────────────────────────────────────
+
+def _yt_json_cookies_to_netscape(raw: str) -> str:
+    """Convert a JSON cookie array to Netscape format for yt-dlp."""
+    import json as _json
+    import time as _time
+
+    try:
+        cookies = _json.loads(raw)
+        if not isinstance(cookies, list):
+            return ""
+    except (_json.JSONDecodeError, ValueError):
+        return ""
+
+    lines = ["# Netscape HTTP Cookie File", "# Converted from JSON by audio_service"]
+    for c in cookies:
+        if not isinstance(c, dict):
+            continue
+        domain = str(c.get("domain") or "")
+        if not domain:
+            continue
+        if not domain.startswith("."):
+            domain = "." + domain
+        path   = str(c.get("path") or "/")
+        secure = "TRUE" if c.get("secure") else "FALSE"
+        expiry = str(int(c.get("expirationDate") or int(_time.time()) + 86_400 * 365))
+        name   = str(c.get("name") or "")
+        value  = str(c.get("value") or "")
+        lines.append(f"{domain}\tTRUE\t{path}\t{secure}\t{expiry}\t{name}\t{value}")
+    return "\n".join(lines)
+
+
+def _apply_youtube_cookies(ydl_opts: dict, out_dir: str) -> None:
+    """Inject YOUTUBE_COOKIES into *ydl_opts* if the env var is set.
+
+    Accepted formats (same as TIKTOK_COOKIES):
+      1. Netscape cookie file (7 tab-separated columns)
+      2. Netscape with ``\\n`` escapes instead of real newlines
+      3. JSON array from 'Cookie Editor' / 'EditThisCookie' browser extension
+      4. Raw HTTP Cookie header string  (name=val; name2=val2)
+    """
+    raw = os.environ.get("YOUTUBE_COOKIES", "").strip()
+    if not raw:
+        logger.warning(
+            "YOUTUBE_COOKIES is not set — YouTube may block server-side downloads. "
+            "Export cookies from your browser and add them as the YOUTUBE_COOKIES secret."
+        )
+        return
+
+    # Normalise escaped newlines (env var may collapse real newlines)
+    if "\n" not in raw and "\\n" in raw:
+        raw = raw.replace("\\n", "\n")
+
+    # 1. Netscape file
+    data_lines = [l for l in raw.splitlines() if l.strip() and not l.strip().startswith("#")]
+    if [l for l in data_lines if len(l.split("\t")) == 7]:
+        cookie_path = os.path.join(out_dir, "_yt_cookies.txt")
+        with open(cookie_path, "w", encoding="utf-8") as fh:
+            fh.write(raw)
+        ydl_opts["cookiefile"] = cookie_path
+        logger.info("YouTube: Netscape cookiefile applied")
+        return
+
+    # 2. JSON array
+    if raw.lstrip().startswith("["):
+        ns = _yt_json_cookies_to_netscape(raw)
+        if ns:
+            cookie_path = os.path.join(out_dir, "_yt_cookies.txt")
+            with open(cookie_path, "w", encoding="utf-8") as fh:
+                fh.write(ns)
+            ydl_opts["cookiefile"] = cookie_path
+            logger.info("YouTube: JSON→Netscape cookiefile applied")
+            return
+        logger.warning("YouTube: YOUTUBE_COOKIES looks like JSON but failed to parse")
+
+    # 3. Raw Cookie header string
+    if "=" in raw and "\n" not in raw and "\t" not in raw:
+        ydl_opts.setdefault("http_headers", {})
+        ydl_opts["http_headers"]["Cookie"] = raw
+        logger.info("YouTube: raw Cookie header injected")
+        return
+
+    logger.warning(
+        "YouTube: YOUTUBE_COOKIES present (%d bytes) but format not recognised "
+        "(expected Netscape / JSON / Cookie header).", len(raw)
+    )
+
 MAX_BYTES         = 48 * 1024 * 1024   # 48 MB — Telegram audio cap
 MAX_DURATION_SECS = 15 * 60            # 15 minutes — skip albums / long mixes
 _CACHE_TTL        = 600                # 10 minutes
@@ -232,6 +320,17 @@ async def stream_to_bytes(url: str) -> tuple[bytes, str]:
 
     # Use the same format + client as _download_sync (known to work),
     # only replacing the output path with "-" for stdout piping.
+    # Write cookies to a temp file so we can pass --cookies to the subprocess.
+    import tempfile as _tempfile  # noqa: PLC0415
+    _cookie_tmp = _tempfile.mkdtemp(prefix="ytcook_")
+    _cookie_opts: dict = {}
+    _apply_youtube_cookies(_cookie_opts, _cookie_tmp)
+    _cookies_arg: list[str] = []
+    if "cookiefile" in _cookie_opts:
+        _cookies_arg = ["--cookies", _cookie_opts["cookiefile"]]
+    elif "http_headers" in _cookie_opts and "Cookie" in _cookie_opts["http_headers"]:
+        _cookies_arg = ["--add-header", f"Cookie:{_cookie_opts['http_headers']['Cookie']}"]
+
     ytdlp_args = [
         "yt-dlp",
         "--no-playlist",
@@ -240,6 +339,7 @@ async def stream_to_bytes(url: str) -> tuple[bytes, str]:
         "--no-part",
         "--no-warnings",
         "-f", "bestaudio[ext=m4a]/bestaudio/best",
+        *_cookies_arg,
         "-o", "-",
         url,
     ]
@@ -315,6 +415,8 @@ def _download_sync(url: str, out_dir: str) -> tuple[Path, str, str, int]:
             "preferredcodec":   "mp3",
             "preferredquality": "192",
         }]
+
+    _apply_youtube_cookies(opts, out_dir)
 
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)

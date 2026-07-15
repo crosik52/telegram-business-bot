@@ -4045,11 +4045,20 @@
         minesRevealedCount = 0;
         updateBalanceDisplay(balance - bet);
 
-        // Activate grid cells
+        // Reset and activate grid cells
         document.querySelectorAll(".mines-cell").forEach(cell => {
-          cell.classList.remove("inactive");
+          cell.classList.remove("inactive", "safe", "mine", "mine-end");
           cell.textContent = "·";
+          cell.style.pointerEvents = "";
         });
+        const resultEl2 = document.getElementById("minesResult");
+        if (resultEl2) resultEl2.innerHTML = "";
+        const multEl0 = document.getElementById("minesMultEl");
+        const payEl0  = document.getElementById("minesPayoutEl");
+        const cbtn0   = document.getElementById("minesCashoutBtn");
+        if (multEl0) multEl0.textContent = "1.00×";
+        if (payEl0)  payEl0.textContent  = "Забрать 0 монет";
+        if (cbtn0)   cbtn0.disabled = true;
         const statusEl = document.getElementById("minesStatus");
         if (statusEl) statusEl.style.display = "";
         btn.style.display = "none";

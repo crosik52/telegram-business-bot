@@ -208,7 +208,14 @@ class RelationshipRepository:
 
     async def gift(self, sender_id: int, partner_id: int) -> dict:
         """Daily gift: deduct GIFT_COST, add GIFT_TO_PARTNER to partner,
-        and add GIFT_XP to both sides' relationship XP."""
+        and add GIFT_XP to both sides' relationship XP.
+
+        Atomicity guarantee: both the sender debit and the partner credit are
+        performed inside the same SQLAlchemy session transaction.  If the
+        partner has no wallet row yet, _get_wallet() creates one (also within
+        the same transaction).  All changes are committed or rolled back
+        together by the caller — no partial state can persist.
+        """
         rel = await self.get_between(sender_id, partner_id)
         if not rel or rel.status != "active":
             raise ValueError("not_related")

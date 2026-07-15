@@ -299,6 +299,50 @@ async def test_gift_not_related_blocked(session):
         await repo.gift(14001, 14002)
 
 
+@pytest.mark.asyncio
+async def test_gift_partner_no_wallet_atomic(session):
+    """gift() creates the partner's wallet and credits it atomically.
+
+    Scenario: the sender has a wallet, but the partner has never interacted
+    with the bot and therefore has no UserWallet row.  gift() must:
+      1. create the partner's wallet inside the same session transaction,
+      2. debit the sender and credit the partner, and
+      3. flush both changes together — so either both persist or neither does.
+
+    This test verifies the happy-path side: after a successful gift() call both
+    the debit and the newly-created credit are visible in the same session,
+    confirming they were flushed atomically.
+    """
+    from sqlalchemy import select as sa_select
+
+    SENDER = 21001
+    PARTNER = 21002
+
+    # Seed only the sender's wallet — partner intentionally has no row.
+    await _seed_wallet(session, SENDER, 200)
+    await _seed_active_rel(session, SENDER, PARTNER)
+
+    repo = RelationshipRepository(session)
+    result = await repo.gift(SENDER, PARTNER)
+
+    # Both changes must be visible within the same session after the flush.
+    sender_w = (await session.execute(
+        sa_select(UserWallet).where(UserWallet.owner_telegram_id == SENDER)
+    )).scalar_one()
+    partner_w = (await session.execute(
+        sa_select(UserWallet).where(UserWallet.owner_telegram_id == PARTNER)
+    )).scalar_one()
+
+    assert sender_w.balance == 200 - GIFT_COST, (
+        "Sender should be debited GIFT_COST even when partner had no wallet"
+    )
+    assert partner_w.balance == GIFT_TO_PARTNER, (
+        "Partner wallet must be created and credited in the same transaction"
+    )
+    assert result["partner_received"] == GIFT_TO_PARTNER
+    assert result["new_xp"] == GIFT_XP
+
+
 # ---------------------------------------------------------------------------
 # upgrade_tier tests
 # ---------------------------------------------------------------------------

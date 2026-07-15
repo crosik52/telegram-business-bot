@@ -973,10 +973,12 @@ async def wallet_claim_daily(
         premium_bonus      = int(b.get("daily_bonus_coins", 0))
 
     # Marriage daily bonus — each active marriage adds MARRIAGE_DAILY_BONUS coins
+    _marriage_bonus = 0
     try:
         _rel_repo_dc = RelationshipRepository(session)
         _marriages   = await _rel_repo_dc.count_marriages(owner_id)
-        premium_bonus += MARRIAGE_DAILY_BONUS * _marriages
+        _marriage_bonus = MARRIAGE_DAILY_BONUS * _marriages
+        premium_bonus += _marriage_bonus
     except Exception:
         pass
 
@@ -998,6 +1000,7 @@ async def wallet_claim_daily(
         "is_premium": sub is not None,
         "premium_multiplier": result.premium_multiplier,
         "premium_bonus": result.premium_bonus,
+        "marriage_bonus": _marriage_bonus,
     }
 
 
@@ -1845,8 +1848,36 @@ async def rel_break(
     owner_id = _verify_rel_init(payload.init_data, settings)
     repo     = RelationshipRepository(session)
     try:
+        # Remember tier before breaking so we can notify if it was a marriage
+        _rel_before = await repo.get_between(owner_id, payload.partner_id)
+        _was_married = _rel_before and _rel_before.rel_type == "married" and _rel_before.status == "active"
+
         await repo.break_rel(owner_id, payload.partner_id)
         await session.commit()
+
+        # Notify the partner when a marriage ends so they're not surprised
+        if _was_married:
+            try:
+                _bot = get_bot(settings)
+                if _bot:
+                    from app.models.user import TelegramUser as _TU
+                    _me = (await session.execute(
+                        select(_TU).where(_TU.telegram_id == owner_id)
+                    )).scalar_one_or_none()
+                    _parts = [p for p in [
+                        _me.first_name if _me else None,
+                        _me.last_name  if _me else None,
+                    ] if p]
+                    _name = " ".join(_parts) or f"#{owner_id}"
+                    await _bot.send_message(
+                        payload.partner_id,
+                        f"💔 <b>{_name}</b> расторг(ла) ваш брак.\n\n"
+                        f"Ежедневный бонус 💍 +{MARRIAGE_DAILY_BONUS}🪙 больше не начисляется.",
+                        parse_mode="HTML",
+                    )
+            except Exception:
+                pass
+
         return {"ok": True}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

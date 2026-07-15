@@ -4406,7 +4406,10 @@
         updateBalanceDisplay(data.new_balance);
         btn.textContent = `✅ Получено ${data.earned} монет!`;
         if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
-        toastMessage(`🎁 +${data.earned} монет${data.streak_bonus > 0 ? ` (включая +${data.streak_bonus} за серию 🔥)` : ""}!`);
+        const _parts = [`🎁 +${data.earned} монет`];
+        if (data.streak_bonus > 0) _parts.push(`+${data.streak_bonus} за серию 🔥`);
+        if (data.marriage_bonus > 0) _parts.push(`+${data.marriage_bonus} от брака 💍`);
+        toastMessage(_parts.length > 1 ? `${_parts[0]} (${_parts.slice(1).join(", ")})!` : `${_parts[0]}!`);
       } catch {
         btn.disabled = false;
         btn.textContent = "🎁 Получить награду";

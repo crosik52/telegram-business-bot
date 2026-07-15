@@ -3386,6 +3386,12 @@
       }
     }
 
+    function switchCasinoGame(g) {
+      if (g === currentCasinoGame) return;
+      currentCasinoGame = g;
+      renderCasino();
+    }
+
     function renderCasinoGamePicker() {
       const games = [
         { id: "slots", icon: "🎰", label: "Слоты"   },
@@ -3395,7 +3401,8 @@
       ];
       return `<div class="casino-game-picker">
         ${games.map(g => `
-          <button class="cgp-btn${currentCasinoGame === g.id ? " active" : ""}" data-game="${g.id}">
+          <button class="cgp-btn${currentCasinoGame === g.id ? " active" : ""}"
+                  onclick="switchCasinoGame('${g.id}')">
             <span class="cgp-icon">${g.icon}</span>
             <span class="cgp-label">${g.label}</span>
           </button>`).join("")}
@@ -3791,16 +3798,6 @@
       ["flipHeadsBtn","flipTailsBtn"].forEach(id => {
         const btn = document.getElementById(id);
         if (btn) btn.addEventListener("click", () => doFlip(btn.dataset.choice));
-      });
-
-      // ── Game picker ──
-      document.querySelectorAll(".cgp-btn").forEach(btn => {
-        btn.addEventListener("click", () => {
-          const g = btn.dataset.game;
-          if (g === currentCasinoGame) return;
-          currentCasinoGame = g;
-          renderCasino();
-        });
       });
 
       // ── Mines: mine count presets ──

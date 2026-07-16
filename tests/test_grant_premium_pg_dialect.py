@@ -1175,3 +1175,119 @@ async def test_all_soft_deleted_subs_triggers_fresh_subscription(session_factory
             f"Soft-deleted subscription was unexpectedly modified: "
             f"original≈{closest.isoformat()}, got {exp.isoformat()} (Δ={diff:.1f}s)"
         )
+
+
+# ---------------------------------------------------------------------------
+# 10. Unique-active-per-user constraint: extension must succeed without INSERT
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_grant_premium_extension_survives_unique_active_constraint(
+    session_factory, engine
+):
+    """_grant_premium must not raise IntegrityError when the DB enforces a
+    partial unique index on ``(user_telegram_id) WHERE is_active = 1``.
+
+    Background
+    ----------
+    Some schemas add a partial unique index to guarantee at most one active
+    subscription row per user.  If _grant_premium's fresh-create ``else``
+    branch were mistakenly reached for a user who already has an active row,
+    the INSERT would violate this constraint and silently lose the grant.
+
+    The fix is structural: because the SELECT in _grant_premium filters
+    ``is_active = True AND expires_at > now`` and the existing row satisfies
+    both predicates, _grant_premium *always* takes the UPDATE path (not the
+    INSERT path) for a still-valid subscription — no constraint violation can
+    occur.
+
+    This test makes that guarantee explicit and regression-proof:
+
+    Setup
+    -----
+    1. Add a partial unique index:
+         ``UNIQUE (user_telegram_id) WHERE is_active = 1``
+       via raw SQL, simulating the constraint being present in production.
+    2. Seed one active subscription for the user with expires_at = now + 30 d.
+
+    Execution
+    ---------
+    Call ``_grant_premium(uid, +7 days)``.
+
+    Assertions
+    ----------
+    * No exception is raised (in particular, no ``IntegrityError``).
+    * Exactly one row still exists for the user (no spurious INSERT).
+    * That row's ``expires_at`` equals initial_expires + 7 days (±5 s).
+    """
+    uid = 9030
+    days = 7
+    now = dt.datetime.now(dt.timezone.utc)
+    initial_expires = now + dt.timedelta(days=30)
+
+    # Step 1: add the partial unique index before seeding any data.
+    # SQLite partial-index syntax: WHERE is_active = 1  (SQLite stores booleans as 0/1).
+    async with engine.begin() as conn:
+        await conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_active_sub_per_user "
+            "ON user_subscriptions (user_telegram_id) WHERE is_active = 1"
+        ))
+
+    # Step 2: seed one active subscription and the required ReferralConfig row.
+    async with session_factory() as seed:
+        seed.add(UserSubscription(
+            user_telegram_id=uid,
+            is_active=True,
+            status="active",
+            started_at=now,
+            expires_at=initial_expires,
+            granted_by_admin=True,
+            stars_paid=0,
+        ))
+        await _seed_config(seed)
+        await seed.commit()
+
+    # Step 3: call _grant_premium — must NOT raise IntegrityError.
+    try:
+        async with session_factory() as s:
+            repo = ReferralRepository(s)
+            await repo._grant_premium(uid, days)
+            await s.commit()
+    except Exception as exc:
+        raise AssertionError(
+            f"_grant_premium raised {type(exc).__name__} under a unique-active "
+            f"constraint even though the user already has a valid active row. "
+            f"This means the INSERT (else) branch was reached instead of the UPDATE "
+            f"branch — the Premium grant would have been silently lost.\n"
+            f"Original exception: {exc}"
+        ) from exc
+
+    # Step 4: verify exactly one row and correct expires_at.
+    async with session_factory() as check:
+        all_subs = (
+            await check.execute(
+                select(UserSubscription).where(
+                    UserSubscription.user_telegram_id == uid,
+                )
+            )
+        ).scalars().all()
+
+    assert len(all_subs) == 1, (
+        f"Expected exactly 1 subscription row under the unique-active constraint, "
+        f"got {len(all_subs)}. _grant_premium must UPDATE the existing row, not INSERT."
+    )
+
+    sub = all_subs[0]
+    assert sub.is_active is True, "The subscription row must remain active after extension."
+
+    final_expires = sub.expires_at
+    if final_expires.tzinfo is None:
+        final_expires = final_expires.replace(tzinfo=dt.timezone.utc)
+
+    expected = initial_expires + dt.timedelta(days=days)
+    diff = abs((final_expires - expected).total_seconds())
+    assert diff < 5, (
+        f"Extension under unique-active constraint produced wrong expires_at: "
+        f"expected ~{expected.isoformat()}, got {final_expires.isoformat()} "
+        f"(Δ={diff:.1f}s)"
+    )

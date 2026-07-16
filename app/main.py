@@ -215,7 +215,7 @@ async def _note_reminder_loop() -> None:
                                 reminder.owner_telegram_id, reminder.id,
                             )
                         finally:
-                            await repo.mark_sent(reminder.id)
+                            await repo.delete(reminder.id)
                     await session.commit()
         except Exception:
             logger.exception("Note reminder loop error — will retry next cycle")

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.note_reminder import NoteReminder
@@ -46,11 +46,10 @@ class NoteReminderRepository:
         )
         return list(result.scalars().all())
 
-    async def mark_sent(self, reminder_id: int) -> None:
+    async def delete(self, reminder_id: int) -> None:
+        """Delete a reminder row — called after it has been sent (or on cleanup)."""
+        from sqlalchemy import delete as sa_delete  # noqa: PLC0415
         await self._db.execute(
-            update(NoteReminder)
-            .where(NoteReminder.id == reminder_id)
-            .values(is_sent=True)
-            .execution_options(synchronize_session=False)
+            sa_delete(NoteReminder).where(NoteReminder.id == reminder_id)
         )
         await self._db.flush()

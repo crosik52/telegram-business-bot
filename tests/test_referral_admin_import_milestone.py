@@ -2175,3 +2175,154 @@ async def test_grant_premium_concurrent_two_sessions_both_extensions_applied(
             "mutation is racy: both sessions read the same stale expires_at before "
             "either commits, so the second commit silently overwrites the first."
         )
+
+
+# ---------------------------------------------------------------------------
+# Concurrent INSERT test: two simultaneous _grant_premium calls for a user
+# with NO prior subscription must produce exactly one row (Task #62)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_grant_premium_concurrent_fresh_subscription_no_duplicates(
+    session_factory,
+):
+    """Two concurrent _grant_premium calls for a user with *no* prior subscription
+    must produce exactly one active subscription row whose expires_at reflects
+    both grants.
+
+    Background
+    ----------
+    When no active subscription exists both sessions take the INSERT branch of
+    ``_grant_premium`` rather than the atomic UPDATE branch.  Because the two
+    coroutines are scheduled by the asyncio cooperative scheduler both sessions
+    complete their SELECT (finding sub_id=None) before either commits — triggering
+    the race reliably on every run:
+
+        Session A: SELECT -> None  -> INSERT now+7d  -> commits  ->  DB has 1 row
+        Session B: SELECT -> None  -> INSERT now+14d -> commits  ->  DB has 2 rows!
+
+    With the buggy implementation the second INSERT simply creates a second
+    independent row, leaving the user with two separate subscription rows instead
+    of one extended subscription.  Neither row reflects both grants.
+
+    The correct implementation must prevent duplicate rows in the fresh-user
+    branch — for example by using INSERT OR IGNORE / ON CONFLICT DO UPDATE (SQLite)
+    or INSERT ... ON CONFLICT ... DO UPDATE (PostgreSQL) so that the second INSERT
+    extends the row created by the first rather than producing a new one.
+
+    Assertions
+    ----------
+    * Exactly one active ``UserSubscription`` row exists for the user after both
+      concurrent calls commit.
+    * That row's ``expires_at`` equals ``now + grant_a_days + grant_b_days`` —
+      both grants are reflected in a single row.
+
+    If the implementation creates two separate rows the row-count assertion
+    fails, exposing the gap.  If it creates one row but only records one grant
+    the expires_at assertion fails.
+    """
+    import asyncio
+    import datetime as dt
+
+    user_id      = 19002   # distinct from all other tests in this file
+    grant_a_days = 7
+    grant_b_days = 14
+
+    # ── Seed: config only — no subscription for this user ────────────────────
+    async with session_factory() as seed:
+        await _seed_config(
+            seed,
+            milestones=[],
+            referrer_reward_days=0,
+            referee_reward_days=0,
+        )
+        await seed.commit()
+
+    # Confirm there is genuinely no subscription for this user before we start.
+    async with session_factory() as pre_check:
+        existing = (
+            await pre_check.execute(
+                select(UserSubscription).where(
+                    UserSubscription.user_telegram_id == user_id,
+                )
+            )
+        ).scalars().all()
+        assert len(existing) == 0, (
+            f"Pre-condition failed: user_id={user_id} already has "
+            f"{len(existing)} subscription row(s) before the test starts. "
+            "Use a unique user_id to isolate this test."
+        )
+
+    before_grant = dt.datetime.now(dt.timezone.utc)
+
+    # ── Two concurrent _grant_premium calls — both take the INSERT branch ────
+    # asyncio.gather schedules both coroutines on the same event loop.
+    # The cooperative scheduler lets both sessions complete their SELECT
+    # (finding sub_id=None) before either commits — triggering the race
+    # reliably on every run.
+    async def _grant(days: int) -> None:
+        async with session_factory() as sess:
+            repo = ReferralRepository(sess)
+            await repo._grant_premium(user_id, days)
+            await sess.commit()
+
+    await asyncio.gather(_grant(grant_a_days), _grant(grant_b_days))
+
+    after_grant = dt.datetime.now(dt.timezone.utc)
+
+    # ── Verify: exactly one active subscription, expires_at = now + A + B ───
+    async with session_factory() as check:
+        def _tz(ts: dt.datetime) -> dt.datetime:
+            return ts if ts.tzinfo else ts.replace(tzinfo=dt.timezone.utc)
+
+        all_subs = (
+            await check.execute(
+                select(UserSubscription).where(
+                    UserSubscription.user_telegram_id == user_id,
+                    UserSubscription.is_active.is_(True),
+                )
+            )
+        ).scalars().all()
+
+        assert len(all_subs) == 1, (
+            f"Expected exactly 1 active subscription for user_id={user_id} after "
+            f"two concurrent _grant_premium calls on a user with no prior sub, "
+            f"but found {len(all_subs)} row(s).\n\n"
+            f"Row expires_at values: "
+            f"{[_tz(s.expires_at).isoformat() for s in all_subs]}\n\n"
+            "Two rows means both sessions took the INSERT branch independently "
+            "and created duplicate subscriptions — the fresh-user concurrent path "
+            "is not atomic.  The implementation must use an upsert (INSERT ... ON "
+            "CONFLICT DO UPDATE) or another mechanism to merge the second grant "
+            "into the row created by the first, rather than inserting a second "
+            "independent row."
+        )
+
+        sub = all_subs[0]
+        actual_expires = _tz(sub.expires_at)
+        started = _tz(sub.started_at)
+        expected_expires = started + dt.timedelta(days=grant_a_days + grant_b_days)
+
+        # started_at must be within the grant window
+        assert before_grant <= started <= after_grant + dt.timedelta(seconds=5), (
+            f"started_at={started.isoformat()} is outside the expected grant "
+            f"window [{before_grant.isoformat()}, {after_grant.isoformat()}]. "
+            "_grant_premium must set started_at=now when creating a new subscription."
+        )
+
+        # expires_at must reflect BOTH grants (started_at + grant_a + grant_b)
+        delta_s = abs((actual_expires - expected_expires).total_seconds())
+        assert delta_s < 10, (
+            f"The single active subscription's expires_at does not reflect both grants.\n\n"
+            f"  started_at             : {started.isoformat()}\n"
+            f"  expected expires_at    : {expected_expires.isoformat()}  "
+            f"(started + {grant_a_days} + {grant_b_days} = started + "
+            f"{grant_a_days + grant_b_days}d)\n"
+            f"  actual   expires_at    : {actual_expires.isoformat()}\n"
+            f"  delta vs expected      : {delta_s:.1f}s\n\n"
+            f"  Wrong outcome A (only grant_a recorded): started + {grant_a_days}d\n"
+            f"  Wrong outcome B (only grant_b recorded): started + {grant_b_days}d\n\n"
+            "Both grants must be merged into the single subscription row.  "
+            "If expires_at only reflects one of the two grants, the second "
+            "concurrent call silently failed to extend the row created by the first."
+        )

@@ -133,6 +133,9 @@ class RelationshipRepository:
         )
         last_gift = self._last_gift(rel, viewer_id)
         now = dt.datetime.now(dt.timezone.utc)
+        if last_gift is not None and last_gift.tzinfo is None:
+            # SQLite/aiosqlite may strip timezone info; treat as UTC.
+            last_gift = last_gift.replace(tzinfo=dt.timezone.utc)
         gift_ready = last_gift is None or (
             now - last_gift
         ).total_seconds() >= GIFT_COOLDOWN_H * 3600

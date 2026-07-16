@@ -627,3 +627,45 @@ async def test_concurrent_send_request_single_row(file_engine):
         f"successes={successes}, errors={errors}"
     )
     assert successes + errors == 2
+
+
+# ---------------------------------------------------------------------------
+# to_dict: naive last_gift timezone normalisation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_to_dict_gift_ready_with_naive_last_gift_within_cooldown(session):
+    """to_dict() must not raise when last_gift is a naive datetime (SQLite quirk).
+
+    Scenario: last_gift was stored recently (well within GIFT_COOLDOWN_H), but
+    aiosqlite returns it without timezone info.  to_dict() must normalise it to
+    UTC-aware before the subtraction and report gift_ready=False.
+    """
+    rel = await _seed_active_rel(session, 40001, 40002)
+
+    # Simulate a naive datetime returned by SQLite (recent — cooldown still active)
+    rel.last_gift_a = dt.datetime.utcnow()  # naive, no tzinfo
+    await session.flush()
+
+    repo = RelationshipRepository(session)
+    # Force the attribute to be naive (bypass any ORM coercion)
+    rel.last_gift_a = rel.last_gift_a.replace(tzinfo=None)
+
+    # Must not raise TypeError; cooldown is active so gift_ready should be False
+    result = repo.to_dict(rel, viewer_id=40001)
+    assert result["gift_ready"] is False
+
+
+@pytest.mark.asyncio
+async def test_to_dict_gift_ready_with_naive_last_gift_expired_cooldown(session):
+    """to_dict() correctly reports gift_ready=True when naive last_gift is old enough."""
+    rel = await _seed_active_rel(session, 41001, 41002)
+
+    # Naive datetime far enough in the past that the cooldown has expired
+    past_naive = dt.datetime.utcnow() - dt.timedelta(hours=GIFT_COOLDOWN_H + 1)
+    rel.last_gift_a = past_naive.replace(tzinfo=None)
+
+    repo = RelationshipRepository(session)
+    result = repo.to_dict(rel, viewer_id=41001)
+    assert result["gift_ready"] is True

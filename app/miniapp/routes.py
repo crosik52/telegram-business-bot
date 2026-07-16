@@ -376,7 +376,10 @@ def _require_admin(init_data: str) -> dict:
 
 @router.get("/app", response_model=None)
 async def miniapp_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request, "miniapp.html", {})
+    response = templates.TemplateResponse(request, "miniapp.html", {})
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    return response
 
 
 @router.get("/terms", response_model=None)

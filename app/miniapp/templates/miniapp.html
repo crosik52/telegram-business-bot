@@ -3531,15 +3531,18 @@
       try {
         const body = JSON.stringify({initData});
         const hdr  = {"Content-Type": "application/json"};
-        const _mkSignal = (ms) => { try { return AbortSignal.timeout(ms); } catch(_){} const c=new AbortController(); setTimeout(()=>c.abort(),ms); return c.signal; };
-        const post = (url) => fetch(url, {method:"POST", headers:hdr, body, signal:_mkSignal(12000)}).catch(()=>null);
+        const post = (url) => fetch(url, {method:"POST", headers:hdr, body}).catch(()=>null);
+        const _hardTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error("load_timeout")), 14000));
 
-        const [statsRes, actRes, wordsRes, digestRes, relRes] = await Promise.all([
-          post("/app/api/stats"),
-          post("/app/api/activity"),
-          post("/app/api/stats/words"),
-          post("/app/api/stats/digest"),
-          post("/app/api/relationships/list"),
+        const [statsRes, actRes, wordsRes, digestRes, relRes] = await Promise.race([
+          Promise.all([
+            post("/app/api/stats"),
+            post("/app/api/activity"),
+            post("/app/api/stats/words"),
+            post("/app/api/stats/digest"),
+            post("/app/api/relationships/list"),
+          ]),
+          _hardTimeout,
         ]);
 
         if (!statsRes.ok) throw new Error("bad_status");

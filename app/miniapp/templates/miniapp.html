@@ -3531,7 +3531,8 @@
       try {
         const body = JSON.stringify({initData});
         const hdr  = {"Content-Type": "application/json"};
-        const post = (url) => fetch(url, {method:"POST", headers:hdr, body, signal:AbortSignal.timeout(12000)}).catch(()=>null);
+        const _mkSignal = (ms) => { try { return AbortSignal.timeout(ms); } catch(_){} const c=new AbortController(); setTimeout(()=>c.abort(),ms); return c.signal; };
+        const post = (url) => fetch(url, {method:"POST", headers:hdr, body, signal:_mkSignal(12000)}).catch(()=>null);
 
         const [statsRes, actRes, wordsRes, digestRes, relRes] = await Promise.all([
           post("/app/api/stats"),

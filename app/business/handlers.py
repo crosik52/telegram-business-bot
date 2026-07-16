@@ -182,38 +182,17 @@ async def _handle_dot_save(
             ref = result.scalar_one_or_none()
 
             if ref is None:
-                # Message wasn't captured by the bot (received while offline,
-                # or Telegram didn't relay it).  Try Telethon by coordinates.
-                logger.warning(
-                    "dot-save: reply_to=%s not in DB (chat=%s) — trying Telethon",
+                # Message not in DB — could be a bot-sent message (e.g. a
+                # downloaded social-media video), the owner's own message, or
+                # a message received while the bot was offline.
+                # Silently skip: we cannot distinguish these cases from a genuine
+                # view-once intercept attempt, so notifying the owner would be
+                # noisy and confusing.
+                logger.info(
+                    "dot-save: reply_to=%s not in DB (chat=%s) — skipping silently "
+                    "(bot-sent video or message received while offline)",
                     reply_to_message_id, chat_id,
                 )
-                from app.services import telethon_service as _tls
-                _raw = await _tls.download_message_media(chat_id, reply_to_message_id) \
-                    if _tls.is_available() else None
-                if _raw:
-                    from aiogram.types import BufferedInputFile as _BIF2
-                    await bot.send_document(
-                        document=_BIF2(_raw, filename="media"),
-                        chat_id=owner_id,
-                        caption="📥 Сохранено (сообщение не было в базе бота)",
-                    )
-                else:
-                    hint = (
-                        "\n\n<i>Совет: настройте TELETHON_SESSION_STR для надёжного "
-                        "перехвата view-once медиа.</i>"
-                        if not _tls.is_available() else ""
-                    )
-                    await bot.send_message(
-                        chat_id=owner_id,
-                        text=(
-                            f"{E.WARNING} Сообщение не найдено в базе бота — "
-                            "возможно, оно пришло пока бот не работал, "
-                            "или Telegram не передаёт такой тип медиа ботам."
-                            f"{hint}"
-                        ),
-                        parse_mode="HTML",
-                    )
                 return
 
             if ref.media_type in _NO_FILE_TYPES:

@@ -203,52 +203,122 @@ async def _handle_dot_save(
                 ref.media_type.value, ref.file_id,
             )
 
-            # ── Gate: skip regular media, only forward self-destructing ───────
-            # Try to download the file right now.
-            # • Download succeeds → file is accessible normally → regular media → skip.
-            # • Download fails    → Telegram blocked access → self-destructing → proceed.
+            # ── Download strategy (three tiers) ──────────────────────────────
+            #
+            # 1. Already cached bytes in DB  — works even after file_id expiry.
+            # 2. Bot API fresh download       — works for regular + some SD media.
+            # 3. Telethon user-client         — works for view-once / ttl_period
+            #                                   media that the Bot API blocks.
+            #
+            # If the file is accessible via Bot API it is regular media → we
+            # still forward it (owner replied explicitly, so they want it).
+            # If Bot API fails → try Telethon before giving up.
+
+            caption = ref.caption or ref.text or None
+
+            # ── Tier 1: cached bytes already in DB ───────────────────────────
+            cached_bytes = await media_cache_service.get_cached_bytes(
+                session, ref.file_unique_id
+            )
+            if cached_bytes:
+                logger.info("dot-save: serving %s from cache", ref.media_type.value)
+                await _try_send_media(
+                    bot, owner_id, ref.media_type, ref.file_id,
+                    file_unique_id=ref.file_unique_id,
+                    session=session,
+                    caption=caption,
+                )
+                return
+
+            # ── Tier 2: Bot API fresh download ────────────────────────────────
             fresh_ok = await media_cache_service.download_and_cache(
                 bot, session, ref.file_id, ref.file_unique_id, ref.media_type.value
             )
             if fresh_ok:
-                logger.info(
-                    "dot-save: skipping — download succeeded = regular media (type=%s msg=%s)",
-                    ref.media_type.value, reply_to_message_id,
-                )
                 await session.flush()
-                return
+                sent = await _try_send_media(
+                    bot, owner_id, ref.media_type, ref.file_id,
+                    file_unique_id=ref.file_unique_id,
+                    session=session,
+                    caption=caption,
+                )
+                if sent:
+                    logger.info(
+                        "dot-save: ✓ sent %s via bot_api to owner=%s",
+                        ref.media_type.value, owner_id,
+                    )
+                    return
 
+            # ── Tier 3: Telethon user-client ──────────────────────────────────
+            # Bot API blocked access (view-once / ttl_period).
+            # Try fetching the raw bytes directly via MTProto.
             logger.info(
-                "dot-save: download blocked by Telegram — treating as self-destructing"
+                "dot-save: bot_api failed for %s — trying Telethon (chat=%s msg=%s)",
+                ref.media_type.value, ref.chat_id, ref.message_id,
             )
+            from app.services import telethon_service as _tls
+            tg_bytes: bytes | None = None
+            if _tls.is_available():
+                tg_bytes = await _tls.download_message_media(
+                    ref.chat_id, ref.message_id
+                )
 
-            caption = ref.caption or ref.text or None
-            sent = await _try_send_media(
-                bot, owner_id, ref.media_type, ref.file_id,
-                file_unique_id=ref.file_unique_id,
-                session=session,
-                caption=caption,
+            if tg_bytes:
+                from aiogram.types import BufferedInputFile as _BIF
+                ext = {
+                    "photo": "jpg", "video": "mp4", "voice": "ogg",
+                    "video_note": "mp4", "audio": "mp3", "document": "bin",
+                }.get(ref.media_type.value, "bin")
+                buf_file = _BIF(tg_bytes, filename=f"media.{ext}")
+                kw: dict = {"chat_id": owner_id}
+                if caption:
+                    kw["caption"] = caption
+                try:
+                    match ref.media_type:
+                        case MediaType.PHOTO:
+                            await bot.send_photo(photo=buf_file, **kw)
+                        case MediaType.VIDEO:
+                            await bot.send_video(video=buf_file, **kw)
+                        case MediaType.VOICE:
+                            await bot.send_voice(voice=buf_file, **kw)
+                        case MediaType.VIDEO_NOTE:
+                            await bot.send_video_note(
+                                video_note=buf_file, chat_id=owner_id
+                            )
+                        case MediaType.AUDIO:
+                            await bot.send_audio(audio=buf_file, **kw)
+                        case _:
+                            await bot.send_document(document=buf_file, **kw)
+                    logger.info(
+                        "dot-save: ✓ sent %s via telethon to owner=%s",
+                        ref.media_type.value, owner_id,
+                    )
+                    return
+                except Exception as _send_exc:
+                    logger.warning(
+                        "dot-save: telethon bytes obtained but send failed: %s",
+                        _send_exc,
+                    )
+
+            # ── All tiers failed ──────────────────────────────────────────────
+            logger.warning(
+                "dot-save: ✗ all methods failed for %s owner=%s (chat=%s msg=%s)",
+                ref.media_type.value, owner_id, ref.chat_id, ref.message_id,
             )
-
-            if sent:
-                logger.info(
-                    "dot-save: ✓ sent %s to owner=%s", ref.media_type.value, owner_id,
-                )
-            else:
-                logger.warning(
-                    "dot-save: ✗ could not send %s to owner=%s "
-                    "(file_id expired or Telegram blocked access)",
-                    ref.media_type.value, owner_id,
-                )
-                await bot.send_message(
-                    chat_id=owner_id,
-                    text=(
-                        f"{E.WARNING} Не удалось сохранить медиа — "
-                        "Telegram заблокировал доступ к файлу.\n"
-                        "Самоудаляющиеся медиа с таймером защищены на уровне API."
-                    ),
-                    parse_mode="HTML",
-                )
+            _telethon_hint = (
+                "\n\n<i>Совет: настройте Telethon (TELETHON_SESSION_STR) для "
+                "надёжного скачивания самоудаляющихся медиа.</i>"
+                if not _tls.is_available() else ""
+            )
+            await bot.send_message(
+                chat_id=owner_id,
+                text=(
+                    f"{E.WARNING} Не удалось сохранить медиа — "
+                    "файл уже недоступен (самоудалился или защищён)."
+                    f"{_telethon_hint}"
+                ),
+                parse_mode="HTML",
+            )
 
     except Exception:
         logger.exception(

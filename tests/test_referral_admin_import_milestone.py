@@ -907,3 +907,119 @@ async def test_grant_premium_creates_new_subscription_when_previous_expired(
                 f"by {delta_s:.1f}s. "
                 "_grant_premium must set expires_at = now + days for a new subscription."
             )
+
+
+# ---------------------------------------------------------------------------
+# Tie-breaking test: _grant_premium picks the row with the latest expires_at
+# when a user has multiple active subscriptions.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_grant_premium_extends_latest_subscription_when_multiple_active(
+    session_factory,
+):
+    """_grant_premium must extend the row with the furthest-future expires_at
+    when a user has two overlapping active subscriptions.
+
+    Scenario
+    --------
+    1. Seed a user with two active subscriptions:
+       - ``sub_earlier`` expires 10 days from now.
+       - ``sub_later``  expires 20 days from now  (the later one — should be picked).
+    2. Call ``_grant_premium`` with 7 extra days.
+    3. Assert that ``sub_later.expires_at`` moved forward by exactly 7 days.
+    4. Assert that ``sub_earlier.expires_at`` is unchanged.
+
+    This exercises the ``.order_by(UserSubscription.expires_at.desc()).limit(1)``
+    tie-breaking in ``_grant_premium``.  If the ORDER BY were missing or reversed,
+    ``sub_earlier`` would be extended while ``sub_later`` (the row the endpoint
+    reads) would stay put — and the user would see no change in their expiry.
+    """
+    import datetime as dt
+
+    user_id = 9700
+    grant_days = 7
+    earlier_days = 10
+    later_days = 20
+
+    async with session_factory() as seed:
+        await _seed_config(seed, milestones=[], referrer_reward_days=0, referee_reward_days=0)
+
+        now = dt.datetime.now(dt.timezone.utc)
+
+        sub_earlier = UserSubscription(
+            user_telegram_id=user_id,
+            is_active=True,
+            started_at=now - dt.timedelta(days=1),
+            expires_at=now + dt.timedelta(days=earlier_days),
+            granted_by_admin=True,
+            stars_paid=0,
+        )
+        sub_later = UserSubscription(
+            user_telegram_id=user_id,
+            is_active=True,
+            started_at=now - dt.timedelta(days=1),
+            expires_at=now + dt.timedelta(days=later_days),
+            granted_by_admin=True,
+            stars_paid=0,
+        )
+        seed.add(sub_earlier)
+        seed.add(sub_later)
+        await seed.commit()
+
+        earlier_id = sub_earlier.id
+        later_id = sub_later.id
+        original_earlier_expires = sub_earlier.expires_at
+        original_later_expires = sub_later.expires_at
+
+    # Call _grant_premium directly via a ReferralRepository instance
+    async with session_factory() as sess:
+        repo = ReferralRepository(sess)
+        await repo._grant_premium(user_id, grant_days)
+        await sess.commit()
+
+    # Verify the row with the later expires_at was extended; the other unchanged
+    async with session_factory() as check:
+        def _tz(ts: dt.datetime) -> dt.datetime:
+            return ts if ts.tzinfo else ts.replace(tzinfo=dt.timezone.utc)
+
+        later_row = (
+            await check.execute(
+                select(UserSubscription).where(UserSubscription.id == later_id)
+            )
+        ).scalar_one()
+        earlier_row = (
+            await check.execute(
+                select(UserSubscription).where(UserSubscription.id == earlier_id)
+            )
+        ).scalar_one()
+
+        actual_later_expires  = _tz(later_row.expires_at)
+        actual_earlier_expires = _tz(earlier_row.expires_at)
+
+        # Normalise seed timestamps to UTC for comparison
+        original_later_expires_utc  = _tz(original_later_expires)
+        original_earlier_expires_utc = _tz(original_earlier_expires)
+
+        expected_later_expires = original_later_expires_utc + dt.timedelta(days=grant_days)
+
+        delta_later = abs((actual_later_expires - expected_later_expires).total_seconds())
+        assert delta_later < 5, (
+            f"_grant_premium did not extend the row with the later expires_at.\n"
+            f"  sub_later (id={later_id}):\n"
+            f"    original  : {original_later_expires_utc.isoformat()}\n"
+            f"    expected  : {expected_later_expires.isoformat()}\n"
+            f"    actual    : {actual_later_expires.isoformat()}\n"
+            f"    delta     : {delta_later:.1f}s\n"
+            "This means _grant_premium either picked the wrong row or did not extend at all."
+        )
+
+        delta_earlier = abs((actual_earlier_expires - original_earlier_expires_utc).total_seconds())
+        assert delta_earlier < 5, (
+            f"_grant_premium must leave the earlier subscription untouched, but it was modified.\n"
+            f"  sub_earlier (id={earlier_id}):\n"
+            f"    original  : {original_earlier_expires_utc.isoformat()}\n"
+            f"    actual    : {actual_earlier_expires.isoformat()}\n"
+            f"    delta     : {delta_earlier:.1f}s\n"
+            "Only the row with the latest expires_at should be extended."
+        )

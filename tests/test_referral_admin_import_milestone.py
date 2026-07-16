@@ -1273,6 +1273,134 @@ async def test_grant_premium_extends_active_row_leaves_deactivated_row_untouched
 
 
 # ---------------------------------------------------------------------------
+# Create-branch / is_active=False test: _grant_premium must INSERT a fresh
+# subscription when the only prior row is fully deactivated (is_active=False).
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_grant_premium_creates_new_subscription_when_only_deactivated_row_exists(
+    session_factory,
+):
+    """_grant_premium must create a new active subscription when the only existing
+    row has is_active=False (fully deactivated), exercising both query predicates.
+
+    Scenario
+    --------
+    1. Seed a user with exactly one subscription row:
+       - ``sub_deactivated`` : is_active=False, expires_at is 10 days in the past.
+         Both the is_active predicate (``is_active.is_(True)``) and the time
+         predicate (``expires_at > now``) must independently exclude this row.
+    2. Call ``_grant_premium`` with 14 days.
+    3. Assert a **new** row is inserted — different primary-key id, is_active=True,
+       started_at≈now, expires_at≈now+14d.
+    4. Assert the original deactivated row is completely untouched (is_active remains
+       False, expires_at unchanged).
+
+    This is distinct from the existing expired-but-active-flagged test
+    (test_grant_premium_creates_new_subscription_when_previous_expired), which only
+    exercises the ``expires_at > now`` predicate.  Here is_active=False means the
+    ``is_active.is_(True)`` predicate alone would exclude the row regardless of time.
+    A regression that accidentally reads is_active=False rows would either update the
+    wrong row or skip the INSERT entirely, leaving the user without Premium.
+    """
+    import datetime as dt
+
+    user_id = 9901
+    grant_days = 14
+    deactivated_days_ago = 10
+
+    async with session_factory() as seed:
+        await _seed_config(seed, milestones=[], referrer_reward_days=0, referee_reward_days=0)
+
+        now = dt.datetime.now(dt.timezone.utc)
+
+        sub_deactivated = UserSubscription(
+            user_telegram_id=user_id,
+            is_active=False,  # explicitly deactivated
+            started_at=now - dt.timedelta(days=deactivated_days_ago + 30),
+            expires_at=now - dt.timedelta(days=deactivated_days_ago),
+            granted_by_admin=True,
+            stars_paid=0,
+        )
+        seed.add(sub_deactivated)
+        await seed.commit()
+
+        deactivated_id = sub_deactivated.id
+        original_deactivated_expires = sub_deactivated.expires_at
+
+    # Call _grant_premium — no active subscription exists, so create-branch must fire
+    async with session_factory() as sess:
+        repo = ReferralRepository(sess)
+        await repo._grant_premium(user_id, grant_days)
+        await sess.commit()
+
+    # Verify a new active subscription was inserted and the old row is untouched
+    async with session_factory() as check:
+        def _tz(ts: dt.datetime) -> dt.datetime:
+            return ts if ts.tzinfo else ts.replace(tzinfo=dt.timezone.utc)
+
+        all_subs = (
+            await check.execute(
+                select(UserSubscription).where(
+                    UserSubscription.user_telegram_id == user_id
+                ).order_by(UserSubscription.id)
+            )
+        ).scalars().all()
+
+        assert len(all_subs) == 2, (
+            f"_grant_premium must INSERT a new subscription row when the only existing row "
+            f"has is_active=False.  Found {len(all_subs)} row(s) for user {user_id}.\n"
+            "If only 1 row exists, _grant_premium silently skipped the INSERT — "
+            "possibly because it accidentally read the deactivated row as a match."
+        )
+
+        # Identify new vs old row by id
+        old_row = next(r for r in all_subs if r.id == deactivated_id)
+        new_row = next(r for r in all_subs if r.id != deactivated_id)
+
+        # New row must be active with correct timestamps
+        assert new_row.is_active is True, (
+            f"_grant_premium created a row with is_active={new_row.is_active!r} — expected True."
+        )
+
+        now_utc = dt.datetime.now(dt.timezone.utc)
+        new_started = _tz(new_row.started_at)
+        new_expires = _tz(new_row.expires_at)
+
+        delta_started = abs((new_started - now_utc).total_seconds())
+        assert delta_started < 10, (
+            f"_grant_premium must set started_at≈now on the new subscription.\n"
+            f"  started_at : {new_started.isoformat()}\n"
+            f"  now        : {now_utc.isoformat()}\n"
+            f"  delta      : {delta_started:.1f}s"
+        )
+
+        expected_expires = now_utc + dt.timedelta(days=grant_days)
+        delta_expires = abs((new_expires - expected_expires).total_seconds())
+        assert delta_expires < 10, (
+            f"_grant_premium must set expires_at≈now+{grant_days}d on the new subscription.\n"
+            f"  expires_at : {new_expires.isoformat()}\n"
+            f"  expected   : {expected_expires.isoformat()}\n"
+            f"  delta      : {delta_expires:.1f}s"
+        )
+
+        # Original deactivated row must be completely untouched
+        assert old_row.is_active is False, (
+            f"_grant_premium changed is_active on the deactivated row (id={deactivated_id}) "
+            f"to {old_row.is_active!r} — it must stay False."
+        )
+        original_deactivated_utc = _tz(original_deactivated_expires)
+        delta_old = abs((_tz(old_row.expires_at) - original_deactivated_utc).total_seconds())
+        assert delta_old < 5, (
+            f"_grant_premium modified expires_at on the deactivated row (id={deactivated_id}).\n"
+            f"  original : {original_deactivated_utc.isoformat()}\n"
+            f"  actual   : {_tz(old_row.expires_at).isoformat()}\n"
+            f"  delta    : {delta_old:.1f}s\n"
+            "The deactivated row must never be touched by _grant_premium."
+        )
+
+
+# ---------------------------------------------------------------------------
 # Savepoint rollback tests: _grant_premium must not be silently skipped
 # after a rolled-back savepoint inside evaluate_and_grant_milestones.
 # ---------------------------------------------------------------------------

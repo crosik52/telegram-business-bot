@@ -159,28 +159,46 @@ class ReferralRepository:
 
         Returns (referral, list_of_rewards_granted).
         If nothing to do, returns (None, []).
+
+        Uses an atomic UPDATE WHERE status='pending' so that two concurrent
+        calls for the same referred user can never both activate the referral:
+        exactly one UPDATE will match (rowcount=1) and the other sees
+        rowcount=0 and returns early.  This guard works for both SQLite and
+        PostgreSQL without relying on SELECT … FOR UPDATE row-level locking.
         """
         if not has_business_connection:
             return None, []
 
-        result = await self._db.execute(
-            select(Referral).where(
+        now = dt.datetime.now(dt.timezone.utc)
+
+        # Atomic claim: only one concurrent transaction can flip status from
+        # "pending" → "active"; the other will get rowcount == 0 and bail out.
+        claim_result = await self._db.execute(
+            update(Referral)
+            .where(
                 Referral.referred_telegram_id == referred_telegram_id,
                 Referral.status == "pending",
             )
+            .values(status="active", activated_at=now)
+            .execution_options(synchronize_session="fetch")
         )
-        ref = result.scalar_one_or_none()
+        if claim_result.rowcount == 0:
+            return None, []
+
+        # Load the row we just claimed so we can read referrer_id, ref.id, etc.
+        ref_result = await self._db.execute(
+            select(Referral).where(
+                Referral.referred_telegram_id == referred_telegram_id,
+                Referral.status == "active",
+            )
+        )
+        ref = ref_result.scalar_one_or_none()
         if ref is None:
+            # Should not happen, but be safe.
             return None, []
 
         cfg = await self.get_config()
-        now = dt.datetime.now(dt.timezone.utc)
         rewards: list[dict] = []
-
-        # Mark active
-        ref.status = "active"
-        ref.activated_at = now
-        await self._db.flush()
 
         # ── Referee welcome reward ────────────────────────────────────────────
         if cfg.referee_reward_days > 0:

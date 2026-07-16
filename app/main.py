@@ -36,6 +36,10 @@ _STREAK_REMINDER_INTERVAL_MINUTES = 60
 _MILESTONE_SWEEP_INTERVAL_MINUTES = 15
 _MILESTONE_SWEEP_BATCH_SIZE = 50
 _MILESTONE_SWEEP_MAX_BATCHES = 100  # safety cap: at most 5 000 rows per cycle
+# After this many consecutive evaluation failures the sweep stops retrying a
+# referral (circuit-breaker).  An operator can reset evaluation_failures to 0
+# via SQL to re-enable processing.
+_MILESTONE_SWEEP_MAX_FAILURES = 10
 
 
 async def _streak_reminder_loop() -> None:
@@ -91,6 +95,7 @@ async def _milestone_sweep_loop() -> None:
                     unchecked = await repo.list_unchecked_referral_ids(
                         limit=_MILESTONE_SWEEP_BATCH_SIZE,
                         after_id=after_id,
+                        max_failures=_MILESTONE_SWEEP_MAX_FAILURES,
                     )
 
                 if not unchecked:
@@ -104,9 +109,11 @@ async def _milestone_sweep_loop() -> None:
 
                 # Phase B: evaluate milestones for each row in its own session
                 # so that a single failure does not block the rest.
-                # Exceptions are caught silently here and aggregated into a
-                # single warning at the end of the cycle to avoid flooding logs
-                # when a large number of referrals are persistently unchecked.
+                # Exceptions are caught here and aggregated into a single
+                # warning at the end of the cycle to avoid flooding logs.
+                # On failure the per-row evaluation_failures counter is
+                # incremented; once it reaches _MILESTONE_SWEEP_MAX_FAILURES
+                # the row is excluded from future sweeps (circuit-breaker).
                 failed_ids: list[int] = []
                 for ref_id, referrer_id in unchecked:
                     try:
@@ -122,6 +129,19 @@ async def _milestone_sweep_loop() -> None:
                             ref_id,
                             exc,
                         )
+                        # Increment the per-row failure counter in its own
+                        # session so a rollback of the evaluation session
+                        # does not prevent the counter from being persisted.
+                        try:
+                            async for session in get_db_session():
+                                repo = ReferralRepository(session)
+                                await repo.increment_evaluation_failures(ref_id)
+                        except Exception:  # noqa: BLE001
+                            logger.debug(
+                                "Milestone sweep: could not increment evaluation_failures "
+                                "for referral_id=%s",
+                                ref_id,
+                            )
 
                 # If the batch was smaller than the limit the table is exhausted.
                 if len(unchecked) < _MILESTONE_SWEEP_BATCH_SIZE:
@@ -206,6 +226,9 @@ async def lifespan(app: FastAPI):
             ))
             await conn.execute(text(
                 "ALTER TABLE referrals ADD COLUMN IF NOT EXISTS referred_username VARCHAR(64)"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE referrals ADD COLUMN IF NOT EXISTS evaluation_failures INTEGER NOT NULL DEFAULT 0"
             ))
 
     if settings.webhook_base_url:

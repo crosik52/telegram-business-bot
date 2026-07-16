@@ -1,13 +1,16 @@
-"""Integration test: milestone sweep retries correctly after a server restart mid-batch.
+"""Integration tests: milestone sweep retry and circuit-breaker behaviour.
 
 Scenario
 --------
 The background ``_milestone_sweep_loop`` guarantees at-least-once milestone
 evaluation by relying on ``milestone_checked=False`` to identify referrals
-whose Phase-2 evaluation was interrupted (e.g. the server restarted after
-Phase 1 committed but before ``evaluate_and_grant_milestones`` could run).
+whose Phase-2 evaluation was interrupted.  To prevent a permanently-broken
+referral from being retried forever, each failed evaluation increments an
+``evaluation_failures`` counter; once that counter reaches
+``_MILESTONE_SWEEP_MAX_FAILURES`` the sweep stops selecting the row
+(circuit-breaker).
 
-This test file verifies the full retry path:
+This test file verifies four complementary paths:
 
 1. ``test_unchecked_after_phase1_without_phase2``
    Phase 1 (try_activate) is committed; Phase 2 is intentionally skipped.
@@ -27,6 +30,13 @@ This test file verifies the full retry path:
 3. ``test_sweep_skips_already_checked_referral``
    Referral that went through both Phase 1 and Phase 2 normally is NOT
    returned by ``list_unchecked_referral_ids``.
+
+4. ``test_sweep_stops_retrying_after_max_failures``
+   A referral whose evaluation always raises is incremented on every attempt.
+   Once ``evaluation_failures`` reaches the configured threshold the row is
+   no longer returned by ``list_unchecked_referral_ids``, confirming the
+   circuit-breaker works.  The test also documents the design intent: a row
+   can be re-enabled by an operator resetting the counter to 0.
 
 Strategy
 --------
@@ -305,4 +315,108 @@ async def test_sweep_skips_already_checked_referral(session_factory):
         f"Referral id={ref.id} appeared in unchecked list after Phase 2 completed. "
         "milestone_checked was not set to True, or list_unchecked_referral_ids "
         "is not filtering correctly."
+    )
+
+
+@pytest.mark.asyncio
+async def test_sweep_stops_retrying_after_max_failures(session_factory):
+    """The sweep stops selecting a referral once its evaluation_failures counter
+    reaches the configured threshold (circuit-breaker).
+
+    Design note — bounded retry vs at-least-once
+    --------------------------------------------
+    The sweep uses at-least-once semantics: any referral with
+    milestone_checked=False is retried on the next cycle.  To prevent a
+    permanently-broken referral (e.g. DB constraint violation or bad config)
+    from causing log noise on every 15-minute cycle, each failed evaluation
+    increments the ``evaluation_failures`` column.  Once the counter reaches
+    ``max_failures``, ``list_unchecked_referral_ids`` excludes the row.
+
+    An operator can re-enable processing by resetting the counter to 0 via SQL:
+        UPDATE referrals SET evaluation_failures = 0 WHERE id = <id>;
+
+    This test verifies:
+    1. While evaluation_failures < threshold the referral IS returned.
+    2. After evaluation_failures reaches the threshold the referral is NOT
+       returned — the sweep stops retrying it.
+    3. milestone_checked remains False (no false positive on the happy path).
+    4. Resetting the counter re-enables selection (operator recovery path).
+    """
+    from sqlalchemy import update as sa_update
+
+    MAX_FAILURES = 3  # small threshold so the test is fast
+
+    # Seed + Phase 1 only (milestone_checked stays False)
+    async with session_factory() as seed:
+        await _seed_db(seed)
+    ref = await _phase1_activate_and_commit(session_factory)
+
+    # ── Accumulate failures one-by-one and verify the referral is still visible ──
+    for attempt in range(MAX_FAILURES):
+        # The referral must still appear before hitting the threshold
+        async with session_factory() as check_sess:
+            repo = ReferralRepository(check_sess)
+            visible = await repo.list_unchecked_referral_ids(
+                limit=50, max_failures=MAX_FAILURES
+            )
+        assert ref.id in [r[0] for r in visible], (
+            f"Referral disappeared from unchecked list after {attempt} failure(s) "
+            f"but threshold is {MAX_FAILURES}. Circuit-breaker fired too early."
+        )
+
+        # Simulate one failed evaluation: increment the counter
+        async with session_factory() as fail_sess:
+            repo = ReferralRepository(fail_sess)
+            await repo.increment_evaluation_failures(ref.id)
+            await fail_sess.commit()
+
+    # ── After reaching the threshold the row must be excluded ────────────────
+    async with session_factory() as threshold_check:
+        repo = ReferralRepository(threshold_check)
+        visible_after = await repo.list_unchecked_referral_ids(
+            limit=50, max_failures=MAX_FAILURES
+        )
+
+    assert ref.id not in [r[0] for r in visible_after], (
+        f"Referral id={ref.id} is still returned by list_unchecked_referral_ids "
+        f"after {MAX_FAILURES} failures — the circuit-breaker did not engage. "
+        "The sweep will keep retrying this referral forever."
+    )
+
+    # ── milestone_checked must still be False (no false success) ─────────────
+    async with session_factory() as flag_check:
+        row = (
+            await flag_check.execute(
+                select(Referral).where(Referral.id == ref.id)
+            )
+        ).scalar_one_or_none()
+
+        assert row is not None
+        assert row.milestone_checked is False, (
+            "milestone_checked must remain False — the circuit-breaker suppresses "
+            "retries but does not pretend the milestone was successfully evaluated."
+        )
+        assert row.evaluation_failures >= MAX_FAILURES, (
+            f"evaluation_failures should be >= {MAX_FAILURES} after {MAX_FAILURES} "
+            f"recorded failures, got {row.evaluation_failures}."
+        )
+
+    # ── Operator recovery: resetting the counter re-enables selection ─────────
+    async with session_factory() as reset_sess:
+        await reset_sess.execute(
+            sa_update(Referral)
+            .where(Referral.id == ref.id)
+            .values(evaluation_failures=0)
+        )
+        await reset_sess.commit()
+
+    async with session_factory() as recovered_check:
+        repo = ReferralRepository(recovered_check)
+        visible_after_reset = await repo.list_unchecked_referral_ids(
+            limit=50, max_failures=MAX_FAILURES
+        )
+
+    assert ref.id in [r[0] for r in visible_after_reset], (
+        f"Referral id={ref.id} did not reappear in the unchecked list after the "
+        "operator reset evaluation_failures to 0. The recovery path is broken."
     )

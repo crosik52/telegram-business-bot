@@ -91,6 +91,11 @@ class Referral(Base):
     # Whether milestone reward has been evaluated for the *referrer* after this activation
     milestone_checked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
+    # How many times the background sweep failed to evaluate milestones for this referral.
+    # Once this reaches _MILESTONE_SWEEP_MAX_FAILURES the sweep stops selecting it
+    # (to avoid infinite retries for permanently-broken rows).
+    evaluation_failures: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

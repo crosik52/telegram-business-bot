@@ -316,7 +316,7 @@ class ReferralRepository:
     # ── Unchecked-milestone sweep (called by background loop) ─────────────────
 
     async def list_unchecked_referral_ids(
-        self, limit: int = 50, after_id: int = 0
+        self, limit: int = 50, after_id: int = 0, max_failures: int = 10
     ) -> list[tuple[int, int]]:
         """Return (referral_id, referrer_telegram_id) pairs for active referrals
         whose milestones have not yet been evaluated.
@@ -328,6 +328,12 @@ class ReferralRepository:
         seen in the previous batch so that each batch advances monotonically and
         a referral that fails (and therefore keeps ``milestone_checked=False``)
         is not re-selected within the same sweep cycle.
+
+        ``max_failures`` caps the retry count: rows whose ``evaluation_failures``
+        column has reached this threshold are excluded from the result.  They
+        will no longer be retried by the sweep until an operator resets the
+        counter.  This prevents a persistently-broken referral from causing
+        infinite retries and log noise every cycle.
         """
         result = await self._db.execute(
             select(Referral.id, Referral.referrer_telegram_id)
@@ -335,11 +341,29 @@ class ReferralRepository:
                 Referral.status == "active",
                 Referral.milestone_checked.is_(False),
                 Referral.id > after_id,
+                Referral.evaluation_failures < max_failures,
             )
             .order_by(Referral.id)
             .limit(limit)
         )
         return result.all()
+
+    async def increment_evaluation_failures(self, referral_id: int) -> None:
+        """Atomically increment the failure counter for a referral.
+
+        Called by the background sweep when ``evaluate_and_grant_milestones``
+        raises an exception.  Once the counter reaches the configured threshold
+        (``max_failures`` in ``list_unchecked_referral_ids``), the sweep stops
+        selecting that referral, preventing infinite retries for
+        permanently-broken rows.
+        """
+        await self._db.execute(
+            update(Referral)
+            .where(Referral.id == referral_id)
+            .values(evaluation_failures=Referral.evaluation_failures + 1)
+            .execution_options(synchronize_session="fetch")
+        )
+        await self._db.flush()
 
     # ── User-facing stats ────────────────────────────────────────────────────
 

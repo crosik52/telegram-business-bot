@@ -1453,12 +1453,21 @@ async def on_note_remind(callback: CallbackQuery, bot: Bot) -> None:
         from app.repositories.note_reminder_repository import NoteReminderRepository  # noqa: PLC0415
         async for db_session in get_db_session():
             repo = NoteReminderRepository(db_session)
-            reminder = await repo.create(
+            # Advance reminder (e.g. 15 min before)
+            await repo.create(
                 owner_telegram_id=owner_id,
                 note_text=note_text,
                 event_at=event_at,
                 advance_minutes=advance_min,
             )
+            # At-event reminder (exactly at event_at)
+            if event_at is not None:
+                await repo.create(
+                    owner_telegram_id=owner_id,
+                    note_text=note_text,
+                    event_at=event_at,
+                    advance_minutes=0,
+                )
             await db_session.commit()
 
         date_str = event_at.strftime("%d.%m.%Y в %H:%M") if event_at else "—"
@@ -1468,7 +1477,7 @@ async def on_note_remind(callback: CallbackQuery, bot: Bot) -> None:
                 f"✅ <b>Заметка сохранена</b>\n\n"
                 f"📅 {date_str}\n"
                 f"📝 {note_text}\n\n"
-                f"⏰ Напомню за <b>{label}</b> до события.",
+                f"⏰ Напомню за <b>{label}</b> до события и в момент начала.",
                 parse_mode="HTML",
                 reply_markup=None,
             )

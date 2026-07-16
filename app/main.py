@@ -197,18 +197,16 @@ async def _note_reminder_loop() -> None:
                                 reminder.event_at.strftime("%d.%m.%Y в %H:%M")
                                 if reminder.event_at else "—"
                             )
-                            label = (
-                                f"{reminder.advance_minutes} мин"
-                                if reminder.advance_minutes < 60
-                                else f"{reminder.advance_minutes // 60} ч"
-                            )
+                            if reminder.advance_minutes == 0:
+                                header = f"🔔 <b>Время события!</b> ({event_str})"
+                            elif reminder.advance_minutes < 60:
+                                header = f"⏰ <b>Напоминание</b> — через {reminder.advance_minutes} мин ({event_str})"
+                            else:
+                                h = reminder.advance_minutes // 60
+                                header = f"⏰ <b>Напоминание</b> — через {h} ч ({event_str})"
                             await bot.send_message(
                                 chat_id=reminder.owner_telegram_id,
-                                text=(
-                                    f"⏰ <b>Напоминание</b> (за {label})\n\n"
-                                    f"📅 {event_str}\n"
-                                    f"📝 {reminder.note_text}"
-                                ),
+                                text=f"{header}\n\n📝 {reminder.note_text}",
                                 parse_mode="HTML",
                             )
                         except Exception:

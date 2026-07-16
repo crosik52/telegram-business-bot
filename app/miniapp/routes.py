@@ -3018,10 +3018,29 @@ async def admin_referral_adjust(
     if payload.status not in ("active", "pending", "fraud"):
         raise HTTPException(status_code=400, detail="Invalid status")
     repo = ReferralRepository(session)
-    ok = await repo.admin_set_status(payload.referral_id, payload.status, payload.reason)
+    ok, ref = await repo.admin_set_status(payload.referral_id, payload.status, payload.reason)
     if not ok:
         raise HTTPException(status_code=404, detail="Referral not found")
+    # Phase 1: commit the status change.
     await session.commit()
+
+    # Phase 2: if the referral was just activated, evaluate milestones for the
+    # referrer NOW (after commit) so that _count_active reads fully committed
+    # state — preventing the TOCTOU milestone-skip race.
+    if payload.status == "active" and ref is not None:
+        ms_rewards = await repo.evaluate_and_grant_milestones(
+            ref.referrer_telegram_id, ref.id
+        )
+        if ms_rewards:
+            await session.commit()
+            logger.info(
+                "Admin import: granted %d milestone reward(s) for referrer=%s "
+                "after activating referral_id=%s",
+                len(ms_rewards),
+                ref.referrer_telegram_id,
+                ref.id,
+            )
+
     return {"ok": True}
 
 

@@ -515,21 +515,29 @@ class ReferralRepository:
 
     # ── Admin manual actions ─────────────────────────────────────────────────
 
-    async def admin_set_status(self, referral_id: int, status: str, reason: str = "") -> bool:
-        """Set status of a referral to 'active', 'pending', or 'fraud'."""
+    async def admin_set_status(
+        self, referral_id: int, status: str, reason: str = ""
+    ) -> tuple[bool, "Referral | None"]:
+        """Set status of a referral to 'active', 'pending', or 'fraud'.
+
+        Returns ``(True, referral)`` on success or ``(False, None)`` when the
+        referral does not exist.  The referral object is returned so callers can
+        inspect ``referrer_telegram_id`` for subsequent milestone evaluation
+        (Phase 2) without an extra query.
+        """
         result = await self._db.execute(
             select(Referral).where(Referral.id == referral_id)
         )
         ref = result.scalar_one_or_none()
         if ref is None:
-            return False
+            return False, None
         ref.status = status
         if status == "fraud":
             ref.fraud_reason = reason or "admin"
         elif status == "active" and ref.activated_at is None:
             ref.activated_at = dt.datetime.now(dt.timezone.utc)
         await self._db.flush()
-        return True
+        return True, ref
 
     async def admin_grant_bonus(
         self, user_telegram_id: int, reward_type: str, reward_value: str, label: str

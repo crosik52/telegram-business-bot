@@ -844,6 +844,7 @@ async def test_most_future_active_sub_is_extended(session_factory):
 # ---------------------------------------------------------------------------
 
 
+
 @pytest.mark.asyncio
 async def test_status_column_correct_migration_paused_uses_is_active_false(
     session_factory, engine
@@ -852,7 +853,7 @@ async def test_status_column_correct_migration_paused_uses_is_active_false(
     convention: paused/cancelled subscriptions have is_active=False.
 
     MIGRATION CONTRACT
-    ==================
+    ------------------
     Any migration that adds a status column to user_subscriptions MUST set
     ``is_active=False`` for every row whose status is not 'active'.  This keeps
     _grant_premium's existing ``WHERE is_active = True`` filter correct without
@@ -1072,3 +1073,114 @@ async def test_status_column_wrong_migration_paused_keeps_is_active_true(
         if active_was_extended else
         "Neither row was extended by 7 days — unexpected outcome."
     )
+
+
+# ---------------------------------------------------------------------------
+# 9. Schema-change resilience: all existing subscriptions are soft-deleted
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_all_soft_deleted_subs_triggers_fresh_subscription(session_factory):
+    """When all existing subscriptions are soft-deleted (is_active=False),
+    _grant_premium must create exactly one new active row and leave every
+    existing row untouched.
+
+    Scenario
+    --------
+    A future migration soft-deletes all subscription rows for a user so that
+    every row has is_active=False.  The SELECT in _grant_premium filters
+    ``is_active=True`` and finds nothing, so it falls through to the
+    fresh-subscription branch.
+
+    Seed
+    ----
+    Three soft-deleted rows with varying expires_at:
+      • Row A: is_active=False, expires_at = now + 5  days
+      • Row B: is_active=False, expires_at = now + 15 days
+      • Row C: is_active=False, expires_at = now + 45 days  (furthest future)
+
+    After _grant_premium(+30 days):
+      • A brand-new row must be created: is_active=True,
+        expires_at ≈ now + 30 days (fresh grant, NOT stacked on any old row).
+      • Rows A, B, C must remain is_active=False with their original expires_at.
+      • Total subscription rows for the user must be 4 (3 old + 1 new).
+    """
+    uid = 9015
+    days = 30
+    now = dt.datetime.now(dt.timezone.utc)
+    before = now  # lower bound for new row's expires_at
+
+    expires_a = now + dt.timedelta(days=5)
+    expires_b = now + dt.timedelta(days=15)
+    expires_c = now + dt.timedelta(days=45)
+
+    async with session_factory() as seed:
+        for expires in (expires_a, expires_b, expires_c):
+            seed.add(UserSubscription(
+                user_telegram_id=uid,
+                is_active=False,
+                started_at=now - dt.timedelta(days=1),
+                expires_at=expires,
+                granted_by_admin=True,
+                stars_paid=0,
+            ))
+        await _seed_config(seed)
+        await seed.commit()
+
+    async with session_factory() as s:
+        repo = ReferralRepository(s)
+        await repo._grant_premium(uid, days)
+        await s.commit()
+
+    after = dt.datetime.now(dt.timezone.utc)
+
+    async with session_factory() as check:
+        all_subs = (
+            await check.execute(
+                select(UserSubscription)
+                .where(UserSubscription.user_telegram_id == uid)
+                .order_by(UserSubscription.expires_at)
+            )
+        ).scalars().all()
+
+    # Total rows: 3 old soft-deleted + 1 new active.
+    assert len(all_subs) == 4, (
+        f"Expected 4 subscription rows (3 old + 1 new), got {len(all_subs)}"
+    )
+
+    # Exactly one row must be active.
+    active_subs = [s for s in all_subs if s.is_active is True]
+    inactive_subs = [s for s in all_subs if s.is_active is False]
+    assert len(active_subs) == 1, (
+        f"Expected exactly 1 active subscription after fresh grant, "
+        f"got {len(active_subs)}"
+    )
+    assert len(inactive_subs) == 3, (
+        f"Expected 3 soft-deleted subscriptions to remain, got {len(inactive_subs)}"
+    )
+
+    # New active row: expires_at must be ≈ now + days (fresh grant).
+    new_expires = active_subs[0].expires_at
+    if new_expires.tzinfo is None:
+        new_expires = new_expires.replace(tzinfo=dt.timezone.utc)
+
+    lower = before + dt.timedelta(days=days)
+    upper = after + dt.timedelta(days=days)
+    assert lower <= new_expires <= upper, (
+        f"New active subscription expires_at={new_expires.isoformat()} is outside "
+        f"the expected range [{lower.isoformat()}, {upper.isoformat()}]"
+    )
+
+    # Soft-deleted rows must be completely untouched.
+    original_expires = {expires_a, expires_b, expires_c}
+    for sub in inactive_subs:
+        exp = sub.expires_at
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=dt.timezone.utc)
+        # Find the closest original value and verify it was not modified.
+        closest = min(original_expires, key=lambda e: abs((e - exp).total_seconds()))
+        diff = abs((exp - closest).total_seconds())
+        assert diff < 5, (
+            f"Soft-deleted subscription was unexpectedly modified: "
+            f"original≈{closest.isoformat()}, got {exp.isoformat()} (Δ={diff:.1f}s)"
+        )

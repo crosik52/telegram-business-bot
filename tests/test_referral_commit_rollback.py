@@ -264,3 +264,117 @@ async def test_successful_commit_activates_correctly(session_factory):
             assert user_subs, (
                 f"Expected a subscription for {label} (id={uid}) after successful commit."
             )
+
+
+@pytest.mark.asyncio
+async def test_milestone_reward_not_doubled_after_rollback_and_retry(session_factory):
+    """Milestone reward is granted exactly once when activation is retried after a rollback.
+
+    Scenario
+    --------
+    1. Seed a config with a milestone at count=1 (fires the first time the referrer
+       reaches 1 active referral).
+    2. Seed a pending referral.
+    3. Session A: call try_activate → milestone fires (flushed but NOT committed) →
+       roll back to simulate a commit failure.
+    4. Session B: call try_activate again (retry path) → commit successfully.
+    5. Assert that exactly ONE milestone ReferralRewardLog row exists — the duplicate-
+       guard in try_activate must see no prior log (the first attempt was rolled back)
+       and grant the reward exactly once.
+    """
+
+    milestone = {
+        "count": 1,
+        "type": "premium_days",
+        "value": 14,
+        "label": "+14 дн. Premium (milestone 1)",
+    }
+
+    # ── Phase 1: seed ────────────────────────────────────────────────────────
+    async with session_factory() as seed_session:
+        cfg = ReferralConfig(
+            is_enabled=True,
+            referee_reward_days=3,
+            referrer_reward_days=7,
+            milestones=[milestone],
+            levels=[{"name": "Bronze", "min": 0, "emoji": "🥉", "color": "#CD7F32"}],
+        )
+        seed_session.add(cfg)
+
+        ref = Referral(
+            referrer_telegram_id=REFERRER_ID,
+            referred_telegram_id=REFERRED_ID,
+            status="pending",
+            referred_first_name="Test",
+            referred_username="testuser",
+        )
+        seed_session.add(ref)
+        await seed_session.commit()
+
+    # ── Phase 2: first activation attempt — rolled back ──────────────────────
+    async with session_factory() as work_session_a:
+        repo_a = ReferralRepository(work_session_a)
+        ref_a, rewards_a = await repo_a.try_activate(REFERRED_ID, has_business_connection=True)
+
+        assert ref_a is not None, "try_activate returned None in first attempt"
+        reward_types_a = {r["type"] for r in rewards_a}
+        assert "milestone" in reward_types_a, (
+            "Milestone reward was not generated on the first try_activate call. "
+            f"Rewards returned: {rewards_a}"
+        )
+
+        # Simulate commit failure — roll back everything
+        await work_session_a.rollback()
+
+    # ── Phase 3: retry activation — committed successfully ───────────────────
+    async with session_factory() as work_session_b:
+        repo_b = ReferralRepository(work_session_b)
+        ref_b, rewards_b = await repo_b.try_activate(REFERRED_ID, has_business_connection=True)
+
+        assert ref_b is not None, (
+            "try_activate returned None on the retry — the referral should still be "
+            "'pending' after the rollback."
+        )
+        reward_types_b = {r["type"] for r in rewards_b}
+        assert "milestone" in reward_types_b, (
+            "Milestone reward was not generated on the retry. The referral was rolled "
+            "back so the duplicate-guard should see no prior log and grant it again."
+        )
+
+        await work_session_b.commit()
+
+    # ── Phase 4: verify exactly one milestone log row exists ─────────────────
+    async with session_factory() as check_session:
+        milestone_log_result = await check_session.execute(
+            select(ReferralRewardLog).where(
+                ReferralRewardLog.user_telegram_id == REFERRER_ID,
+                ReferralRewardLog.reward_type == "milestone",
+                ReferralRewardLog.reward_value == str(milestone["count"]),
+            )
+        )
+        milestone_logs = milestone_log_result.scalars().all()
+        assert len(milestone_logs) == 1, (
+            f"Expected exactly 1 milestone reward log after retry, "
+            f"found {len(milestone_logs)}. "
+            "A double-grant indicates the rollback guard is not working correctly."
+        )
+
+        # The referral row must be active
+        ref_result = await check_session.execute(
+            select(Referral).where(Referral.referred_telegram_id == REFERRED_ID)
+        )
+        referral_row = ref_result.scalar_one_or_none()
+        assert referral_row is not None
+        assert referral_row.status == "active", (
+            f"Expected referral status='active' after successful retry, "
+            f"got {referral_row.status!r}."
+        )
+
+        # Total reward logs: welcome (referee) + per_activation (referrer) + milestone
+        all_log_result = await check_session.execute(select(ReferralRewardLog))
+        all_logs = all_log_result.scalars().all()
+        assert len(all_logs) == 3, (
+            f"Expected exactly 3 reward logs (welcome + per_activation + milestone), "
+            f"got {len(all_logs)}: "
+            + str([(r.reward_type, r.user_telegram_id) for r in all_logs])
+        )

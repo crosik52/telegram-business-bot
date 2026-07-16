@@ -33,7 +33,7 @@ import datetime as dt
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.dialects import postgresql as pg_dialect
 from sqlalchemy.dialects import sqlite as sqlite_dialect
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -814,4 +814,261 @@ async def test_most_future_active_sub_is_extended(session_factory):
         f"Row C (most-future) was not extended correctly: "
         f"expected ~{expected_c.isoformat()}, got {finals_sorted[2].isoformat()} "
         f"(Δ={diff_c:.1f}s)"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 8. Status enum migration safety
+# ---------------------------------------------------------------------------
+#
+# _grant_premium's SELECT filters on is_active=True and expires_at > now,
+# ordered by expires_at DESC LIMIT 1.  If a future migration adds a status
+# column (e.g. 'active', 'paused', 'cancelled', 'refunded'), two distinct
+# migration choices produce very different outcomes:
+#
+#   CORRECT (Option A)  — keep is_active as the authoritative "extendable?" flag:
+#       status='paused'    → is_active=False   ← _grant_premium skips it ✓
+#       status='cancelled' → is_active=False   ← _grant_premium skips it ✓
+#       status='active'    → is_active=True    ← _grant_premium extends it ✓
+#
+#   WRONG (Option B)   — leave is_active=True on paused rows:
+#       status='paused', is_active=True, expires_at far-future
+#       → _grant_premium picks the paused row because it has the largest
+#         expires_at; the actually-active subscription is left untouched. ✗
+#
+# Test 8a verifies Option A (passes; this is the required migration contract).
+# Test 8b documents Option B as a characterisation test: it asserts the wrong
+# selection happens, making the risk visible in CI and acting as a tripwire —
+# if _grant_premium is later updated to also filter on status='active' the
+# assertion will flip and the test must be updated.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_status_column_correct_migration_paused_uses_is_active_false(
+    session_factory, engine
+):
+    """_grant_premium extends the right row when the migration follows the correct
+    convention: paused/cancelled subscriptions have is_active=False.
+
+    MIGRATION CONTRACT
+    ==================
+    Any migration that adds a status column to user_subscriptions MUST set
+    ``is_active=False`` for every row whose status is not 'active'.  This keeps
+    _grant_premium's existing ``WHERE is_active = True`` filter correct without
+    any change to application code.
+
+    Scenario (simulated via raw SQL so the ORM model need not be touched)
+    -----------------------------------------------------------------------
+    Two subscription rows for the same user:
+
+      • Row A: is_active=False, status='paused',  expires_at = now + 60 days
+               (represents a subscription that was paused after the migration)
+      • Row B: is_active=True,  status='active',  expires_at = now + 30 days
+               (the user's current valid subscription)
+
+    After _grant_premium(uid, +7 days):
+      • Row B must be extended to now + 37 days.
+      • Row A must remain at now + 60 days — untouched.
+    """
+    uid = 9020
+    now = dt.datetime.now(dt.timezone.utc)
+    paused_expires = now + dt.timedelta(days=60)
+    active_expires = now + dt.timedelta(days=30)
+
+    # Add status column via raw SQL to simulate the future migration.
+    async with engine.begin() as conn:
+        await conn.execute(text(
+            "ALTER TABLE user_subscriptions "
+            "ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"
+        ))
+
+    # ReferralConfig row is required by _grant_premium (get_config call).
+    async with session_factory() as seed:
+        await _seed_config(seed)
+        await seed.commit()
+
+    started_past = (now - dt.timedelta(days=30)).isoformat()
+
+    # Insert both rows via raw SQL so we can populate the new status column.
+    async with engine.begin() as conn:
+        # Row A — paused: is_active=False as per the migration contract.
+        await conn.execute(text(
+            "INSERT INTO user_subscriptions "
+            "(user_telegram_id, is_active, started_at, expires_at, "
+            " granted_by_admin, stars_paid, created_at, status) "
+            "VALUES (:uid, 0, :started, :expires, 0, 99, :created, 'paused')"
+        ), {"uid": uid, "started": started_past, "expires": paused_expires.isoformat(),
+            "created": now.isoformat()})
+
+        # Row B — active: is_active=True.
+        await conn.execute(text(
+            "INSERT INTO user_subscriptions "
+            "(user_telegram_id, is_active, started_at, expires_at, "
+            " granted_by_admin, stars_paid, created_at, status) "
+            "VALUES (:uid, 1, :started, :expires, 1, 0, :created, 'active')"
+        ), {"uid": uid, "started": now.isoformat(), "expires": active_expires.isoformat(),
+            "created": now.isoformat()})
+
+    async with session_factory() as s:
+        repo = ReferralRepository(s)
+        await repo._grant_premium(uid, 7)
+        await s.commit()
+
+    async with session_factory() as check:
+        all_subs = (
+            await check.execute(
+                select(UserSubscription)
+                .where(UserSubscription.user_telegram_id == uid)
+                .order_by(UserSubscription.is_active.desc())
+            )
+        ).scalars().all()
+
+    assert len(all_subs) == 2, f"Expected 2 subscriptions, got {len(all_subs)}"
+
+    active_sub   = next(s for s in all_subs if s.is_active is True)
+    inactive_sub = next(s for s in all_subs if s.is_active is False)
+
+    # Active row must have been extended by 7 days.
+    active_final = active_sub.expires_at
+    if active_final.tzinfo is None:
+        active_final = active_final.replace(tzinfo=dt.timezone.utc)
+    expected_active = active_expires + dt.timedelta(days=7)
+    diff_active = abs((active_final - expected_active).total_seconds())
+    assert diff_active < 5, (
+        f"Active subscription not extended correctly: "
+        f"expected ~{expected_active.isoformat()}, got {active_final.isoformat()} "
+        f"(Δ={diff_active:.1f}s)"
+    )
+
+    # Paused row must NOT have been touched.
+    inactive_final = inactive_sub.expires_at
+    if inactive_final.tzinfo is None:
+        inactive_final = inactive_final.replace(tzinfo=dt.timezone.utc)
+    diff_paused = abs((inactive_final - paused_expires).total_seconds())
+    assert diff_paused < 5, (
+        f"Paused subscription was incorrectly extended: "
+        f"expected ~{paused_expires.isoformat()}, got {inactive_final.isoformat()} "
+        f"(Δ={diff_paused:.1f}s)"
+    )
+
+
+@pytest.mark.asyncio
+async def test_status_column_wrong_migration_paused_keeps_is_active_true(
+    session_factory, engine
+):
+    """RISK DOCUMENTATION: if a paused row retains is_active=True after a status
+    column migration, _grant_premium silently extends the wrong subscription.
+
+    This is a characterisation test — it asserts the *current* (broken) behaviour
+    under the wrong migration pattern so the risk is visible in CI output.
+
+    If _grant_premium is later updated to also filter on ``status = 'active'``,
+    the assertion labelled "wrong selection" below will flip.  That is the signal
+    to update this test: remove the wrong-selection assertion and replace it with
+    the correct-selection one (currently in the else-branch comment).
+
+    Wrong migration pattern exercised here
+    ---------------------------------------
+    Two subscription rows, both is_active=True:
+
+      • Row A: is_active=True, status='paused',  expires_at = now + 60 days
+               (paused but wrongly kept is_active=True after migration)
+      • Row B: is_active=True, status='active',  expires_at = now + 30 days
+               (user's live subscription)
+
+    Current _grant_premium behaviour: picks Row A (largest expires_at among
+    is_active=True rows) and extends it — the paused subscription grows while
+    the live one stays at now + 30 days.  This is the documented migration risk.
+
+    Migration fix
+    -------------
+    Option A (no code change needed): set is_active=False for every non-active
+    status in the migration script.  See
+    test_status_column_correct_migration_paused_uses_is_active_false for the
+    passing scenario under this convention.
+
+    Option B (code change): add `UserSubscription.status == 'active'` to the
+    WHERE clause in _grant_premium's SELECT once a status column exists.
+    """
+    uid = 9021
+    now = dt.datetime.now(dt.timezone.utc)
+    paused_expires = now + dt.timedelta(days=60)   # farther future — ORDER BY picks this
+    active_expires = now + dt.timedelta(days=30)
+
+    # Add status column via raw SQL to simulate the future migration.
+    async with engine.begin() as conn:
+        await conn.execute(text(
+            "ALTER TABLE user_subscriptions "
+            "ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"
+        ))
+
+    async with session_factory() as seed:
+        await _seed_config(seed)
+        await seed.commit()
+
+    started_past = (now - dt.timedelta(days=30)).isoformat()
+
+    async with engine.begin() as conn:
+        # Row A — paused but is_active=True (the wrong migration choice).
+        await conn.execute(text(
+            "INSERT INTO user_subscriptions "
+            "(user_telegram_id, is_active, started_at, expires_at, "
+            " granted_by_admin, stars_paid, created_at, status) "
+            "VALUES (:uid, 1, :started, :expires, 0, 99, :created, 'paused')"
+        ), {"uid": uid, "started": started_past, "expires": paused_expires.isoformat(),
+            "created": now.isoformat()})
+
+        # Row B — active, is_active=True.
+        await conn.execute(text(
+            "INSERT INTO user_subscriptions "
+            "(user_telegram_id, is_active, started_at, expires_at, "
+            " granted_by_admin, stars_paid, created_at, status) "
+            "VALUES (:uid, 1, :started, :expires, 1, 0, :created, 'active')"
+        ), {"uid": uid, "started": now.isoformat(), "expires": active_expires.isoformat(),
+            "created": now.isoformat()})
+
+    async with session_factory() as s:
+        repo = ReferralRepository(s)
+        await repo._grant_premium(uid, 7)
+        await s.commit()
+
+    async with session_factory() as check:
+        all_subs = (
+            await check.execute(
+                select(UserSubscription)
+                .where(UserSubscription.user_telegram_id == uid)
+                .order_by(UserSubscription.expires_at)
+            )
+        ).scalars().all()
+
+    assert len(all_subs) == 2, f"Expected 2 subscriptions, got {len(all_subs)}"
+
+    finals = []
+    for sub in all_subs:
+        exp = sub.expires_at
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=dt.timezone.utc)
+        finals.append(exp)
+    finals_sorted = sorted(finals)
+
+    # Determine which row was extended.
+    paused_was_extended = (
+        abs((finals_sorted[1] - (paused_expires + dt.timedelta(days=7))).total_seconds()) < 5
+    )
+    active_was_extended = (
+        abs((finals_sorted[1] - (active_expires + dt.timedelta(days=7))).total_seconds()) < 5
+    )
+
+    # Current behaviour under the wrong migration: the paused row (farther expires_at,
+    # is_active=True) is selected and extended instead of the live subscription.
+    # This assertion documents that risk.  If it flips to active_was_extended, the
+    # code has been fixed to honour the status column — update this test accordingly.
+    assert paused_was_extended, (
+        "Expected _grant_premium to (incorrectly) extend the paused row under the "
+        "wrong migration pattern, but it extended the active row instead.  "
+        "This means _grant_premium now filters on status — update this test to "
+        "assert correct behaviour and remove the risk documentation comment."
+        if active_was_extended else
+        "Neither row was extended by 7 days — unexpected outcome."
     )

@@ -297,7 +297,40 @@ class ReferralRepository:
 
         if rewards:
             await self._db.flush()
+
+        # Mark this referral as milestone-checked regardless of whether any new
+        # rewards were granted — so the background sweep won't re-process it.
+        # We do this after the milestone loop so that a crash *inside* the loop
+        # still leaves milestone_checked=False and the sweep can retry.
+        if referral_id is not None:
+            await self._db.execute(
+                update(Referral)
+                .where(Referral.id == referral_id)
+                .values(milestone_checked=True)
+                .execution_options(synchronize_session="fetch")
+            )
+            await self._db.flush()
+
         return rewards
+
+    # ── Unchecked-milestone sweep (called by background loop) ─────────────────
+
+    async def list_unchecked_referral_ids(self, limit: int = 50) -> list[tuple[int, int]]:
+        """Return (referral_id, referrer_telegram_id) pairs for active referrals
+        whose milestones have not yet been evaluated.
+
+        Intended for the background sweep loop — each row is processed in a
+        separate session so that one failure does not block others.
+        """
+        result = await self._db.execute(
+            select(Referral.id, Referral.referrer_telegram_id)
+            .where(
+                Referral.status == "active",
+                Referral.milestone_checked.is_(False),
+            )
+            .limit(limit)
+        )
+        return result.all()
 
     # ── User-facing stats ────────────────────────────────────────────────────
 

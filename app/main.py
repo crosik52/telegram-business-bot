@@ -33,6 +33,7 @@ logger = get_logger(__name__)
 
 _CLEANUP_INTERVAL_HOURS = 6
 _STREAK_REMINDER_INTERVAL_MINUTES = 60
+_MILESTONE_SWEEP_INTERVAL_MINUTES = 15
 
 
 async def _streak_reminder_loop() -> None:
@@ -48,6 +49,51 @@ async def _streak_reminder_loop() -> None:
         except Exception:
             logger.exception("Streak reminder check failed — will retry next cycle")
         await asyncio.sleep(_STREAK_REMINDER_INTERVAL_MINUTES * 60)
+
+
+async def _milestone_sweep_loop() -> None:
+    """Background task: retry milestone evaluation for referrals not yet checked.
+
+    Picks up any referral that was activated (Phase 1 committed) but whose
+    milestone evaluation (Phase 2) was skipped because the server restarted
+    before ``evaluate_and_grant_milestones`` could run.  Runs every
+    ``_MILESTONE_SWEEP_INTERVAL_MINUTES`` minutes.
+    """
+    from app.database.session import get_db_session
+    from app.repositories.referral_repository import ReferralRepository
+
+    # Give the app a moment to be fully initialised before the first sweep.
+    await asyncio.sleep(90)
+    while True:
+        try:
+            # Phase A: collect unchecked referral IDs in a short-lived session.
+            unchecked: list[tuple[int, int]] = []
+            async for session in get_db_session():
+                repo = ReferralRepository(session)
+                unchecked = await repo.list_unchecked_referral_ids(limit=50)
+
+            # Phase B: evaluate milestones for each one in its own session so
+            # that a single failure does not prevent the others from being processed.
+            for ref_id, referrer_id in unchecked:
+                try:
+                    async for session in get_db_session():
+                        repo = ReferralRepository(session)
+                        await repo.evaluate_and_grant_milestones(referrer_id, ref_id)
+                except Exception:
+                    logger.exception(
+                        "Milestone sweep: evaluation failed for referral_id=%s referrer=%s",
+                        ref_id,
+                        referrer_id,
+                    )
+
+            if unchecked:
+                logger.info(
+                    "Milestone sweep: processed %d unchecked referral(s)", len(unchecked)
+                )
+        except Exception:
+            logger.exception("Milestone sweep loop error — will retry next cycle")
+
+        await asyncio.sleep(_MILESTONE_SWEEP_INTERVAL_MINUTES * 60)
 
 
 async def _cleanup_loop() -> None:
@@ -162,17 +208,24 @@ async def lifespan(app: FastAPI):
     cleanup_task = asyncio.create_task(_cleanup_loop())
     # ── Streak reminder background task ───────────────────────────────────────
     streak_task = asyncio.create_task(_streak_reminder_loop())
+    # ── Referral milestone sweep (at-least-once guarantee) ───────────────────
+    milestone_sweep_task = asyncio.create_task(_milestone_sweep_loop())
 
     yield
 
     cleanup_task.cancel()
     streak_task.cancel()
+    milestone_sweep_task.cancel()
     try:
         await cleanup_task
     except asyncio.CancelledError:
         pass
     try:
         await streak_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await milestone_sweep_task
     except asyncio.CancelledError:
         pass
 

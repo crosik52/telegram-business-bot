@@ -285,20 +285,40 @@ async def _handle_dot_save(
                 ref.media_type.value, ref.file_id,
             )
 
-            # ── Download strategy (three tiers) ──────────────────────────────
+            # ── Self-destructing detection ────────────────────────────────────
             #
-            # 1. Already cached bytes in DB  — works even after file_id expiry.
-            # 2. Bot API fresh download       — works for regular + some SD media.
-            # 3. Telethon user-client         — works for view-once / ttl_period
-            #                                   media that the Bot API blocks.
+            # The ONLY reliable signal is whether the Bot API can download the
+            # file right now:
+            #   • Download succeeds  →  regular media (still on Telegram CDN)
+            #                          →  owner just replied casually, ignore it
+            #   • Download fails     →  self-destructing / view-once / expired
+            #                          →  try cached bytes then Telethon, notify
             #
-            # If the file is accessible via Bot API it is regular media → we
-            # still forward it (owner replied explicitly, so they want it).
-            # If Bot API fails → try Telethon before giving up.
+            # We intentionally do NOT forward regular media even if the owner
+            # replied to it — only view-once media should arrive in their DM.
 
             caption = ref.caption or ref.text or None
 
-            # ── Tier 1: cached bytes already in DB ───────────────────────────
+            # ── Check: is it still downloadable via Bot API? ──────────────────
+            fresh_ok = await media_cache_service.download_and_cache(
+                bot, session, ref.file_id, ref.file_unique_id, ref.media_type.value
+            )
+            if fresh_ok:
+                # Regular accessible media — owner replied to a normal message.
+                # Do nothing (no DM, no notification).
+                logger.info(
+                    "dot-save: %s is regular media (bot_api ok) — skipping silently",
+                    ref.media_type.value,
+                )
+                return
+
+            # ── Bot API blocked → treat as self-destructing ───────────────────
+            logger.info(
+                "dot-save: bot_api blocked %s — self-destructing, attempting recovery",
+                ref.media_type.value,
+            )
+
+            # Sub-tier A: bytes already cached at message-receipt time
             cached_bytes = await media_cache_service.get_cached_bytes(
                 session, ref.file_unique_id
             )
@@ -312,28 +332,7 @@ async def _handle_dot_save(
                 )
                 return
 
-            # ── Tier 2: Bot API fresh download ────────────────────────────────
-            fresh_ok = await media_cache_service.download_and_cache(
-                bot, session, ref.file_id, ref.file_unique_id, ref.media_type.value
-            )
-            if fresh_ok:
-                await session.flush()
-                sent = await _try_send_media(
-                    bot, owner_id, ref.media_type, ref.file_id,
-                    file_unique_id=ref.file_unique_id,
-                    session=session,
-                    caption=caption,
-                )
-                if sent:
-                    logger.info(
-                        "dot-save: ✓ sent %s via bot_api to owner=%s",
-                        ref.media_type.value, owner_id,
-                    )
-                    return
-
-            # ── Tier 3: Telethon user-client ──────────────────────────────────
-            # Bot API blocked access (view-once / ttl_period).
-            # Try fetching the raw bytes directly via MTProto.
+            # Sub-tier B: Telethon user-client via MTProto.
             logger.info(
                 "dot-save: bot_api failed for %s — trying Telethon (chat=%s msg=%s)",
                 ref.media_type.value, ref.chat_id, ref.message_id,
@@ -923,16 +922,17 @@ async def on_business_message(message: Message, bot: Bot) -> None:
                 _download_tasks.add(_cache_task)
                 _cache_task.add_done_callback(_download_tasks.discard)
 
-        # --- «.» quick-save: owner replies with a dot to forward media to DM ---
-        # Only fire when the owner replies with exactly "." so normal replies
-        # to contacts don't accidentally trigger a save attempt.
+        # --- view-once save: owner replies to any message to trigger capture ---
+        # Any reply from the owner fires the handler; _handle_dot_save itself
+        # decides whether the target is self-destructing (Bot API can't download
+        # it) and only forwards in that case, so normal-media replies are
+        # silently ignored without notifying the owner.
         sender = message.from_user
         if (
             has_connection
             and sender is not None
             and sender.id == owner_telegram_id
             and message.reply_to_message is not None
-            and message.text in (".", "•")
         ):
             _save_task = asyncio.create_task(
                 _handle_dot_save(

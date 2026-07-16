@@ -78,6 +78,7 @@ class SubscriptionRepository:
         sub = UserSubscription(
             user_telegram_id=user_telegram_id,
             is_active=True,
+            status="active",
             started_at=now,
             expires_at=now + dt.timedelta(days=duration_days),
             granted_by_admin=False,
@@ -95,6 +96,7 @@ class SubscriptionRepository:
         sub = UserSubscription(
             user_telegram_id=user_telegram_id,
             is_active=True,
+            status="active",
             started_at=now,
             expires_at=now + dt.timedelta(days=duration_days),
             granted_by_admin=True,
@@ -106,36 +108,60 @@ class SubscriptionRepository:
 
     async def revoke(self, user_telegram_id: int) -> None:
         """Admin: deactivate any active subscription."""
-        await self._deactivate_user_subs(user_telegram_id)
+        await self._deactivate_user_subs(user_telegram_id, new_status="cancelled")
 
-    async def _deactivate_user_subs(self, user_telegram_id: int) -> None:
+    async def _deactivate_user_subs(
+        self, user_telegram_id: int, new_status: str = "cancelled"
+    ) -> None:
+        """Set is_active=False and status=new_status on all active rows for this user."""
         await self._session.execute(
             update(UserSubscription)
             .where(
                 UserSubscription.user_telegram_id == user_telegram_id,
                 UserSubscription.is_active.is_(True),
             )
-            .values(is_active=False)
+            .values(is_active=False, status=new_status)
         )
 
-    async def list_subscribers(self, page: int = 1, page_size: int = 30) -> dict:
+    async def list_subscribers(
+        self,
+        page: int = 1,
+        page_size: int = 30,
+        status_filter: str | None = None,
+    ) -> dict:
+        """List subscription rows for the admin panel.
+
+        When *status_filter* is provided (e.g. 'active', 'cancelled',
+        'paused', 'refunded') only rows with that status are returned.
+        When it is None, all rows are returned regardless of lifecycle state
+        so the admin can see the full history per user.
+
+        Ordering: active rows (soonest-to-expire first) then inactive rows
+        (most-recently-deactivated first), so the currently live subscriptions
+        always appear at the top.
+        """
         now = dt.datetime.now(dt.timezone.utc)
+
+        base_where = []
+        if status_filter:
+            base_where.append(UserSubscription.status == status_filter)
+
         count_q = await self._session.execute(
             select(func.count())
             .select_from(UserSubscription)
-            .where(
-                UserSubscription.is_active.is_(True),
-                UserSubscription.expires_at > now,
-            )
+            .where(*base_where)
         )
         total = count_q.scalar_one()
+
         result = await self._session.execute(
             select(UserSubscription)
-            .where(
-                UserSubscription.is_active.is_(True),
-                UserSubscription.expires_at > now,
+            .where(*base_where)
+            # Active rows first (ascending expires_at so soonest-to-expire is at
+            # the top), then all inactive rows by created_at desc.
+            .order_by(
+                UserSubscription.is_active.desc(),
+                UserSubscription.expires_at.desc(),
             )
-            .order_by(UserSubscription.expires_at.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
         )
@@ -147,6 +173,7 @@ class SubscriptionRepository:
             "subscribers": [
                 {
                     "user_telegram_id": s.user_telegram_id,
+                    "status": s.status,
                     "started_at": s.started_at.isoformat(),
                     "expires_at": s.expires_at.isoformat(),
                     "days_left": max(0, (s.expires_at - now).days),

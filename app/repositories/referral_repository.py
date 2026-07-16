@@ -729,10 +729,14 @@ class ReferralRepository:
         delta = dt.timedelta(days=days)
 
         # Find the ID of the most-future active subscription to extend.
+        # Filter on BOTH is_active=True AND status='active' so that a paused
+        # or cancelled row that incorrectly retained is_active=True (wrong
+        # migration pattern) is never accidentally extended.
         sub_id_q = await self._db.execute(
             select(UserSubscription.id).where(
                 UserSubscription.user_telegram_id == user_telegram_id,
                 UserSubscription.is_active.is_(True),
+                UserSubscription.status == "active",
                 UserSubscription.expires_at > now,
             ).order_by(UserSubscription.expires_at.desc()).limit(1)
         )
@@ -761,6 +765,7 @@ class ReferralRepository:
             sub = UserSubscription(
                 user_telegram_id=user_telegram_id,
                 is_active=True,
+                status="active",
                 started_at=now,
                 expires_at=now + delta,
                 granted_by_admin=True,

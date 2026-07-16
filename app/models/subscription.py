@@ -49,13 +49,26 @@ class SubscriptionConfig(Base):
 
 
 class UserSubscription(Base):
-    """One row per subscription period per user."""
+    """One row per subscription period per user.
+
+    ``status`` is the authoritative lifecycle field:
+        'active'    — subscription is in effect and extendable.
+        'paused'    — temporarily paused (not yet implemented, reserved).
+        'cancelled' — deactivated by admin revoke or replaced by a newer row.
+        'refunded'  — payment was refunded.
+
+    ``is_active`` is kept in sync with ``status`` for backwards compatibility:
+        status='active'    → is_active=True
+        all other statuses → is_active=False
+    """
 
     __tablename__ = "user_subscriptions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Lifecycle status — kept in sync with is_active (see docstring above).
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
     started_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     granted_by_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

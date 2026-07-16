@@ -1856,11 +1856,22 @@
 
         <!-- Subscribers list -->
         <div class="sub-admin-card">
-          <div class="sub-admin-title">👥 Активные подписчики (${subsData.total})</div>
-          ${subsData.subscribers.length === 0
-            ? `<div style="text-align:center;color:var(--hint);padding:20px 0">Нет активных подписчиков</div>`
-            : subsData.subscribers.map(s => renderSubscriberCard(s)).join("")
-          }
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+            <div class="sub-admin-title" style="margin-bottom:0">👥 Подписки (${subsData.total})</div>
+            <select id="subStatusFilter" style="border:1.5px solid rgba(120,120,128,0.2);border-radius:10px;padding:6px 10px;font-size:12px;background:var(--bg);color:var(--text)">
+              <option value="">Все статусы</option>
+              <option value="active">активна</option>
+              <option value="cancelled">отменена</option>
+              <option value="paused">пауза</option>
+              <option value="refunded">возврат</option>
+            </select>
+          </div>
+          <div id="subSubscriberList">
+            ${subsData.subscribers.length === 0
+              ? `<div style="text-align:center;color:var(--hint);padding:20px 0">Нет подписок</div>`
+              : subsData.subscribers.map(s => renderSubscriberCard(s)).join("")
+            }
+          </div>
         </div>`;
     }
 
@@ -1868,11 +1879,20 @@
       const badge = s.granted_by_admin
         ? `<span style="background:rgba(255,204,0,.15);color:#c9920a;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px">👑 Выдана</span>`
         : `<span style="background:rgba(36,129,204,.12);color:var(--link);font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px">⭐ Куплена</span>`;
+      const STATUS_LABEL = { active: "активна", paused: "пауза", cancelled: "отменена", refunded: "возврат" };
+      const STATUS_STYLE = {
+        active:    "background:rgba(52,199,89,.14);color:var(--green)",
+        paused:    "background:rgba(255,149,0,.14);color:#c97a00",
+        cancelled: "background:rgba(255,59,48,.14);color:var(--danger)",
+        refunded:  "background:rgba(120,120,128,.13);color:var(--hint)",
+      };
+      const st = s.status || "active";
+      const statusBadge = `<span style="${STATUS_STYLE[st] || STATUS_STYLE.active};font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px">${STATUS_LABEL[st] || st}</span>`;
       return `
         <div class="sub-subscriber-card">
           <div class="sub-sub-avatar">⭐</div>
           <div class="sub-sub-info">
-            <div class="sub-sub-id">${s.user_telegram_id} ${badge}</div>
+            <div class="sub-sub-id">${s.user_telegram_id} ${badge} ${statusBadge}</div>
             <div class="sub-sub-meta">Ещё ${s.days_left} дн. · до ${s.expires_at.slice(0,10)}${s.stars_paid > 0 ? ` · ${s.stars_paid}⭐` : ""}</div>
           </div>
           <button class="sub-revoke-btn" data-user-id="${s.user_telegram_id}">✗ Отозвать</button>
@@ -2041,13 +2061,65 @@
             });
             if (!res.ok) throw new Error();
             showToast(`✅ Подписка отозвана у ${userId}`);
-            await loadSubscriptionTab();
+            await reloadSubscriberList();
           } catch {
             showToast("❌ Ошибка при отзыве подписки");
             e.currentTarget.disabled = false;
           }
         });
       });
+
+      // Status filter — reload subscriber list on change
+      document.getElementById("subStatusFilter")?.addEventListener("change", async () => {
+        await reloadSubscriberList();
+      });
+    }
+
+    async function reloadSubscriberList() {
+      const filterEl = document.getElementById("subStatusFilter");
+      const statusFilter = filterEl ? filterEl.value : "";
+      const listEl = document.getElementById("subSubscriberList");
+      if (listEl) listEl.innerHTML = `<div style="text-align:center;color:var(--hint);padding:14px 0">Загружаем…</div>`;
+      try {
+        const res = await fetch("/app/api/admin/subscription/subscribers", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData, page: 1, statusFilter: statusFilter || null}),
+        });
+        const data = res.ok ? await res.json() : {total: 0, subscribers: []};
+        // Update count label
+        const titleEl = document.querySelector(".sub-admin-card .sub-admin-title");
+        if (titleEl && titleEl.textContent.startsWith("👥")) {
+          titleEl.textContent = `👥 Подписки (${data.total})`;
+        }
+        if (listEl) {
+          listEl.innerHTML = data.subscribers.length === 0
+            ? `<div style="text-align:center;color:var(--hint);padding:20px 0">Нет подписок</div>`
+            : data.subscribers.map(s => renderSubscriberCard(s)).join("");
+          // Re-attach revoke handlers for the newly rendered cards
+          listEl.querySelectorAll(".sub-revoke-btn").forEach(btn => {
+            btn.addEventListener("click", async (e) => {
+              const userId = parseInt(e.currentTarget.dataset.userId);
+              const ok = await confirmAction(`Отозвать подписку у пользователя ${userId}?`);
+              if (!ok) return;
+              e.currentTarget.disabled = true;
+              try {
+                const res2 = await fetch("/app/api/admin/subscription/revoke", {
+                  method: "POST", headers: {"Content-Type":"application/json"},
+                  body: JSON.stringify({initData, ownerTelegramId: userId}),
+                });
+                if (!res2.ok) throw new Error();
+                showToast(`✅ Подписка отозвана у ${userId}`);
+                await reloadSubscriberList();
+              } catch {
+                showToast("❌ Ошибка при отзыве подписки");
+                e.currentTarget.disabled = false;
+              }
+            });
+          });
+        }
+      } catch {
+        if (listEl) listEl.innerHTML = `<div style="text-align:center;color:var(--danger);padding:14px 0">Ошибка загрузки</div>`;
+      }
     }
 
     // ══════════════════════════════════════════════════════════════════

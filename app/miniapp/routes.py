@@ -325,6 +325,7 @@ class AdminSubSubscribersRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     init_data: str = Field(alias="initData")
     page: int = Field(default=1, ge=1)
+    status_filter: str | None = Field(default=None, alias="statusFilter")
 
 
 class AdminSubGrantRequest(BaseModel):
@@ -2059,10 +2060,18 @@ async def admin_subscription_update(
 async def admin_subscription_subscribers(
     payload: AdminSubSubscribersRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
-    """List active subscribers (paginated)."""
+    """List subscription rows (paginated).
+
+    When statusFilter is provided only that lifecycle status is returned;
+    otherwise all rows (active + cancelled + refunded) are returned so the
+    admin can see the full history.
+    """
     _require_admin(payload.init_data)
+    # Validate the status filter to prevent arbitrary column values.
+    valid_statuses = {"active", "paused", "cancelled", "refunded"}
+    status_filter = payload.status_filter if payload.status_filter in valid_statuses else None
     sub_repo = SubscriptionRepository(session)
-    return await sub_repo.list_subscribers(page=payload.page)
+    return await sub_repo.list_subscribers(page=payload.page, status_filter=status_filter)
 
 
 @router.post("/app/api/admin/subscription/grant")

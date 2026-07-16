@@ -1618,11 +1618,15 @@ async def rel_request(
     try:
         rel = await repo.send_request(owner_id, payload.partner_id)
         await session.commit()
-        # Best-effort push notification to addressee
-        try:
-            _bot = get_bot(settings)
-            if _bot:
+        # Push notification to partner + fallback owner alert
+        _partner_not_reachable = False
+        _bot = get_bot(settings)
+        if _bot:
+            try:
                 from app.models.user import TelegramUser as _TU
+                from app.models.message import Message as _Msg
+                from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
                 _me = (await session.execute(
                     select(_TU).where(_TU.telegram_user_id == owner_id)
                 )).scalar_one_or_none()
@@ -1631,14 +1635,16 @@ async def rel_request(
                     _me.last_name  if _me else None,
                 ] if p]
                 _name = " ".join(_parts) or f"#{owner_id}"
-                from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-                from app.models.message import Message as _Msg
+
                 _kb = InlineKeyboardMarkup(inline_keyboard=[[
                     InlineKeyboardButton(text="✅ Принять", callback_data=f"rel_accept:{owner_id}"),
                     InlineKeyboardButton(text="❌ Отказать", callback_data=f"rel_decline:{owner_id}"),
                 ]])
-                # Try to find the business_connection_id for this owner↔partner chat
-                # so the request appears in their conversation, not in bot DMs.
+
+                # Find business_connection_id for the owner↔partner chat so we
+                # can also place a plain-text nudge directly in the conversation.
+                # (Telegram drops reply_markup on business messages, so buttons
+                # must go via a separate bot-DM to the partner.)
                 _bc_id: str | None = None
                 try:
                     _conn_ids = (await session.execute(
@@ -1656,12 +1662,8 @@ async def rel_request(
                         )).scalar_one_or_none()
                 except Exception:
                     _bc_id = None
-                # Telegram silently drops reply_markup on messages sent with
-                # business_connection_id. So we send two separate messages:
-                # 1) a plain text notification in the business chat (visible
-                #    right inside the conversation), and
-                # 2) a bot-DM with the Accept / Decline keyboard so the
-                #    partner can actually respond.
+
+                # 1) Plain-text nudge in the business chat (if we have a bc_id).
                 if _bc_id:
                     try:
                         await _bot.send_message(
@@ -1673,21 +1675,52 @@ async def rel_request(
                         )
                     except Exception as _chat_exc:
                         logger.warning(
-                            "rel_request: failed to notify partner %s in chat: %s",
+                            "rel_request: business-chat nudge to partner %s failed: %s",
                             payload.partner_id, _chat_exc,
                         )
-                # Always send the DM with the interactive keyboard — this is
-                # the only channel where reply_markup is actually rendered.
-                await _bot.send_message(
-                    payload.partner_id,
-                    f"💌 <b>{_name}</b> хочет с тобой подружиться!\n\n"
-                    f"Прими или отклони запрос:",
-                    parse_mode="HTML",
-                    reply_markup=_kb,
-                )
-        except Exception:
-            pass
-        return repo.to_dict(rel, owner_id)
+
+                # 2) Bot-DM to partner with Accept / Decline keyboard.
+                #    This is the only channel where reply_markup is rendered.
+                try:
+                    await _bot.send_message(
+                        payload.partner_id,
+                        f"💌 <b>{_name}</b> хочет с тобой подружиться!\n\n"
+                        f"Прими или отклони запрос:",
+                        parse_mode="HTML",
+                        reply_markup=_kb,
+                    )
+                except Exception as _dm_exc:
+                    logger.warning(
+                        "rel_request: DM to partner %s failed: %s",
+                        payload.partner_id, _dm_exc,
+                    )
+                    _partner_not_reachable = True
+                    # Alert the owner so they know the partner hasn't started the bot.
+                    _alert = (
+                        "❌ Запрос отправлен, но партнёр ещё не запустил бота — "
+                        "кнопки Принять/Отказать ему не пришли."
+                    )
+                    if _bc_id:
+                        try:
+                            await _bot.send_message(
+                                payload.partner_id,
+                                _alert,
+                                parse_mode="HTML",
+                                business_connection_id=_bc_id,
+                            )
+                        except Exception:
+                            pass
+                    try:
+                        await _bot.send_message(owner_id, _alert, parse_mode="HTML")
+                    except Exception:
+                        pass
+            except Exception as _notify_exc:
+                logger.warning("rel_request: notification setup failed: %s", _notify_exc)
+
+        result = repo.to_dict(rel, owner_id)
+        if _partner_not_reachable:
+            result["partner_not_reachable"] = True
+        return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 

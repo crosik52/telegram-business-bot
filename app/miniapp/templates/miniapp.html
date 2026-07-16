@@ -2848,7 +2848,10 @@
       }
 
       overlay.querySelector("#rBtnPropose")?.addEventListener("click", () =>
-        relAction("/app/api/relationships/request", {}, () => toastMessage("💌 Запрос дружбы отправлен!")));
+        relAction("/app/api/relationships/request", {}, d =>
+          toastMessage(d.partner_not_reachable
+            ? "💌 Запрос отправлен, но партнёр ещё не запустил бота 🤖"
+            : "💌 Запрос дружбы отправлен!"))));
       overlay.querySelector("#rBtnCancel")?.addEventListener("click", () =>
         relAction("/app/api/relationships/cancel", {}, () => toastMessage("Запрос отменён, монеты возвращены.")));
       overlay.querySelector("#rBtnAccept")?.addEventListener("click", () =>

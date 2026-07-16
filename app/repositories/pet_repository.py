@@ -193,8 +193,13 @@ def _personality_cuddle_mood(p: str) -> int:
     return CUDDLE_MOOD_GAIN * 2 if p == "shy" else CUDDLE_MOOD_GAIN
 
 
+def _tz_aware(ts: dt.datetime) -> dt.datetime:
+    """Ensure *ts* is timezone-aware (SQLite/aiosqlite may strip tzinfo)."""
+    return ts if ts.tzinfo is not None else ts.replace(tzinfo=dt.timezone.utc)
+
+
 def _compute_hunger(pet: ChatPet, now: dt.datetime) -> int:
-    ref = pet.last_fed_at or pet.born_at
+    ref = _tz_aware(pet.last_fed_at or pet.born_at)
     hours = max(0.0, (now - ref).total_seconds() / 3600)
     decay_h = _personality_hunger_hours(pet.personality)
     # hunger_resist skill: +25% decay time per level → hunger falls slower
@@ -210,7 +215,7 @@ def _compute_mood(pet: ChatPet, now: dt.datetime) -> int:
     last_cuddled_at / last_played_at are REAL timestamps (not backdated),
     so cooldown checks remain independent and trustworthy.
     """
-    ref = pet.last_cuddled_at or pet.last_played_at or pet.born_at
+    ref = _tz_aware(pet.last_cuddled_at or pet.last_played_at or pet.born_at)
     hours = max(0.0, (now - ref).total_seconds() / 3600)
     decay_h = _personality_mood_hours(pet.personality)
     # mood_resist skill: +25% decay time per level → mood falls slower
@@ -220,7 +225,7 @@ def _compute_mood(pet: ChatPet, now: dt.datetime) -> int:
 
 
 def _compute_stage(born_at: dt.datetime, now: dt.datetime) -> int:
-    days = (now - born_at).days
+    days = (now - _tz_aware(born_at)).days
     if days == 0: return 1
     if days <= 6: return 2
     if days <= 13: return 3
@@ -275,7 +280,7 @@ def _pet_dict(pet: ChatPet, now: dt.datetime, rel_tier: str | None = None) -> di
         "last_cuddled_at":  pet.last_cuddled_at.isoformat() if pet.last_cuddled_at else None,
         "died_at":          pet.died_at.isoformat() if pet.died_at else None,
         "death_cause":      pet.death_cause,
-        "days_alive":       (now - pet.born_at).days,
+        "days_alive":       (now - _tz_aware(pet.born_at)).days,
         "total_feedings":   pet.total_feedings,
         "total_plays":      pet.total_plays,
         "total_cuddles":    pet.total_cuddles,
@@ -295,7 +300,7 @@ def _pet_dict(pet: ChatPet, now: dt.datetime, rel_tier: str | None = None) -> di
 def _cooldown_secs(last_at: dt.datetime | None, hours: float, now: dt.datetime) -> int:
     if last_at is None:
         return 0
-    elapsed = (now - last_at).total_seconds()
+    elapsed = (now - _tz_aware(last_at)).total_seconds()
     remaining = hours * 3600 - elapsed
     return max(0, int(remaining))
 
@@ -369,7 +374,7 @@ class PetRepository:
                     pet.died_at = now
                     changed = True
                 elif pet.chat_id not in recent_chats and pet.personality != "brave":
-                    age_hours = (now - pet.born_at).total_seconds() / 3600
+                    age_hours = (now - _tz_aware(pet.born_at)).total_seconds() / 3600
                     if age_hours > STREAK_GRACE_HOURS:
                         pet.is_alive = False
                         pet.death_cause = "streak_broken"
@@ -632,7 +637,7 @@ class PetRepository:
 
         cooldown = _personality_feed_cooldown(pet.personality)
         if pet.last_fed_at:
-            hours_since = (now - pet.last_fed_at).total_seconds() / 3600
+            hours_since = (now - _tz_aware(pet.last_fed_at)).total_seconds() / 3600
             if hours_since < cooldown:
                 raise ValueError("already_fed")
 
@@ -653,7 +658,7 @@ class PetRepository:
 
         # Compute feed streak BEFORE updating last_fed_at
         prev_fed = pet.last_fed_at
-        if prev_fed and (now - prev_fed).total_seconds() < 26 * 3600:
+        if prev_fed and (now - _tz_aware(prev_fed)).total_seconds() < 26 * 3600:
             pet.feed_streak += 1
         else:
             pet.feed_streak = 1
@@ -702,7 +707,7 @@ class PetRepository:
 
         cooldown = _personality_play_cooldown(pet.personality)
         if pet.last_played_at:
-            hours_since = (now - pet.last_played_at).total_seconds() / 3600
+            hours_since = (now - _tz_aware(pet.last_played_at)).total_seconds() / 3600
             if hours_since < cooldown:
                 raise ValueError("play_cooldown")
 
@@ -756,7 +761,7 @@ class PetRepository:
         pet = await self._get_alive_pet(owner_telegram_id, pet_id)
 
         if pet.last_cuddled_at:
-            hours_since = (now - pet.last_cuddled_at).total_seconds() / 3600
+            hours_since = (now - _tz_aware(pet.last_cuddled_at)).total_seconds() / 3600
             if hours_since < CUDDLE_COOLDOWN_HOURS:
                 raise ValueError("cuddle_cooldown")
 
@@ -862,7 +867,7 @@ class PetRepository:
                 "species_label":     sp.get("label", ""),
                 "level":             _compute_level(pet.xp),
                 "xp":                pet.xp,
-                "days_alive":        (now - pet.born_at).days,
+                "days_alive":        (now - _tz_aware(pet.born_at)).days,
                 "personality_emoji": p_info.get("emoji", ""),
             })
         return result

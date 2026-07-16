@@ -738,3 +738,98 @@ async def test_feed_xp_bonus_restored_when_partner_reconnects(session):
     assert result_reconnected["xp_gained"] == expected_xp
     assert result_reconnected["rel_tier"] == "friends"
     assert result_reconnected["rel_bonus"] == rel_mult
+
+
+# ---------------------------------------------------------------------------
+# get_pets: rel_tier / rel_bonus badge lifecycle
+# ---------------------------------------------------------------------------
+
+
+def _find_pet(pets_out: list[dict], chat_id: int) -> dict:
+    """Return the pet dict for a given chat_id (raises if not found)."""
+    for p in pets_out:
+        if p["chat_id"] == chat_id:
+            return p
+    raise KeyError(f"No pet found for chat_id={chat_id}")
+
+
+@pytest.mark.asyncio
+async def test_get_pets_rel_tier_shown_when_partner_connected(session):
+    """get_pets returns rel_tier and rel_bonus when the partner is connected."""
+    owner, partner = 90001, 90002
+    await _seed_connection(session, partner, is_enabled=True)
+    await _seed_rel(session, owner, partner, status="active", rel_type="married")
+    await _seed_pet(session, owner, partner)
+
+    repo = PetRepository(session)
+    pets_out, _ = await repo.get_pets(owner)
+
+    pet = _find_pet(pets_out, partner)
+    assert pet["rel_tier"] == "married", (
+        "rel_tier should be 'married' when partner has an active connection"
+    )
+    assert pet["rel_bonus"] == REL_XP_BONUS["married"], (
+        "rel_bonus should reflect the married multiplier"
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_pets_rel_tier_none_when_partner_disconnected(session):
+    """get_pets returns rel_tier=None and rel_bonus=1.0 when partner has disconnected."""
+    owner, partner = 91001, 91002
+    await _seed_connection(session, partner, is_enabled=False)
+    await _seed_rel(session, owner, partner, status="active", rel_type="dating")
+    await _seed_pet(session, owner, partner)
+
+    repo = PetRepository(session)
+    pets_out, _ = await repo.get_pets(owner)
+
+    pet = _find_pet(pets_out, partner)
+    assert pet["rel_tier"] is None, (
+        "rel_tier must be None when partner's connection is disabled"
+    )
+    assert pet["rel_bonus"] == 1.0, (
+        "rel_bonus must fall back to 1.0 when the partner is disconnected"
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_pets_rel_tier_restored_after_partner_reconnects(session):
+    """Full lifecycle: connected → disconnected → reconnected — badge follows live state.
+
+    This is the core regression guard for the mid-session reconnect scenario:
+    after a partner re-enables their connection, the very next get_pets call
+    must show the correct tier and bonus without any cache invalidation step.
+    """
+    owner, partner = 92001, 92002
+    partner_conn = await _seed_connection(session, partner, is_enabled=True)
+    await _seed_rel(session, owner, partner, status="active", rel_type="friends")
+    await _seed_pet(session, owner, partner)
+
+    repo = PetRepository(session)
+
+    # Step 1 — connected: tier should be visible
+    pets_out, _ = await repo.get_pets(owner)
+    pet = _find_pet(pets_out, partner)
+    assert pet["rel_tier"] == "friends"
+    assert pet["rel_bonus"] == REL_XP_BONUS["friends"]
+
+    # Step 2 — partner disconnects
+    partner_conn.is_enabled = False
+    await session.flush()
+
+    pets_out, _ = await repo.get_pets(owner)
+    pet = _find_pet(pets_out, partner)
+    assert pet["rel_tier"] is None, "Badge must disappear after partner disconnects"
+    assert pet["rel_bonus"] == 1.0
+
+    # Step 3 — partner reconnects mid-session
+    partner_conn.is_enabled = True
+    await session.flush()
+
+    pets_out, _ = await repo.get_pets(owner)
+    pet = _find_pet(pets_out, partner)
+    assert pet["rel_tier"] == "friends", (
+        "rel_tier must be restored immediately after partner reconnects"
+    )
+    assert pet["rel_bonus"] == REL_XP_BONUS["friends"]

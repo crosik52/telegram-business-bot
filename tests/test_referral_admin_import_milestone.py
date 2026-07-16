@@ -1144,6 +1144,135 @@ async def test_grant_premium_extends_active_row_leaves_expired_row_untouched(
 
 
 # ---------------------------------------------------------------------------
+# Deactivated-row test: _grant_premium ignores a row with is_active=False and
+# extends only the currently-active row.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_grant_premium_extends_active_row_leaves_deactivated_row_untouched(
+    session_factory,
+):
+    """_grant_premium must extend only the active subscription when a user has
+    a fully-deactivated expired row (is_active=False) alongside an active one.
+
+    Scenario
+    --------
+    1. Seed a user with two subscription rows:
+       - ``sub_deactivated`` : is_active=False, expires_at is 10 days in the past.
+         This is a fully-deactivated row — the flag was explicitly cleared.
+       - ``sub_active``      : is_active=True,  expires_at is 20 days in the future.
+    2. Call ``_grant_premium`` with 14 extra days.
+    3. Assert that ``sub_active.expires_at`` moved forward by exactly 14 days.
+    4. Assert that ``sub_deactivated.expires_at`` is completely unchanged.
+
+    This exercises **both** predicates in ``_grant_premium``:
+      - ``is_active.is_(True)``   — excludes the deactivated row (is_active=False)
+      - ``expires_at > now``      — excludes logically-expired rows
+
+    The previous mixed test (test_grant_premium_extends_active_row_leaves_expired_row_untouched)
+    only exercises the expires_at filter because that expired row still has is_active=True.
+    This test confirms the is_active filter works independently: even if expires_at were
+    somehow in the future, a row with is_active=False would still be excluded.
+    """
+    import datetime as dt
+
+    user_id = 9900
+    grant_days = 14
+    deactivated_days_ago = 10   # expires_at is this many days in the past
+    active_days_ahead = 20      # expires_at is this many days in the future
+
+    async with session_factory() as seed:
+        await _seed_config(seed, milestones=[], referrer_reward_days=0, referee_reward_days=0)
+
+        now = dt.datetime.now(dt.timezone.utc)
+
+        sub_deactivated = UserSubscription(
+            user_telegram_id=user_id,
+            is_active=False,  # explicitly deactivated — not just logically expired
+            started_at=now - dt.timedelta(days=deactivated_days_ago + 30),
+            expires_at=now - dt.timedelta(days=deactivated_days_ago),  # also in the past
+            granted_by_admin=True,
+            stars_paid=0,
+        )
+        sub_active = UserSubscription(
+            user_telegram_id=user_id,
+            is_active=True,
+            started_at=now - dt.timedelta(days=1),
+            expires_at=now + dt.timedelta(days=active_days_ahead),  # in the future
+            granted_by_admin=True,
+            stars_paid=0,
+        )
+        seed.add(sub_deactivated)
+        seed.add(sub_active)
+        await seed.commit()
+
+        deactivated_id = sub_deactivated.id
+        active_id = sub_active.id
+        original_deactivated_expires = sub_deactivated.expires_at
+        original_active_expires = sub_active.expires_at
+
+    # Call _grant_premium directly
+    async with session_factory() as sess:
+        repo = ReferralRepository(sess)
+        await repo._grant_premium(user_id, grant_days)
+        await sess.commit()
+
+    # Verify only the active row was extended; the deactivated row is untouched
+    async with session_factory() as check:
+        def _tz(ts: dt.datetime) -> dt.datetime:
+            return ts if ts.tzinfo else ts.replace(tzinfo=dt.timezone.utc)
+
+        active_row = (
+            await check.execute(
+                select(UserSubscription).where(UserSubscription.id == active_id)
+            )
+        ).scalar_one()
+        deactivated_row = (
+            await check.execute(
+                select(UserSubscription).where(UserSubscription.id == deactivated_id)
+            )
+        ).scalar_one()
+
+        actual_active_expires      = _tz(active_row.expires_at)
+        actual_deactivated_expires = _tz(deactivated_row.expires_at)
+
+        original_active_expires_utc      = _tz(original_active_expires)
+        original_deactivated_expires_utc = _tz(original_deactivated_expires)
+
+        # Active row must be extended by exactly grant_days from its original expiry
+        expected_active_expires = original_active_expires_utc + dt.timedelta(days=grant_days)
+        delta_active = abs((actual_active_expires - expected_active_expires).total_seconds())
+        assert delta_active < 5, (
+            f"_grant_premium did not extend the active subscription.\n"
+            f"  sub_active (id={active_id}):\n"
+            f"    original  : {original_active_expires_utc.isoformat()}\n"
+            f"    expected  : {expected_active_expires.isoformat()}\n"
+            f"    actual    : {actual_active_expires.isoformat()}\n"
+            f"    delta     : {delta_active:.1f}s\n"
+            "_grant_premium must extend the active row (is_active=True, expires_at > now), "
+            "not create a new subscription."
+        )
+
+        # Deactivated row must be completely untouched — is_active stays False
+        assert deactivated_row.is_active is False, (
+            f"_grant_premium changed is_active on the deactivated row (id={deactivated_id}) "
+            f"from False to {deactivated_row.is_active!r}. "
+            "A row with is_active=False must never be touched by _grant_premium."
+        )
+        delta_deactivated = abs(
+            (actual_deactivated_expires - original_deactivated_expires_utc).total_seconds()
+        )
+        assert delta_deactivated < 5, (
+            f"_grant_premium modified the deactivated subscription — it must be left untouched.\n"
+            f"  sub_deactivated (id={deactivated_id}):\n"
+            f"    original  : {original_deactivated_expires_utc.isoformat()}\n"
+            f"    actual    : {actual_deactivated_expires.isoformat()}\n"
+            f"    delta     : {delta_deactivated:.1f}s\n"
+            "Only the currently-active row (is_active=True, expires_at > now) should be extended."
+        )
+
+
+# ---------------------------------------------------------------------------
 # Savepoint rollback tests: _grant_premium must not be silently skipped
 # after a rolled-back savepoint inside evaluate_and_grant_milestones.
 # ---------------------------------------------------------------------------

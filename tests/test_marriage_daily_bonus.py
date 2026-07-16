@@ -19,6 +19,7 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.database.base import Base
+from app.models.business_connection import BusinessConnection
 from app.models.relationship import MARRIAGE_DAILY_BONUS, Relationship
 from app.models.wallet import UserWallet
 from app.repositories.relationship_repository import RelationshipRepository
@@ -57,6 +58,22 @@ async def _seed_wallet(session: AsyncSession, user_id: int, balance: int = 1000)
     session.add(w)
     await session.flush()
     return w
+
+
+async def _seed_connection(
+    session: AsyncSession,
+    user_id: int,
+    *,
+    is_enabled: bool = True,
+) -> BusinessConnection:
+    conn = BusinessConnection(
+        business_connection_id=f"bc_{user_id}",
+        user_telegram_id=user_id,
+        is_enabled=is_enabled,
+    )
+    session.add(conn)
+    await session.flush()
+    return conn
 
 
 async def _seed_marriage(
@@ -99,6 +116,9 @@ async def test_count_marriages_no_relationship(session):
 async def test_count_marriages_active_marriage(session):
     """count_marriages returns 1 for a user in one active marriage."""
     user_a, user_b = 9100, 9101
+    # Both partners need an enabled connection so each side's count passes.
+    await _seed_connection(session, user_a)
+    await _seed_connection(session, user_b)
     await _seed_marriage(session, user_a, user_b)
     repo = RelationshipRepository(session)
     assert await repo.count_marriages(user_a) == 1
@@ -171,6 +191,7 @@ async def test_marriage_bonus_is_zero_after_breakup(session):
     """
     user_a, user_b = 8001, 8002
 
+    await _seed_connection(session, user_b)
     await _seed_marriage(session, user_a, user_b)
     rel_repo = RelationshipRepository(session)
 
@@ -207,6 +228,7 @@ async def test_marriage_bonus_in_daily_claim_drops_to_zero_after_breakup(session
          Verify earned == base (no marriage bonus).
     """
     user_a, user_b = 8100, 8101
+    await _seed_connection(session, user_b)
     await _seed_wallet(session, user_a)
     await _seed_marriage(session, user_a, user_b)
 
@@ -277,6 +299,8 @@ async def test_second_marriage_bonus_unaffected_by_unrelated_breakup(session):
     """If A has two marriages, breaking one still leaves count_marriages=1."""
     user_a, user_b, user_c = 8300, 8301, 8302
 
+    await _seed_connection(session, user_b)
+    await _seed_connection(session, user_c)
     # Seed two separate marriages for user_a
     await _seed_marriage(session, user_a, user_b)
 
@@ -326,6 +350,8 @@ async def test_marriage_bonus_reappears_after_remarriage(session):
     """
     user_a, user_b, user_c = 8400, 8401, 8402
 
+    await _seed_connection(session, user_b)
+    await _seed_connection(session, user_c)
     rel_repo = RelationshipRepository(session)
 
     # Step 1 — A and B are married
@@ -368,6 +394,7 @@ async def test_remarriage_daily_claim_includes_bonus(session):
     """
     user_a, user_b, user_c = 8500, 8501, 8502
 
+    await _seed_connection(session, user_c)
     await _seed_wallet(session, user_a)
     await _seed_marriage(session, user_a, user_b)
 
@@ -399,3 +426,140 @@ async def test_remarriage_daily_claim_includes_bonus(session):
     assert result.earned > result.base, (
         "Earned coins must exceed base when re-marriage bonus is applied"
     )
+
+
+# ---------------------------------------------------------------------------
+# Disconnected partner: marriage bonus must NOT be counted
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_count_marriages_partner_connected(session):
+    """count_marriages returns 1 when the partner has an enabled BusinessConnection."""
+    user_a, user_b = 10001, 10002
+    await _seed_connection(session, user_b, is_enabled=True)
+    await _seed_marriage(session, user_a, user_b)
+
+    repo = RelationshipRepository(session)
+    assert await repo.count_marriages(user_a) == 1
+
+
+@pytest.mark.asyncio
+async def test_count_marriages_partner_disconnected(session):
+    """count_marriages returns 0 when the partner has disconnected (is_enabled=False)."""
+    user_a, user_b = 10101, 10102
+    await _seed_connection(session, user_b, is_enabled=False)
+    await _seed_marriage(session, user_a, user_b)
+
+    repo = RelationshipRepository(session)
+    assert await repo.count_marriages(user_a) == 0, (
+        "A disconnected partner must not contribute to the marriage daily bonus"
+    )
+
+
+@pytest.mark.asyncio
+async def test_count_marriages_partner_no_connection_row(session):
+    """count_marriages returns 0 when the partner has no BusinessConnection at all."""
+    user_a, user_b = 10201, 10202
+    # No BusinessConnection seeded for user_b
+    await _seed_marriage(session, user_a, user_b)
+
+    repo = RelationshipRepository(session)
+    assert await repo.count_marriages(user_a) == 0
+
+
+@pytest.mark.asyncio
+async def test_count_marriages_partner_reconnects(session):
+    """count_marriages returns 1 again after a partner re-enables their connection."""
+    user_a, user_b = 10301, 10302
+    conn = await _seed_connection(session, user_b, is_enabled=False)
+    await _seed_marriage(session, user_a, user_b)
+
+    repo = RelationshipRepository(session)
+    assert await repo.count_marriages(user_a) == 0
+
+    conn.is_enabled = True
+    await session.flush()
+
+    assert await repo.count_marriages(user_a) == 1, (
+        "Bonus must be restored as soon as the partner reconnects"
+    )
+
+
+@pytest.mark.asyncio
+async def test_claim_daily_no_marriage_bonus_when_partner_disconnected(session):
+    """claim_daily does not award the marriage bonus when the partner is disconnected."""
+    user_a, user_b = 10401, 10402
+    await _seed_connection(session, user_b, is_enabled=False)
+    await _seed_wallet(session, user_a)
+    await _seed_marriage(session, user_a, user_b)
+
+    wallet_repo = WalletRepository(session)
+    result = await wallet_repo.claim_daily(
+        user_a, streak_days=0, premium_multiplier=1.0, premium_bonus=0
+    )
+
+    assert result.marriage_count == 0, (
+        "Disconnected partner must not be counted in claim_daily"
+    )
+    assert result.marriage_bonus == 0
+    assert result.earned == result.base
+
+
+@pytest.mark.asyncio
+async def test_claim_daily_marriage_bonus_paid_when_partner_connected(session):
+    """claim_daily awards MARRIAGE_DAILY_BONUS when the partner is connected."""
+    user_a, user_b = 10501, 10502
+    await _seed_connection(session, user_b, is_enabled=True)
+    await _seed_wallet(session, user_a)
+    await _seed_marriage(session, user_a, user_b)
+
+    wallet_repo = WalletRepository(session)
+    result = await wallet_repo.claim_daily(
+        user_a, streak_days=0, premium_multiplier=1.0, premium_bonus=0
+    )
+
+    assert result.marriage_count == 1
+    assert result.marriage_bonus == MARRIAGE_DAILY_BONUS
+    assert result.earned == result.base + MARRIAGE_DAILY_BONUS
+
+
+@pytest.mark.asyncio
+async def test_claim_daily_bonus_drops_after_partner_disconnects(session):
+    """After a partner disconnects, the very next claim_daily pays no marriage bonus.
+
+    This is the primary regression guard: even with an active marriage row,
+    claim_daily must re-check BusinessConnection.is_enabled at claim time.
+    """
+    user_a, user_b = 10601, 10602
+    partner_conn = await _seed_connection(session, user_b, is_enabled=True)
+    await _seed_wallet(session, user_a)
+    await _seed_marriage(session, user_a, user_b)
+
+    wallet_repo = WalletRepository(session)
+
+    # First claim — partner connected, bonus expected
+    result_connected = await wallet_repo.claim_daily(
+        user_a, streak_days=0, premium_multiplier=1.0, premium_bonus=0
+    )
+    assert result_connected.marriage_bonus == MARRIAGE_DAILY_BONUS
+
+    # Partner disconnects; backdate last_daily_claim so the cooldown clears
+    partner_conn.is_enabled = False
+    from sqlalchemy import select as sa_select
+    wallet_row = (await session.execute(
+        sa_select(UserWallet).where(UserWallet.owner_telegram_id == user_a)
+    )).scalar_one()
+    wallet_row.last_daily_claim = (
+        dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=21)
+    )
+    await session.flush()
+
+    # Second claim — partner disconnected, no bonus
+    result_disconnected = await wallet_repo.claim_daily(
+        user_a, streak_days=0, premium_multiplier=1.0, premium_bonus=0
+    )
+    assert result_disconnected.marriage_count == 0, (
+        "Disconnected partner must not count at claim time"
+    )
+    assert result_disconnected.marriage_bonus == 0

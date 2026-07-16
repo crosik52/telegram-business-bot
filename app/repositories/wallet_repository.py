@@ -14,9 +14,10 @@ import datetime as dt
 import random
 from dataclasses import dataclass
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.business_connection import BusinessConnection
 from app.models.relationship import MARRIAGE_DAILY_BONUS, Relationship
 from app.models.wallet import UserWallet
 
@@ -257,11 +258,25 @@ class WalletRepository:
 
         # Count active marriages inside the locked transaction so a concurrent
         # claim_daily cannot observe a stale count before the cooldown is set.
+        # Only count marriages where the partner still has an enabled
+        # BusinessConnection — a disconnected partner must not keep generating
+        # the daily bonus.
+        connected_partners = (
+            select(BusinessConnection.user_telegram_id)
+            .where(BusinessConnection.is_enabled.is_(True))
+            .scalar_subquery()
+        )
         marriage_count_row = await self.session.execute(
             select(func.count()).select_from(Relationship).where(
                 or_(
-                    Relationship.user_a_id == owner_telegram_id,
-                    Relationship.user_b_id == owner_telegram_id,
+                    and_(
+                        Relationship.user_a_id == owner_telegram_id,
+                        Relationship.user_b_id.in_(connected_partners),
+                    ),
+                    and_(
+                        Relationship.user_b_id == owner_telegram_id,
+                        Relationship.user_a_id.in_(connected_partners),
+                    ),
                 ),
                 Relationship.rel_type == "married",
                 Relationship.status == "active",

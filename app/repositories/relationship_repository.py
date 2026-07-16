@@ -86,11 +86,31 @@ class RelationshipRepository:
         )
 
     async def count_marriages(self, user_id: int) -> int:
-        """Count active marriages for daily bonus calculation."""
+        """Count active marriages where the partner still has an enabled
+        BusinessConnection. A disconnected partner must not keep generating
+        the marriage daily bonus."""
         rels = await self.get_for_user(user_id)
-        return sum(
-            1 for r in rels if r.rel_type == "married" and r.status == "active"
-        )
+        active_marriages = [
+            r for r in rels if r.rel_type == "married" and r.status == "active"
+        ]
+        if not active_marriages:
+            return 0
+        partner_ids = [
+            r.user_b_id if r.user_a_id == user_id else r.user_a_id
+            for r in active_marriages
+        ]
+        connected: set[int] = {
+            r[0]
+            for r in (
+                await self._session.execute(
+                    select(BusinessConnection.user_telegram_id).where(
+                        BusinessConnection.user_telegram_id.in_(partner_ids),
+                        BusinessConnection.is_enabled.is_(True),
+                    )
+                )
+            ).all()
+        }
+        return sum(1 for pid in partner_ids if pid in connected)
 
     async def get_active_tier(self, user1: int, user2: int) -> str | None:
         """Return rel_type of the active relationship between user1 and user2, or None.

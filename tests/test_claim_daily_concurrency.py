@@ -31,6 +31,7 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.database.base import Base
+from app.models.business_connection import BusinessConnection
 from app.models.relationship import MARRIAGE_DAILY_BONUS, Relationship
 from app.models.wallet import UserWallet
 from app.repositories.wallet_repository import DAILY_BASE, DailyClaimResult, WalletRepository
@@ -67,6 +68,19 @@ async def _seed_wallet(session: AsyncSession, user_id: int, balance: int = 1_000
     return w
 
 
+async def _seed_connection(
+    session: AsyncSession, user_id: int, *, is_enabled: bool = True
+) -> BusinessConnection:
+    conn = BusinessConnection(
+        business_connection_id=f"bc_{user_id}",
+        user_telegram_id=user_id,
+        is_enabled=is_enabled,
+    )
+    session.add(conn)
+    await session.flush()
+    return conn
+
+
 async def _seed_marriage(session: AsyncSession, user_a: int, user_b: int) -> Relationship:
     a, b = min(user_a, user_b), max(user_a, user_b)
     now = dt.datetime.now(dt.timezone.utc)
@@ -97,6 +111,7 @@ async def test_marriage_bonus_computed_atomically(session_factory):
     user_a, user_b = 7001, 7002
 
     async with session_factory() as seed_sess:
+        await _seed_connection(seed_sess, user_b)
         await _seed_wallet(seed_sess, user_a)
         await _seed_marriage(seed_sess, user_a, user_b)
         await seed_sess.commit()
@@ -137,6 +152,7 @@ async def test_second_claim_within_cooldown_is_rejected(session_factory):
     user_a, user_b = 7100, 7101
 
     async with session_factory() as seed_sess:
+        await _seed_connection(seed_sess, user_b)
         await _seed_wallet(seed_sess, user_a)
         await _seed_marriage(seed_sess, user_a, user_b)
         await seed_sess.commit()
@@ -176,6 +192,7 @@ async def test_total_balance_reflects_exactly_one_payout(session_factory):
     initial_balance = 500
 
     async with session_factory() as seed_sess:
+        await _seed_connection(seed_sess, user_b)
         await _seed_wallet(seed_sess, user_a, balance=initial_balance)
         await _seed_marriage(seed_sess, user_a, user_b)
         await seed_sess.commit()

@@ -41,6 +41,43 @@ from app.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+
+def _video_dimensions(path: str) -> tuple[int, int]:
+    """Return (width, height) of a video file using ffprobe.
+
+    Falls back to (0, 0) on any error so callers can skip the params
+    entirely rather than sending wrong values to Telegram.
+    """
+    import json
+    import subprocess
+
+    try:
+        out = subprocess.check_output(
+            [
+                "ffprobe", "-v", "quiet",
+                "-print_format", "json",
+                "-show_streams",
+                "-select_streams", "v:0",
+                path,
+            ],
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+        )
+        streams = json.loads(out).get("streams", [])
+        if not streams:
+            return 0, 0
+        s = streams[0]
+        w = int(s.get("width", 0))
+        h = int(s.get("height", 0))
+        # Some Instagram / TikTok files have a rotation tag that swaps axes.
+        rotation = int(s.get("tags", {}).get("rotate", 0))
+        if rotation in (90, 270):
+            w, h = h, w
+        return w, h
+    except Exception as exc:
+        logger.debug("ffprobe failed for %s: %s", path, exc)
+        return 0, 0
+
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 MAX_BYTES = 45 * 1024 * 1024  # 45 MB
@@ -498,6 +535,10 @@ async def handle_video_link(
 
         else:  # video
             path = paths[0]
+            _w, _h = _video_dimensions(path)
+            _dim: dict = {}
+            if _w and _h:
+                _dim = {"width": _w, "height": _h}
             if status_msg is not None:
                 await bot.edit_message_media(
                     business_connection_id=business_connection_id,
@@ -506,6 +547,7 @@ async def handle_video_link(
                     media=InputMediaVideo(
                         media=FSInputFile(path),
                         supports_streaming=True,
+                        **_dim,
                     ),
                 )
             else:
@@ -514,6 +556,7 @@ async def handle_video_link(
                     business_connection_id=business_connection_id,
                     video=FSInputFile(path),
                     supports_streaming=True,
+                    **_dim,
                 )
 
         logger.info("Media delivered to chat_id=%s (%s)", chat_id, media_type)

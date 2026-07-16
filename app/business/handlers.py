@@ -965,6 +965,7 @@ async def on_business_message(message: Message, bot: Bot) -> None:
                             _url=url,
                             _platform=platform,
                             _key=key,
+                            _link_msg_id=message.message_id,
                         ) -> None:
                             async with _download_semaphore:
                                 try:
@@ -974,6 +975,7 @@ async def on_business_message(message: Message, bot: Bot) -> None:
                                         business_connection_id=_conn_id,
                                         url=_url,
                                         platform=_platform,
+                                        link_message_id=_link_msg_id,
                                     )
                                 finally:
                                     _in_flight.discard(_key)

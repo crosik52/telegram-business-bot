@@ -396,8 +396,13 @@ async def handle_video_link(
     business_connection_id: str,
     url: str,
     platform: str,
+    link_message_id: int | None = None,
 ) -> None:
-    """Download *url*, showing live progress, then deliver the media."""
+    """Download *url*, showing live progress, then deliver the media.
+
+    If *link_message_id* is provided it is deleted from the chat after
+    the media is successfully sent, so the original link disappears.
+    """
     import shutil
 
     label   = _PLATFORM_LABELS.get(platform, platform)
@@ -523,6 +528,20 @@ async def handle_video_link(
                 )
 
         logger.info("Media delivered to chat_id=%s (%s)", chat_id, media_type)
+
+        # Delete the original link message now that the video is in the chat.
+        if link_message_id is not None:
+            try:
+                await bot.delete_message(
+                    chat_id=chat_id,
+                    message_id=link_message_id,
+                    business_connection_id=business_connection_id,
+                )
+            except Exception as _del_exc:
+                logger.debug(
+                    "Could not delete link message %s in chat %s: %s",
+                    link_message_id, chat_id, _del_exc,
+                )
 
     except Exception as exc:
         logger.warning("Media download/send failed for %s (%s): %s", url, label, exc)

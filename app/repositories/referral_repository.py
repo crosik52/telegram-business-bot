@@ -315,19 +315,28 @@ class ReferralRepository:
 
     # ── Unchecked-milestone sweep (called by background loop) ─────────────────
 
-    async def list_unchecked_referral_ids(self, limit: int = 50) -> list[tuple[int, int]]:
+    async def list_unchecked_referral_ids(
+        self, limit: int = 50, after_id: int = 0
+    ) -> list[tuple[int, int]]:
         """Return (referral_id, referrer_telegram_id) pairs for active referrals
         whose milestones have not yet been evaluated.
 
         Intended for the background sweep loop — each row is processed in a
         separate session so that one failure does not block others.
+
+        ``after_id`` enables keyset pagination: pass the highest ``referral_id``
+        seen in the previous batch so that each batch advances monotonically and
+        a referral that fails (and therefore keeps ``milestone_checked=False``)
+        is not re-selected within the same sweep cycle.
         """
         result = await self._db.execute(
             select(Referral.id, Referral.referrer_telegram_id)
             .where(
                 Referral.status == "active",
                 Referral.milestone_checked.is_(False),
+                Referral.id > after_id,
             )
+            .order_by(Referral.id)
             .limit(limit)
         )
         return result.all()

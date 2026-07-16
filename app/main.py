@@ -34,6 +34,8 @@ logger = get_logger(__name__)
 _CLEANUP_INTERVAL_HOURS = 6
 _STREAK_REMINDER_INTERVAL_MINUTES = 60
 _MILESTONE_SWEEP_INTERVAL_MINUTES = 15
+_MILESTONE_SWEEP_BATCH_SIZE = 50
+_MILESTONE_SWEEP_MAX_BATCHES = 100  # safety cap: at most 5 000 rows per cycle
 
 
 async def _streak_reminder_loop() -> None:
@@ -58,6 +60,12 @@ async def _milestone_sweep_loop() -> None:
     milestone evaluation (Phase 2) was skipped because the server restarted
     before ``evaluate_and_grant_milestones`` could run.  Runs every
     ``_MILESTONE_SWEEP_INTERVAL_MINUTES`` minutes.
+
+    Within each cycle the loop keeps fetching batches of
+    ``_MILESTONE_SWEEP_BATCH_SIZE`` rows until the backlog is exhausted or
+    ``_MILESTONE_SWEEP_MAX_BATCHES`` batches have been processed (safety cap).
+    A single log line summarises the total rows processed for the whole cycle
+    rather than emitting one line per batch.
     """
     from app.database.session import get_db_session
     from app.repositories.referral_repository import ReferralRepository
@@ -66,30 +74,80 @@ async def _milestone_sweep_loop() -> None:
     await asyncio.sleep(90)
     while True:
         try:
-            # Phase A: collect unchecked referral IDs in a short-lived session.
-            unchecked: list[tuple[int, int]] = []
-            async for session in get_db_session():
-                repo = ReferralRepository(session)
-                unchecked = await repo.list_unchecked_referral_ids(limit=50)
+            total_processed = 0
+            total_failed = 0
+            batches_run = 0
+            after_id = 0  # keyset cursor — advances monotonically through the table
 
-            # Phase B: evaluate milestones for each one in its own session so
-            # that a single failure does not prevent the others from being processed.
-            for ref_id, referrer_id in unchecked:
-                try:
-                    async for session in get_db_session():
-                        repo = ReferralRepository(session)
-                        await repo.evaluate_and_grant_milestones(referrer_id, ref_id)
-                except Exception:
-                    logger.exception(
-                        "Milestone sweep: evaluation failed for referral_id=%s referrer=%s",
-                        ref_id,
-                        referrer_id,
+            while batches_run < _MILESTONE_SWEEP_MAX_BATCHES:
+                # Phase A: collect the next batch of unchecked IDs in a
+                # short-lived session.  ``after_id`` ensures monotonic progress:
+                # referrals whose evaluation failed (milestone_checked stays
+                # False) are NOT re-selected within this cycle because their id
+                # is already below the cursor.
+                unchecked: list[tuple[int, int]] = []
+                async for session in get_db_session():
+                    repo = ReferralRepository(session)
+                    unchecked = await repo.list_unchecked_referral_ids(
+                        limit=_MILESTONE_SWEEP_BATCH_SIZE,
+                        after_id=after_id,
                     )
 
-            if unchecked:
-                logger.info(
-                    "Milestone sweep: processed %d unchecked referral(s)", len(unchecked)
+                if not unchecked:
+                    break  # backlog is clear
+
+                batches_run += 1
+
+                # Advance the keyset cursor past this batch before processing
+                # so the next query starts from after the highest id we saw.
+                after_id = unchecked[-1][0]
+
+                # Phase B: evaluate milestones for each row in its own session
+                # so that a single failure does not block the rest.
+                # Exceptions are caught silently here and aggregated into a
+                # single warning at the end of the cycle to avoid flooding logs
+                # when a large number of referrals are persistently unchecked.
+                failed_ids: list[int] = []
+                for ref_id, referrer_id in unchecked:
+                    try:
+                        async for session in get_db_session():
+                            repo = ReferralRepository(session)
+                            await repo.evaluate_and_grant_milestones(referrer_id, ref_id)
+                        total_processed += 1
+                    except Exception as exc:  # noqa: BLE001
+                        total_failed += 1
+                        failed_ids.append(ref_id)
+                        logger.debug(
+                            "Milestone sweep: evaluation error for referral_id=%s: %s",
+                            ref_id,
+                            exc,
+                        )
+
+                # If the batch was smaller than the limit the table is exhausted.
+                if len(unchecked) < _MILESTONE_SWEEP_BATCH_SIZE:
+                    break
+
+            capped = batches_run >= _MILESTONE_SWEEP_MAX_BATCHES
+            if total_processed or total_failed:
+                msg = (
+                    "Milestone sweep: processed %d, failed %d referral(s)"
+                    " in %d batch(es)%s"
                 )
+                args: list = [
+                    total_processed,
+                    total_failed,
+                    batches_run,
+                    " (safety cap reached — more rows remain)" if capped else "",
+                ]
+                if total_failed:
+                    # Include a sample of failed IDs (up to 5) so operators can
+                    # investigate without a per-row stack trace.
+                    sample = failed_ids[:5]
+                    msg += "; failed referral_ids (sample): %s"
+                    args.append(sample)
+                    logger.warning(msg, *args)
+                else:
+                    logger.info(msg, *args)
         except Exception:
             logger.exception("Milestone sweep loop error — will retry next cycle")
 

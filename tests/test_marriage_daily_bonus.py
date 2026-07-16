@@ -214,17 +214,17 @@ async def test_marriage_bonus_in_daily_claim_drops_to_zero_after_breakup(session
     wallet_repo = WalletRepository(session)
 
     # ── Claim 1: while married ────────────────────────────────────────────
-    marriages_1     = await rel_repo.count_marriages(user_a)
-    marriage_bonus_1 = MARRIAGE_DAILY_BONUS * marriages_1
-    assert marriage_bonus_1 > 0, "Should have a positive marriage bonus before break-up"
-
+    # Marriage bonus is now computed atomically inside claim_daily (after the
+    # wallet row lock), so the route passes premium_bonus=0 for the marriage
+    # portion — claim_daily adds it internally.
     result_1 = await wallet_repo.claim_daily(
         user_a,
         streak_days=0,
         premium_multiplier=1.0,
-        premium_bonus=marriage_bonus_1,
+        premium_bonus=0,
     )
-    assert result_1.premium_bonus == marriage_bonus_1
+    assert result_1.marriage_count == 1, "Should count 1 active marriage"
+    assert result_1.marriage_bonus == MARRIAGE_DAILY_BONUS
     assert result_1.earned > result_1.base, (
         "Earned must exceed base when marriage bonus is applied"
     )
@@ -245,21 +245,17 @@ async def test_marriage_bonus_in_daily_claim_drops_to_zero_after_breakup(session
     await session.flush()
 
     # ── Claim 2: after break-up ───────────────────────────────────────────
-    marriages_2      = await rel_repo.count_marriages(user_a)
-    marriage_bonus_2 = MARRIAGE_DAILY_BONUS * marriages_2
-    assert marriage_bonus_2 == 0, "Marriage bonus must be 0 after break-up"
-
     result_2 = await wallet_repo.claim_daily(
         user_a,
         streak_days=0,
         premium_multiplier=1.0,
-        premium_bonus=marriage_bonus_2,
+        premium_bonus=0,
     )
-    assert result_2.premium_bonus == 0
+    assert result_2.marriage_count == 0, "Marriage count must be 0 after break-up"
+    assert result_2.marriage_bonus == 0, "Marriage bonus must be 0 after break-up"
     assert result_2.earned == result_2.base, (
         "Earned must equal base when there is no marriage bonus"
     )
-    assert result_2.marriage_count == 0 if hasattr(result_2, "marriage_count") else True
 
 
 @pytest.mark.asyncio
@@ -391,13 +387,15 @@ async def test_remarriage_daily_claim_includes_bonus(session):
         "marriage_bonus must be MARRIAGE_DAILY_BONUS after re-marrying"
     )
 
+    # Marriage bonus is computed atomically inside claim_daily; route passes 0
     result = await wallet_repo.claim_daily(
         user_a,
         streak_days=0,
         premium_multiplier=1.0,
-        premium_bonus=marriage_bonus,
+        premium_bonus=0,
     )
-    assert result.premium_bonus == MARRIAGE_DAILY_BONUS
+    assert result.marriage_count == 1, "Should count 1 active marriage after re-marriage"
+    assert result.marriage_bonus == MARRIAGE_DAILY_BONUS
     assert result.earned > result.base, (
         "Earned coins must exceed base when re-marriage bonus is applied"
     )

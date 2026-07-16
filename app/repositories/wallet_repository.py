@@ -14,9 +14,10 @@ import datetime as dt
 import random
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.relationship import MARRIAGE_DAILY_BONUS, Relationship
 from app.models.wallet import UserWallet
 
 # ── Constants ──────────────────────────────────────────────────────────────
@@ -164,6 +165,8 @@ class DailyClaimResult:
     new_balance: int
     premium_multiplier: float = 1.0
     premium_bonus: int = 0
+    marriage_bonus: int = 0
+    marriage_count: int = 0
 
 
 # ── Repository ──────────────────────────────────────────────────────────────
@@ -237,7 +240,14 @@ class WalletRepository:
     ) -> DailyClaimResult:
         """Claim the daily reward.  streak_days MUST be server-derived by the
         caller — never pass a client-supplied value directly.
-        premium_multiplier and premium_bonus are applied after streak calculation."""
+        premium_multiplier and premium_bonus are applied after streak calculation.
+
+        The marriage bonus is computed atomically *after* the wallet row-level
+        lock is acquired (SELECT … FOR UPDATE), so two concurrent claim_daily
+        calls for the same user will serialize at the lock and only the first
+        will pass the can_claim check — preventing the bonus from being
+        double-applied.
+        """
         streak_days = max(0, streak_days)   # defensive clamp
         wallet = await self._get_for_update(owner_telegram_id)
 
@@ -245,9 +255,24 @@ class WalletRepository:
         if not can_claim:
             raise ValueError(f"not_yet:{wait}")
 
+        # Count active marriages inside the locked transaction so a concurrent
+        # claim_daily cannot observe a stale count before the cooldown is set.
+        marriage_count_row = await self.session.execute(
+            select(func.count()).select_from(Relationship).where(
+                or_(
+                    Relationship.user_a_id == owner_telegram_id,
+                    Relationship.user_b_id == owner_telegram_id,
+                ),
+                Relationship.rel_type == "married",
+                Relationship.status == "active",
+            )
+        )
+        _marriage_count = marriage_count_row.scalar() or 0
+        _marriage_bonus = MARRIAGE_DAILY_BONUS * _marriage_count
+
         bonus        = min(streak_days * DAILY_STREAK_BONUS_PER_DAY, DAILY_STREAK_BONUS_MAX)
         base_earned  = DAILY_BASE + bonus
-        earned       = round(base_earned * max(1.0, premium_multiplier)) + max(0, premium_bonus)
+        earned       = round(base_earned * max(1.0, premium_multiplier)) + max(0, premium_bonus) + _marriage_bonus
 
         wallet.balance      += earned
         wallet.total_earned += earned
@@ -262,6 +287,8 @@ class WalletRepository:
             new_balance=wallet.balance,
             premium_multiplier=premium_multiplier,
             premium_bonus=premium_bonus,
+            marriage_bonus=_marriage_bonus,
+            marriage_count=_marriage_count,
         )
 
     # ── Slots spin (mutation) ──────────────────────────────────────────────

@@ -49,6 +49,21 @@ class Settings(BaseSettings):
         default=60 * 60 * 12, alias="SESSION_MAX_AGE_SECONDS"
     )
 
+    # --- Telethon user-client (optional — for view-once media download) -------
+    # Obtain API credentials at https://my.telegram.org
+    # Generate session string once with: python scripts/generate_telethon_session.py
+    telegram_api_id: int | None = Field(default=None, alias="TELEGRAM_API_ID")
+    telegram_api_hash: str | None = Field(default=None, alias="TELEGRAM_API_HASH")
+    telethon_session_str: str | None = Field(default=None, alias="TELETHON_SESSION_STR")
+
+    @property
+    def telethon_enabled(self) -> bool:
+        return bool(
+            self.telegram_api_id
+            and self.telegram_api_hash
+            and self.telethon_session_str
+        )
+
     # --- Mini App super-admin ----------------------------------------------
     # The Telegram @username (without "@") that is allowed to open the
     # /app/admin mini app panel and manage every connected user. Distinct

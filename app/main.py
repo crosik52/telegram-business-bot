@@ -143,6 +143,21 @@ async def lifespan(app: FastAPI):
             "Set it (or call setWebhook manually) before the bot can receive updates."
         )
 
+    # ── Telethon user-client (view-once media) ────────────────────────────────
+    if settings.telethon_enabled:
+        from app.services import telethon_service
+        await telethon_service.connect(
+            settings.telegram_api_id,
+            settings.telegram_api_hash,
+            settings.telethon_session_str,
+        )
+    else:
+        logger.info(
+            "Telethon not configured (TELEGRAM_API_ID / TELEGRAM_API_HASH / "
+            "TELETHON_SESSION_STR missing) — view-once media will fall back to "
+            "Bot API only."
+        )
+
     # ── Periodic DB cleanup task ──────────────────────────────────────────────
     cleanup_task = asyncio.create_task(_cleanup_loop())
     # ── Streak reminder background task ───────────────────────────────────────
@@ -162,8 +177,10 @@ async def lifespan(app: FastAPI):
         pass
 
     logger.info("Shutting down Telegram Business Bot")
-    from app.business.dispatcher import close_bot
+    from app.services import telethon_service as _ts
+    await _ts.disconnect()
 
+    from app.business.dispatcher import close_bot
     await close_bot()
     await dispose_engine()
 

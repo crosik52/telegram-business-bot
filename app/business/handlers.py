@@ -665,35 +665,92 @@ async def on_business_message(message: Message, bot: Bot) -> None:
             _is_sd = bool(getattr(message, "has_media_spoiler", False))
 
             if _is_sd and owner_telegram_id:
-                # ── Self-destructing / view-once: download SYNCHRONOUSLY ──────
-                # create_task() defers execution to the next event-loop
-                # iteration.  For view-once media the recipient can open (and
-                # destroy) the file in that window.  Awaiting the download
-                # here — before the webhook response is sent — guarantees we
-                # grab the bytes while the file_id is still valid.
+                # ── Self-destructing / view-once: grab bytes IMMEDIATELY ──────
+                # Strategy (in priority order):
+                # 1. Telethon user-client  — fetches via MTProto, works for
+                #    view-once / ttl_period media that Bot API blocks.
+                # 2. Bot API download_and_cache — fallback when Telethon is not
+                #    configured or the file is still accessible via Bot API.
+                # Both paths are awaited synchronously before the webhook
+                # response returns so no event-loop gap exists for the file
+                # to expire.
                 _partner_label = _counterpart_label(message.chat, owner_telegram_id)
-                cached_now = await media_cache_service.download_and_cache(
-                    bot, session, _file_id, _file_uq_id, _media_type_str
-                )
-                if cached_now:
-                    await session.flush()   # persist cache row in current txn
-                    # Forward the captured file to the owner's DM immediately.
+                _media_type_enum = MediaType(_media_type_str)
+                _captured_bytes: bytes | None = None
+                _method = "none"
+
+                # ── 1. Telethon ───────────────────────────────────────────────
+                from app.services import telethon_service as _tls
+                if _tls.is_available():
+                    _captured_bytes = await _tls.download_message_media(
+                        message.chat.id, message.message_id
+                    )
+                    if _captured_bytes:
+                        _method = "telethon"
+
+                # ── 2. Bot API fallback ───────────────────────────────────────
+                if _captured_bytes is None:
+                    _cached_ok = await media_cache_service.download_and_cache(
+                        bot, session, _file_id, _file_uq_id, _media_type_str
+                    )
+                    if _cached_ok:
+                        _method = "bot_api"
+
+                # ── Send to owner ─────────────────────────────────────────────
+                if _captured_bytes is not None:
+                    # Telethon gave us raw bytes — store in cache then send.
+                    import io as _io
+                    from aiogram.types import BufferedInputFile
+                    _buf_file = BufferedInputFile(
+                        _captured_bytes,
+                        filename=f"media.{'jpg' if _media_type_enum == MediaType.PHOTO else 'mp4'}",
+                    )
+                    _kw = {
+                        "chat_id": owner_telegram_id,
+                        "caption": f"📥 Самоудаляющееся медиа от {_partner_label}",
+                    }
+                    try:
+                        match _media_type_enum:
+                            case MediaType.PHOTO:
+                                await bot.send_photo(photo=_buf_file, **_kw)
+                            case MediaType.VIDEO:
+                                await bot.send_video(video=_buf_file, **_kw)
+                            case MediaType.VOICE:
+                                await bot.send_voice(voice=BufferedInputFile(_captured_bytes, "voice.ogg"), **_kw)
+                            case MediaType.VIDEO_NOTE:
+                                await bot.send_video_note(
+                                    video_note=BufferedInputFile(_captured_bytes, "videonote.mp4"),
+                                    chat_id=owner_telegram_id,
+                                )
+                            case _:
+                                await bot.send_document(document=_buf_file, **_kw)
+                        logger.info(
+                            "view-once %s captured via %s and forwarded to owner=%s",
+                            _media_type_str, _method, owner_telegram_id,
+                        )
+                    except Exception as _send_exc:
+                        logger.warning(
+                            "view-once: captured bytes but failed to send to owner=%s: %s",
+                            owner_telegram_id, _send_exc,
+                        )
+                elif _method == "bot_api":
+                    # Bot API cached — forward via cached bytes / file_id.
+                    await session.flush()
                     await _try_send_media(
-                        bot, owner_telegram_id,
-                        MediaType(_media_type_str), _file_id,
+                        bot, owner_telegram_id, _media_type_enum, _file_id,
                         file_unique_id=_file_uq_id,
                         session=session,
                         caption=f"📥 Самоудаляющееся медиа от {_partner_label}",
                     )
                     logger.info(
-                        "Self-destructing %s captured and forwarded to owner=%s",
+                        "view-once %s captured via bot_api and forwarded to owner=%s",
                         _media_type_str, owner_telegram_id,
                     )
                 else:
-                    # File was already gone — tell the owner.
+                    # Both paths failed — file already expired.
                     logger.warning(
-                        "Self-destructing %s file_id=%s could not be downloaded "
-                        "(already expired or protected)", _media_type_str, _file_id,
+                        "view-once %s file_id=%s: all download methods failed",
+                        _media_type_str, _file_id,
                     )
                     try:
                         await bot.send_message(

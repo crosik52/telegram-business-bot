@@ -625,6 +625,9 @@ async def _cmd_switch(
     *,
     bot: Bot,
     owner_id: int,
+    chat_id: int,
+    business_connection_id: str,
+    can_reply: bool = True,
     replied_text: str | None = None,
     **_: object,
 ) -> None:
@@ -632,20 +635,37 @@ async def _cmd_switch(
 
     Usage: reply to any message with ``!switch`` (or ``!свич``).
     The bot detects direction automatically (EN→RU or RU→EN) and sends
-    the corrected text back to the owner via DM.
+    the corrected text directly into the business chat (``!switch`` itself
+    is deleted by the dispatcher).  Falls back to a DM if the bot cannot
+    write to the chat.
     """
     if not replied_text or not replied_text.strip():
         await _reply(
             bot, owner_id,
             "⌨️ Ответь на сообщение командой <code>!switch</code>, "
-            "чтобы исправить раскладку."
+            "чтобы исправить раскладку.",
         )
         return
 
     converted = _switch_layout(replied_text.strip())
+
+    if can_reply:
+        try:
+            await bot.send_message(
+                chat_id=chat_id,
+                business_connection_id=business_connection_id,
+                text=converted,
+            )
+            return
+        except Exception as exc:
+            logger.warning(
+                "!switch: failed to send corrected text to chat %s: %s", chat_id, exc
+            )
+
+    # Fallback to DM when the bot can't write to the business chat.
     await _reply(
         bot, owner_id,
-        f"⌨️ <b>Исправленная раскладка:</b>\n\n{html_escape(converted)}"
+        f"⌨️ <b>Исправленная раскладка:</b>\n\n{html_escape(converted)}",
     )
 
 

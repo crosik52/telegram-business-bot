@@ -264,12 +264,21 @@ async def _cache_media_in_background(
     file_id: str,
     file_unique_id: str,
     media_type_str: str,
+    *,
+    owner_id: int | None = None,
+    is_self_destructing: bool = False,
+    partner_name: str = "собеседника",
 ) -> None:
     """Background task: download and cache media bytes immediately after receipt.
 
     Self-destructing media file_ids expire within seconds of the message
     disappearing.  By caching here — synchronously with message ingestion —
     the bytes are always available when a delete notification fires later.
+
+    When *is_self_destructing* is True (message.has_media_spoiler or detected
+    at receipt time) the task also proactively notifies the owner:
+      • Success → forwards the cached file to the owner's DM.
+      • Failure → tells the owner the file could not be captured.
     """
     try:
         async with session_scope() as session:
@@ -278,6 +287,35 @@ async def _cache_media_in_background(
             )
             if cached:
                 await session.commit()
+                if is_self_destructing and owner_id:
+                    # Proactively deliver the captured file to the owner's DM
+                    # so they don't have to use dot-save and can't miss it.
+                    media_type_enum = MediaType(media_type_str)
+                    sent = await _try_send_media(
+                        bot, owner_id, media_type_enum, file_id,
+                        file_unique_id=file_unique_id,
+                        session=session,
+                        caption=f"📥 Самоудаляющееся медиа от {partner_name}",
+                    )
+                    if not sent:
+                        logger.warning(
+                            "Captured self-destructing %s but failed to forward "
+                            "to owner=%s", media_type_str, owner_id,
+                        )
+            elif is_self_destructing and owner_id:
+                # File was already gone / protected before we could cache it.
+                try:
+                    await bot.send_message(
+                        owner_id,
+                        f"🚫 <b>Самоудаляющееся медиа</b> от {partner_name} — "
+                        f"файл исчез до того, как бот успел его сохранить.",
+                        parse_mode="HTML",
+                    )
+                except Exception as _notify_exc:
+                    logger.warning(
+                        "Could not notify owner=%s about missed self-destructing media: %s",
+                        owner_id, _notify_exc,
+                    )
     except Exception:
         logger.warning(
             "Background media cache task failed for file_unique_id=%s", file_unique_id
@@ -625,10 +663,25 @@ async def on_business_message(message: Message, bot: Bot) -> None:
         # Schedule a background task to cache the file bytes right now, before
         # the message can disappear and the file_id expires.  The task uses its
         # own session so it never blocks the current handler.
+        #
+        # has_media_spoiler=True signals a view-once / self-destructing message.
+        # For those we pass extra context so the task can:
+        #   • Proactively forward the file to the owner's DM on success.
+        #   • Alert the owner if the file expired before we could capture it.
         _file_id, _file_uq_id, _media_type_str = _get_file_info(message)
         if _file_id and _file_uq_id and _media_type_str:
+            _is_sd = bool(getattr(message, "has_media_spoiler", False))
+            _partner_label = (
+                _counterpart_label(message.chat, owner_telegram_id or 0)
+                if _is_sd else "собеседника"
+            )
             _cache_task = asyncio.create_task(
-                _cache_media_in_background(bot, _file_id, _file_uq_id, _media_type_str)
+                _cache_media_in_background(
+                    bot, _file_id, _file_uq_id, _media_type_str,
+                    owner_id=owner_telegram_id if _is_sd else None,
+                    is_self_destructing=_is_sd,
+                    partner_name=_partner_label,
+                )
             )
             _download_tasks.add(_cache_task)
             _cache_task.add_done_callback(_download_tasks.discard)

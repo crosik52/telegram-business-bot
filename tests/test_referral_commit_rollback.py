@@ -270,17 +270,24 @@ async def test_successful_commit_activates_correctly(session_factory):
 async def test_milestone_reward_not_doubled_after_rollback_and_retry(session_factory):
     """Milestone reward is granted exactly once when activation is retried after a rollback.
 
+    Milestone evaluation is a TWO-PHASE operation:
+      Phase 1 — try_activate (welcome + per-activation rewards) → commit.
+      Phase 2 — evaluate_and_grant_milestones → commit.
+
+    Milestone evaluation MUST happen in Phase 2 (after the activation commit)
+    so that ``_count_active`` reads fully committed state and cannot be tricked
+    by concurrent transactions.  The duplicate-guard (partial unique index +
+    savepoint) prevents double-grants if two sessions race to grant the same
+    milestone.
+
     Scenario
     --------
-    1. Seed a config with a milestone at count=1 (fires the first time the referrer
-       reaches 1 active referral).
+    1. Seed a config with a milestone at count=1.
     2. Seed a pending referral.
-    3. Session A: call try_activate → milestone fires (flushed but NOT committed) →
-       roll back to simulate a commit failure.
-    4. Session B: call try_activate again (retry path) → commit successfully.
-    5. Assert that exactly ONE milestone ReferralRewardLog row exists — the duplicate-
-       guard in try_activate must see no prior log (the first attempt was rolled back)
-       and grant the reward exactly once.
+    3. Session A: Phase 1 activate → rollback (simulated commit failure).
+       Because no commit happened, the referral is still 'pending'.
+    4. Session B: Phase 1 activate → commit; Phase 2 evaluate milestones → commit.
+    5. Assert that exactly ONE milestone ReferralRewardLog row exists.
     """
 
     milestone = {
@@ -311,22 +318,20 @@ async def test_milestone_reward_not_doubled_after_rollback_and_retry(session_fac
         seed_session.add(ref)
         await seed_session.commit()
 
-    # ── Phase 2: first activation attempt — rolled back ──────────────────────
+    # ── Phase 2: first activation attempt — Phase-1 rolled back ─────────────
     async with session_factory() as work_session_a:
         repo_a = ReferralRepository(work_session_a)
         ref_a, rewards_a = await repo_a.try_activate(REFERRED_ID, has_business_connection=True)
 
         assert ref_a is not None, "try_activate returned None in first attempt"
-        reward_types_a = {r["type"] for r in rewards_a}
-        assert "milestone" in reward_types_a, (
-            "Milestone reward was not generated on the first try_activate call. "
-            f"Rewards returned: {rewards_a}"
-        )
+        # try_activate no longer evaluates milestones (that is Phase 2).
+        # We only expect the base activation rewards here.
+        assert rewards_a, f"try_activate returned no base rewards: {rewards_a}"
 
         # Simulate commit failure — roll back everything
         await work_session_a.rollback()
 
-    # ── Phase 3: retry activation — committed successfully ───────────────────
+    # ── Phase 3: retry — both phases committed successfully ───────────────────
     async with session_factory() as work_session_b:
         repo_b = ReferralRepository(work_session_b)
         ref_b, rewards_b = await repo_b.try_activate(REFERRED_ID, has_business_connection=True)
@@ -335,12 +340,22 @@ async def test_milestone_reward_not_doubled_after_rollback_and_retry(session_fac
             "try_activate returned None on the retry — the referral should still be "
             "'pending' after the rollback."
         )
-        reward_types_b = {r["type"] for r in rewards_b}
-        assert "milestone" in reward_types_b, (
-            "Milestone reward was not generated on the retry. The referral was rolled "
-            "back so the duplicate-guard should see no prior log and grant it again."
+        assert rewards_b, "try_activate returned no rewards on the retry"
+
+        # Phase-1 commit: persists activation + base rewards
+        await work_session_b.commit()
+
+        # Phase-2: evaluate milestones against fully committed state
+        ms_rewards_b = await repo_b.evaluate_and_grant_milestones(
+            REFERRER_ID, ref_b.id
+        )
+        assert any(r["type"] == "milestone" for r in ms_rewards_b), (
+            "evaluate_and_grant_milestones did not produce a milestone reward "
+            "on the retry.  The referral was rolled back so the duplicate-guard "
+            "should see no prior log and grant it now."
         )
 
+        # Phase-2 commit: persists milestone reward
         await work_session_b.commit()
 
     # ── Phase 4: verify exactly one milestone log row exists ─────────────────
@@ -356,7 +371,7 @@ async def test_milestone_reward_not_doubled_after_rollback_and_retry(session_fac
         assert len(milestone_logs) == 1, (
             f"Expected exactly 1 milestone reward log after retry, "
             f"found {len(milestone_logs)}. "
-            "A double-grant indicates the rollback guard is not working correctly."
+            "A double-grant indicates the duplicate-guard is not working correctly."
         )
 
         # The referral row must be active

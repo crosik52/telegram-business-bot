@@ -5,6 +5,7 @@ import datetime as dt
 import logging
 
 from sqlalchemy import case, func, select, update, and_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.referral import (
@@ -226,36 +227,77 @@ class ReferralRepository:
             self._db.add(log2)
             rewards.append({"user": ref.referrer_telegram_id, "type": "per_activation", "days": cfg.referrer_reward_days})
 
-        # ── Milestone check for referrer ─────────────────────────────────────
-        active_count = await self._count_active(ref.referrer_telegram_id)
+        await self._db.flush()
+        return ref, rewards
+
+    async def evaluate_and_grant_milestones(
+        self,
+        referrer_telegram_id: int,
+        referral_id: int | None = None,
+    ) -> list[dict]:
+        """Evaluate and grant any newly-crossed milestone rewards for a referrer.
+
+        MUST be called **after** the activation transaction has been committed
+        so that ``_count_active`` reads the fully committed referral count —
+        including any concurrent activations that finished at the same time.
+        Calling this inside the activation transaction would produce a stale
+        count (TOCTOU) and silently skip milestones that were crossed by
+        concurrent activations.
+
+        Concurrency safety
+        ------------------
+        * Uses ``<=`` (not ``==``) so every milestone threshold up to the
+          current committed count is evaluated on each call.  If Session A and
+          Session B each activate a different referred user and both call this
+          method after their respective commits, Session B (which commits second
+          and therefore sees the higher count) will attempt to grant all
+          milestones ≤ count, while Session A will also attempt them — the
+          partial unique index ``uq_milestone_reward_per_user`` rejects the
+          duplicate via an IntegrityError caught inside a savepoint, ensuring
+          each milestone is granted exactly once.
+
+        Returns a list of reward dicts for newly granted milestones.
+        """
+        cfg = await self.get_config()
+        active_count = await self._count_active(referrer_telegram_id)
+        rewards: list[dict] = []
+
         for milestone in cfg.milestones:
-            if milestone["count"] == active_count:
-                already = await self._db.execute(
-                    select(ReferralRewardLog).where(
-                        ReferralRewardLog.user_telegram_id == ref.referrer_telegram_id,
-                        ReferralRewardLog.reward_type == "milestone",
-                        ReferralRewardLog.reward_value == str(milestone["count"]),
-                    )
-                )
-                if already.scalar_one_or_none() is None:
-                    if milestone["type"] == "premium_days":
-                        await self._grant_premium(ref.referrer_telegram_id, int(milestone["value"]))
-                    milestone_log = ReferralRewardLog(
-                        referral_id=ref.id,
-                        user_telegram_id=ref.referrer_telegram_id,
-                        reward_type="milestone",
-                        reward_value=str(milestone["count"]),
-                        label=milestone["label"],
-                    )
-                    self._db.add(milestone_log)
+            if milestone["count"] <= active_count:
+                try:
+                    async with self._db.begin_nested():
+                        milestone_log = ReferralRewardLog(
+                            referral_id=referral_id,
+                            user_telegram_id=referrer_telegram_id,
+                            reward_type="milestone",
+                            reward_value=str(milestone["count"]),
+                            label=milestone["label"],
+                        )
+                        self._db.add(milestone_log)
+                        # flush first — unique index raises IntegrityError here
+                        # if a concurrent session already inserted this grant.
+                        await self._db.flush()
+                        # Only reached when insert succeeded (no duplicate).
+                        if milestone["type"] == "premium_days":
+                            await self._grant_premium(
+                                referrer_telegram_id, int(milestone["value"])
+                            )
                     rewards.append({
-                        "user": ref.referrer_telegram_id,
+                        "user": referrer_telegram_id,
                         "type": "milestone",
                         "milestone": milestone,
                     })
+                except IntegrityError:
+                    logger.info(
+                        "Milestone count=%s already granted for referrer=%s "
+                        "— concurrent duplicate skipped",
+                        milestone["count"],
+                        referrer_telegram_id,
+                    )
 
-        await self._db.flush()
-        return ref, rewards
+        if rewards:
+            await self._db.flush()
+        return rewards
 
     # ── User-facing stats ────────────────────────────────────────────────────
 

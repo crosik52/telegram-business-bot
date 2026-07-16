@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Integer, JSON, String, ForeignKey
+from sqlalchemy import BigInteger, Boolean, DateTime, Index, Integer, JSON, String, ForeignKey, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.base import Base
@@ -102,9 +102,28 @@ class Referral(Base):
 
 
 class ReferralRewardLog(Base):
-    """Immutable log of every reward granted (two-sided or milestone)."""
+    """Immutable log of every reward granted (two-sided or milestone).
+
+    The partial unique index ``uq_milestone_reward_per_user`` guarantees that
+    the same milestone threshold can only be granted once per referrer, even
+    under concurrent writes.  It covers only rows where
+    ``reward_type = 'milestone'`` so that per-activation and welcome logs
+    (which legitimately repeat the same reward_value) are unaffected.
+    """
 
     __tablename__ = "referral_reward_log"
+    __table_args__ = (
+        # Partial unique index: one milestone grant per (user, threshold).
+        # Works on both SQLite (≥3.8.9) and PostgreSQL.
+        Index(
+            "uq_milestone_reward_per_user",
+            "user_telegram_id",
+            "reward_value",
+            unique=True,
+            sqlite_where=text("reward_type = 'milestone'"),
+            postgresql_where=text("reward_type = 'milestone'"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     referral_id: Mapped[int | None] = mapped_column(

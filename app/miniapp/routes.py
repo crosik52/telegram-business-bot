@@ -427,8 +427,19 @@ async def miniapp_stats(
             _ref, _ref_rewards = await _ref_repo.try_activate(
                 owner_telegram_id, has_business_connection=True
             )
-            if _ref_rewards:
+            if _ref is not None:
+                # Phase 1: commit the activation (welcome + per-activation rewards).
                 await session.commit()
+                # Phase 2: evaluate milestones AFTER commit so that _count_active
+                # reads fully committed state — including any concurrent activations
+                # that committed at the same time (prevents the TOCTOU skip race).
+                _ms_rewards = await _ref_repo.evaluate_and_grant_milestones(
+                    _ref.referrer_telegram_id, _ref.id
+                )
+                if _ms_rewards:
+                    await session.commit()
+                    _ref_rewards.extend(_ms_rewards)
+            if _ref_rewards:
                 # Notify both sides via bot (best-effort — each send is individually guarded)
                 _settings = get_settings()
                 _bot = get_bot(_settings)

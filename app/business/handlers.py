@@ -1399,6 +1399,92 @@ async def on_inline_query(query: InlineQuery, bot: Bot) -> None:
     )
 
 
+@router.callback_query(F.data.startswith("note_remind:"))
+async def on_note_remind(callback: CallbackQuery, bot: Bot) -> None:
+    """Handle reminder advance-time selection from the !note inline keyboard."""
+    await callback.answer()
+    if not callback.from_user or not callback.data:
+        return
+
+    parts = callback.data.split(":")
+    if len(parts) != 4:
+        return
+    try:
+        note_id       = int(parts[1])
+        advance_min   = int(parts[2])
+        unix_ts       = int(parts[3])
+    except ValueError:
+        return
+
+    owner_id = callback.from_user.id
+
+    # Edit the DM to remove the keyboard and confirm the choice
+    if advance_min == 0:
+        result_text = (
+            f"✅ <b>Заметка сохранена</b>\n\n"
+            f"📝 {callback.message.html_text.split(chr(10))[0].replace('✅ <b>Заметка принята</b>', '').strip()}\n\n"
+            f"<i>Напоминание не установлено.</i>"
+        )
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)  # type: ignore[union-attr]
+        except Exception:
+            pass
+        return
+
+    # Create the reminder row
+    import datetime as _dt  # noqa: PLC0415
+    event_at = _dt.datetime.fromtimestamp(unix_ts, tz=_dt.timezone.utc) if unix_ts else None
+
+    note_text = ""
+    try:
+        # Extract note text from the DM message (between "📝 Текст:" and "\n")
+        msg_text = callback.message.text or ""  # type: ignore[union-attr]
+        for line in msg_text.splitlines():
+            if line.startswith("📝"):
+                note_text = line.lstrip("📝 Текст:").strip()
+                break
+        if not note_text:
+            note_text = msg_text
+    except Exception:
+        note_text = "(заметка)"
+
+    try:
+        from app.database.session import get_db_session  # noqa: PLC0415
+        from app.repositories.note_reminder_repository import NoteReminderRepository  # noqa: PLC0415
+        async for db_session in get_db_session():
+            repo = NoteReminderRepository(db_session)
+            reminder = await repo.create(
+                owner_telegram_id=owner_id,
+                note_text=note_text,
+                event_at=event_at,
+                advance_minutes=advance_min,
+            )
+            await db_session.commit()
+
+        date_str = event_at.strftime("%d.%m.%Y в %H:%M") if event_at else "—"
+        label = f"{advance_min} мин" if advance_min < 60 else f"{advance_min // 60} ч"
+        try:
+            await callback.message.edit_text(  # type: ignore[union-attr]
+                f"✅ <b>Заметка сохранена</b>\n\n"
+                f"📅 {date_str}\n"
+                f"📝 {note_text}\n\n"
+                f"⏰ Напомню за <b>{label}</b> до события.",
+                parse_mode="HTML",
+                reply_markup=None,
+            )
+        except Exception:
+            pass
+    except Exception:
+        logger.exception("note_remind callback: failed to create reminder for owner %s", owner_id)
+        try:
+            await bot.send_message(
+                chat_id=owner_id,
+                text="❌ Не удалось сохранить напоминание. Попробуй ещё раз.",
+            )
+        except Exception:
+            pass
+
+
 @router.callback_query(F.data == "noop")
 async def on_noop(call: CallbackQuery) -> None:
     await call.answer()

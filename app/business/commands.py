@@ -279,6 +279,57 @@ async def _cmd_info(
         )
 
 
+def _parse_note_datetime(text: str) -> tuple[object, str]:
+    """Try to extract a datetime from *text* using dateparser (Russian locale).
+
+    Uses ``search_dates`` which scans the full text for date/time expressions
+    (handles mixed text like «завтра в 15:00 встреча с Иваном»).
+
+    Returns ``(datetime_or_None, original_text)``.
+    The original text is always preserved as the note content.
+    """
+    import datetime as _dt  # noqa: PLC0415
+    try:
+        from dateparser.search import search_dates  # noqa: PLC0415
+        now = _dt.datetime.now(_dt.timezone.utc)
+        results = search_dates(
+            text,
+            languages=["ru"],
+            settings={
+                "PREFER_DATES_FROM": "future",
+                "PREFER_DAY_OF_MONTH": "first",
+                "RETURN_AS_TIMEZONE_AWARE": True,
+                "RELATIVE_BASE": now,
+                "TIMEZONE": "UTC",
+            },
+        )
+        # Pick the first (or most specific) hit
+        if results:
+            # Prefer the hit whose string snippet looks most like a time/date
+            # rather than an ordinary word — filter out hits with <3 chars.
+            hits = [(s, d) for s, d in results if len(s.strip()) >= 2]
+            if hits:
+                return hits[0][1], text
+    except Exception:
+        pass
+    return None, text
+
+
+def _reminder_keyboard(note_id: int, unix_ts: int) -> InlineKeyboardMarkup:
+    """Build the 'how far in advance?' inline keyboard."""
+    def _btn(label: str, minutes: int) -> InlineKeyboardButton:
+        return InlineKeyboardButton(
+            text=label,
+            callback_data=f"note_remind:{note_id}:{minutes}:{unix_ts}",
+        )
+
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [_btn("⏱ 15 мин", 15), _btn("⏱ 30 мин", 30),
+         _btn("⏱ 60 мин", 60), _btn("⏱ 120 мин", 120)],
+        [_btn("❌ Не напоминать", 0)],
+    ])
+
+
 async def _cmd_note(
     *,
     bot: Bot,
@@ -295,9 +346,43 @@ async def _cmd_note(
             f"{E.CROSS} Укажите текст: <code>!note текст заметки</code>",
         )
         return
+
+    raw = args.strip()
+    event_dt, note_text = _parse_note_datetime(raw)
+
     repo = ContactNoteRepository(session)
-    note = await repo.add(business_connection_id, chat_id, args.strip())
-    await _reply(bot, owner_id, f"{E.CHECK} <b>Заметка сохранена:</b>\n\n«{note.text}»")
+    note = await repo.add(business_connection_id, chat_id, note_text)
+    await session.commit()
+
+    # ── Build confirmation DM ──────────────────────────────────────────────
+    if event_dt is not None:
+        import datetime as _dt  # noqa: PLC0415
+        unix_ts = int(event_dt.timestamp())
+        date_str = event_dt.strftime("%d.%m.%Y в %H:%M")
+        confirmation = (
+            f"✅ <b>Заметка принята</b>\n\n"
+            f"📅 <b>Дата:</b> {date_str}\n"
+            f"📝 <b>Текст:</b> {html_escape(note_text)}\n\n"
+            f"⏰ <b>За сколько напомнить о событии?</b>"
+        )
+        keyboard = _reminder_keyboard(note.id, unix_ts)
+        try:
+            await bot.send_message(
+                chat_id=owner_id,
+                text=confirmation,
+                parse_mode="HTML",
+                reply_markup=keyboard,
+            )
+        except Exception:
+            logger.exception("Failed to send note confirmation to owner %s", owner_id)
+    else:
+        # No datetime found — save silently, no reminder offered
+        await _reply(
+            bot, owner_id,
+            f"✅ <b>Заметка сохранена:</b>\n\n"
+            f"📝 {html_escape(note_text)}\n\n"
+            f"<i>Дата не распознана — напоминание недоступно.</i>",
+        )
 
 
 async def _cmd_notes(

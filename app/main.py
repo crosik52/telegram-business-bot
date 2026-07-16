@@ -34,6 +34,7 @@ logger = get_logger(__name__)
 _CLEANUP_INTERVAL_HOURS = 6
 _STREAK_REMINDER_INTERVAL_MINUTES = 60
 _MILESTONE_SWEEP_INTERVAL_MINUTES = 15
+_NOTE_REMINDER_INTERVAL_SECONDS = 60
 _MILESTONE_SWEEP_BATCH_SIZE = 50
 _MILESTONE_SWEEP_MAX_BATCHES = 100  # safety cap: at most 5 000 rows per cycle
 # After this many consecutive evaluation failures the sweep stops retrying a
@@ -174,6 +175,55 @@ async def _milestone_sweep_loop() -> None:
         await asyncio.sleep(_MILESTONE_SWEEP_INTERVAL_MINUTES * 60)
 
 
+async def _note_reminder_loop() -> None:
+    """Background task: send due note reminders to owners every minute."""
+    import datetime as _dt  # noqa: PLC0415
+    from app.database.session import get_db_session  # noqa: PLC0415
+    from app.repositories.note_reminder_repository import NoteReminderRepository  # noqa: PLC0415
+
+    await asyncio.sleep(30)  # short startup delay
+    while True:
+        try:
+            from app.business.dispatcher import get_bot  # noqa: PLC0415
+            bot = get_bot(settings)
+            if bot:
+                now = _dt.datetime.now(_dt.timezone.utc)
+                async for session in get_db_session():
+                    repo = NoteReminderRepository(session)
+                    due = await repo.get_due(now)
+                    for reminder in due:
+                        try:
+                            event_str = (
+                                reminder.event_at.strftime("%d.%m.%Y в %H:%M")
+                                if reminder.event_at else "—"
+                            )
+                            label = (
+                                f"{reminder.advance_minutes} мин"
+                                if reminder.advance_minutes < 60
+                                else f"{reminder.advance_minutes // 60} ч"
+                            )
+                            await bot.send_message(
+                                chat_id=reminder.owner_telegram_id,
+                                text=(
+                                    f"⏰ <b>Напоминание</b> (за {label})\n\n"
+                                    f"📅 {event_str}\n"
+                                    f"📝 {reminder.note_text}"
+                                ),
+                                parse_mode="HTML",
+                            )
+                        except Exception:
+                            logger.exception(
+                                "Note reminder: failed to notify owner=%s reminder_id=%s",
+                                reminder.owner_telegram_id, reminder.id,
+                            )
+                        finally:
+                            await repo.mark_sent(reminder.id)
+                    await session.commit()
+        except Exception:
+            logger.exception("Note reminder loop error — will retry next cycle")
+        await asyncio.sleep(_NOTE_REMINDER_INTERVAL_SECONDS)
+
+
 async def _cleanup_loop() -> None:
     """Background task: purge old media_cache and message rows every N hours."""
     from app.database.session import get_db_session
@@ -212,6 +262,8 @@ async def lifespan(app: FastAPI):
     # Ensure tables exist. Alembic migrations remain the source of truth for
     # schema evolution; this is a safety net for fresh deployments where
     # migrations haven't been run yet.
+    # Import all models so Base.metadata knows about them before create_all.
+    import app.models.note_reminder  # noqa: F401, PLC0415
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -291,12 +343,15 @@ async def lifespan(app: FastAPI):
     streak_task = asyncio.create_task(_streak_reminder_loop())
     # ── Referral milestone sweep (at-least-once guarantee) ───────────────────
     milestone_sweep_task = asyncio.create_task(_milestone_sweep_loop())
+    # ── Note reminder loop ────────────────────────────────────────────────────
+    note_reminder_task = asyncio.create_task(_note_reminder_loop())
 
     yield
 
     cleanup_task.cancel()
     streak_task.cancel()
     milestone_sweep_task.cancel()
+    note_reminder_task.cancel()
     try:
         await cleanup_task
     except asyncio.CancelledError:
@@ -307,6 +362,10 @@ async def lifespan(app: FastAPI):
         pass
     try:
         await milestone_sweep_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await note_reminder_task
     except asyncio.CancelledError:
         pass
 

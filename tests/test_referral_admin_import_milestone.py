@@ -753,3 +753,157 @@ async def test_grant_premium_extends_existing_subscription(session_factory):
             "This suggests _grant_premium created a new subscription from 'now' "
             "instead of extending the existing one."
         )
+
+
+# ---------------------------------------------------------------------------
+# Create-branch test: _grant_premium creates a fresh subscription when the
+# previous one has already expired (or never existed).
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_grant_premium_creates_new_subscription_when_previous_expired(
+    session_factory,
+):
+    """_grant_premium must create a new active subscription when no active one exists.
+
+    Scenario A — expired subscription present
+    -----------------------------------------
+    1. Seed the user (referrer) with a subscription that already expired 5 days ago
+       (is_active=True but expires_at < now).
+    2. Admin-activate a referral whose referrer is that user; the config grants
+       ``referrer_reward_days`` (14) days.
+    3. Assert that a *new* ``UserSubscription`` row is created with
+       ``is_active=True``, ``started_at ≈ now``, and ``expires_at ≈ now + 14 days``.
+
+    Scenario B — no subscription at all
+    ------------------------------------
+    4. Repeat the same grant for a second user who has never had a subscription.
+    5. Assert the same properties on the newly created row.
+
+    If the create-branch of ``_grant_premium`` is broken — e.g. it silently
+    skips the INSERT, sets ``is_active=False``, or uses the wrong ``started_at``
+    — the assertions below will fail and expose the regression.
+    """
+    import datetime as dt
+
+    referrer_id_expired = 9600   # has a lapsed subscription
+    referrer_id_fresh   = 9601   # has never had a subscription
+    referred_id_a       = 9602
+    referred_id_b       = 9603
+    grant_days          = 14
+
+    # ── Seed ─────────────────────────────────────────────────────────────────
+    async with session_factory() as seed:
+        await _seed_config(
+            seed,
+            milestones=[],
+            referrer_reward_days=grant_days,
+            referee_reward_days=0,  # keep the referee out of the picture
+        )
+
+        # Referral A — referrer has an already-expired subscription
+        ref_a = await _seed_pending_referral(seed, referrer_id_expired, referred_id_a)
+        referral_id_a = ref_a.id
+
+        now_seed = dt.datetime.now(dt.timezone.utc)
+        expired_sub = UserSubscription(
+            user_telegram_id=referrer_id_expired,
+            is_active=True,                          # flag still True, but time has passed
+            started_at=now_seed - dt.timedelta(days=35),
+            expires_at=now_seed - dt.timedelta(days=5),  # lapsed 5 days ago
+            granted_by_admin=True,
+            stars_paid=0,
+        )
+        seed.add(expired_sub)
+
+        # Referral B — referrer has no subscription at all
+        ref_b = await _seed_pending_referral(seed, referrer_id_fresh, referred_id_b)
+        referral_id_b = ref_b.id
+
+        await seed.commit()
+
+    # ── Activate referral A (expired-sub user) ───────────────────────────────
+    async with session_factory() as sess:
+        repo = ReferralRepository(sess)
+        ok, ref = await repo.admin_set_status(referral_id_a, "active")
+        assert ok
+        ref_id_a = ref.id
+        await sess.commit()
+
+    before_grant_a = dt.datetime.now(dt.timezone.utc)
+    async with session_factory() as sess:
+        repo = ReferralRepository(sess)
+        ref_row = (
+            await sess.execute(select(Referral).where(Referral.id == ref_id_a))
+        ).scalar_one()
+        await repo.admin_grant_per_activation_rewards(ref_row)
+        await sess.commit()
+    after_grant_a = dt.datetime.now(dt.timezone.utc)
+
+    # ── Activate referral B (no-sub user) ────────────────────────────────────
+    async with session_factory() as sess:
+        repo = ReferralRepository(sess)
+        ok, ref = await repo.admin_set_status(referral_id_b, "active")
+        assert ok
+        ref_id_b = ref.id
+        await sess.commit()
+
+    before_grant_b = dt.datetime.now(dt.timezone.utc)
+    async with session_factory() as sess:
+        repo = ReferralRepository(sess)
+        ref_row = (
+            await sess.execute(select(Referral).where(Referral.id == ref_id_b))
+        ).scalar_one()
+        await repo.admin_grant_per_activation_rewards(ref_row)
+        await sess.commit()
+    after_grant_b = dt.datetime.now(dt.timezone.utc)
+
+    # ── Verify both users received a fresh active subscription ───────────────
+    async with session_factory() as check:
+        for uid, before, after, label in [
+            (referrer_id_expired, before_grant_a, after_grant_a, "expired-sub user"),
+            (referrer_id_fresh,   before_grant_b, after_grant_b, "no-sub user"),
+        ]:
+            # Fetch the subscription with the latest expires_at (the newly created one)
+            sub = (
+                await check.execute(
+                    select(UserSubscription)
+                    .where(
+                        UserSubscription.user_telegram_id == uid,
+                        UserSubscription.is_active.is_(True),
+                        UserSubscription.expires_at > after,   # must be in the future
+                    )
+                    .order_by(UserSubscription.expires_at.desc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+
+            assert sub is not None, (
+                f"No active future subscription found for {label} (uid={uid}) "
+                "after _grant_premium — the create-branch did not insert a new row "
+                "or set is_active=False."
+            )
+
+            # Normalise timezone (SQLite may return naive datetimes)
+            def _tz(ts: dt.datetime) -> dt.datetime:
+                return ts if ts.tzinfo else ts.replace(tzinfo=dt.timezone.utc)
+
+            started  = _tz(sub.started_at)
+            expires  = _tz(sub.expires_at)
+
+            # started_at must be within the grant window (≈ now at grant time)
+            assert before <= started <= after + dt.timedelta(seconds=2), (
+                f"{label}: started_at={started.isoformat()} is outside the expected "
+                f"window [{before.isoformat()}, {after.isoformat()}]. "
+                "_grant_premium must set started_at=now when creating a new subscription."
+            )
+
+            # expires_at must be started_at + grant_days (within a small tolerance)
+            expected_expires = started + dt.timedelta(days=grant_days)
+            delta_s = abs((expires - expected_expires).total_seconds())
+            assert delta_s < 5, (
+                f"{label}: expires_at={expires.isoformat()} differs from "
+                f"started_at + {grant_days} days = {expected_expires.isoformat()} "
+                f"by {delta_s:.1f}s. "
+                "_grant_premium must set expires_at = now + days for a new subscription."
+            )

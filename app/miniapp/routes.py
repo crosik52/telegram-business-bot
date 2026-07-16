@@ -1641,72 +1641,108 @@ async def rel_request(
                     InlineKeyboardButton(text="❌ Отказать", callback_data=f"rel_decline:{owner_id}"),
                 ]])
 
-                # Find business_connection_id for the owner↔partner chat so we
-                # can also place a plain-text nudge directly in the conversation.
-                # (Telegram drops reply_markup on business messages, so buttons
-                # must go via a separate bot-DM to the partner.)
-                _bc_id: str | None = None
+                # ── Lookup bc_ids ─────────────────────────────────────────
+                # owner_bc_id: owner's connection → used to write into the
+                #              owner↔partner conversation from the owner's side.
+                # partner_bc_id: partner's connection → used to write into the
+                #                partner↔owner conversation from the partner's
+                #                side. This is the primary delivery channel:
+                #                the message lands directly in the partner's
+                #                chat with the owner, with the keyboard.
+                _owner_bc_id: str | None = None
+                _partner_bc_id: str | None = None
                 try:
-                    _conn_ids = (await session.execute(
+                    from app.models.message import Message as _Msg
+                    # Owner's active bc_id for this chat
+                    _owner_conn_ids = (await session.execute(
                         select(BusinessConnection.business_connection_id).where(
                             BusinessConnection.user_telegram_id == owner_id,
                             BusinessConnection.is_enabled.is_(True),
                         )
                     )).scalars().all()
-                    if _conn_ids:
-                        _bc_id = (await session.execute(
+                    if _owner_conn_ids:
+                        _owner_bc_id = (await session.execute(
                             select(_Msg.business_connection_id).where(
-                                _Msg.business_connection_id.in_(_conn_ids),
+                                _Msg.business_connection_id.in_(_owner_conn_ids),
                                 _Msg.chat_id == payload.partner_id,
                             ).limit(1)
                         )).scalar_one_or_none()
+                    # Partner's own active bc_id (they also connected the bot)
+                    _partner_bc_id = (await session.execute(
+                        select(BusinessConnection.business_connection_id).where(
+                            BusinessConnection.user_telegram_id == payload.partner_id,
+                            BusinessConnection.is_enabled.is_(True),
+                        ).limit(1)
+                    )).scalar_one_or_none()
                 except Exception:
-                    _bc_id = None
+                    pass
 
-                # 1) Plain-text nudge in the business chat (if we have a bc_id).
-                if _bc_id:
+                # ── Primary: send via PARTNER's business connection ────────
+                # The message lands in the partner's conversation with the
+                # owner with the Accept/Decline keyboard visible right there.
+                _delivered = False
+                if _partner_bc_id:
+                    try:
+                        await _bot.send_message(
+                            owner_id,        # chat_id = owner, from partner's bc
+                            f"💌 <b>{_name}</b> хочет с тобой подружиться!\n\n"
+                            f"Прими или отклони запрос:",
+                            parse_mode="HTML",
+                            reply_markup=_kb,
+                            business_connection_id=_partner_bc_id,
+                        )
+                        _delivered = True
+                    except Exception as _pbc_exc:
+                        logger.warning(
+                            "rel_request: partner-bc delivery to %s failed: %s",
+                            payload.partner_id, _pbc_exc,
+                        )
+
+                # ── Secondary: plain bot DM (requires partner to have /start) ─
+                if not _delivered:
                     try:
                         await _bot.send_message(
                             payload.partner_id,
-                            f"💌 <b>{_name}</b> хочет с тобой подружиться!\n"
-                            f"Ответь через уведомление от бота 👇",
+                            f"💌 <b>{_name}</b> хочет с тобой подружиться!\n\n"
+                            f"Прими или отклони запрос:",
                             parse_mode="HTML",
-                            business_connection_id=_bc_id,
+                            reply_markup=_kb,
                         )
-                    except Exception as _chat_exc:
+                        _delivered = True
+                    except Exception as _dm_exc:
                         logger.warning(
-                            "rel_request: business-chat nudge to partner %s failed: %s",
-                            payload.partner_id, _chat_exc,
+                            "rel_request: DM to partner %s failed: %s",
+                            payload.partner_id, _dm_exc,
                         )
 
-                # 2) Bot-DM to partner with Accept / Decline keyboard.
-                #    This is the only channel where reply_markup is rendered.
-                try:
-                    await _bot.send_message(
-                        payload.partner_id,
-                        f"💌 <b>{_name}</b> хочет с тобой подружиться!\n\n"
-                        f"Прими или отклони запрос:",
-                        parse_mode="HTML",
-                        reply_markup=_kb,
-                    )
-                except Exception as _dm_exc:
-                    logger.warning(
-                        "rel_request: DM to partner %s failed: %s",
-                        payload.partner_id, _dm_exc,
-                    )
+                # ── Nudge in owner's chat regardless (plain text, no buttons) ─
+                # Lets the owner know the request was sent and the partner
+                # will see it on their end.
+                if _owner_bc_id:
+                    try:
+                        await _bot.send_message(
+                            payload.partner_id,
+                            f"💌 <b>{_name}</b> отправил запрос дружбы!\n"
+                            f"Партнёр получил уведомление с кнопками.",
+                            parse_mode="HTML",
+                            business_connection_id=_owner_bc_id,
+                        )
+                    except Exception:
+                        pass
+
+                # ── Fallback: alert owner when partner was not reachable ───
+                if not _delivered:
                     _partner_not_reachable = True
-                    # Alert the owner so they know the partner hasn't started the bot.
                     _alert = (
-                        "❌ Запрос отправлен, но партнёр ещё не запустил бота — "
-                        "кнопки Принять/Отказать ему не пришли."
+                        "❌ Запрос отправлен в базе, но партнёру не удалось "
+                        "доставить уведомление — он ещё не подключил бота."
                     )
-                    if _bc_id:
+                    if _owner_bc_id:
                         try:
                             await _bot.send_message(
-                                payload.partner_id,
-                                _alert,
+                                payload.partner_id, _alert,
                                 parse_mode="HTML",
-                                business_connection_id=_bc_id,
+                                business_connection_id=_owner_bc_id,
                             )
                         except Exception:
                             pass

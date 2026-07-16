@@ -624,27 +624,56 @@ async def _cmd_friend(
     ] if p]
     owner_name = " ".join(owner_parts) or f"#{owner_id}"
 
-    # Send inline Accept / Decline buttons via regular bot DM to the partner.
-    # Telegram does NOT render reply_markup on messages sent with
-    # business_connection_id — the buttons are silently dropped.  Sending as
-    # a plain bot message (no business_connection_id) guarantees the partner
-    # sees the interactive keyboard in their chat with the bot.
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="✅ Принять", callback_data=f"rel_accept:{owner_id}"),
         InlineKeyboardButton(text="❌ Отказать", callback_data=f"rel_decline:{owner_id}"),
     ]])
-    try:
-        await bot.send_message(
-            chat_id,                       # partner's telegram_id → their DM with the bot
-            f"💌 <b>{html_escape(owner_name)}</b> хочет с тобой подружиться!\n\n"
-            f"Прими или отклони запрос:",
-            parse_mode="HTML",
-            reply_markup=kb,
-            # intentionally no business_connection_id — inline keyboards require DM
-        )
-    except Exception as exc:
-        logger.warning("Failed to send friend-request DM to partner %s: %s", chat_id, exc)
-        await _chat_reply("❌ Не удалось отправить запрос — партнёр ещё не запустил бота.")
+
+    # ── Primary: deliver via partner's own business connection ───────────────
+    # If the partner also connected the bot, we can post directly into their
+    # conversation with the owner — the message and keyboard appear right there.
+    from app.models.business_connection import BusinessConnection as _BC  # noqa: PLC0415
+    _partner_bc_id: str | None = (await session.execute(
+        select(_BC.business_connection_id).where(
+            _BC.user_telegram_id == chat_id,   # chat_id == partner's user ID
+            _BC.is_enabled.is_(True),
+        ).limit(1)
+    )).scalar_one_or_none()
+
+    _delivered = False
+    if _partner_bc_id:
+        try:
+            await bot.send_message(
+                owner_id,              # chat_id = owner, posted via partner's bc
+                f"💌 <b>{html_escape(owner_name)}</b> хочет с тобой подружиться!\n\n"
+                f"Прими или отклони запрос:",
+                parse_mode="HTML",
+                reply_markup=kb,
+                business_connection_id=_partner_bc_id,
+            )
+            _delivered = True
+        except Exception as _pbc_exc:
+            logger.warning(
+                "Failed to deliver friend-request via partner bc %s: %s",
+                chat_id, _pbc_exc,
+            )
+
+    # ── Fallback: plain bot DM (requires partner to have /start'd the bot) ───
+    if not _delivered:
+        try:
+            await bot.send_message(
+                chat_id,
+                f"💌 <b>{html_escape(owner_name)}</b> хочет с тобой подружиться!\n\n"
+                f"Прими или отклони запрос:",
+                parse_mode="HTML",
+                reply_markup=kb,
+            )
+            _delivered = True
+        except Exception as exc:
+            logger.warning("Failed to send friend-request DM to partner %s: %s", chat_id, exc)
+
+    if not _delivered:
+        await _chat_reply("❌ Не удалось отправить запрос — партнёр ещё не подключил бота.")
         return
 
     # Confirm to the owner in the business chat that the request was sent

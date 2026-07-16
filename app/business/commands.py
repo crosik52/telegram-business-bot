@@ -903,6 +903,9 @@ def parse_command(text: str | None) -> tuple[str, str | None] | None:
     return m.group(1).lower(), m.group(2)
 
 
+_GATE_EXEMPT = {"help", "помощь"}  # commands that bypass the channel subscription gate
+
+
 async def dispatch(
     cmd: str,
     args: str | None,
@@ -917,6 +920,40 @@ async def dispatch(
     replied_text: str | None = None,
 ) -> None:
     """Route a parsed command to its handler and then delete the command message."""
+
+    # ── Channel subscription gate ─────────────────────────────────────────────
+    if cmd not in _GATE_EXEMPT:
+        try:
+            from app.repositories.channel_repository import ChannelRepository  # noqa: PLC0415
+            from app.services.channel_subscription_service import get_unsubscribed_channels  # noqa: PLC0415
+            _active_chs = await ChannelRepository(session).get_active()
+            if _active_chs:
+                _unsub = await get_unsubscribed_channels(bot, owner_id, _active_chs)
+                if _unsub:
+                    _lines = "\n".join(f"• {ch.display_title}" for ch in _unsub)
+                    _kb = InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(
+                            text=f"📢 {ch.display_title}",
+                            url=ch.join_url,
+                        )]
+                        for ch in _unsub
+                    ])
+                    await bot.send_message(
+                        chat_id=owner_id,
+                        text=(
+                            f"🔒 <b>Для использования команд подпишитесь на каналы:</b>\n\n"
+                            f"{_lines}\n\n"
+                            f"После подписки повторите команду."
+                        ),
+                        parse_mode="HTML",
+                        reply_markup=_kb,
+                    )
+                    await _delete_cmd_msg(bot, chat_id, message_id, business_connection_id)
+                    return
+        except Exception:
+            logger.exception("channel_gate: check failed for owner %s — allowing through", owner_id)
+
+    # ── Dispatch ──────────────────────────────────────────────────────────────
     handler = _HANDLERS.get(cmd)
     if handler is None:
         await _reply(

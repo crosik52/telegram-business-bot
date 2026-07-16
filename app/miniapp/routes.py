@@ -412,12 +412,44 @@ async def miniapp_stats(
 
     owner_telegram_id = int(user["id"])
 
+    # ── Channel subscription gate ─────────────────────────────────────────────
+    try:
+        from app.repositories.channel_repository import ChannelRepository as _CR  # noqa: PLC0415
+        from app.services.channel_subscription_service import get_unsubscribed_channels as _guc  # noqa: PLC0415
+        _active_chs = await _CR(session).get_active()
+        if _active_chs:
+            _bot = get_bot(get_settings())
+            if _bot:
+                _unsub = await _guc(_bot, owner_telegram_id, _active_chs)
+                if _unsub:
+                    return {
+                        "subscription_gate": True,
+                        "required_channels": [
+                            {
+                                "title": ch.display_title,
+                                "username": ch.channel_username,
+                                "url": ch.join_url,
+                            }
+                            for ch in _unsub
+                        ],
+                    }
+    except Exception:
+        logger.exception(
+            "channel_gate miniapp: check failed for user %s — allowing through",
+            owner_telegram_id,
+        )
+
     result = await session.execute(
         select(BusinessConnection.business_connection_id).where(
             BusinessConnection.user_telegram_id == owner_telegram_id
         )
     )
     connection_ids = [row[0] for row in result.all()]
+
+    _sub_repo   = SubscriptionRepository(session)
+    _sub_config = await _sub_repo.get_config()
+    _active_sub = await _sub_repo.get_active_subscription(owner_telegram_id)
+    is_premium  = _active_sub is not None and _sub_config.is_enabled
 
     _sub_repo   = SubscriptionRepository(session)
     _sub_config = await _sub_repo.get_config()

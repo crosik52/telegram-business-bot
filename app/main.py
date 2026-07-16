@@ -15,6 +15,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import get_settings
 from app.dashboard.routes import auth as dashboard_auth
+from app.dashboard.routes import channels as dashboard_channels
 from app.dashboard.routes import export as dashboard_export
 from app.dashboard.routes import home as dashboard_home
 from app.dashboard.routes import messages as dashboard_messages
@@ -262,6 +263,7 @@ async def lifespan(app: FastAPI):
     # migrations haven't been run yet.
     # Import all models so Base.metadata knows about them before create_all.
     import app.models.note_reminder  # noqa: F401, PLC0415
+    import app.models.required_channel  # noqa: F401, PLC0415
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -399,4 +401,5 @@ app.include_router(dashboard_home.router)
 app.include_router(dashboard_messages.router)
 app.include_router(dashboard_stats.router)
 app.include_router(dashboard_export.router)
+app.include_router(dashboard_channels.router)
 app.include_router(miniapp_routes.router)

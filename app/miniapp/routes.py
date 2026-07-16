@@ -2053,6 +2053,25 @@ async def admin_subscription_grant(
     sub_repo = SubscriptionRepository(session)
     sub = await sub_repo.grant(payload.owner_telegram_id, payload.duration_days)
     await session.commit()
+
+    # Notify the user in their DM
+    try:
+        from app.bot import emoji as E
+        _bot = get_bot(get_settings())
+        if _bot:
+            _expires = sub.expires_at.strftime("%d.%m.%Y")
+            await _bot.send_message(
+                payload.owner_telegram_id,
+                f"{E.STAR} <b>Premium активирован!</b>\n\n"
+                f"Администратор выдал вам Premium на <b>{payload.duration_days} дн.</b>\n"
+                f"Действует до: <b>{_expires}</b>\n\n"
+                f"Наслаждайтесь привилегиями! 🎉",
+                parse_mode="HTML",
+            )
+    except Exception as _exc:
+        logger.warning("admin_grant: failed to notify user %s: %s",
+                       payload.owner_telegram_id, _exc)
+
     return {
         "ok": True,
         "expires_at": sub.expires_at.isoformat(),
@@ -2069,6 +2088,22 @@ async def admin_subscription_revoke(
     sub_repo = SubscriptionRepository(session)
     await sub_repo.revoke(payload.owner_telegram_id)
     await session.commit()
+
+    # Notify the user in their DM
+    try:
+        from app.bot import emoji as E
+        _bot = get_bot(get_settings())
+        if _bot:
+            await _bot.send_message(
+                payload.owner_telegram_id,
+                f"{E.WARNING} <b>Premium деактивирован</b>\n\n"
+                f"Ваша Premium-подписка была отозвана администратором.",
+                parse_mode="HTML",
+            )
+    except Exception as _exc:
+        logger.warning("admin_revoke: failed to notify user %s: %s",
+                       payload.owner_telegram_id, _exc)
+
     return {"ok": True}
 
 

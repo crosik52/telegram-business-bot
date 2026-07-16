@@ -1885,3 +1885,152 @@ async def test_earlier_row_not_modified_after_multiple_grant_premium_calls(
             "The endpoint is reading the wrong subscription row — "
             "the user would see a shorter expiry than they actually have."
         )
+
+
+# ---------------------------------------------------------------------------
+# Cross-session baseline test: a second _grant_premium call in a fresh session
+# must extend from the already-committed expiry, NOT from the original DB value.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_second_grant_premium_extends_from_first_extension_not_original_baseline(
+    session_factory,
+):
+    """A second _grant_premium call (in a separate session) must build on the
+    expiry that was committed by the first call, not re-read the original value.
+
+    Scenario
+    --------
+    1. Seed a user with one active subscription expiring 10 days from now
+       (``original_expires``).
+    2. Open session A, call ``_grant_premium(+7)``, commit.
+       → Correct DB state: ``expires_at = original + 7d`` (= now + 17d).
+    3. Open a *fresh* session B (to defeat any in-process session cache),
+       call ``_grant_premium(+5)``, commit.
+       → Correct DB state: ``expires_at = original + 7d + 5d`` (= now + 22d).
+    4. Assert ``actual_expires ≈ original + 12d`` (= 22d from now, not 15d or 17d).
+
+    Why this matters
+    ----------------
+    If session B were to hit a stale SQLAlchemy identity-map cache (or if
+    ``_grant_premium`` relied on an in-memory reference rather than a fresh
+    SELECT), it would extend from ``original`` (now + 10d) instead of the
+    committed ``original + 7d`` (now + 17d), yielding ``now + 15d`` instead of
+    the correct ``now + 22d``.  The three candidate outcomes are deliberately
+    spaced far enough apart (15d vs 17d vs 22d) that the assertion cannot pass
+    by accident.
+
+    Failure modes caught
+    --------------------
+    * ``actual ≈ original + 5d``  (= now + 15d) → second call re-read the
+      *original* baseline (stale session cache or missing flush).
+    * ``actual ≈ original + 7d``  (= now + 17d) → second call was a no-op or
+      wrote to the wrong row.
+    * ``actual ≈ original + 12d`` (= now + 22d) → correct, both extensions
+      stacked from the committed value.
+    """
+    import datetime as dt
+
+    user_id = 9900
+    existing_days = 10   # subscription expires this many days from now at seed time
+    first_grant    = 7   # days added by the first _grant_premium call
+    second_grant   = 5   # days added by the second _grant_premium call
+    total_grant    = first_grant + second_grant  # 12 extra days total
+
+    # ── Seed: one active subscription ────────────────────────────────────────
+    async with session_factory() as seed:
+        # Config is required (get_config creates one if absent, but we need a
+        # session that has the schema fully initialised).
+        await _seed_config(seed, milestones=[], referrer_reward_days=0, referee_reward_days=0)
+
+        now_seed = dt.datetime.now(dt.timezone.utc)
+        original_expires = now_seed + dt.timedelta(days=existing_days)
+
+        sub = UserSubscription(
+            user_telegram_id=user_id,
+            is_active=True,
+            started_at=now_seed - dt.timedelta(days=1),
+            expires_at=original_expires,
+            granted_by_admin=True,
+            stars_paid=0,
+        )
+        seed.add(sub)
+        await seed.commit()
+        sub_id = sub.id
+
+    # ── Session A: first grant (+7 days) ─────────────────────────────────────
+    async with session_factory() as sess_a:
+        repo_a = ReferralRepository(sess_a)
+        await repo_a._grant_premium(user_id, first_grant)
+        await sess_a.commit()
+
+    # Quick sanity check: after the first commit the DB should show original + 7d
+    async with session_factory() as mid_check:
+        def _tz(ts: dt.datetime) -> dt.datetime:
+            return ts if ts.tzinfo else ts.replace(tzinfo=dt.timezone.utc)
+
+        mid_row = (
+            await mid_check.execute(
+                select(UserSubscription).where(UserSubscription.id == sub_id)
+            )
+        ).scalar_one()
+        mid_expires = _tz(mid_row.expires_at)
+        expected_mid = _tz(original_expires) + dt.timedelta(days=first_grant)
+        delta_mid = abs((mid_expires - expected_mid).total_seconds())
+        assert delta_mid < 5, (
+            f"After the first _grant_premium(+{first_grant}), expires_at was not "
+            f"extended by {first_grant} days from the original value.\n"
+            f"  original    : {_tz(original_expires).isoformat()}\n"
+            f"  expected mid: {expected_mid.isoformat()}\n"
+            f"  actual mid  : {mid_expires.isoformat()}\n"
+            f"  delta       : {delta_mid:.1f}s\n"
+            "The extension branch of _grant_premium may be broken — check the "
+            "UPDATE path in referral_repository._grant_premium."
+        )
+
+    # ── Session B: second grant (+5 days) ────────────────────────────────────
+    # A fresh session is opened to ensure there is no in-process identity-map
+    # that could serve a cached (pre-first-commit) version of the row.
+    async with session_factory() as sess_b:
+        repo_b = ReferralRepository(sess_b)
+        await repo_b._grant_premium(user_id, second_grant)
+        await sess_b.commit()
+
+    # ── Final verification ────────────────────────────────────────────────────
+    async with session_factory() as final_check:
+        def _tz(ts: dt.datetime) -> dt.datetime:
+            return ts if ts.tzinfo else ts.replace(tzinfo=dt.timezone.utc)
+
+        final_row = (
+            await final_check.execute(
+                select(UserSubscription).where(UserSubscription.id == sub_id)
+            )
+        ).scalar_one()
+        actual_expires  = _tz(final_row.expires_at)
+        original_utc    = _tz(original_expires)
+
+        # The only correct outcome: original + first_grant + second_grant
+        expected_final  = original_utc + dt.timedelta(days=total_grant)
+
+        # The two wrong outcomes to name in the error message:
+        wrong_stale     = original_utc + dt.timedelta(days=second_grant)   # second read original
+        wrong_no_second = original_utc + dt.timedelta(days=first_grant)    # second was no-op
+
+        delta_correct = abs((actual_expires - expected_final).total_seconds())
+        assert delta_correct < 5, (
+            f"After two sequential _grant_premium calls (+{first_grant} then "
+            f"+{second_grant}) in separate sessions, the final expires_at is wrong.\n\n"
+            f"  original expires_at   : {original_utc.isoformat()}  (now + {existing_days}d)\n"
+            f"  expected final        : {expected_final.isoformat()}  "
+            f"(original + {first_grant} + {second_grant} = now + {existing_days + total_grant}d)\n"
+            f"  actual   final        : {actual_expires.isoformat()}\n"
+            f"  delta vs correct      : {delta_correct:.1f}s\n\n"
+            f"  Wrong outcome A (stale baseline in session B): "
+            f"{wrong_stale.isoformat()}  (now + {existing_days + second_grant}d)\n"
+            f"  Wrong outcome B (second call was a no-op):    "
+            f"{wrong_no_second.isoformat()}  (now + {existing_days + first_grant}d)\n\n"
+            "The second _grant_premium call must read the committed expires_at "
+            "(written by session A) as its baseline, not the original value. "
+            "A stale SQLAlchemy identity-map hit or a missing expire_on_commit "
+            "setting would cause it to extend from the original instead."
+        )

@@ -1141,3 +1141,269 @@ async def test_grant_premium_extends_active_row_leaves_expired_row_untouched(
             f"    delta     : {delta_expired:.1f}s\n"
             "Only the currently-active row (expires_at > now) should be extended."
         )
+
+
+# ---------------------------------------------------------------------------
+# Savepoint rollback tests: _grant_premium must not be silently skipped
+# after a rolled-back savepoint inside evaluate_and_grant_milestones.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_grant_premium_not_skipped_when_concurrent_session_already_committed(
+    session_factory,
+):
+    """Premium must not be silently skipped when a concurrent session already
+    committed the milestone, causing this session's savepoint to get an
+    IntegrityError on the milestone_log insert.
+
+    Background
+    ----------
+    evaluate_and_grant_milestones wraps each milestone in a begin_nested()
+    savepoint.  The savepoint flushes the milestone_log first; if a concurrent
+    session already committed the same milestone, the flush raises IntegrityError
+    and the savepoint rolls back — _grant_premium is never called.  The question
+    is whether the concurrent session that WON the race also committed a
+    subscription row for the user.
+
+    Scenario
+    --------
+    1. Activate a referral so active_count = 1 (threshold crossed).
+    2. "Concurrent winner" session: call evaluate_and_grant_milestones and
+       commit — milestone_log + subscription both written.
+    3. "Losing" session: call evaluate_and_grant_milestones again → the
+       begin_nested savepoint raises IntegrityError on milestone_log →
+       savepoint rolls back → _grant_premium is not called in this session.
+    4. Assert:
+       - Exactly one milestone_log row for the referrer.
+       - Exactly one active subscription for the referrer (from the winner).
+       - The losing session's rewards list is empty (duplicate correctly skipped).
+
+    This confirms the atomicity invariant: milestone_log and subscription are
+    always committed together inside the same savepoint, so an IntegrityError on
+    the log means the subscription was ALSO committed by the winner — Premium is
+    not silently skipped.
+    """
+    referrer_id = 10_000
+    referred_id = 10_001
+    milestone_count = 1
+    milestone_days = 14
+
+    # ── Seed config + pending referral ───────────────────────────────────────
+    async with session_factory() as seed:
+        await _seed_config(seed, milestones=[{
+            "count": milestone_count,
+            "type": "premium_days",
+            "value": milestone_days,
+            "label": f"+{milestone_days} дн. Premium (milestone {milestone_count})",
+        }])
+        ref = await _seed_pending_referral(seed, referrer_id, referred_id)
+        referral_id = ref.id
+        await seed.commit()
+
+    # ── Phase 1: activate the referral and commit so active_count becomes 1 ──
+    async with session_factory() as sess:
+        repo = ReferralRepository(sess)
+        ok, ref = await repo.admin_set_status(referral_id, "active")
+        assert ok
+        ref_id = ref.id
+        await sess.commit()
+
+    # ── "Winner" session: milestone_log + subscription committed atomically ───
+    async with session_factory() as sess:
+        repo = ReferralRepository(sess)
+        winner_rewards = await repo.evaluate_and_grant_milestones(referrer_id, ref_id)
+        await sess.commit()
+
+    assert len(winner_rewards) == 1, (
+        f"Winner session should have granted the milestone, got {len(winner_rewards)} rewards"
+    )
+
+    # Verify both rows exist after the winner commits.
+    async with session_factory() as check:
+        logs_after_winner = (await check.execute(
+            select(ReferralRewardLog).where(
+                ReferralRewardLog.user_telegram_id == referrer_id,
+                ReferralRewardLog.reward_type == "milestone",
+            )
+        )).scalars().all()
+        assert len(logs_after_winner) == 1, (
+            f"Expected 1 milestone_log after winner commit, found {len(logs_after_winner)}"
+        )
+
+        sub_after_winner = (await check.execute(
+            select(UserSubscription).where(
+                UserSubscription.user_telegram_id == referrer_id,
+                UserSubscription.is_active.is_(True),
+            )
+        )).scalar_one_or_none()
+        assert sub_after_winner is not None, (
+            "Winner session must have created a subscription atomically with the "
+            "milestone_log — none found.  The savepoint did not write both rows."
+        )
+
+    # ── "Loser" session: duplicate milestone_log → IntegrityError → skips ─────
+    # This simulates the concurrent-session race where a second caller tries to
+    # grant the same milestone.  The savepoint rolls back (IntegrityError on
+    # the log insert), _grant_premium is NOT called — but the subscription
+    # already exists from the winner, so Premium is not silently skipped.
+    async with session_factory() as sess:
+        repo = ReferralRepository(sess)
+        loser_rewards = await repo.evaluate_and_grant_milestones(referrer_id, ref_id)
+        await sess.commit()
+
+    assert loser_rewards == [], (
+        f"Loser session must return empty rewards (duplicate milestone correctly "
+        f"skipped via IntegrityError), got {loser_rewards}"
+    )
+
+    # ── Final DB state: exactly one log, one subscription ────────────────────
+    async with session_factory() as check:
+        milestone_logs = (await check.execute(
+            select(ReferralRewardLog).where(
+                ReferralRewardLog.user_telegram_id == referrer_id,
+                ReferralRewardLog.reward_type == "milestone",
+                ReferralRewardLog.reward_value == str(milestone_count),
+            )
+        )).scalars().all()
+        assert len(milestone_logs) == 1, (
+            f"Expected exactly 1 milestone_log for referrer={referrer_id} "
+            f"at count={milestone_count} — found {len(milestone_logs)}. "
+            "Either the milestone was not granted at all, or it was double-granted."
+        )
+
+        subs = (await check.execute(
+            select(UserSubscription).where(
+                UserSubscription.user_telegram_id == referrer_id,
+                UserSubscription.is_active.is_(True),
+            )
+        )).scalars().all()
+        assert len(subs) == 1, (
+            f"Expected exactly 1 active subscription for referrer={referrer_id} — "
+            f"found {len(subs)}.  Either the subscription was not created by the "
+            "winner session, or it was duplicated by the loser session."
+        )
+        assert subs[0].is_active is True, (
+            "Subscription must be active after the concurrent milestone grant."
+        )
+
+
+@pytest.mark.asyncio
+async def test_grant_premium_not_skipped_when_savepoint_rolls_back_mid_grant(
+    session_factory,
+):
+    """Premium must not be silently skipped when an error inside _grant_premium
+    causes the savepoint to roll back, after which a retry call succeeds.
+
+    Scenario
+    --------
+    1. Activate a referral so active_count = 1 (milestone threshold crossed).
+    2. Patch _grant_premium to raise RuntimeError on the first invocation only.
+       When evaluate_and_grant_milestones runs, the savepoint catches the error
+       (via the begin_nested context manager), rolling back both the
+       milestone_log insert and the partial _grant_premium work.
+       The RuntimeError propagates out of the savepoint but is NOT an
+       IntegrityError, so it bubbles up — the caller's outer session is still
+       usable (the savepoint rollback isolated the damage).
+    3. On the second call (retry, no patch), evaluate_and_grant_milestones
+       succeeds: milestone_log is inserted cleanly and _grant_premium runs to
+       completion.
+    4. Assert that after the retry an active subscription exists for the referrer.
+
+    This test catches a regression where a mid-savepoint failure leaves the
+    system in a state where `_grant_premium` can never be reached again
+    (e.g. because a stale milestone_log row was partially persisted and not
+    rolled back, causing a false IntegrityError on every subsequent attempt).
+    """
+    import unittest.mock
+
+    referrer_id = 10_100
+    referred_id = 10_101
+    milestone_count = 1
+    milestone_days = 7
+
+    # ── Seed ─────────────────────────────────────────────────────────────────
+    async with session_factory() as seed:
+        await _seed_config(seed, milestones=[{
+            "count": milestone_count,
+            "type": "premium_days",
+            "value": milestone_days,
+            "label": f"+{milestone_days} дн. Premium (milestone {milestone_count})",
+        }])
+        ref = await _seed_pending_referral(seed, referrer_id, referred_id)
+        referral_id = ref.id
+        await seed.commit()
+
+    # Phase 1: activate → commit
+    async with session_factory() as sess:
+        repo = ReferralRepository(sess)
+        ok, ref = await repo.admin_set_status(referral_id, "active")
+        assert ok
+        ref_id = ref.id
+        await sess.commit()
+
+    # ── Attempt 1: _grant_premium raises mid-savepoint → savepoint rolls back ─
+    # The begin_nested context manager re-raises non-IntegrityError exceptions,
+    # so the error propagates to the caller. We catch it here and verify the DB
+    # is clean (savepoint rollback isolated the damage).
+    call_count = {"n": 0}
+    original_grant = ReferralRepository._grant_premium
+
+    async def failing_first_grant(self, user_telegram_id, days):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            raise RuntimeError("Simulated mid-savepoint failure in _grant_premium")
+        return await original_grant(self, user_telegram_id, days)
+
+    with unittest.mock.patch.object(
+        ReferralRepository, "_grant_premium", failing_first_grant
+    ):
+        async with session_factory() as sess:
+            repo = ReferralRepository(sess)
+            try:
+                await repo.evaluate_and_grant_milestones(referrer_id, ref_id)
+            except RuntimeError:
+                # Expected: the savepoint rolled back and the error bubbled up.
+                pass
+            finally:
+                await sess.rollback()
+
+    # The savepoint rollback must have erased the partial milestone_log write.
+    async with session_factory() as check:
+        logs = (await check.execute(
+            select(ReferralRewardLog).where(
+                ReferralRewardLog.user_telegram_id == referrer_id,
+                ReferralRewardLog.reward_type == "milestone",
+            )
+        )).scalars().all()
+        assert len(logs) == 0, (
+            f"After the mid-savepoint failure the milestone_log must be absent "
+            f"(savepoint rolled it back), but found {len(logs)} row(s). "
+            "This means the savepoint did not cleanly roll back the partial write."
+        )
+
+    # ── Attempt 2 (retry): no patch — must succeed end-to-end ────────────────
+    async with session_factory() as sess:
+        repo = ReferralRepository(sess)
+        retry_rewards = await repo.evaluate_and_grant_milestones(referrer_id, ref_id)
+        await sess.commit()
+
+    assert len(retry_rewards) == 1, (
+        f"Retry must grant the milestone (count={milestone_count}). "
+        f"Got {len(retry_rewards)} rewards. "
+        "The savepoint rollback left the system in a state where the milestone "
+        "cannot be re-granted on retry."
+    )
+
+    # Subscription must now exist and be active.
+    async with session_factory() as check:
+        sub = (await check.execute(
+            select(UserSubscription).where(
+                UserSubscription.user_telegram_id == referrer_id,
+                UserSubscription.is_active.is_(True),
+            )
+        )).scalar_one_or_none()
+        assert sub is not None, (
+            f"Expected an active subscription for referrer={referrer_id} after the "
+            "retry, but none was found. _grant_premium was not called on retry — "
+            "the savepoint rollback scenario silently blocked the Premium grant."
+        )

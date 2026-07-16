@@ -417,6 +417,96 @@ async def test_upgrade_tier_not_related_blocked(session):
 
 
 # ---------------------------------------------------------------------------
+# Re-send request after a declined / broken request
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_resend_request_after_decline_allowed(session):
+    """A → B request, B declines → A can send a fresh request to B.
+
+    The UniqueConstraint on (user_a_id, user_b_id) means there can only ever be
+    one row per pair.  send_request() must reuse the existing 'broken' row
+    (UPDATE) rather than attempting a second INSERT, otherwise the DB constraint
+    would raise an IntegrityError and the user could never retry.
+    """
+    await _seed_wallet(session, 30001, 500)
+    repo = RelationshipRepository(session)
+
+    # A sends a request to B
+    rel = await repo.send_request(30001, 30002)
+    assert rel.status == "pending"
+    assert rel.initiator_id == 30001
+    rel_id = rel.id
+
+    # B declines → status becomes "broken"
+    declined = await repo.respond(30002, 30001, accept=False)
+    assert declined.status == "broken"
+
+    # A should be able to send again — must not raise
+    rel2 = await repo.send_request(30001, 30002)
+    assert rel2.status == "pending"
+    assert rel2.initiator_id == 30001
+    # Same row is reused (no new INSERT, no UniqueConstraint violation)
+    assert rel2.id == rel_id
+
+
+@pytest.mark.asyncio
+async def test_resend_request_after_decline_deducts_coins_again(session):
+    """Each re-send costs REQUEST_COST regardless of prior history."""
+    from sqlalchemy import select as sa_select
+
+    await _seed_wallet(session, 31001, 500)
+    repo = RelationshipRepository(session)
+
+    await repo.send_request(31001, 31002)
+    await repo.respond(31002, 31001, accept=False)
+
+    wallet = (await session.execute(
+        sa_select(UserWallet).where(UserWallet.owner_telegram_id == 31001)
+    )).scalar_one()
+    balance_after_decline = wallet.balance
+
+    await repo.send_request(31001, 31002)
+
+    await session.refresh(wallet)
+    assert wallet.balance == balance_after_decline - REQUEST_COST
+
+
+@pytest.mark.asyncio
+async def test_resend_request_insufficient_funds_after_decline(session):
+    """Re-send after decline is still blocked when the wallet is empty."""
+    await _seed_wallet(session, 32001, REQUEST_COST)  # exact — enough for first
+    repo = RelationshipRepository(session)
+
+    await repo.send_request(32001, 32002)
+    await repo.respond(32002, 32001, accept=False)
+
+    # Wallet is now at 0
+    with pytest.raises(ValueError, match="insufficient_funds"):
+        await repo.send_request(32001, 32002)
+
+
+@pytest.mark.asyncio
+async def test_pending_request_still_blocked_after_prior_break(session):
+    """A second send_request while one is already pending raises 'request_pending',
+    even when the pair previously had a broken relationship."""
+    await _seed_wallet(session, 33001, 500)
+    repo = RelationshipRepository(session)
+
+    # First cycle: send → decline
+    await repo.send_request(33001, 33002)
+    await repo.respond(33002, 33001, accept=False)
+
+    # Second cycle: send again → should succeed (pending)
+    await repo.send_request(33001, 33002)
+
+    # Third send while still pending must be blocked
+    with pytest.raises(ValueError, match="request_pending"):
+        await repo.send_request(33001, 33002)
+
+
+# ---------------------------------------------------------------------------
 # Cooldown reset after tier upgrade
 # ---------------------------------------------------------------------------
 

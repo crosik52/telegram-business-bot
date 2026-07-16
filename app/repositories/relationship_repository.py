@@ -182,6 +182,34 @@ class RelationshipRepository:
         wallet.balance -= REQUEST_COST
 
         a, b = self._pair(requester_id, addressee_id)
+
+        # The UniqueConstraint on (user_a_id, user_b_id) allows only one row
+        # per pair ever.  If a previous request was declined or broken, reuse
+        # that row (UPDATE) instead of attempting a new INSERT that would
+        # violate the constraint.
+        broken = (
+            await self._session.execute(
+                select(Relationship).where(
+                    Relationship.user_a_id == a,
+                    Relationship.user_b_id == b,
+                    Relationship.status == "broken",
+                )
+            )
+        ).scalar_one_or_none()
+
+        if broken:
+            broken.initiator_id = requester_id
+            broken.rel_type     = "friends"
+            broken.level        = 1
+            broken.xp           = 0
+            broken.status       = "pending"
+            broken.accepted_at  = None
+            broken.last_gift_a  = None
+            broken.last_gift_b  = None
+            broken.created_at   = dt.datetime.now(dt.timezone.utc)
+            await self._session.flush()
+            return broken
+
         rel = Relationship(
             user_a_id=a,
             user_b_id=b,

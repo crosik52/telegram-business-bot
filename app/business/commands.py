@@ -110,6 +110,7 @@ _HELP_TEXT = (
     f"<code>!card</code> · <code>!открытка</code> — отправить открытку партнёру по отношениям\n"
     f"<code>!card текст</code> · <code>!открытка текст</code> — открытка с личным текстом\n"
     f"<code>!friend</code> · <code>!друг</code> — предложить дружбу этому собеседнику\n"
+    f"<code>!switch</code> · <code>!свич</code> — исправить раскладку в цитируемом сообщении\n"
     f"<code>!help</code> · <code>!помощь</code> — эта справка\n"
 )
 
@@ -569,6 +570,85 @@ async def _cmd_card(
         await _reply(bot, owner_id, "❌ Не удалось отправить открытку. Попробуй ещё раз.")
 
 
+# ── Layout switcher ──────────────────────────────────────────────────────────
+
+# Physical-key mapping: English QWERTY character → Russian ЙЦУКЕН character
+# (for text typed with Russian layout active but English layout selected in OS)
+_EN_TO_RU: dict[str, str] = {
+    # Lowercase letters
+    "q": "й", "w": "ц", "e": "у", "r": "к", "t": "е", "y": "н",
+    "u": "г", "i": "ш", "o": "щ", "p": "з", "[": "х", "]": "ъ",
+    "a": "ф", "s": "ы", "d": "в", "f": "а", "g": "п", "h": "р",
+    "j": "о", "k": "л", "l": "д", ";": "ж", "'": "э",
+    "z": "я", "x": "ч", "c": "с", "v": "м", "b": "и", "n": "т",
+    "m": "ь", ",": "б", ".": "ю", "`": "ё",
+    # Uppercase letters
+    "Q": "Й", "W": "Ц", "E": "У", "R": "К", "T": "Е", "Y": "Н",
+    "U": "Г", "I": "Ш", "O": "Щ", "P": "З", "{": "Х", "}": "Ъ",
+    "A": "Ф", "S": "Ы", "D": "В", "F": "А", "G": "П", "H": "Р",
+    "J": "О", "K": "Л", "L": "Д", ":": "Ж", '"': "Э",
+    "Z": "Я", "X": "Ч", "C": "С", "V": "М", "B": "И", "N": "Т",
+    "M": "Ь", "<": "Б", ">": "Ю", "~": "Ё",
+    # Punctuation & symbols that differ between layouts
+    "@": '"',   # Shift+2
+    "#": "№",   # Shift+3
+    "$": ";",   # Shift+4
+    "^": ":",   # Shift+6
+    "&": "?",   # Shift+7
+    "/": ".",   # slash → dot (Russian period key)
+    "?": ",",   # Shift+/ → Russian comma
+}
+
+# Reverse map: Russian → English
+_RU_TO_EN: dict[str, str] = {v: k for k, v in _EN_TO_RU.items()}
+
+
+def _switch_layout(text: str) -> str:
+    """Convert *text* from wrong keyboard layout to correct one.
+
+    Automatically detects direction:
+    • Mostly Latin characters  → assumes Russian layout was intended → EN→RU
+    • Mostly Cyrillic characters → assumes English layout was intended → RU→EN
+    """
+    latin  = sum(1 for c in text if c.isascii() and c.isalpha())
+    cyril  = sum(1 for c in text if "\u0400" <= c <= "\u04ff")
+
+    if cyril > latin:
+        # Text is Cyrillic — convert to English
+        return "".join(_RU_TO_EN.get(c, c) for c in text)
+    else:
+        # Text is Latin (or mixed/empty) — convert to Russian
+        return "".join(_EN_TO_RU.get(c, c) for c in text)
+
+
+async def _cmd_switch(
+    *,
+    bot: Bot,
+    owner_id: int,
+    replied_text: str | None = None,
+    **_: object,
+) -> None:
+    """Fix keyboard layout of the replied-to message.
+
+    Usage: reply to any message with ``!switch`` (or ``!свич``).
+    The bot detects direction automatically (EN→RU or RU→EN) and sends
+    the corrected text back to the owner via DM.
+    """
+    if not replied_text or not replied_text.strip():
+        await _reply(
+            bot, owner_id,
+            "⌨️ Ответь на сообщение командой <code>!switch</code>, "
+            "чтобы исправить раскладку."
+        )
+        return
+
+    converted = _switch_layout(replied_text.strip())
+    await _reply(
+        bot, owner_id,
+        f"⌨️ <b>Исправленная раскладка:</b>\n\n{html_escape(converted)}"
+    )
+
+
 # ── Dispatch table ────────────────────────────────────────────────────────────
 
 async def _cmd_friend(
@@ -691,6 +771,7 @@ _HANDLERS: dict[str, object] = {
     "mp3":      _cmd_mp3,
     "card":     _cmd_card,
     "friend":   _cmd_friend,
+    "switch":   _cmd_switch,
     # Russian aliases
     "помощь":   _cmd_help,
     "инфо":     _cmd_info,
@@ -701,6 +782,7 @@ _HANDLERS: dict[str, object] = {
     "мп3":      _cmd_mp3,
     "открытка": _cmd_card,
     "друг":     _cmd_friend,
+    "свич":     _cmd_switch,
 }
 
 
@@ -727,6 +809,7 @@ async def dispatch(
     message_id: int,
     session: AsyncSession,
     can_reply: bool = True,
+    replied_text: str | None = None,
 ) -> None:
     """Route a parsed command to its handler and then delete the command message."""
     handler = _HANDLERS.get(cmd)
@@ -745,6 +828,7 @@ async def dispatch(
             session=session,
             args=args,
             can_reply=can_reply,
+            replied_text=replied_text,
         )
 
     # Always attempt to hide the command message from the contact.

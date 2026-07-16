@@ -922,6 +922,11 @@ async def on_business_message(message: Message, bot: Bot) -> None:
                         "Owner command !%s from user=%s in chat=%s",
                         cmd, sender.id, message.chat.id,
                     )
+                    _replied_text = (
+                        message.reply_to_message.text
+                        or message.reply_to_message.caption
+                        if message.reply_to_message else None
+                    )
                     await commands.dispatch(
                         cmd, args,
                         bot=bot,
@@ -931,6 +936,7 @@ async def on_business_message(message: Message, bot: Bot) -> None:
                         message_id=message.message_id,
                         session=session,
                         can_reply=can_reply,
+                        replied_text=_replied_text,
                     )
 
         # --- Video link detection (Reels / TikTok / YouTube Shorts) ---

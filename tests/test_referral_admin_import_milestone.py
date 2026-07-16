@@ -2034,3 +2034,144 @@ async def test_second_grant_premium_extends_from_first_extension_not_original_ba
             "A stale SQLAlchemy identity-map hit or a missing expire_on_commit "
             "setting would cause it to extend from the original instead."
         )
+
+
+# ---------------------------------------------------------------------------
+# Concurrent-call test: two simultaneous _grant_premium calls must not lose
+# either extension (Task #61)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_grant_premium_concurrent_two_sessions_both_extensions_applied(
+    session_factory,
+):
+    """Two concurrent _grant_premium calls for the same user must not lose either grant.
+
+    Background
+    ----------
+    The naive implementation reads ``expires_at`` into a Python object, adds the
+    timedelta in Python, and flushes back the mutated value.  Under concurrent
+    access both sessions read the *same* stale ``expires_at`` before either
+    commits:
+
+        Session A reads T → sets T+7  → commits  →  DB = T+7
+        Session B reads T → sets T+14 → commits  →  DB = T+14  ← A's grant is lost!
+
+    The safe implementation uses a **DB-side arithmetic expression** in the
+    UPDATE so that each session reads the DB's *committed* value at UPDATE
+    time rather than a Python-side snapshot from the earlier SELECT:
+
+        Session A: UPDATE SET expires_at = datetime(expires_at, '+7 days')  →  T+7
+        Session B: UPDATE SET expires_at = datetime(expires_at, '+14 days') →  T+21  ✓
+
+    Because aiosqlite serialises writes, session B's UPDATE executes after
+    session A's commit and therefore reads T+7 from the database rather than
+    the original T it saw during its own SELECT.
+
+    Assertion
+    ---------
+    After both concurrent calls the subscription's ``expires_at`` must equal
+    ``original + grant_a_days + grant_b_days``.  Any other result indicates
+    that one session overwrote the other's extension.
+
+    Race exposure
+    -------------
+    This test is designed to *fail* with the buggy SELECT→Python-mutation
+    implementation and *pass* only when the implementation uses a DB-side
+    atomic UPDATE expression.  The asyncio cooperative scheduler ensures both
+    sessions' SELECTs complete before either flushes, reliably triggering the
+    race on every run.
+    """
+    import asyncio
+    import datetime as dt
+
+    user_id      = 19001
+    initial_days = 30
+    grant_a_days = 7
+    grant_b_days = 14
+    expected_total = initial_days + grant_a_days + grant_b_days  # 51
+
+    # ── Seed an existing active subscription ────────────────────────────────
+    async with session_factory() as seed:
+        await _seed_config(
+            seed,
+            milestones=[],
+            referrer_reward_days=0,
+            referee_reward_days=0,
+        )
+        now = dt.datetime.now(dt.timezone.utc)
+        original_expires = now + dt.timedelta(days=initial_days)
+        seed.add(UserSubscription(
+            user_telegram_id=user_id,
+            is_active=True,
+            started_at=now,
+            expires_at=original_expires,
+            granted_by_admin=True,
+            stars_paid=0,
+        ))
+        await seed.commit()
+
+    # ── Two concurrent _grant_premium calls in separate sessions ─────────────
+    # asyncio.gather schedules both coroutines on the same event loop.
+    # The cooperative scheduler ensures session A's SELECT runs to completion
+    # (suspending at the I/O await) before session B's SELECT fires — so both
+    # sessions read the original expires_at before either session commits.
+    # With the buggy Python-mutation implementation the last commit wins and
+    # one extension is silently lost.  With the atomic DB-side UPDATE the
+    # second commit reads the first's committed value and adds to it correctly.
+    async def _grant(days: int) -> None:
+        async with session_factory() as sess:
+            repo = ReferralRepository(sess)
+            await repo._grant_premium(user_id, days)
+            await sess.commit()
+
+    await asyncio.gather(_grant(grant_a_days), _grant(grant_b_days))
+
+    # ── Verify: final expires_at = original + A + B (no extension is lost) ──
+    async with session_factory() as check:
+        def _tz(ts: dt.datetime) -> dt.datetime:
+            return ts if ts.tzinfo else ts.replace(tzinfo=dt.timezone.utc)
+
+        sub = (
+            await check.execute(
+                select(UserSubscription)
+                .where(
+                    UserSubscription.user_telegram_id == user_id,
+                    UserSubscription.is_active.is_(True),
+                )
+                .order_by(UserSubscription.expires_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+
+        assert sub is not None, (
+            f"No active subscription found for user_id={user_id} after concurrent grants — "
+            "_grant_premium may have silently failed."
+        )
+
+        actual  = _tz(sub.expires_at)
+        orig_tz = _tz(original_expires)
+        expected = orig_tz + dt.timedelta(days=grant_a_days + grant_b_days)
+
+        # Wrong outcome: last-writer-wins (one session's stale read overwrites the other's grant)
+        wrong_last_wins = orig_tz + dt.timedelta(days=grant_b_days)
+
+        delta_correct = abs((actual - expected).total_seconds())
+        assert delta_correct < 5, (
+            f"Concurrent _grant_premium calls lost an extension.\n\n"
+            f"  initial subscription   : now + {initial_days}d  "
+            f"({orig_tz.isoformat()})\n"
+            f"  expected final         : now + {expected_total}d "
+            f"({expected.isoformat()})\n"
+            f"  actual   final         : {actual.isoformat()}\n"
+            f"  delta vs expected      : {delta_correct:.1f}s\n\n"
+            f"  Wrong outcome (last-writer-wins, one extension lost): "
+            f"{wrong_last_wins.isoformat()}\n\n"
+            "Both concurrent _grant_premium calls must be reflected in the final "
+            "expires_at.  The implementation must use a DB-side arithmetic expression "
+            "in the UPDATE (e.g. datetime(expires_at, '+N days') for SQLite or "
+            "expires_at + timedelta for PostgreSQL) rather than a Python-side "
+            "mutation of the value read by the earlier SELECT.  A Python-side "
+            "mutation is racy: both sessions read the same stale expires_at before "
+            "either commits, so the second commit silently overwrites the first."
+        )

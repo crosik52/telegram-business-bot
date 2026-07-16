@@ -704,28 +704,68 @@ class ReferralRepository:
         return q.scalar_one() or 0
 
     async def _grant_premium(self, user_telegram_id: int, days: int) -> None:
-        """Extend or create an active subscription for the user."""
+        """Extend or create an active subscription for the user.
+
+        Concurrency safety
+        ------------------
+        The UPDATE uses a **DB-side arithmetic expression** rather than a
+        Python-side mutation of a previously-read value.  This prevents the
+        classic TOCTOU race where two concurrent sessions both read the same
+        ``expires_at`` before either commits:
+
+        * Buggy (SELECT → Python mutation → flush):
+            Session A reads T, Session B reads T (stale),
+            A commits T+7, B commits T+14 ← B's extension is lost.
+
+        * Safe (SELECT id → atomic UPDATE SET expires_at = expires_at + Δ):
+            A commits: DB T → T+7.
+            B commits after A: DB reads T+7, writes T+21 ← correct.
+
+        The DB-side expression is chosen per-dialect:
+            * SQLite  : ``datetime(expires_at, '+N days')``
+            * Others  : ``expires_at + timedelta(days=N)``   (PostgreSQL native)
+        """
         now = dt.datetime.now(dt.timezone.utc)
-        existing_q = await self._db.execute(
-            select(UserSubscription).where(
+        delta = dt.timedelta(days=days)
+
+        # Find the ID of the most-future active subscription to extend.
+        sub_id_q = await self._db.execute(
+            select(UserSubscription.id).where(
                 UserSubscription.user_telegram_id == user_telegram_id,
                 UserSubscription.is_active.is_(True),
                 UserSubscription.expires_at > now,
             ).order_by(UserSubscription.expires_at.desc()).limit(1)
         )
-        existing = existing_q.scalar_one_or_none()
-        if existing:
-            # Extend existing subscription
-            existing.expires_at = existing.expires_at + dt.timedelta(days=days)
+        sub_id = sub_id_q.scalar_one_or_none()
+
+        if sub_id is not None:
+            # Atomic UPDATE: the expression is evaluated server-side so that a
+            # concurrent session that commits between our SELECT and this UPDATE
+            # will have its change included rather than overwritten.
+            dialect_name = self._db.sync_session.get_bind().dialect.name
+            if dialect_name == "sqlite":
+                new_expires = func.datetime(
+                    UserSubscription.expires_at, f"+{days} days"
+                )
+            else:
+                new_expires = UserSubscription.expires_at + delta
+
+            await self._db.execute(
+                update(UserSubscription)
+                .where(UserSubscription.id == sub_id)
+                .values(expires_at=new_expires)
+                .execution_options(synchronize_session=False)
+            )
         else:
-            # Create new one
+            # No active subscription exists — create a fresh one.
             sub = UserSubscription(
                 user_telegram_id=user_telegram_id,
                 is_active=True,
                 started_at=now,
-                expires_at=now + dt.timedelta(days=days),
+                expires_at=now + delta,
                 granted_by_admin=True,
                 stars_paid=0,
             )
             self._db.add(sub)
+
         await self._db.flush()

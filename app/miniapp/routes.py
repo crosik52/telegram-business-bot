@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import collections as _collections
 import datetime as dt
 import re as _re
@@ -440,7 +441,7 @@ async def miniapp_stats(
                     await session.commit()
                     _ref_rewards.extend(_ms_rewards)
             if _ref_rewards:
-                # Notify both sides via bot (best-effort — each send is individually guarded)
+                # Notify both sides via bot in background — never block the HTTP response.
                 _settings = get_settings()
                 _bot = get_bot(_settings)
                 _cfg = await _ref_repo.get_config()
@@ -473,32 +474,38 @@ async def miniapp_stats(
                     _ref_msg += (
                         f"\n\n{E.TARGET} До награды «{_next_ms['label']}» — ещё <b>{_need}</b>"
                     )
-                try:
-                    await _bot.send_message(
-                        _ref.referrer_telegram_id, _ref_msg, parse_mode="HTML"
-                    )
-                except Exception as _exc:
-                    logger.warning(
-                        "Referral activation: failed to notify referrer %s "
-                        "(referred=%s): %s",
-                        _ref.referrer_telegram_id, owner_telegram_id, _exc,
-                    )
 
-                # ── Notify referred user (welcome bonus) ─────────────────────
-                if _cfg.referee_reward_days > 0:
+                async def _send_referral_notifications(
+                    bot=_bot,
+                    referrer_id=_ref.referrer_telegram_id,
+                    referred_id=owner_telegram_id,
+                    ref_msg=_ref_msg,
+                    referee_days=_cfg.referee_reward_days,
+                ) -> None:
                     try:
-                        await _bot.send_message(
-                            owner_telegram_id,
-                            f"{E.PARTY} Ты подключил бота по реферальной ссылке — "
-                            f"<b>+{_cfg.referee_reward_days} дн. Premium</b> уже у тебя!",
-                            parse_mode="HTML",
-                        )
-                    except Exception as _exc:
+                        await bot.send_message(referrer_id, ref_msg, parse_mode="HTML")
+                    except Exception as exc:
                         logger.warning(
-                            "Referral activation: failed to notify referred user %s "
-                            "(referrer=%s): %s",
-                            owner_telegram_id, _ref.referrer_telegram_id, _exc,
+                            "Referral activation: failed to notify referrer %s "
+                            "(referred=%s): %s",
+                            referrer_id, referred_id, exc,
                         )
+                    if referee_days > 0:
+                        try:
+                            await bot.send_message(
+                                referred_id,
+                                f"{E.PARTY} Ты подключил бота по реферальной ссылке — "
+                                f"<b>+{referee_days} дн. Premium</b> уже у тебя!",
+                                parse_mode="HTML",
+                            )
+                        except Exception as exc:
+                            logger.warning(
+                                "Referral activation: failed to notify referred user %s "
+                                "(referrer=%s): %s",
+                                referred_id, referrer_id, exc,
+                            )
+
+                asyncio.create_task(_send_referral_notifications())
         except Exception:
             logger.exception(
                 "Referral activation check failed for user %s", owner_telegram_id

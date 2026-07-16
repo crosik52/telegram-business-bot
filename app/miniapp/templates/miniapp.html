@@ -3531,7 +3531,7 @@
       try {
         const body = JSON.stringify({initData});
         const hdr  = {"Content-Type": "application/json"};
-        const post = (url) => fetch(url, {method:"POST", headers:hdr, body}).catch(()=>null);
+        const post = (url) => fetch(url, {method:"POST", headers:hdr, body, signal:AbortSignal.timeout(12000)}).catch(()=>null);
 
         const [statsRes, actRes, wordsRes, digestRes, relRes] = await Promise.all([
           post("/app/api/stats"),

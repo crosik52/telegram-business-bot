@@ -132,44 +132,7 @@ def _build_base_opts(out_dir: str, max_bytes: int) -> dict:
     }
 
 
-def _json_cookies_to_netscape(raw: str) -> str:
-    """Convert a JSON cookie array (exported by browser extensions such as
-    'Cookie Editor' or 'EditThisCookie') to Netscape/Mozilla cookie file format
-    that yt-dlp accepts via ``cookiefile``.
-
-    Returns an empty string if *raw* is not valid JSON or not a list.
-    """
-    import json as _json
-    import time as _time
-
-    try:
-        cookies = _json.loads(raw)
-        if not isinstance(cookies, list):
-            return ""
-    except (_json.JSONDecodeError, ValueError):
-        return ""
-
-    lines = [
-        "# Netscape HTTP Cookie File",
-        "# Converted from JSON by video_service",
-    ]
-    for c in cookies:
-        if not isinstance(c, dict):
-            continue
-        domain = str(c.get("domain") or "")
-        if not domain:
-            continue
-        if not domain.startswith("."):
-            domain = "." + domain
-        include_sub = "TRUE"
-        path       = str(c.get("path") or "/")
-        secure     = "TRUE" if c.get("secure") else "FALSE"
-        expiry     = str(int(c.get("expirationDate") or int(_time.time()) + 86_400 * 365))
-        name       = str(c.get("name") or "")
-        value      = str(c.get("value") or "")
-        lines.append(f"{domain}\t{include_sub}\t{path}\t{secure}\t{expiry}\t{name}\t{value}")
-
-    return "\n".join(lines)
+from app.services._cookie_utils import json_cookies_to_netscape as _json_cookies_to_netscape
 
 
 def _apply_tiktok_opts(ydl_opts: dict, url: str, out_dir: str) -> None:

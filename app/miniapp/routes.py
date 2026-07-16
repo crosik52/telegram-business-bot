@@ -1656,13 +1656,34 @@ async def rel_request(
                         )).scalar_one_or_none()
                 except Exception:
                     _bc_id = None
+                # Telegram silently drops reply_markup on messages sent with
+                # business_connection_id. So we send two separate messages:
+                # 1) a plain text notification in the business chat (visible
+                #    right inside the conversation), and
+                # 2) a bot-DM with the Accept / Decline keyboard so the
+                #    partner can actually respond.
+                if _bc_id:
+                    try:
+                        await _bot.send_message(
+                            payload.partner_id,
+                            f"💌 <b>{_name}</b> хочет с тобой подружиться!\n"
+                            f"Ответь через уведомление от бота 👇",
+                            parse_mode="HTML",
+                            business_connection_id=_bc_id,
+                        )
+                    except Exception as _chat_exc:
+                        logger.warning(
+                            "rel_request: failed to notify partner %s in chat: %s",
+                            payload.partner_id, _chat_exc,
+                        )
+                # Always send the DM with the interactive keyboard — this is
+                # the only channel where reply_markup is actually rendered.
                 await _bot.send_message(
                     payload.partner_id,
                     f"💌 <b>{_name}</b> хочет с тобой подружиться!\n\n"
                     f"Прими или отклони запрос:",
                     parse_mode="HTML",
                     reply_markup=_kb,
-                    **( {"business_connection_id": _bc_id} if _bc_id else {} ),
                 )
         except Exception:
             pass

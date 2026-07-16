@@ -489,7 +489,9 @@ async def miniapp_stats(
                             owner_telegram_id, _ref.referrer_telegram_id, _exc,
                         )
         except Exception:
-            logger.debug("Referral activation check failed for %s", owner_telegram_id)
+            logger.exception(
+                "Referral activation check failed for user %s", owner_telegram_id
+            )
 
     if not connection_ids:
         return {

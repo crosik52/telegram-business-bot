@@ -1435,18 +1435,18 @@ async def on_note_remind(callback: CallbackQuery, bot: Bot) -> None:
     import datetime as _dt  # noqa: PLC0415
     event_at = _dt.datetime.fromtimestamp(unix_ts, tz=_dt.timezone.utc) if unix_ts else None
 
-    note_text = ""
+    # Load note text directly from the DB — avoids lstrip-on-charset bugs
+    # when trying to parse it back out of the formatted DM message.
+    note_text = "(заметка)"
     try:
-        # Extract note text from the DM message (between "📝 Текст:" and "\n")
-        msg_text = callback.message.text or ""  # type: ignore[union-attr]
-        for line in msg_text.splitlines():
-            if line.startswith("📝"):
-                note_text = line.lstrip("📝 Текст:").strip()
-                break
-        if not note_text:
-            note_text = msg_text
+        from app.database.session import get_db_session as _gds  # noqa: PLC0415
+        from app.models.contact_note import ContactNote  # noqa: PLC0415
+        async for _s in _gds():
+            _note = await _s.get(ContactNote, note_id)
+            if _note:
+                note_text = _note.text
     except Exception:
-        note_text = "(заметка)"
+        logger.exception("note_remind: failed to load note_id=%s from DB", note_id)
 
     try:
         from app.database.session import get_db_session  # noqa: PLC0415

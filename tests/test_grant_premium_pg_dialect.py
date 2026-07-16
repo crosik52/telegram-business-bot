@@ -630,3 +630,188 @@ async def test_postgresql_branch_executes_correctly_when_dialect_mocked(session_
             f"PG-branch (mocked dialect) accumulation wrong: "
             f"expected ~{expected.isoformat()}, got {final_expires.isoformat()}"
         )
+
+
+# ---------------------------------------------------------------------------
+# 6. Schema-change resilience: is_active=False rows are ignored
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_inactive_sub_is_ignored_active_sub_is_extended(session_factory):
+    """A cancelled/refunded subscription (is_active=False) must be skipped.
+
+    Scenario
+    --------
+    User has two subscription rows:
+      • Row A: is_active=False, expires_at = now + 60 days  (cancelled/refunded)
+      • Row B: is_active=True,  expires_at = now + 30 days  (current active sub)
+
+    After _grant_premium(+7 days):
+      • Row B expires_at must become now + 37 days.
+      • Row A expires_at must remain now + 60 days (untouched).
+
+    This guards against a future schema change (e.g. soft-delete flag, status
+    enum) where the SELECT might accidentally pick up the cancelled row because
+    it has a later expires_at.  The WHERE clause ``is_active=True`` must be
+    sufficient to exclude it.
+    """
+    uid = 9013
+    now = dt.datetime.now(dt.timezone.utc)
+    inactive_expires = now + dt.timedelta(days=60)   # further future, but cancelled
+    active_expires   = now + dt.timedelta(days=30)   # current valid sub
+
+    async with session_factory() as seed:
+        # Row A — cancelled (is_active=False)
+        seed.add(UserSubscription(
+            user_telegram_id=uid,
+            is_active=False,
+            started_at=now - dt.timedelta(days=30),
+            expires_at=inactive_expires,
+            granted_by_admin=False,
+            stars_paid=99,
+        ))
+        # Row B — active
+        seed.add(UserSubscription(
+            user_telegram_id=uid,
+            is_active=True,
+            started_at=now,
+            expires_at=active_expires,
+            granted_by_admin=True,
+            stars_paid=0,
+        ))
+        await _seed_config(seed)
+        await seed.commit()
+
+    async with session_factory() as s:
+        repo = ReferralRepository(s)
+        await repo._grant_premium(uid, 7)
+        await s.commit()
+
+    async with session_factory() as check:
+        all_subs = (
+            await check.execute(
+                select(UserSubscription)
+                .where(UserSubscription.user_telegram_id == uid)
+                .order_by(UserSubscription.is_active.desc())  # active first
+            )
+        ).scalars().all()
+
+    assert len(all_subs) == 2, f"Expected exactly 2 subscriptions, got {len(all_subs)}"
+
+    active_sub   = next(s for s in all_subs if s.is_active is True)
+    inactive_sub = next(s for s in all_subs if s.is_active is False)
+
+    # Active row must have been extended by 7 days.
+    active_final = active_sub.expires_at
+    if active_final.tzinfo is None:
+        active_final = active_final.replace(tzinfo=dt.timezone.utc)
+    expected_active = active_expires + dt.timedelta(days=7)
+    diff_active = abs((active_final - expected_active).total_seconds())
+    assert diff_active < 5, (
+        f"Active subscription was not extended correctly: "
+        f"expected ~{expected_active.isoformat()}, got {active_final.isoformat()} "
+        f"(Δ={diff_active:.1f}s)"
+    )
+
+    # Inactive row must NOT have been touched.
+    inactive_final = inactive_sub.expires_at
+    if inactive_final.tzinfo is None:
+        inactive_final = inactive_final.replace(tzinfo=dt.timezone.utc)
+    diff_inactive = abs((inactive_final - inactive_expires).total_seconds())
+    assert diff_inactive < 5, (
+        f"Cancelled subscription was incorrectly modified: "
+        f"expected ~{inactive_expires.isoformat()}, got {inactive_final.isoformat()} "
+        f"(Δ={diff_inactive:.1f}s)"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 7. Schema-change resilience: most-future active row is extended
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_most_future_active_sub_is_extended(session_factory):
+    """When multiple active subscriptions exist, the most-future one is extended.
+
+    Scenario
+    --------
+    User has three active subscription rows with staggered expires_at:
+      • Row A: expires_at = now + 10 days  (oldest active)
+      • Row B: expires_at = now + 30 days  (middle)
+      • Row C: expires_at = now + 60 days  (most future — this must be extended)
+
+    After _grant_premium(+14 days):
+      • Row C expires_at must become now + 74 days.
+      • Rows A and B must remain unchanged.
+
+    The ORDER BY expires_at DESC LIMIT 1 in the SELECT ensures the most-future
+    active subscription is always picked, so that an extension always adds on
+    top of the user's longest-running validity period.
+    """
+    uid = 9014
+    now = dt.datetime.now(dt.timezone.utc)
+    expires_a = now + dt.timedelta(days=10)
+    expires_b = now + dt.timedelta(days=30)
+    expires_c = now + dt.timedelta(days=60)   # most future
+
+    async with session_factory() as seed:
+        for expires in (expires_a, expires_b, expires_c):
+            seed.add(UserSubscription(
+                user_telegram_id=uid,
+                is_active=True,
+                started_at=now,
+                expires_at=expires,
+                granted_by_admin=True,
+                stars_paid=0,
+            ))
+        await _seed_config(seed)
+        await seed.commit()
+
+    async with session_factory() as s:
+        repo = ReferralRepository(s)
+        await repo._grant_premium(uid, 14)
+        await s.commit()
+
+    async with session_factory() as check:
+        all_subs = (
+            await check.execute(
+                select(UserSubscription)
+                .where(UserSubscription.user_telegram_id == uid)
+                .order_by(UserSubscription.expires_at)
+            )
+        ).scalars().all()
+
+    assert len(all_subs) == 3, f"Expected 3 subscriptions, got {len(all_subs)}"
+
+    # Gather final expires_at values (normalised to UTC-aware).
+    finals = []
+    for s in all_subs:
+        exp = s.expires_at
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=dt.timezone.utc)
+        finals.append(exp)
+
+    finals_sorted = sorted(finals)
+
+    # Row A (shortest) — must be unchanged.
+    diff_a = abs((finals_sorted[0] - expires_a).total_seconds())
+    assert diff_a < 5, (
+        f"Row A (expires_at ~{expires_a.isoformat()}) was unexpectedly modified; "
+        f"got {finals_sorted[0].isoformat()} (Δ={diff_a:.1f}s)"
+    )
+
+    # Row B (middle) — must be unchanged.
+    diff_b = abs((finals_sorted[1] - expires_b).total_seconds())
+    assert diff_b < 5, (
+        f"Row B (expires_at ~{expires_b.isoformat()}) was unexpectedly modified; "
+        f"got {finals_sorted[1].isoformat()} (Δ={diff_b:.1f}s)"
+    )
+
+    # Row C (most future) — must have been extended by 14 days.
+    expected_c = expires_c + dt.timedelta(days=14)
+    diff_c = abs((finals_sorted[2] - expected_c).total_seconds())
+    assert diff_c < 5, (
+        f"Row C (most-future) was not extended correctly: "
+        f"expected ~{expected_c.isoformat()}, got {finals_sorted[2].isoformat()} "
+        f"(Δ={diff_c:.1f}s)"
+    )

@@ -100,6 +100,38 @@ async def download_and_cache(
         return False
 
 
+async def store_bytes(
+    session: AsyncSession,
+    file_unique_id: str,
+    file_id: str | None,
+    media_type: str,
+    data: bytes,
+) -> None:
+    """Persist raw *data* bytes directly (e.g. from Telethon).  Idempotent."""
+    existing = (
+        await session.execute(
+            select(MediaCache).where(MediaCache.file_unique_id == file_unique_id)
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        return
+    try:
+        session.add(
+            MediaCache(
+                file_unique_id=file_unique_id,
+                file_id=file_id or "",
+                media_type=media_type,
+                file_data=data,
+                file_size=len(data),
+            )
+        )
+        await session.flush()
+        logger.debug("media_cache: stored %d B via store_bytes (%s)", len(data), file_unique_id)
+    except Exception:
+        await session.rollback()
+        logger.debug("media_cache: duplicate in store_bytes for %s", file_unique_id)
+
+
 async def get_cached_bytes(
     session: AsyncSession,
     file_unique_id: str,

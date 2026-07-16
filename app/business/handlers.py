@@ -659,32 +659,60 @@ async def on_business_message(message: Message, bot: Bot) -> None:
             _download_tasks.add(_streak_task)
             _streak_task.add_done_callback(_download_tasks.discard)
 
-        # ── Immediate media download (self-destructing media support) ─────────
-        # Schedule a background task to cache the file bytes right now, before
-        # the message can disappear and the file_id expires.  The task uses its
-        # own session so it never blocks the current handler.
-        #
-        # has_media_spoiler=True signals a view-once / self-destructing message.
-        # For those we pass extra context so the task can:
-        #   • Proactively forward the file to the owner's DM on success.
-        #   • Alert the owner if the file expired before we could capture it.
+        # ── Media download / cache ────────────────────────────────────────────
         _file_id, _file_uq_id, _media_type_str = _get_file_info(message)
         if _file_id and _file_uq_id and _media_type_str:
             _is_sd = bool(getattr(message, "has_media_spoiler", False))
-            _partner_label = (
-                _counterpart_label(message.chat, owner_telegram_id or 0)
-                if _is_sd else "собеседника"
-            )
-            _cache_task = asyncio.create_task(
-                _cache_media_in_background(
-                    bot, _file_id, _file_uq_id, _media_type_str,
-                    owner_id=owner_telegram_id if _is_sd else None,
-                    is_self_destructing=_is_sd,
-                    partner_name=_partner_label,
+
+            if _is_sd and owner_telegram_id:
+                # ── Self-destructing / view-once: download SYNCHRONOUSLY ──────
+                # create_task() defers execution to the next event-loop
+                # iteration.  For view-once media the recipient can open (and
+                # destroy) the file in that window.  Awaiting the download
+                # here — before the webhook response is sent — guarantees we
+                # grab the bytes while the file_id is still valid.
+                _partner_label = _counterpart_label(message.chat, owner_telegram_id)
+                cached_now = await media_cache_service.download_and_cache(
+                    bot, session, _file_id, _file_uq_id, _media_type_str
                 )
-            )
-            _download_tasks.add(_cache_task)
-            _cache_task.add_done_callback(_download_tasks.discard)
+                if cached_now:
+                    await session.flush()   # persist cache row in current txn
+                    # Forward the captured file to the owner's DM immediately.
+                    await _try_send_media(
+                        bot, owner_telegram_id,
+                        MediaType(_media_type_str), _file_id,
+                        file_unique_id=_file_uq_id,
+                        session=session,
+                        caption=f"📥 Самоудаляющееся медиа от {_partner_label}",
+                    )
+                    logger.info(
+                        "Self-destructing %s captured and forwarded to owner=%s",
+                        _media_type_str, owner_telegram_id,
+                    )
+                else:
+                    # File was already gone — tell the owner.
+                    logger.warning(
+                        "Self-destructing %s file_id=%s could not be downloaded "
+                        "(already expired or protected)", _media_type_str, _file_id,
+                    )
+                    try:
+                        await bot.send_message(
+                            owner_telegram_id,
+                            f"🚫 <b>Самоудаляющееся медиа</b> от {_partner_label} — "
+                            f"файл исчез раньше, чем бот успел его сохранить.",
+                            parse_mode="HTML",
+                        )
+                    except Exception:
+                        pass
+            else:
+                # ── Regular media: cache in the background (no latency hit) ──
+                _cache_task = asyncio.create_task(
+                    _cache_media_in_background(
+                        bot, _file_id, _file_uq_id, _media_type_str,
+                    )
+                )
+                _download_tasks.add(_cache_task)
+                _cache_task.add_done_callback(_download_tasks.discard)
 
         # --- «.» quick-save: owner replies with a dot to forward media to DM ---
         sender = message.from_user

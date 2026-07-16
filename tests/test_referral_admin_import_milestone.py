@@ -516,6 +516,92 @@ async def test_admin_activation_rewards_are_idempotent(session_factory):
 
 
 @pytest.mark.asyncio
+async def test_subscription_status_reflects_admin_activation_rewards(session_factory):
+    """Integration test: after admin activation the subscription-status query
+    used by the /app/api/subscription/status endpoint returns is_active=True
+    with the correct expiry for both referrer and referee.
+
+    This test exercises the full chain:
+      admin_set_status → admin_grant_per_activation_rewards → _grant_premium
+      → UserSubscription row → SubscriptionRepository.get_active_subscription
+
+    If _grant_premium silently fails or writes to the wrong table,
+    get_active_subscription returns None and the assertions below fail.
+    """
+    import datetime as dt
+    from app.repositories.subscription_repository import SubscriptionRepository
+
+    referrer_id = 9300
+    referred_id = 9301
+    referrer_days = 7
+    referee_days = 3
+
+    async with session_factory() as seed:
+        await _seed_config(
+            seed,
+            milestones=[],
+            referrer_reward_days=referrer_days,
+            referee_reward_days=referee_days,
+        )
+        ref = await _seed_pending_referral(seed, referrer_id, referred_id)
+        referral_id = ref.id
+        await seed.commit()
+
+    # Run the full admin activation (mirrors what admin_referral_adjust does)
+    activation_rewards, _ = await _admin_activate_full(session_factory, referral_id)
+
+    assert len(activation_rewards) == 2, (
+        f"Expected 2 activation rewards (per_activation + welcome), "
+        f"got {len(activation_rewards)}: {activation_rewards}"
+    )
+
+    # Now query subscription status the same way the endpoint does —
+    # via SubscriptionRepository.get_active_subscription.
+    async with session_factory() as check:
+        sub_repo = SubscriptionRepository(check)
+        now = dt.datetime.now(dt.timezone.utc)
+
+        # ── Referrer must have an active Premium subscription ─────────────────
+        referrer_sub = await sub_repo.get_active_subscription(referrer_id)
+        assert referrer_sub is not None, (
+            f"get_active_subscription returned None for referrer (uid={referrer_id}) "
+            "after admin activation — _grant_premium did not create a subscription row "
+            "or wrote it to the wrong place."
+        )
+        assert referrer_sub.is_active is True, (
+            f"Referrer subscription is_active={referrer_sub.is_active!r}, expected True"
+        )
+        # SQLite may return timezone-naive datetimes; normalise before comparing.
+        referrer_expires = referrer_sub.expires_at
+        if referrer_expires.tzinfo is None:
+            referrer_expires = referrer_expires.replace(tzinfo=dt.timezone.utc)
+        referrer_days_left = (referrer_expires - now).days
+        assert referrer_days_left >= referrer_days - 1, (
+            f"Referrer expiry is too soon: days_left={referrer_days_left}, "
+            f"expected ~{referrer_days} days. expires_at={referrer_sub.expires_at}"
+        )
+
+        # ── Referee must have an active Premium subscription ──────────────────
+        referee_sub = await sub_repo.get_active_subscription(referred_id)
+        assert referee_sub is not None, (
+            f"get_active_subscription returned None for referee (uid={referred_id}) "
+            "after admin activation — _grant_premium did not create a subscription row "
+            "or wrote it to the wrong place."
+        )
+        assert referee_sub.is_active is True, (
+            f"Referee subscription is_active={referee_sub.is_active!r}, expected True"
+        )
+        referee_expires = referee_sub.expires_at
+        if referee_expires.tzinfo is None:
+            referee_expires = referee_expires.replace(tzinfo=dt.timezone.utc)
+        referee_days_left = (referee_expires - now).days
+        assert referee_days_left >= referee_days - 1, (
+            f"Referee expiry is too soon: days_left={referee_days_left}, "
+            f"expected ~{referee_days} days. expires_at={referee_sub.expires_at}"
+        )
+
+
+@pytest.mark.asyncio
 async def test_zero_reward_days_skips_grants(session_factory):
     """When referrer_reward_days=0 and referee_reward_days=0, no per-activation
     or welcome rewards should be granted even via the admin path.

@@ -182,21 +182,103 @@ async def _handle_dot_save(
             ref = result.scalar_one_or_none()
 
             if ref is None:
+                # Message wasn't captured by the bot (received while offline,
+                # or Telegram didn't relay it).  Try Telethon by coordinates.
                 logger.warning(
-                    "dot-save: message reply_to=%s not found in DB (chat=%s conn=%s)",
-                    reply_to_message_id, chat_id, business_connection_id,
+                    "dot-save: reply_to=%s not in DB (chat=%s) — trying Telethon",
+                    reply_to_message_id, chat_id,
                 )
-                return  # message was never captured — nothing to do
+                from app.services import telethon_service as _tls
+                _raw = await _tls.download_message_media(chat_id, reply_to_message_id) \
+                    if _tls.is_available() else None
+                if _raw:
+                    from aiogram.types import BufferedInputFile as _BIF2
+                    await bot.send_document(
+                        document=_BIF2(_raw, filename="media"),
+                        chat_id=owner_id,
+                        caption="📥 Сохранено (сообщение не было в базе бота)",
+                    )
+                else:
+                    hint = (
+                        "\n\n<i>Совет: настройте TELETHON_SESSION_STR для надёжного "
+                        "перехвата view-once медиа.</i>"
+                        if not _tls.is_available() else ""
+                    )
+                    await bot.send_message(
+                        chat_id=owner_id,
+                        text=(
+                            f"{E.WARNING} Сообщение не найдено в базе бота — "
+                            "возможно, оно пришло пока бот не работал, "
+                            "или Telegram не передаёт такой тип медиа ботам."
+                            f"{hint}"
+                        ),
+                        parse_mode="HTML",
+                    )
+                return
 
-            if ref.media_type in _NO_FILE_TYPES or not ref.file_id:
+            if ref.media_type in _NO_FILE_TYPES:
+                # Genuine non-media message (text, poll, contact…) — nothing to save.
                 logger.info(
-                    "dot-save: message %s has no sendable media (type=%s)",
+                    "dot-save: message %s is non-media (type=%s) — skipping",
                     reply_to_message_id, ref.media_type,
                 )
-                return  # text / contact / poll — no file to forward
+                return
 
-            if not ref.file_unique_id:
-                return  # no file info — nothing to do
+            if not ref.file_id:
+                # Message was recorded as media but file_id is missing —
+                # typical for view-once / «Истекшая фотография» that Telegram
+                # delivers without accessible file data.  Try Telethon.
+                logger.info(
+                    "dot-save: %s has no file_id (view-once?) — trying Telethon "
+                    "chat=%s msg=%s", ref.media_type.value, chat_id, reply_to_message_id,
+                )
+                from app.services import telethon_service as _tls
+                _raw = await _tls.download_message_media(chat_id, reply_to_message_id) \
+                    if _tls.is_available() else None
+                if _raw:
+                    from aiogram.types import BufferedInputFile as _BIF3
+                    ext = {"photo": "jpg", "video": "mp4", "voice": "ogg",
+                           "video_note": "mp4", "audio": "mp3"}.get(
+                               ref.media_type.value, "bin")
+                    kw2: dict = {"chat_id": owner_id,
+                                 "caption": "📥 Самоудаляющееся медиа (перехвачено через Telethon)"}
+                    _f = _BIF3(_raw, filename=f"media.{ext}")
+                    try:
+                        match ref.media_type:
+                            case MediaType.PHOTO:
+                                await bot.send_photo(photo=_f, **kw2)
+                            case MediaType.VIDEO:
+                                await bot.send_video(video=_f, **kw2)
+                            case MediaType.VOICE:
+                                await bot.send_voice(voice=_f, **kw2)
+                            case MediaType.VIDEO_NOTE:
+                                await bot.send_video_note(
+                                    video_note=_f, chat_id=owner_id)
+                            case _:
+                                await bot.send_document(document=_f, **kw2)
+                    except Exception as _se:
+                        logger.warning("dot-save no-file_id send failed: %s", _se)
+                        await bot.send_document(
+                            document=_BIF3(_raw, filename=f"media.{ext}"),
+                            chat_id=owner_id,
+                        )
+                else:
+                    _hint2 = (
+                        "\n\n<i>Совет: настройте TELETHON_SESSION_STR — тогда бот "
+                        "сможет перехватывать view-once медиа.</i>"
+                        if not _tls.is_available() else ""
+                    )
+                    await bot.send_message(
+                        chat_id=owner_id,
+                        text=(
+                            f"{E.WARNING} <b>Истекшее / view-once медиа</b> — "
+                            "файл уже удалён с серверов Telegram и недоступен "
+                            "ни через Bot API, ни через Telethon."
+                            f"{_hint2}"
+                        ),
+                        parse_mode="HTML",
+                    )
+                return
 
             logger.info(
                 "dot-save: found %s file_id=%.20s…",
@@ -842,12 +924,15 @@ async def on_business_message(message: Message, bot: Bot) -> None:
                 _cache_task.add_done_callback(_download_tasks.discard)
 
         # --- «.» quick-save: owner replies with a dot to forward media to DM ---
+        # Only fire when the owner replies with exactly "." so normal replies
+        # to contacts don't accidentally trigger a save attempt.
         sender = message.from_user
         if (
             has_connection
             and sender is not None
             and sender.id == owner_telegram_id
             and message.reply_to_message is not None
+            and message.text in (".", "•")
         ):
             _save_task = asyncio.create_task(
                 _handle_dot_save(

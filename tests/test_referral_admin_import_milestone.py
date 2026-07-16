@@ -638,3 +638,118 @@ async def test_zero_reward_days_skips_grants(session_factory):
         assert len(logs) == 0, (
             f"Expected 0 activation reward logs when days=0, found {len(logs)}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Extension-branch test: _grant_premium adds days to an existing subscription
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_grant_premium_extends_existing_subscription(session_factory):
+    """_grant_premium must add N days to the existing expires_at, not replace it.
+
+    Scenario
+    --------
+    1. Seed a user (referrer) with an already-active subscription expiring 10 days
+       from now.
+    2. Admin-activate a referral whose referrer is that user; the config grants
+       ``referrer_reward_days`` (7) days via ``admin_grant_per_activation_rewards``
+       → ``_grant_premium``.
+    3. Assert that the subscription's ``expires_at`` moved forward by exactly 7
+       days from the *original* expiry, not from ``now``.
+
+    If the extension branch is broken and ``_grant_premium`` creates a fresh
+    subscription starting from now instead of extending the existing one, the
+    final ``expires_at`` would be ≈ ``now + 7`` (≈ 17 days from now) rather
+    than ``original_expires_at + 7`` (= 17 days from now **if** measured from the
+    original expiry).  The test pins the original expiry precisely so that the
+    two outcomes are distinguishable.
+    """
+    import datetime as dt
+
+    referrer_id = 9500
+    referred_id = 9501
+    referrer_reward_days = 7
+    existing_days_remaining = 10
+
+    async with session_factory() as seed:
+        await _seed_config(
+            seed,
+            milestones=[],
+            referrer_reward_days=referrer_reward_days,
+            referee_reward_days=0,  # irrelevant for this test
+        )
+        ref = await _seed_pending_referral(seed, referrer_id, referred_id)
+        referral_id = ref.id
+
+        # Seed an existing active subscription for the referrer
+        now = dt.datetime.now(dt.timezone.utc)
+        original_expires_at = now + dt.timedelta(days=existing_days_remaining)
+        existing_sub = UserSubscription(
+            user_telegram_id=referrer_id,
+            is_active=True,
+            started_at=now - dt.timedelta(days=1),
+            expires_at=original_expires_at,
+            granted_by_admin=True,
+            stars_paid=0,
+        )
+        seed.add(existing_sub)
+        await seed.commit()
+
+    # Phase 1: activate the referral
+    async with session_factory() as sess:
+        repo = ReferralRepository(sess)
+        ok, ref = await repo.admin_set_status(referral_id, "active")
+        assert ok
+        ref_id = ref.id
+        await sess.commit()
+
+    # Phase 1b: grant per-activation rewards (calls _grant_premium for referrer)
+    async with session_factory() as sess:
+        repo = ReferralRepository(sess)
+        ref_row = (
+            await sess.execute(select(Referral).where(Referral.id == ref_id))
+        ).scalar_one()
+        activation_rewards = await repo.admin_grant_per_activation_rewards(ref_row)
+        await sess.commit()
+
+    # Exactly one reward (per_activation for referrer; referee_reward_days=0)
+    assert len(activation_rewards) == 1, (
+        f"Expected 1 activation reward (per_activation), got {len(activation_rewards)}"
+    )
+    assert activation_rewards[0]["type"] == "per_activation"
+
+    # Verify the subscription was EXTENDED, not replaced
+    async with session_factory() as check:
+        sub = (
+            await check.execute(
+                select(UserSubscription).where(
+                    UserSubscription.user_telegram_id == referrer_id,
+                    UserSubscription.is_active.is_(True),
+                ).order_by(UserSubscription.expires_at.desc()).limit(1)
+            )
+        ).scalar_one_or_none()
+
+        assert sub is not None, (
+            f"No active subscription found for referrer (uid={referrer_id}) "
+            "after _grant_premium — subscription was not created or is_active=False."
+        )
+
+        # Normalise timezone for SQLite (may return naive datetimes)
+        actual_expires = sub.expires_at
+        if actual_expires.tzinfo is None:
+            actual_expires = actual_expires.replace(tzinfo=dt.timezone.utc)
+
+        expected_expires = original_expires_at + dt.timedelta(days=referrer_reward_days)
+
+        delta_seconds = abs((actual_expires - expected_expires).total_seconds())
+        assert delta_seconds < 5, (
+            f"expires_at was not extended by exactly {referrer_reward_days} days "
+            f"from the original expiry.\n"
+            f"  original_expires_at : {original_expires_at.isoformat()}\n"
+            f"  expected_expires_at : {expected_expires.isoformat()}\n"
+            f"  actual_expires_at   : {actual_expires.isoformat()}\n"
+            f"  delta               : {delta_seconds:.1f}s\n"
+            "This suggests _grant_premium created a new subscription from 'now' "
+            "instead of extending the existing one."
+        )

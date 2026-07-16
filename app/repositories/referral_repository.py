@@ -572,6 +572,76 @@ class ReferralRepository:
         await self._db.flush()
         return True, ref
 
+    async def admin_grant_per_activation_rewards(
+        self, ref: "Referral"
+    ) -> list[dict]:
+        """Grant per-activation (referrer) and welcome (referee) rewards for an
+        admin-activated referral.
+
+        This mirrors the reward logic inside ``try_activate`` so that referrals
+        activated through the admin panel receive the same Premium grants as
+        those activated through the normal mini-app flow.
+
+        Idempotent: before granting each reward type this method checks whether
+        a ``ReferralRewardLog`` row with the same ``referral_id`` and
+        ``reward_type`` already exists.  If it does the grant is skipped, so
+        calling this twice (e.g. an admin re-saves an already-active row) can
+        never double-grant either reward.
+
+        Must be called **after** the Phase 1 commit so the referral status is
+        durably 'active' before rewards are written.
+
+        Returns a list of reward dicts for the rewards that were actually granted.
+        """
+        cfg = await self.get_config()
+        rewards: list[dict] = []
+
+        # Which reward types are already logged for this referral?
+        existing_q = await self._db.execute(
+            select(ReferralRewardLog.reward_type).where(
+                ReferralRewardLog.referral_id == ref.id,
+                ReferralRewardLog.reward_type.in_(["welcome", "per_activation"]),
+            )
+        )
+        already_granted = {row[0] for row in existing_q.all()}
+
+        # ── Referee welcome reward ────────────────────────────────────────────
+        if cfg.referee_reward_days > 0 and "welcome" not in already_granted:
+            await self._grant_premium(ref.referred_telegram_id, cfg.referee_reward_days)
+            self._db.add(ReferralRewardLog(
+                referral_id=ref.id,
+                user_telegram_id=ref.referred_telegram_id,
+                reward_type="welcome",
+                reward_value=str(cfg.referee_reward_days),
+                label=f"+{cfg.referee_reward_days} дн. Premium (приветственный бонус)",
+            ))
+            rewards.append({
+                "user": ref.referred_telegram_id,
+                "type": "welcome",
+                "days": cfg.referee_reward_days,
+            })
+
+        # ── Per-activation reward for referrer ───────────────────────────────
+        if cfg.referrer_reward_days > 0 and "per_activation" not in already_granted:
+            await self._grant_premium(ref.referrer_telegram_id, cfg.referrer_reward_days)
+            self._db.add(ReferralRewardLog(
+                referral_id=ref.id,
+                user_telegram_id=ref.referrer_telegram_id,
+                reward_type="per_activation",
+                reward_value=str(cfg.referrer_reward_days),
+                label=f"+{cfg.referrer_reward_days} дн. Premium за приглашение",
+            ))
+            rewards.append({
+                "user": ref.referrer_telegram_id,
+                "type": "per_activation",
+                "days": cfg.referrer_reward_days,
+            })
+
+        if rewards:
+            await self._db.flush()
+
+        return rewards
+
     async def admin_grant_bonus(
         self, user_telegram_id: int, reward_type: str, reward_value: str, label: str
     ) -> dict:

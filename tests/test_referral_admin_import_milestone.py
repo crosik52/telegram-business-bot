@@ -318,3 +318,237 @@ async def test_non_active_status_change_does_not_grant_milestone(session_factory
             f"Expected 0 milestone logs when only fraud/pending statuses were set, "
             f"found {len(logs)}. Milestone evaluation must only fire for 'active'."
         )
+
+
+# ---------------------------------------------------------------------------
+# Helper: full two-phase admin activation (status + activation rewards)
+# ---------------------------------------------------------------------------
+
+async def _admin_activate_full(
+    session_factory,
+    referral_id: int,
+) -> tuple[list[dict], list[dict]]:
+    """Replicate the full three-phase logic in admin_referral_adjust.
+
+    Phase 1 : admin_set_status → commit
+    Phase 1b: admin_grant_per_activation_rewards → commit (if any granted)
+    Phase 2 : evaluate_and_grant_milestones → commit (if any granted)
+
+    Returns (activation_rewards, milestone_rewards).
+    """
+    # Phase 1 — activate and commit
+    async with session_factory() as sess:
+        repo = ReferralRepository(sess)
+        ok, ref = await repo.admin_set_status(referral_id, "active")
+        assert ok, f"admin_set_status returned False for referral_id={referral_id}"
+        referrer_id = ref.referrer_telegram_id
+        ref_id = ref.id
+        await sess.commit()
+
+    # Phase 1b — per-activation + welcome rewards
+    async with session_factory() as sess:
+        repo = ReferralRepository(sess)
+        # Re-fetch ref so session owns the object
+        ref_row = (
+            await sess.execute(select(Referral).where(Referral.id == ref_id))
+        ).scalar_one()
+        activation_rewards = await repo.admin_grant_per_activation_rewards(ref_row)
+        if activation_rewards:
+            await sess.commit()
+
+    # Phase 2 — milestones
+    async with session_factory() as sess:
+        repo = ReferralRepository(sess)
+        ms_rewards = await repo.evaluate_and_grant_milestones(referrer_id, ref_id)
+        if ms_rewards:
+            await sess.commit()
+
+    return activation_rewards, ms_rewards
+
+
+# ---------------------------------------------------------------------------
+# Per-activation + welcome reward tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_per_activation_and_welcome_rewards_granted_on_admin_activate(
+    session_factory,
+):
+    """Admin activating a pending referral must grant the per-activation reward
+    to the referrer and the welcome reward to the referee.
+    """
+    referrer_id = 9000
+    referred_id = 9001
+    referrer_days = 7
+    referee_days = 3
+
+    async with session_factory() as seed:
+        await _seed_config(
+            seed,
+            milestones=[],
+            referrer_reward_days=referrer_days,
+            referee_reward_days=referee_days,
+        )
+        ref = await _seed_pending_referral(seed, referrer_id, referred_id)
+        referral_id = ref.id
+        await seed.commit()
+
+    activation_rewards, ms_rewards = await _admin_activate_full(
+        session_factory, referral_id
+    )
+
+    assert ms_rewards == [], "No milestones configured — none should fire"
+
+    reward_types = {r["type"] for r in activation_rewards}
+    assert "per_activation" in reward_types, (
+        "per_activation reward was not granted to the referrer during admin activation"
+    )
+    assert "welcome" in reward_types, (
+        "welcome reward was not granted to the referee during admin activation"
+    )
+
+    # Verify DB: one per_activation log for referrer, one welcome log for referee
+    async with session_factory() as check:
+        per_act_logs = (
+            await check.execute(
+                select(ReferralRewardLog).where(
+                    ReferralRewardLog.referral_id == referral_id,
+                    ReferralRewardLog.user_telegram_id == referrer_id,
+                    ReferralRewardLog.reward_type == "per_activation",
+                )
+            )
+        ).scalars().all()
+        assert len(per_act_logs) == 1, (
+            f"Expected 1 per_activation log for referrer={referrer_id}, "
+            f"found {len(per_act_logs)}"
+        )
+
+        welcome_logs = (
+            await check.execute(
+                select(ReferralRewardLog).where(
+                    ReferralRewardLog.referral_id == referral_id,
+                    ReferralRewardLog.user_telegram_id == referred_id,
+                    ReferralRewardLog.reward_type == "welcome",
+                )
+            )
+        ).scalars().all()
+        assert len(welcome_logs) == 1, (
+            f"Expected 1 welcome log for referred={referred_id}, "
+            f"found {len(welcome_logs)}"
+        )
+
+        # Premium subscriptions must exist for both parties
+        for uid, label in [(referrer_id, "referrer"), (referred_id, "referee")]:
+            sub = (
+                await check.execute(
+                    select(UserSubscription).where(
+                        UserSubscription.user_telegram_id == uid,
+                        UserSubscription.is_active.is_(True),
+                    )
+                )
+            ).scalar_one_or_none()
+            assert sub is not None, (
+                f"Expected an active subscription for {label} (uid={uid}) "
+                "after admin activation — none found"
+            )
+
+
+@pytest.mark.asyncio
+async def test_admin_activation_rewards_are_idempotent(session_factory):
+    """Calling admin_grant_per_activation_rewards twice for the same referral
+    must not double-grant either reward.
+    """
+    referrer_id = 9100
+    referred_id = 9101
+    referrer_days = 7
+    referee_days = 3
+
+    async with session_factory() as seed:
+        await _seed_config(
+            seed,
+            milestones=[],
+            referrer_reward_days=referrer_days,
+            referee_reward_days=referee_days,
+        )
+        ref = await _seed_pending_referral(seed, referrer_id, referred_id)
+        referral_id = ref.id
+        await seed.commit()
+
+    # First activation — rewards should fire
+    activation_rewards_1, _ = await _admin_activate_full(session_factory, referral_id)
+    assert len(activation_rewards_1) == 2, (
+        f"Expected 2 activation rewards on first call, got {len(activation_rewards_1)}"
+    )
+
+    # Second call — rewards already logged, nothing new should be granted
+    async with session_factory() as sess:
+        repo = ReferralRepository(sess)
+        ref_row = (
+            await sess.execute(select(Referral).where(Referral.id == referral_id))
+        ).scalar_one()
+        activation_rewards_2 = await repo.admin_grant_per_activation_rewards(ref_row)
+        await sess.commit()
+
+    assert activation_rewards_2 == [], (
+        f"Expected 0 new activation rewards on second call (idempotency), "
+        f"got {len(activation_rewards_2)}: {activation_rewards_2}"
+    )
+
+    # DB: still exactly one log per reward type
+    async with session_factory() as check:
+        for uid, rtype in [
+            (referrer_id, "per_activation"),
+            (referred_id, "welcome"),
+        ]:
+            logs = (
+                await check.execute(
+                    select(ReferralRewardLog).where(
+                        ReferralRewardLog.referral_id == referral_id,
+                        ReferralRewardLog.user_telegram_id == uid,
+                        ReferralRewardLog.reward_type == rtype,
+                    )
+                )
+            ).scalars().all()
+            assert len(logs) == 1, (
+                f"Expected exactly 1 {rtype} log for uid={uid} after two calls, "
+                f"found {len(logs)} — double-grant detected"
+            )
+
+
+@pytest.mark.asyncio
+async def test_zero_reward_days_skips_grants(session_factory):
+    """When referrer_reward_days=0 and referee_reward_days=0, no per-activation
+    or welcome rewards should be granted even via the admin path.
+    """
+    referrer_id = 9200
+    referred_id = 9201
+
+    async with session_factory() as seed:
+        await _seed_config(
+            seed,
+            milestones=[],
+            referrer_reward_days=0,
+            referee_reward_days=0,
+        )
+        ref = await _seed_pending_referral(seed, referrer_id, referred_id)
+        referral_id = ref.id
+        await seed.commit()
+
+    activation_rewards, _ = await _admin_activate_full(session_factory, referral_id)
+
+    assert activation_rewards == [], (
+        f"Expected no activation rewards when reward_days=0, got {activation_rewards}"
+    )
+
+    async with session_factory() as check:
+        logs = (
+            await check.execute(
+                select(ReferralRewardLog).where(
+                    ReferralRewardLog.referral_id == referral_id,
+                    ReferralRewardLog.reward_type.in_(["welcome", "per_activation"]),
+                )
+            )
+        ).scalars().all()
+        assert len(logs) == 0, (
+            f"Expected 0 activation reward logs when days=0, found {len(logs)}"
+        )

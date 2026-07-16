@@ -3024,10 +3024,27 @@ async def admin_referral_adjust(
     # Phase 1: commit the status change.
     await session.commit()
 
-    # Phase 2: if the referral was just activated, evaluate milestones for the
-    # referrer NOW (after commit) so that _count_active reads fully committed
-    # state — preventing the TOCTOU milestone-skip race.
     if payload.status == "active" and ref is not None:
+        # Phase 1b: grant per-activation reward for the referrer and welcome
+        # reward for the referee — the same rewards that try_activate grants on
+        # the normal mini-app path.  Idempotent: skips any reward type already
+        # logged for this referral_id, so re-activating an already-active row
+        # never double-grants.
+        activation_rewards = await repo.admin_grant_per_activation_rewards(ref)
+        if activation_rewards:
+            await session.commit()
+            logger.info(
+                "Admin import: granted %d activation reward(s) for "
+                "referral_id=%s (referrer=%s, referred=%s)",
+                len(activation_rewards),
+                ref.id,
+                ref.referrer_telegram_id,
+                ref.referred_telegram_id,
+            )
+
+        # Phase 2: evaluate milestones for the referrer NOW (after commit) so
+        # that _count_active reads fully committed state — preventing the TOCTOU
+        # milestone-skip race.
         ms_rewards = await repo.evaluate_and_grant_milestones(
             ref.referrer_telegram_id, ref.id
         )

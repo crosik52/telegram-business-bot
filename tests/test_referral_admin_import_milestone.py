@@ -1023,3 +1023,121 @@ async def test_grant_premium_extends_latest_subscription_when_multiple_active(
             f"    delta     : {delta_earlier:.1f}s\n"
             "Only the row with the latest expires_at should be extended."
         )
+
+
+# ---------------------------------------------------------------------------
+# Mixed expired+active test: _grant_premium ignores the expired row and
+# extends only the active one.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_grant_premium_extends_active_row_leaves_expired_row_untouched(
+    session_factory,
+):
+    """_grant_premium must extend only the active (non-expired) subscription when
+    a user has both an expired row and a currently-active row.
+
+    Scenario
+    --------
+    1. Seed a user with two subscription rows:
+       - ``sub_expired`` : is_active=True, but expires_at is 5 days *in the past*
+         (i.e. logically expired; the flag may still be True).
+       - ``sub_active``  : is_active=True, expires_at is 15 days *in the future*.
+    2. Call ``_grant_premium`` with 7 extra days.
+    3. Assert that ``sub_active.expires_at`` moved forward by exactly 7 days.
+    4. Assert that ``sub_expired.expires_at`` is completely unchanged.
+
+    This exercises the ``UserSubscription.expires_at > now`` predicate in
+    ``_grant_premium``.  If that filter were missing, the query could pick the
+    expired row (e.g. when ordered differently) and extend the wrong one, leaving
+    the user's visible subscription untouched.
+    """
+    import datetime as dt
+
+    user_id = 9800
+    grant_days = 7
+    expired_days_ago = 5   # expires_at is this many days in the past
+    active_days_ahead = 15  # expires_at is this many days in the future
+
+    async with session_factory() as seed:
+        await _seed_config(seed, milestones=[], referrer_reward_days=0, referee_reward_days=0)
+
+        now = dt.datetime.now(dt.timezone.utc)
+
+        sub_expired = UserSubscription(
+            user_telegram_id=user_id,
+            is_active=True,  # flag still set, but time has passed
+            started_at=now - dt.timedelta(days=expired_days_ago + 30),
+            expires_at=now - dt.timedelta(days=expired_days_ago),  # in the past
+            granted_by_admin=True,
+            stars_paid=0,
+        )
+        sub_active = UserSubscription(
+            user_telegram_id=user_id,
+            is_active=True,
+            started_at=now - dt.timedelta(days=1),
+            expires_at=now + dt.timedelta(days=active_days_ahead),  # in the future
+            granted_by_admin=True,
+            stars_paid=0,
+        )
+        seed.add(sub_expired)
+        seed.add(sub_active)
+        await seed.commit()
+
+        expired_id = sub_expired.id
+        active_id = sub_active.id
+        original_expired_expires = sub_expired.expires_at
+        original_active_expires = sub_active.expires_at
+
+    # Call _grant_premium directly
+    async with session_factory() as sess:
+        repo = ReferralRepository(sess)
+        await repo._grant_premium(user_id, grant_days)
+        await sess.commit()
+
+    # Verify only the active row was extended; the expired row is untouched
+    async with session_factory() as check:
+        def _tz(ts: dt.datetime) -> dt.datetime:
+            return ts if ts.tzinfo else ts.replace(tzinfo=dt.timezone.utc)
+
+        active_row = (
+            await check.execute(
+                select(UserSubscription).where(UserSubscription.id == active_id)
+            )
+        ).scalar_one()
+        expired_row = (
+            await check.execute(
+                select(UserSubscription).where(UserSubscription.id == expired_id)
+            )
+        ).scalar_one()
+
+        actual_active_expires  = _tz(active_row.expires_at)
+        actual_expired_expires = _tz(expired_row.expires_at)
+
+        original_active_expires_utc  = _tz(original_active_expires)
+        original_expired_expires_utc = _tz(original_expired_expires)
+
+        # Active row must be extended by exactly grant_days from its original expiry
+        expected_active_expires = original_active_expires_utc + dt.timedelta(days=grant_days)
+        delta_active = abs((actual_active_expires - expected_active_expires).total_seconds())
+        assert delta_active < 5, (
+            f"_grant_premium did not extend the active subscription.\n"
+            f"  sub_active (id={active_id}):\n"
+            f"    original  : {original_active_expires_utc.isoformat()}\n"
+            f"    expected  : {expected_active_expires.isoformat()}\n"
+            f"    actual    : {actual_active_expires.isoformat()}\n"
+            f"    delta     : {delta_active:.1f}s\n"
+            "_grant_premium must extend the active row (expires_at > now), "
+            "not create a new subscription."
+        )
+
+        # Expired row must be completely untouched
+        delta_expired = abs((actual_expired_expires - original_expired_expires_utc).total_seconds())
+        assert delta_expired < 5, (
+            f"_grant_premium modified the expired subscription — it must be left untouched.\n"
+            f"  sub_expired (id={expired_id}):\n"
+            f"    original  : {original_expired_expires_utc.isoformat()}\n"
+            f"    actual    : {actual_expired_expires.isoformat()}\n"
+            f"    delta     : {delta_expired:.1f}s\n"
+            "Only the currently-active row (expires_at > now) should be extended."
+        )

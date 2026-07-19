@@ -3359,7 +3359,7 @@ async def ai_ping(payload: dict, session: AsyncSession = Depends(get_db_session)
 
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-2.0-flash")
         resp = await asyncio.to_thread(model.generate_content, "Say OK")
         return {"ok": True, "response": resp.text[:100]}
     except Exception as exc:

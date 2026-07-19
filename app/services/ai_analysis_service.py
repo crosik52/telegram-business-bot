@@ -301,7 +301,8 @@ async def analyze(
         ),
     )
 
-    response = model.generate_content(user_prompt)
+    import asyncio  # noqa: PLC0415
+    response = await asyncio.to_thread(model.generate_content, user_prompt)
     raw = response.text.strip()
 
     # Strip markdown code fences if Gemini wrapped it

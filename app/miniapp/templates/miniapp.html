@@ -680,6 +680,24 @@
   }
   .game-btn:active { opacity: 0.72; }
 
+  /* ── VIP upgrade block (shown under active Premium card) ── */
+  .sub-upgrade-block {
+    margin-top: 12px;
+    background: var(--secondary-bg);
+    border-radius: 18px;
+    border: 1.5px solid rgba(196,120,0,.22);
+    padding: 16px 14px 14px;
+  }
+  .sub-upgrade-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 4px;
+  }
+  .sub-upgrade-title {
+    font-size: 15px; font-weight: 800;
+    background: linear-gradient(90deg, #c47800, #9c4cc4);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .sub-upgrade-sub { font-size: 12px; color: var(--hint); margin-top: 2px; }
+
   /* ── AI Analysis button ── */
   .ai-btn {
     border: none; border-radius: 20px;
@@ -4488,6 +4506,45 @@
             <button class="ai-teaser-btn" onclick="openAiAnalysisForChat()">🤖 Открыть AI Анализ</button>
           </div>` : "";
 
+        // ── VIP upgrade block (shown below active Premium card) ──────────────
+        let upgradeBlockHtml = "";
+        if (!isVip) {
+          const vipPlansU   = _vipPlans(s);
+          const vipActiveU  = vipPlansU.find(p => p.key === selectedVipPlan) || vipPlansU[1];
+          const vipMonthlyU = vipPlansU[0].stars;
+          const vipSaveU    = vipActiveU.savePct > 0
+            ? ` · <span class="sub-cta-save" style="color:#c47800">−${vipActiveU.savePct}%</span>` : "";
+          const vipBeneItemsU = _vipBeneItems((s.vip_config && s.vip_config.benefits) || {});
+          const vipBeneGridU  = vipBeneItemsU.slice(0, 6).map(bi =>
+            `<div class="sub-bene-item"><span class="sub-bene-ico">${bi.ico}</span><span>${bi.text}</span></div>`
+          ).join("");
+
+          upgradeBlockHtml = `
+            <div class="sub-upgrade-block">
+              <div class="sub-upgrade-header">
+                <span style="font-size:20px">💎</span>
+                <div>
+                  <div class="sub-upgrade-title">Перейти на VIP</div>
+                  <div class="sub-upgrade-sub">AI Анализ, ×3 XP, эксклюзивные скины и больше</div>
+                </div>
+              </div>
+              <div class="sub-plans-row" style="margin:12px 0 10px">
+                ${_renderPlanCards(vipPlansU, selectedVipPlan, vipMonthlyU, true)}
+              </div>
+              <div class="sub-bene-grid" style="margin-bottom:12px">${vipBeneGridU}</div>
+              <div class="sub-cta-wrap" style="border:1.5px solid rgba(196,120,0,.25)">
+                <div class="sub-cta-info">
+                  VIP на <strong>${vipActiveU.label}</strong> · ${vipActiveU.days} дней${vipSaveU}
+                </div>
+                <button class="sub-buy-btn vip" id="subVipBuyBtn">
+                  <span class="sub-buy-star">💎</span>
+                  <span>Перейти на VIP за ${vipActiveU.stars} Stars</span>
+                </button>
+                <div class="sub-buy-note">Premium заменяется на VIP · без автопродления</div>
+              </div>
+            </div>`;
+        }
+
         return `
           <div class="sub-card ${isVip ? "vip-active" : "active"}">
             <div class="sub-card-header">
@@ -4507,7 +4564,8 @@
             <div class="sub-divider"></div>
             <div class="sub-benefit-list">${beneHtml}</div>
             ${aiTeaserHtml}
-          </div>`;
+          </div>
+          ${upgradeBlockHtml}`;
       }
 
       // ── Purchase flow — tier switcher + two sections ───────────────────────

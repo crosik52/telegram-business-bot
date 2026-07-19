@@ -3332,9 +3332,12 @@ async def ai_relationship_analysis(
             raise HTTPException(status_code=404, detail="no_messages") from exc
         if "GEMINI_API_KEY" in detail:
             raise HTTPException(status_code=503, detail="ai_not_configured") from exc
-        raise HTTPException(status_code=500, detail="analysis_failed") from exc
+        # Pass through real error message for debugging
+        logger.exception("AI analysis ValueError for user=%s chat=%s: %s", owner_id, payload.chat_id, detail)
+        raise HTTPException(status_code=500, detail=f"analysis_failed: {detail}") from exc
     except Exception as exc:
-        logger.exception("AI analysis failed for user=%s chat=%s", owner_id, payload.chat_id)
-        raise HTTPException(status_code=500, detail="analysis_failed") from exc
+        msg = f"{type(exc).__name__}: {exc}"
+        logger.exception("AI analysis failed for user=%s chat=%s: %s", owner_id, payload.chat_id, msg)
+        raise HTTPException(status_code=500, detail=f"analysis_failed: {msg}") from exc
 
     return result

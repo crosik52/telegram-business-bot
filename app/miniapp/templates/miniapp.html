@@ -7350,9 +7350,10 @@
             ai_not_configured:"⚙️ AI сервис временно недоступен",
             analysis_failed:  "❌ Ошибка анализа. Попробуй позже.",
           };
+          const errText = MSGS[err.detail] || (err.detail ? `❌ ${err.detail}` : "Ошибка. Попробуй позже.");
           body.innerHTML = `<div class="ai-loading-wrap">
             <div style="font-size:36px">😔</div>
-            <div style="font-size:14px;font-weight:600;color:var(--hint);text-align:center">${MSGS[err.detail] || "Ошибка. Попробуй позже."}</div>
+            <div style="font-size:13px;font-weight:600;color:var(--hint);text-align:center;word-break:break-word;max-width:280px">${errText}</div>
           </div>`;
           return;
         }

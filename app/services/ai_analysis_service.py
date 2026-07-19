@@ -290,26 +290,37 @@ async def analyze(
 
 Верни JSON по схеме."""
 
+    import asyncio  # noqa: PLC0415
     import google.generativeai as genai  # noqa: PLC0415
+
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel(
         model_name="gemini-1.5-flash",
         system_instruction=_SYSTEM_PROMPT,
-        generation_config=genai.GenerationConfig(
-            response_mime_type="application/json",
-            temperature=0.4,
-        ),
+        generation_config=genai.GenerationConfig(temperature=0.4),
     )
 
-    import asyncio  # noqa: PLC0415
-    response = await asyncio.to_thread(model.generate_content, user_prompt)
+    full_prompt = (
+        user_prompt
+        + "\n\nОтвет верни СТРОГО в формате JSON без пояснений и markdown-обёрток."
+    )
+    try:
+        response = await asyncio.to_thread(model.generate_content, full_prompt)
+    except Exception as exc:
+        raise ValueError(f"gemini_error: {type(exc).__name__}: {exc}") from exc
+
     raw = response.text.strip()
-
-    # Strip markdown code fences if Gemini wrapped it
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
-    raw = re.sub(r"\s*```$", "", raw)
+    raw = re.sub(r"\s*```$", "", raw.strip())
 
-    ai_data = json.loads(raw)
+    try:
+        ai_data = json.loads(raw)
+    except json.JSONDecodeError:
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        if m:
+            ai_data = json.loads(m.group())
+        else:
+            raise ValueError(f"bad_json: {raw[:300]}")
 
     result = {
         "stats":    stats,

@@ -3267,3 +3267,62 @@ async def admin_cancel_pending_relationships(
             for r in rows
         ],
     }
+
+
+# ── AI Relationship Analysis ──────────────────────────────────────────────────
+
+class AiAnalysisRequest(BaseModel):
+    init_data:    str = Field(...,              alias="initData")
+    chat_id:      int = Field(...,              alias="chatId")
+    contact_name: str = Field("Собеседник",    alias="contactName")
+    model_config = {"populate_by_name": True}
+
+
+@router.post("/app/api/ai/relationship_analysis")
+async def ai_relationship_analysis(
+    payload: AiAnalysisRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Run Gemini AI analysis for a specific chat. VIP-only."""
+    from app.models.business import BusinessConnection   # noqa: PLC0415
+    from app.services.ai_analysis_service import analyze # noqa: PLC0415
+
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid init data")
+    owner_id = int(user["id"])
+
+    sub_repo = SubscriptionRepository(session)
+    vip_sub  = await sub_repo.get_active_vip_subscription(owner_id)
+    if vip_sub is None:
+        raise HTTPException(status_code=403, detail="vip_required")
+
+    conn_result = await session.execute(
+        select(BusinessConnection.business_connection_id).where(
+            BusinessConnection.user_telegram_id == owner_id
+        )
+    )
+    connection_ids = [row[0] for row in conn_result.all()]
+    if not connection_ids:
+        raise HTTPException(status_code=404, detail="no_connection")
+
+    try:
+        result = await analyze(
+            session=session,
+            owner_id=owner_id,
+            chat_id=payload.chat_id,
+            connection_ids=connection_ids,
+            contact_name=payload.contact_name,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        if detail == "no_messages":
+            raise HTTPException(status_code=404, detail="no_messages") from exc
+        if "GEMINI_API_KEY" in detail:
+            raise HTTPException(status_code=503, detail="ai_not_configured") from exc
+        raise HTTPException(status_code=500, detail="analysis_failed") from exc
+    except Exception as exc:
+        logger.exception("AI analysis failed for user=%s chat=%s", owner_id, payload.chat_id)
+        raise HTTPException(status_code=500, detail="analysis_failed") from exc
+
+    return result

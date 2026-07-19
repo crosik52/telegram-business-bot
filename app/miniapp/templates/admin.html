@@ -591,15 +591,26 @@
     display: flex; align-items: center; gap: 12px;
     border: 1px solid rgba(120,120,128,.09);
   }
+  .sub-stats-row {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 8px; margin-bottom: 14px;
+  }
+  .sub-stat-card {
+    background: var(--secondary-bg); border-radius: 14px;
+    padding: 11px 10px; text-align: center; box-shadow: var(--shadow);
+  }
+  .sub-stat-val { font-size: 22px; font-weight: 900; line-height: 1; }
+  .sub-stat-lbl { font-size: 10px; color: var(--hint); margin-top: 3px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
   .sub-sub-avatar {
-    width: 38px; height: 38px; border-radius: 50%;
-    background: linear-gradient(135deg, #5856d6, var(--link));
+    width: 40px; height: 40px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    color: #fff; font-size: 18px; flex-shrink: 0;
+    color: #fff; font-size: 15px; font-weight: 800; flex-shrink: 0;
+    letter-spacing: -0.5px;
   }
   .sub-sub-info { flex: 1; min-width: 0; }
-  .sub-sub-id   { font-size: 13px; font-weight: 700; }
-  .sub-sub-meta { font-size: 11.5px; color: var(--hint); margin-top: 2px; }
+  .sub-sub-name { font-size: 13.5px; font-weight: 700; line-height: 1.2; }
+  .sub-sub-id   { font-size: 11px; color: var(--hint); font-family: monospace; margin-top: 1px; }
+  .sub-sub-meta { font-size: 11.5px; color: var(--hint); margin-top: 3px; }
   .sub-revoke-btn {
     border: none; border-radius: 9px; padding: 6px 11px;
     font-size: 12px; font-weight: 700;
@@ -627,6 +638,27 @@
   }
   .sub-status-pill.on  { background: rgba(52,199,89,.14);  color: var(--green); }
   .sub-status-pill.off { background: rgba(255,59,48,.14);  color: var(--danger); }
+  .sub-filter-row {
+    display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 12px;
+  }
+  .sub-filter-chip {
+    border: 1.5px solid rgba(120,120,128,.22); border-radius: 20px;
+    padding: 5px 12px; font-size: 12px; font-weight: 600;
+    background: transparent; color: var(--hint); touch-action: manipulation;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  .sub-filter-chip.active {
+    background: rgba(88,86,214,.12); border-color: rgba(88,86,214,.4); color: #5856d6;
+  }
+  .sub-pager {
+    display: flex; justify-content: center; gap: 8px; margin-top: 10px;
+  }
+  .sub-page-btn {
+    border: 1.5px solid rgba(120,120,128,.22); border-radius: 10px;
+    padding: 6px 14px; font-size: 13px; font-weight: 700;
+    background: var(--bg); color: var(--text); touch-action: manipulation;
+  }
+  .sub-page-btn:disabled { opacity: .35; }
 
   /* ── Dynamic benefits editor ── */
   .dyn-benefit-row {
@@ -1780,12 +1812,32 @@
       const benefitRows = Object.entries(b).map(([k, v]) => renderBenefitRow(k, v)).join("");
       const existingKeys = Object.keys(b);
 
+      // Count active subs and total stars from this page
+      const activeSubs  = subsData.subscribers.filter(s => s.status === "active").length;
+      const totalStars  = subsData.subscribers.reduce((acc, s) => acc + (s.stars_paid || 0), 0);
+
       return `
+        <!-- Stats row -->
+        <div class="sub-stats-row">
+          <div class="sub-stat-card">
+            <div class="sub-stat-val" style="color:var(--green)">${subsData.total}</div>
+            <div class="sub-stat-lbl">Всего</div>
+          </div>
+          <div class="sub-stat-card">
+            <div class="sub-stat-val" style="color:#5856d6">${activeSubs}</div>
+            <div class="sub-stat-lbl">Активных</div>
+          </div>
+          <div class="sub-stat-card">
+            <div class="sub-stat-val" style="color:var(--orange)">${totalStars}⭐</div>
+            <div class="sub-stat-lbl">Stars (стр.)</div>
+          </div>
+        </div>
+
         <!-- Status header -->
         <div class="sub-admin-card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
           <div>
             <div style="font-size:16px;font-weight:800;margin-bottom:4px">⭐ Premium подписка</div>
-            <div style="font-size:12px;color:var(--hint)">${subsData.total} активных подписчиков</div>
+            <div style="font-size:12px;color:var(--hint)">Базовый тариф: ${cfg.price_stars}⭐ · ${cfg.duration_days} дн.</div>
           </div>
           ${pill}
         </div>
@@ -1806,11 +1858,11 @@
           </div>
 
           <div class="sub-field">
-            <label>Цена (Stars ⭐)</label>
+            <label>Цена (Stars ⭐) — базовый тариф (1 месяц)</label>
             <input type="number" id="subPrice" value="${cfg.price_stars}" min="1" max="10000" step="1">
           </div>
           <div class="sub-field">
-            <label>Длительность (дней)</label>
+            <label>Длительность базового тарифа (дней)</label>
             <input type="number" id="subDuration" value="${cfg.duration_days}" min="1" max="365" step="1">
           </div>
           <div class="sub-field">
@@ -1849,22 +1901,23 @@
           <div class="sub-admin-title">🎁 Выдать подписку</div>
           <div class="sub-grant-form">
             <input type="number" id="grantUserId" placeholder="Telegram ID пользователя" min="1">
-            <input type="number" id="grantDays" placeholder="Дней" value="30" min="1" max="365" style="max-width:90px">
+            <input type="number" id="grantDays" placeholder="Дней" value="${cfg.duration_days}" min="1" max="730" style="max-width:90px">
             <button class="sub-grant-btn" id="subGrantBtn">✓ Выдать</button>
           </div>
+          <div style="font-size:11px;color:var(--hint);margin-top:-6px">ID можно скопировать из карточки пользователя во вкладке «Пользователи»</div>
         </div>
 
         <!-- Subscribers list -->
         <div class="sub-admin-card">
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
-            <div class="sub-admin-title" style="margin-bottom:0">👥 Подписки (${subsData.total})</div>
-            <select id="subStatusFilter" style="border:1.5px solid rgba(120,120,128,0.2);border-radius:10px;padding:6px 10px;font-size:12px;background:var(--bg);color:var(--text)">
-              <option value="">Все статусы</option>
-              <option value="active">активна</option>
-              <option value="cancelled">отменена</option>
-              <option value="paused">пауза</option>
-              <option value="refunded">возврат</option>
-            </select>
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+            <div class="sub-admin-title" style="margin-bottom:0">👥 Подписчики <span id="subTotalLabel" style="font-weight:500;color:var(--hint);font-size:13px">(${subsData.total})</span></div>
+          </div>
+          <div class="sub-filter-row">
+            <button class="sub-filter-chip active" data-sf="">Все</button>
+            <button class="sub-filter-chip" data-sf="active">✓ Активные</button>
+            <button class="sub-filter-chip" data-sf="cancelled">Отменены</button>
+            <button class="sub-filter-chip" data-sf="paused">Пауза</button>
+            <button class="sub-filter-chip" data-sf="refunded">Возврат</button>
           </div>
           <div id="subSubscriberList">
             ${subsData.subscribers.length === 0
@@ -1872,13 +1925,23 @@
               : subsData.subscribers.map(s => renderSubscriberCard(s)).join("")
             }
           </div>
+          <div class="sub-pager" id="subPager" style="display:none">
+            <button class="sub-page-btn" id="subPrevBtn" disabled>← Назад</button>
+            <span id="subPageLabel" style="font-size:12px;color:var(--hint);align-self:center">1 / 1</span>
+            <button class="sub-page-btn" id="subNextBtn" disabled>Далее →</button>
+          </div>
         </div>`;
     }
 
     function renderSubscriberCard(s) {
-      const badge = s.granted_by_admin
-        ? `<span style="background:rgba(255,204,0,.15);color:#c9920a;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px">👑 Выдана</span>`
-        : `<span style="background:rgba(36,129,204,.12);color:var(--link);font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px">⭐ Куплена</span>`;
+      const name     = s.full_name || (s.username ? "@" + s.username : null) || String(s.user_telegram_id);
+      const avatarBg = colorFor(String(s.user_telegram_id));
+      const avatarLetter = initials(name);
+
+      const grantBadge = s.granted_by_admin
+        ? `<span style="background:rgba(255,204,0,.15);color:#c9920a;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;vertical-align:middle">👑 Выдана</span>`
+        : `<span style="background:rgba(36,129,204,.12);color:var(--link);font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;vertical-align:middle">⭐ Куплена</span>`;
+
       const STATUS_LABEL = { active: "активна", paused: "пауза", cancelled: "отменена", refunded: "возврат" };
       const STATUS_STYLE = {
         active:    "background:rgba(52,199,89,.14);color:var(--green)",
@@ -1887,15 +1950,32 @@
         refunded:  "background:rgba(120,120,128,.13);color:var(--hint)",
       };
       const st = s.status || "active";
-      const statusBadge = `<span style="${STATUS_STYLE[st] || STATUS_STYLE.active};font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px">${STATUS_LABEL[st] || st}</span>`;
+      const statusBadge = `<span style="${STATUS_STYLE[st]};font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;vertical-align:middle">${STATUS_LABEL[st] || st}</span>`;
+
+      // secondary line: @username if different from display name, then ID
+      const subLine = [
+        s.username && s.full_name ? `@${esc(s.username)}` : null,
+        `ID ${s.user_telegram_id}`,
+        s.stars_paid > 0 ? `${s.stars_paid}⭐` : null,
+      ].filter(Boolean).join(" · ");
+
+      const expLine = st === "active"
+        ? `Ещё ${s.days_left} дн. · до ${s.expires_at.slice(0,10)}`
+        : `Истекла ${s.expires_at.slice(0,10)}`;
+
+      const actionBtn = st === "active"
+        ? `<button class="sub-revoke-btn" data-user-id="${s.user_telegram_id}" data-name="${esc(name)}">✗ Отозвать</button>`
+        : `<button class="sub-grant-btn" style="padding:6px 11px;font-size:12px" data-grant-id="${s.user_telegram_id}" data-name="${esc(name)}">↩ Вернуть</button>`;
+
       return `
         <div class="sub-subscriber-card">
-          <div class="sub-sub-avatar">⭐</div>
+          <div class="sub-sub-avatar" style="background:${avatarBg}">${esc(avatarLetter)}</div>
           <div class="sub-sub-info">
-            <div class="sub-sub-id">${s.user_telegram_id} ${badge} ${statusBadge}</div>
-            <div class="sub-sub-meta">Ещё ${s.days_left} дн. · до ${s.expires_at.slice(0,10)}${s.stars_paid > 0 ? ` · ${s.stars_paid}⭐` : ""}</div>
+            <div class="sub-sub-name">${esc(name)} ${grantBadge} ${statusBadge}</div>
+            <div class="sub-sub-id">${subLine}</div>
+            <div class="sub-sub-meta">${expLine}</div>
           </div>
-          <button class="sub-revoke-btn" data-user-id="${s.user_telegram_id}">✗ Отозвать</button>
+          ${actionBtn}
         </div>`;
     }
 
@@ -1956,6 +2036,11 @@
       container.appendChild(row);
       refreshQuickAdd();
     }
+
+    // ── Subscriber list state ─────────────────────────────────────────────────
+    let _subStatusFilter = "";
+    let _subPage = 1;
+    let _subTotalPages = 1;
 
     function attachSubscriptionTabHandlers() {
       // Delete existing benefit rows
@@ -2025,7 +2110,7 @@
         }
       });
 
-      // Grant subscription
+      // Grant subscription (form)
       document.getElementById("subGrantBtn")?.addEventListener("click", async (e) => {
         const btn = e.currentTarget;
         const userId = parseInt(document.getElementById("grantUserId").value);
@@ -2040,82 +2125,120 @@
           if (!res.ok) throw new Error();
           showToast(`✅ Подписка выдана пользователю ${userId} на ${days} дн.`);
           document.getElementById("grantUserId").value = "";
-          await loadSubscriptionTab();
+          _subPage = 1;
+          await reloadSubscriberList();
         } catch {
           showToast("❌ Ошибка при выдаче подписки");
           btn.disabled = false;
         }
       });
 
-      // Revoke buttons
+      // Status filter chips
+      document.querySelectorAll(".sub-filter-chip").forEach(chip => {
+        chip.addEventListener("click", () => {
+          document.querySelectorAll(".sub-filter-chip").forEach(c => c.classList.remove("active"));
+          chip.classList.add("active");
+          _subStatusFilter = chip.dataset.sf;
+          _subPage = 1;
+          reloadSubscriberList();
+        });
+      });
+
+      // Pagination
+      document.getElementById("subPrevBtn")?.addEventListener("click", () => {
+        if (_subPage > 1) { _subPage--; reloadSubscriberList(); }
+      });
+      document.getElementById("subNextBtn")?.addEventListener("click", () => {
+        if (_subPage < _subTotalPages) { _subPage++; reloadSubscriberList(); }
+      });
+
+      // Attach action buttons in the initial render
+      _attachSubListActions();
+    }
+
+    // ── Attach revoke/grant buttons in the subscriber list ────────────────────
+    function _attachSubListActions() {
+      // Revoke buttons (active → cancel)
       document.querySelectorAll(".sub-revoke-btn").forEach(btn => {
         btn.addEventListener("click", async (e) => {
-          const userId = parseInt(e.currentTarget.dataset.userId);
-          const ok = await confirmAction(`Отозвать подписку у пользователя ${userId}?`);
+          const b      = e.currentTarget;
+          const userId = parseInt(b.dataset.userId);
+          const name   = b.dataset.name || String(userId);
+          const ok     = await confirmAction(`Отозвать подписку у ${name}?`);
           if (!ok) return;
-          e.currentTarget.disabled = true;
+          b.disabled = true;
           try {
             const res = await fetch("/app/api/admin/subscription/revoke", {
               method: "POST", headers: {"Content-Type":"application/json"},
               body: JSON.stringify({initData, ownerTelegramId: userId}),
             });
             if (!res.ok) throw new Error();
-            showToast(`✅ Подписка отозвана у ${userId}`);
+            showToast(`✅ Подписка отозвана у ${name}`);
             await reloadSubscriberList();
           } catch {
-            showToast("❌ Ошибка при отзыве подписки");
-            e.currentTarget.disabled = false;
+            showToast("❌ Ошибка при отзыве");
+            b.disabled = false;
           }
         });
       });
 
-      // Status filter — reload subscriber list on change
-      document.getElementById("subStatusFilter")?.addEventListener("change", async () => {
-        await reloadSubscriberList();
+      // Restore buttons (cancelled → grant again)
+      document.querySelectorAll("[data-grant-id]").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+          const b      = e.currentTarget;
+          const userId = parseInt(b.dataset.grantId);
+          const name   = b.dataset.name || String(userId);
+          const days   = parseInt(document.getElementById("grantDays")?.value) || (subConfig?.duration_days || 30);
+          const ok     = await confirmAction(`Вернуть подписку ${name} на ${days} дн.?`);
+          if (!ok) return;
+          b.disabled = true;
+          try {
+            const res = await fetch("/app/api/admin/subscription/grant", {
+              method: "POST", headers: {"Content-Type":"application/json"},
+              body: JSON.stringify({initData, ownerTelegramId: userId, durationDays: days}),
+            });
+            if (!res.ok) throw new Error();
+            showToast(`✅ Подписка возвращена ${name}`);
+            await reloadSubscriberList();
+          } catch {
+            showToast("❌ Ошибка");
+            b.disabled = false;
+          }
+        });
       });
     }
 
     async function reloadSubscriberList() {
-      const filterEl = document.getElementById("subStatusFilter");
-      const statusFilter = filterEl ? filterEl.value : "";
       const listEl = document.getElementById("subSubscriberList");
       if (listEl) listEl.innerHTML = `<div style="text-align:center;color:var(--hint);padding:14px 0">Загружаем…</div>`;
       try {
         const res = await fetch("/app/api/admin/subscription/subscribers", {
           method: "POST", headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({initData, page: 1, statusFilter: statusFilter || null}),
+          body: JSON.stringify({initData, page: _subPage, statusFilter: _subStatusFilter || null}),
         });
-        const data = res.ok ? await res.json() : {total: 0, subscribers: []};
+        const data = res.ok ? await res.json() : {total: 0, page: 1, page_size: 25, subscribers: []};
+
         // Update count label
-        const titleEl = document.querySelector(".sub-admin-card .sub-admin-title");
-        if (titleEl && titleEl.textContent.startsWith("👥")) {
-          titleEl.textContent = `👥 Подписки (${data.total})`;
-        }
+        const lbl = document.getElementById("subTotalLabel");
+        if (lbl) lbl.textContent = `(${data.total})`;
+
+        // Pagination state
+        const pageSize = data.page_size || 25;
+        _subTotalPages = Math.max(1, Math.ceil(data.total / pageSize));
+        const pager    = document.getElementById("subPager");
+        const prevBtn  = document.getElementById("subPrevBtn");
+        const nextBtn  = document.getElementById("subNextBtn");
+        const pageLbl  = document.getElementById("subPageLabel");
+        if (pager) pager.style.display = _subTotalPages > 1 ? "flex" : "none";
+        if (prevBtn)  prevBtn.disabled  = _subPage <= 1;
+        if (nextBtn)  nextBtn.disabled  = _subPage >= _subTotalPages;
+        if (pageLbl)  pageLbl.textContent = `${_subPage} / ${_subTotalPages}`;
+
         if (listEl) {
           listEl.innerHTML = data.subscribers.length === 0
             ? `<div style="text-align:center;color:var(--hint);padding:20px 0">Нет подписок</div>`
             : data.subscribers.map(s => renderSubscriberCard(s)).join("");
-          // Re-attach revoke handlers for the newly rendered cards
-          listEl.querySelectorAll(".sub-revoke-btn").forEach(btn => {
-            btn.addEventListener("click", async (e) => {
-              const userId = parseInt(e.currentTarget.dataset.userId);
-              const ok = await confirmAction(`Отозвать подписку у пользователя ${userId}?`);
-              if (!ok) return;
-              e.currentTarget.disabled = true;
-              try {
-                const res2 = await fetch("/app/api/admin/subscription/revoke", {
-                  method: "POST", headers: {"Content-Type":"application/json"},
-                  body: JSON.stringify({initData, ownerTelegramId: userId}),
-                });
-                if (!res2.ok) throw new Error();
-                showToast(`✅ Подписка отозвана у ${userId}`);
-                await reloadSubscriberList();
-              } catch {
-                showToast("❌ Ошибка при отзыве подписки");
-                e.currentTarget.disabled = false;
-              }
-            });
-          });
+          _attachSubListActions();
         }
       } catch {
         if (listEl) listEl.innerHTML = `<div style="text-align:center;color:var(--danger);padding:14px 0">Ошибка загрузки</div>`;

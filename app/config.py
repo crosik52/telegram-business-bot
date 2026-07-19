@@ -42,8 +42,8 @@ class Settings(BaseSettings):
     )
 
     # --- Dashboard / auth -------------------------------------------------
-    dashboard_admin_username: str = Field(..., alias="DASHBOARD_ADMIN_USERNAME")
-    dashboard_admin_password: str = Field(..., alias="DASHBOARD_ADMIN_PASSWORD")
+    dashboard_admin_username: str = Field("admin", alias="DASHBOARD_ADMIN_USERNAME")
+    dashboard_admin_password: str = Field("changeme", alias="DASHBOARD_ADMIN_PASSWORD")
     session_secret: str = Field(..., alias="SESSION_SECRET")
     session_max_age_seconds: int = Field(
         default=60 * 60 * 12, alias="SESSION_MAX_AGE_SECONDS"

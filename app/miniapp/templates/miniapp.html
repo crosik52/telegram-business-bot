@@ -3792,8 +3792,9 @@
 
     function openContactProfile(s) {
       if (!s) return;
-      const sub    = s.username ? "@" + s.username : "личный контакт";
-      const rel    = lastRelationships?.[s.chat_id];
+      const _e  = v => String(v || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      const sub = s.username ? "@" + s.username : "личный контакт";
+      const rel = lastRelationships?.[s.chat_id];
       const relChip = (rel?.status === "active")
         ? `<span class="chip ${_relTierCls(rel.rel_type)}">${_relTierLabel(rel.rel_type)} Ур.${rel.level}</span>`
         : "";
@@ -3808,9 +3809,9 @@
           <div class="cp-avatar-wrap" id="cpAvatarWrap" style="background:${frameStyle}">
             <div class="cp-avatar" style="background:${colorFor(s.display_name)}">${initials(s.display_name)}</div>
           </div>
-          <div class="cp-name">${esc2(s.display_name)}</div>
+          <div class="cp-name">${_e(s.display_name)}</div>
           <div class="cp-sub-line">
-            <span class="cp-username">${esc2(sub)}</span>
+            <span class="cp-username">${_e(sub)}</span>
             <span id="cpBadge"></span>
             ${relChip}
           </div>

@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+{% block title %}Подписки — Админ панель{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  {# ── Page header ── #}
+  <div class="flex items-center justify-between">
+    <h1 class="text-2xl font-bold tracking-tight">⭐ Подписки</h1>
+  </div>
+
+  {# ── Flash messages ── #}
+  {% if success %}
+  <div class="rounded-xl bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300 flex items-center gap-2">
+    <span>✅</span><span>{{ success }}</span>
+  </div>
+  {% endif %}
+  {% if error %}
+  <div class="rounded-xl bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 px-4 py-3 text-sm text-red-700 dark:text-red-300 flex items-center gap-2">
+    <span>❌</span><span>{{ error }}</span>
+  </div>
+  {% endif %}
+
+  {# ── Stats bar ── #}
+  <div class="grid grid-cols-3 gap-4">
+    <div class="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5">
+      <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Активных</p>
+      <p class="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{{ stats.active }}</p>
+    </div>
+    <div class="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5">
+      <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Всего записей</p>
+      <p class="text-3xl font-bold">{{ stats.total }}</p>
+    </div>
+    <div class="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5">
+      <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Заработано ⭐</p>
+      <p class="text-3xl font-bold text-amber-500 dark:text-amber-400">{{ stats.total_stars }}</p>
+    </div>
+  </div>
+
+  {# ── Config card ── #}
+  <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+    <button type="button" onclick="toggleSection('cfgBody')"
+      class="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+      <h2 class="font-semibold">Настройки подписки</h2>
+      <span id="cfgArrow" class="text-slate-400 text-sm transition-transform duration-200">▼</span>
+    </button>
+    <div id="cfgBody" class="border-t border-slate-200 dark:border-slate-800 px-5 py-5">
+      <form method="post" action="/subscriptions/config" class="space-y-5">
+
+        {# Row 1: enabled + price + days #}
+        <div class="flex flex-wrap gap-4 items-center">
+          <label class="flex items-center gap-2 text-sm font-medium cursor-pointer select-none">
+            <input type="checkbox" name="is_enabled" value="on" {% if config.is_enabled %}checked{% endif %}
+              class="w-4 h-4 rounded border-slate-300 dark:border-slate-600 accent-brand-600" />
+            Подписка включена
+          </label>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Цена (Stars)</label>
+            <input type="number" name="price_stars" value="{{ config.price_stars }}" min="1"
+              class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Длительность (дней)</label>
+            <input type="number" name="duration_days" value="{{ config.duration_days }}" min="1"
+              class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Расчётные тарифы</label>
+            <div class="text-xs text-slate-500 dark:text-slate-400 space-y-1 pt-2">
+              <div>1 мес — <strong>{{ config.price_stars }}</strong> ⭐</div>
+              <div>3 мес — <strong>{{ (config.price_stars * 3 * 0.83) | round | int }}</strong> ⭐ (−17%)</div>
+              <div>12 мес — <strong>{{ (config.price_stars * 12 * 0.67) | round | int }}</strong> ⭐ (−33%)</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Название</label>
+            <input type="text" name="title" value="{{ config.title }}"
+              class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Описание</label>
+            <input type="text" name="description" value="{{ config.description }}"
+              class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+        </div>
+
+        {# Benefits #}
+        <div>
+          <p class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-3 uppercase tracking-wide">Бонусы</p>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1.5">🎁 Множитель монет</label>
+              <input type="number" name="daily_multiplier" step="0.1" min="1"
+                value="{{ config.benefits.daily_multiplier | default(2.0) }}"
+                class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1.5">💰 Бонус монет/день</label>
+              <input type="number" name="daily_bonus_coins" min="0"
+                value="{{ config.benefits.daily_bonus_coins | default(50) }}"
+                class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1.5">✨ Множитель XP питомца</label>
+              <input type="number" name="xp_multiplier" step="0.1" min="1"
+                value="{{ config.benefits.xp_multiplier | default(1.5) }}"
+                class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1.5">🐾 Доп. слотов питомца</label>
+              <input type="number" name="max_pets_bonus" min="0"
+                value="{{ config.benefits.max_pets_bonus | default(2) }}"
+                class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+            </div>
+            <div class="flex items-center gap-2 mt-4">
+              <input type="checkbox" name="pet_feed_free" value="on"
+                {% if config.benefits.pet_feed_free %}checked{% endif %}
+                class="w-4 h-4 rounded border-slate-300 dark:border-slate-600 accent-brand-600" id="feedFreeChk" />
+              <label for="feedFreeChk" class="text-xs text-slate-500 dark:text-slate-400 cursor-pointer">🍖 Еда для питомца бесплатно</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-1">
+          <button type="submit"
+            class="px-5 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors">
+            Сохранить настройки
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {# ── Grant form ── #}
+  <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5">
+    <h2 class="font-semibold mb-4">Выдать подписку вручную</h2>
+    <form method="post" action="/subscriptions/grant" class="flex flex-wrap gap-3 items-end">
+      <div>
+        <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Telegram ID</label>
+        <input type="number" name="user_telegram_id" placeholder="123456789" required
+          class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm w-44 focus:outline-none focus:ring-2 focus:ring-brand-500" />
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Дней</label>
+        <input type="number" name="duration_days" value="{{ config.duration_days }}" min="1"
+          class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm w-28 focus:outline-none focus:ring-2 focus:ring-brand-500" />
+      </div>
+      <button type="submit"
+        class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition-colors">
+        Выдать
+      </button>
+    </form>
+  </div>
+
+  {# ── Subscribers table ── #}
+  <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+    <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+      <h2 class="font-semibold">Подписчики <span class="text-slate-400 font-normal text-sm">({{ total }})</span></h2>
+      {# Status filter tabs #}
+      <div class="flex gap-1 text-xs font-medium flex-wrap">
+        {% for label, val in [("Все", ""), ("Активные", "active"), ("Отменённые", "cancelled"), ("Рефанды", "refunded")] %}
+        <a href="/subscriptions?status={{ val }}"
+          class="px-3 py-1.5 rounded-lg transition-colors
+            {% if status_filter == val %}bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300
+            {% else %}hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500{% endif %}">
+          {{ label }}
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+
+    {% if subscribers %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-xs uppercase tracking-wide text-slate-400 border-b border-slate-100 dark:border-slate-800">
+            <th class="text-left px-5 py-3 font-medium">Пользователь</th>
+            <th class="text-left px-4 py-3 font-medium">Статус</th>
+            <th class="text-left px-4 py-3 font-medium">Начало</th>
+            <th class="text-left px-4 py-3 font-medium">Истекает</th>
+            <th class="text-right px-4 py-3 font-medium">⭐ Оплачено</th>
+            <th class="text-right px-5 py-3 font-medium">Действия</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-50 dark:divide-slate-800/60">
+          {% for s in subscribers %}
+          <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+            {# User cell #}
+            <td class="px-5 py-3">
+              <div class="flex items-center gap-3 min-w-0">
+                {# Avatar letter #}
+                <div class="w-8 h-8 rounded-full bg-gradient-to-br
+                  {% if s.status == 'active' %}from-emerald-400 to-teal-500
+                  {% else %}from-slate-300 to-slate-400{% endif %}
+                  flex items-center justify-center text-white text-xs font-bold shrink-0">
+                  {{ s.full_name[0] | upper if s.full_name else "?" }}
+                </div>
+                <div class="min-w-0">
+                  <p class="font-medium truncate leading-tight">
+                    {{ s.full_name }}
+                    {% if s.granted_by_admin %}
+                    <span class="ml-1 text-xs text-violet-500" title="Выдана вручную">🛡</span>
+                    {% endif %}
+                  </p>
+                  <div class="flex items-center gap-2 mt-0.5">
+                    {% if s.username %}
+                    <span class="text-xs text-slate-400">@{{ s.username }}</span>
+                    {% endif %}
+                    <span class="text-xs text-slate-300 dark:text-slate-600 font-mono">{{ s.user_telegram_id }}</span>
+                  </div>
+                </div>
+              </div>
+            </td>
+            {# Status cell #}
+            <td class="px-4 py-3 whitespace-nowrap">
+              {% if s.status == 'active' %}
+                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block"></span>
+                  Активна · {{ s.days_left }}д
+                </span>
+              {% elif s.status == 'cancelled' %}
+                <span class="px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">Отменена</span>
+              {% elif s.status == 'refunded' %}
+                <span class="px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Рефанд</span>
+              {% else %}
+                <span class="px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">{{ s.status }}</span>
+              {% endif %}
+            </td>
+            {# Dates #}
+            <td class="px-4 py-3 whitespace-nowrap text-xs text-slate-500">
+              {{ s.started_at[:10] }}
+            </td>
+            <td class="px-4 py-3 whitespace-nowrap text-xs {% if s.status == 'active' and s.days_left <= 3 %}text-red-500 font-medium{% else %}text-slate-500{% endif %}">
+              {{ s.expires_at[:10] }}
+            </td>
+            {# Stars #}
+            <td class="px-4 py-3 text-right whitespace-nowrap">
+              {% if s.stars_paid > 0 %}
+              <span class="font-semibold text-amber-500">⭐ {{ s.stars_paid }}</span>
+              {% else %}
+              <span class="text-slate-300 dark:text-slate-600 text-xs">—</span>
+              {% endif %}
+            </td>
+            {# Actions #}
+            <td class="px-5 py-3 text-right whitespace-nowrap">
+              {% if s.status == 'active' %}
+              <form method="post" action="/subscriptions/{{ s.user_telegram_id }}/revoke"
+                onsubmit="return confirm('Отозвать подписку у {{ s.full_name }}?')">
+                <button type="submit"
+                  class="text-xs px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors font-medium">
+                  Отозвать
+                </button>
+              </form>
+              {% else %}
+              <form method="post" action="/subscriptions/grant">
+                <input type="hidden" name="user_telegram_id" value="{{ s.user_telegram_id }}" />
+                <input type="hidden" name="duration_days" value="{{ config.duration_days }}" />
+                <button type="submit"
+                  class="text-xs px-3 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors font-medium">
+                  Выдать
+                </button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# Pagination #}
+    {% if total_pages > 1 %}
+    <div class="px-5 py-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-sm">
+      <span class="text-slate-400">Стр. {{ page }} из {{ total_pages }}</span>
+      <div class="flex gap-2">
+        {% if page > 1 %}
+        <a href="/subscriptions?page={{ page - 1 }}&status={{ status_filter }}"
+          class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+          ← Назад
+        </a>
+        {% endif %}
+        {% if page < total_pages %}
+        <a href="/subscriptions?page={{ page + 1 }}&status={{ status_filter }}"
+          class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+          Далее →
+        </a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="px-5 py-12 text-center">
+      <p class="text-4xl mb-3">⭐</p>
+      <p class="text-slate-400 text-sm">Подписчиков пока нет.</p>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+  function toggleSection(id) {
+    const el = document.getElementById(id);
+    const arrow = document.getElementById('cfgArrow');
+    const hidden = el.classList.toggle('hidden');
+    if (arrow) arrow.style.transform = hidden ? 'rotate(-90deg)' : '';
+  }
+</script>
+{% endblock %}

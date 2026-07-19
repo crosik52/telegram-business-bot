@@ -43,17 +43,34 @@
       <div class="h-16 flex items-center px-5 border-b border-slate-200 dark:border-slate-800">
         <span class="text-lg font-semibold tracking-tight text-brand-600 dark:text-brand-400">Business Inbox</span>
       </div>
-      <nav class="flex-1 px-3 py-4 space-y-1 text-sm">
-        <a href="/" class="block rounded-lg px-3 py-2 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 {% if active_nav == 'dashboard' %}bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300{% endif %}">Dashboard</a>
-        <a href="/messages" class="block rounded-lg px-3 py-2 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 {% if active_nav == 'messages' %}bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300{% endif %}">Messages</a>
-        <a href="/messages/deleted" class="block rounded-lg px-3 py-2 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 {% if active_nav == 'deleted' %}bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300{% endif %}">Deleted</a>
-        <a href="/statistics" class="block rounded-lg px-3 py-2 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 {% if active_nav == 'statistics' %}bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300{% endif %}">Statistics</a>
-        <a href="/channels" class="block rounded-lg px-3 py-2 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 {% if active_nav == 'channels' %}bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300{% endif %}">Channels</a>
+      <nav class="flex-1 px-3 py-4 space-y-0.5 text-sm">
+        {% set nav_items = [
+          ("dashboard",     "/",              "🏠", "Главная"),
+          ("messages",      "/messages",      "💬", "Сообщения"),
+          ("deleted",       "/messages/deleted", "🗑", "Удалённые"),
+          ("statistics",    "/statistics",    "📊", "Статистика"),
+          ("subscriptions", "/subscriptions", "⭐", "Подписки"),
+          ("channels",      "/channels",      "📢", "Каналы"),
+        ] %}
+        {% for key, href, icon, label in nav_items %}
+        <a href="{{ href }}"
+          class="flex items-center gap-2.5 rounded-lg px-3 py-2 font-medium transition-colors
+            hover:bg-slate-100 dark:hover:bg-slate-800
+            {% if active_nav == key %}bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300{% else %}text-slate-600 dark:text-slate-300{% endif %}">
+          <span class="text-base leading-none">{{ icon }}</span>
+          <span>{{ label }}</span>
+        </a>
+        {% endfor %}
       </nav>
-      <div class="p-3 border-t border-slate-200 dark:border-slate-800">
-        <button id="theme-toggle" class="w-full text-left text-sm rounded-lg px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800">Toggle theme</button>
+      <div class="p-3 border-t border-slate-200 dark:border-slate-800 space-y-0.5">
+        <button id="theme-toggle"
+          class="w-full flex items-center gap-2.5 text-left text-sm rounded-lg px-3 py-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          <span class="text-base leading-none">🌗</span><span>Тема</span>
+        </button>
         <form method="post" action="/logout">
-          <button class="w-full text-left text-sm rounded-lg px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-red-600 dark:text-red-400">Log out</button>
+          <button class="w-full flex items-center gap-2.5 text-left text-sm rounded-lg px-3 py-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+            <span class="text-base leading-none">🚪</span><span>Выйти</span>
+          </button>
         </form>
       </div>
     </aside>

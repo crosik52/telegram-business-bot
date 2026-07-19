@@ -20,6 +20,7 @@ from app.dashboard.routes import export as dashboard_export
 from app.dashboard.routes import home as dashboard_home
 from app.dashboard.routes import messages as dashboard_messages
 from app.dashboard.routes import stats as dashboard_stats
+from app.dashboard.routes import subscriptions as dashboard_subscriptions
 from app.database.base import Base
 from app.database.session import dispose_engine, get_engine
 from app.logging_config import configure_logging, get_logger
@@ -402,4 +403,5 @@ app.include_router(dashboard_messages.router)
 app.include_router(dashboard_stats.router)
 app.include_router(dashboard_export.router)
 app.include_router(dashboard_channels.router)
+app.include_router(dashboard_subscriptions.router)
 app.include_router(miniapp_routes.router)

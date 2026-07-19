@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, outerjoin, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.subscription import DEFAULT_BENEFITS, SubscriptionConfig, UserSubscription
+from app.models.user import TelegramUser
 
 
 class SubscriptionRepository:
@@ -123,22 +124,45 @@ class SubscriptionRepository:
             .values(is_active=False, status=new_status)
         )
 
+    async def get_stats(self) -> dict:
+        """Quick aggregate stats for the admin panel header."""
+        now = dt.datetime.now(dt.timezone.utc)
+        active_count = (
+            await self._session.execute(
+                select(func.count())
+                .select_from(UserSubscription)
+                .where(UserSubscription.is_active.is_(True), UserSubscription.expires_at > now)
+            )
+        ).scalar_one()
+        total_count = (
+            await self._session.execute(select(func.count()).select_from(UserSubscription))
+        ).scalar_one()
+        total_stars = (
+            await self._session.execute(
+                select(func.coalesce(func.sum(UserSubscription.stars_paid), 0))
+                .select_from(UserSubscription)
+            )
+        ).scalar_one()
+        return {
+            "active": active_count,
+            "total": total_count,
+            "total_stars": int(total_stars),
+        }
+
     async def list_subscribers(
         self,
         page: int = 1,
-        page_size: int = 30,
+        page_size: int = 25,
         status_filter: str | None = None,
     ) -> dict:
-        """List subscription rows for the admin panel.
+        """List subscription rows for the admin panel with user identity info.
 
-        When *status_filter* is provided (e.g. 'active', 'cancelled',
-        'paused', 'refunded') only rows with that status are returned.
-        When it is None, all rows are returned regardless of lifecycle state
-        so the admin can see the full history per user.
+        JOINs TelegramUser so the admin sees first_name, last_name, username
+        alongside the Telegram ID.  Falls back gracefully when the user has no
+        TelegramUser row (outer join).
 
-        Ordering: active rows (soonest-to-expire first) then inactive rows
-        (most-recently-deactivated first), so the currently live subscriptions
-        always appear at the top.
+        Ordering: active rows first (soonest-to-expire at the top), then all
+        inactive rows by expires_at desc so the most-recent history is visible.
         """
         now = dt.datetime.now(dt.timezone.utc)
 
@@ -153,11 +177,16 @@ class SubscriptionRepository:
         )
         total = count_q.scalar_one()
 
+        # LEFT OUTER JOIN so subscriptions without a TelegramUser row are not dropped
+        j = outerjoin(
+            UserSubscription,
+            TelegramUser,
+            UserSubscription.user_telegram_id == TelegramUser.telegram_user_id,
+        )
         result = await self._session.execute(
-            select(UserSubscription)
+            select(UserSubscription, TelegramUser)
+            .select_from(j)
             .where(*base_where)
-            # Active rows first (ascending expires_at so soonest-to-expire is at
-            # the top), then all inactive rows by created_at desc.
             .order_by(
                 UserSubscription.is_active.desc(),
                 UserSubscription.expires_at.desc(),
@@ -165,21 +194,31 @@ class SubscriptionRepository:
             .offset((page - 1) * page_size)
             .limit(page_size)
         )
-        subs = result.scalars().all()
+        rows = result.all()
+
+        subscribers = []
+        for sub, user in rows:
+            first_name = getattr(user, "first_name", None) or ""
+            last_name  = getattr(user, "last_name",  None) or ""
+            username   = getattr(user, "username",   None) or ""
+            full_name  = " ".join(p for p in (first_name, last_name) if p) or None
+            subscribers.append({
+                "user_telegram_id": sub.user_telegram_id,
+                "first_name":       first_name,
+                "last_name":        last_name,
+                "username":         username,
+                "full_name":        full_name or username or str(sub.user_telegram_id),
+                "status":           sub.status,
+                "started_at":       sub.started_at.isoformat(),
+                "expires_at":       sub.expires_at.isoformat(),
+                "days_left":        max(0, (sub.expires_at - now).days),
+                "granted_by_admin": sub.granted_by_admin,
+                "stars_paid":       sub.stars_paid,
+            })
+
         return {
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "subscribers": [
-                {
-                    "user_telegram_id": s.user_telegram_id,
-                    "status": s.status,
-                    "started_at": s.started_at.isoformat(),
-                    "expires_at": s.expires_at.isoformat(),
-                    "days_left": max(0, (s.expires_at - now).days),
-                    "granted_by_admin": s.granted_by_admin,
-                    "stars_paid": s.stars_paid,
-                }
-                for s in subs
-            ],
+            "total":       total,
+            "page":        page,
+            "page_size":   page_size,
+            "subscribers": subscribers,
         }

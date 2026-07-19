@@ -20,3 +20,4 @@ aiosqlite
 pytest
 pytest-asyncio
 dateparser==1.2.1
+uvicorn

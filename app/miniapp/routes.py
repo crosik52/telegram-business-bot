@@ -3349,7 +3349,7 @@ async def ai_ping(payload: dict, session: AsyncSession = Depends(get_db_session)
     import asyncio  # noqa: PLC0415
     import os       # noqa: PLC0415
     try:
-        import google.generativeai as genai  # noqa: PLC0415
+        from google import genai  # noqa: PLC0415
     except ImportError as exc:
         return {"ok": False, "error": f"ImportError: {exc}"}
 
@@ -3358,9 +3358,10 @@ async def ai_ping(payload: dict, session: AsyncSession = Depends(get_db_session)
         return {"ok": False, "error": "GEMINI_API_KEY not set"}
 
     try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-flash-latest")
-        resp = await asyncio.to_thread(model.generate_content, "Say OK")
+        client = genai.Client(api_key=api_key)
+        resp = await asyncio.to_thread(
+            client.models.generate_content, model="gemini-flash-latest", contents="Say OK"
+        )
         return {"ok": True, "response": resp.text[:100]}
     except Exception as exc:
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}

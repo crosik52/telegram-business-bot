@@ -291,21 +291,25 @@ async def analyze(
 Верни JSON по схеме."""
 
     import asyncio  # noqa: PLC0415
-    import google.generativeai as genai  # noqa: PLC0415
+    from google import genai  # noqa: PLC0415
+    from google.genai import types  # noqa: PLC0415
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(
-        model_name="gemini-flash-latest",
-        system_instruction=_SYSTEM_PROMPT,
-        generation_config=genai.GenerationConfig(temperature=0.4),
-    )
+    client = genai.Client(api_key=api_key)
 
     full_prompt = (
         user_prompt
         + "\n\nОтвет верни СТРОГО в формате JSON без пояснений и markdown-обёрток."
     )
     try:
-        response = await asyncio.to_thread(model.generate_content, full_prompt)
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model="gemini-flash-latest",
+            contents=full_prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=_SYSTEM_PROMPT,
+                temperature=0.4,
+            ),
+        )
     except Exception as exc:
         raise ValueError(f"gemini_error: {type(exc).__name__}: {exc}") from exc
 

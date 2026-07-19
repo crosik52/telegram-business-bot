@@ -268,7 +268,7 @@ async def analyze(
     if not api_key:
         raise ValueError("GEMINI_API_KEY not set")
 
-    msgs = await _fetch_messages(session, chat_id, connection_ids, limit=150)
+    msgs = await _fetch_messages(session, chat_id, connection_ids, limit=600)
     if not msgs:
         raise ValueError("no_messages")
 

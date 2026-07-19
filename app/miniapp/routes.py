@@ -3341,3 +3341,26 @@ async def ai_relationship_analysis(
         raise HTTPException(status_code=500, detail=f"analysis_failed: {msg}") from exc
 
     return result
+
+
+@router.post("/app/api/ai/ping")
+async def ai_ping(payload: dict, session: AsyncSession = Depends(get_db_session)) -> dict:
+    """Quick Gemini connectivity test (admin/debug only)."""
+    import asyncio  # noqa: PLC0415
+    import os       # noqa: PLC0415
+    try:
+        import google.generativeai as genai  # noqa: PLC0415
+    except ImportError as exc:
+        return {"ok": False, "error": f"ImportError: {exc}"}
+
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    if not api_key:
+        return {"ok": False, "error": "GEMINI_API_KEY not set"}
+
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        resp = await asyncio.to_thread(model.generate_content, "Say OK")
+        return {"ok": True, "response": resp.text[:100]}
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}

@@ -3347,9 +3347,7 @@
         const relBtn = s.mutual_connected
           ? `<button class="rel-btn" data-rel-open="${s.chat_id}" data-rel-name="${s.display_name}">❤️ Отношения</button>`
           : "";
-        const aiBtn = subData?.is_vip
-          ? `<button class="ai-btn" data-ai-chat="${s.chat_id}" data-ai-name="${s.display_name}">🤖 Анализ</button>`
-          : "";
+        const aiBtn = `<button class="ai-btn" data-ai-chat="${s.chat_id}" data-ai-name="${s.display_name}">🤖 Анализ</button>`;
 
         return `
           <div class="row${s.username ? " clickable" : ""}"${s.username ? ` data-username="${s.username}"` : ""}>
@@ -7334,8 +7332,19 @@
         });
         if (!res.ok) {
           const err = await res.json().catch(()=>({}));
+          if (err.detail === "vip_required") {
+            body.innerHTML = `<div class="ai-loading-wrap">
+              <div style="font-size:36px">💎</div>
+              <div style="font-size:15px;font-weight:700;text-align:center">AI Анализ — VIP функция</div>
+              <div style="font-size:13px;color:var(--hint);text-align:center;max-width:260px;line-height:1.55">Для доступа к AI анализу отношений нужна VIP подписка</div>
+              <button onclick="closeAiModal();switchMainTab('donate');setTimeout(()=>{document.querySelector('.sub-tier-tab[data-tier=vip]')?.click();},300)"
+                style="margin-top:8px;border:none;border-radius:14px;padding:13px 24px;font-size:14px;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#c47800,#9c4cc4);color:#fff">
+                💎 Перейти на VIP
+              </button>
+            </div>`;
+            return;
+          }
           const MSGS = {
-            vip_required:     "💎 Анализ доступен только для VIP подписчиков",
             no_messages:      "📭 В этом чате пока нет сообщений для анализа",
             no_connection:    "❌ Бизнес-аккаунт не подключён",
             ai_not_configured:"⚙️ AI сервис временно недоступен",

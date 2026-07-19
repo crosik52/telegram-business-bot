@@ -1622,29 +1622,47 @@ async def on_successful_payment(message: Message, bot: Bot) -> None:
     if payment is None or not payment.invoice_payload.startswith("subscription_"):
         return
 
-    user_id   = message.from_user.id
-    charge_id = payment.telegram_payment_charge_id
+    user_id    = message.from_user.id
+    charge_id  = payment.telegram_payment_charge_id
     stars_paid = payment.total_amount          # Stars amount (integer)
+
+    # Payload format: "subscription_{user_id}_{duration_days}"
+    # Fall back to config duration for legacy "subscription_{user_id}" payloads
+    parts = payment.invoice_payload.split("_")
+    try:
+        duration_days = int(parts[2]) if len(parts) >= 3 else None
+    except (ValueError, IndexError):
+        duration_days = None
 
     async with session_scope() as session:
         sub_repo = SubscriptionRepository(session)
         config   = await sub_repo.get_config()
-        await sub_repo.activate(user_id, charge_id, stars_paid, config.duration_days)
+        effective_days = duration_days if duration_days and duration_days >= 1 else config.duration_days
+        await sub_repo.activate(user_id, charge_id, stars_paid, effective_days)
         await session.commit()
 
     logger.info(
         "Subscription activated: user=%s stars=%s charge=%s duration=%sd",
-        user_id, stars_paid, charge_id, config.duration_days,
+        user_id, stars_paid, charge_id, effective_days,
     )
+
+    # Build human-friendly duration label
+    if effective_days >= 360:
+        dur_label = "12 месяцев"
+    elif effective_days >= 80:
+        dur_label = "3 месяца"
+    else:
+        dur_label = f"{effective_days} дней"
 
     try:
         await bot.send_message(
             chat_id=user_id,
             text=(
                 f"⭐ <b>Подписка активирована!</b>\n\n"
-                f"Спасибо за поддержку! Подписка действует <b>{config.duration_days} дней</b>.\n\n"
+                f"Спасибо за поддержку! Premium действует <b>{dur_label}</b>.\n\n"
                 f"🎁 Все бонусы уже активны — открой мини-приложение, чтобы увидеть их."
             ),
+            parse_mode="HTML",
         )
     except Exception:
         logger.exception("Failed to send subscription confirmation to user %s", user_id)

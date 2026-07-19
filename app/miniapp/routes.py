@@ -307,7 +307,9 @@ class SubscriptionStatusRequest(BaseModel):
 
 class SubscriptionInvoiceRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
-    init_data: str = Field(alias="initData")
+    init_data:   str = Field(alias="initData")
+    plan_stars:  int | None = Field(default=None, alias="plan_stars")
+    plan_days:   int | None = Field(default=None, alias="plan_days")
 
 
 class AdminSubUpdateRequest(BaseModel):
@@ -2024,21 +2026,34 @@ async def subscription_invoice(
     if existing:
         raise HTTPException(status_code=409, detail="already_subscribed")
 
+    # Use client-chosen plan if valid, else fall back to config defaults
+    effective_stars = (
+        payload.plan_stars
+        if payload.plan_stars and payload.plan_stars >= 1
+        else config.price_stars
+    )
+    effective_days = (
+        payload.plan_days
+        if payload.plan_days and payload.plan_days >= 1
+        else config.duration_days
+    )
+
     bot = get_bot(settings)
     try:
         invoice_link = await bot.create_invoice_link(
             title=config.title,
             description=config.description,
-            payload=f"subscription_{owner_id}",
+            # Encode duration so the payment handler activates the right plan
+            payload=f"subscription_{owner_id}_{effective_days}",
             provider_token="",          # empty string = Telegram Stars (XTR)
             currency="XTR",
-            prices=[LabeledPrice(label=config.title, amount=config.price_stars)],
+            prices=[LabeledPrice(label=config.title, amount=effective_stars)],
         )
     except Exception as exc:
         logger.exception("Failed to create invoice link for user %s", owner_id)
         raise HTTPException(status_code=502, detail="invoice_send_failed") from exc
 
-    return {"ok": True, "price_stars": config.price_stars, "invoice_link": invoice_link}
+    return {"ok": True, "price_stars": effective_stars, "invoice_link": invoice_link}
 
 
 # ── Admin subscription endpoints ──────────────────────────────────────────────

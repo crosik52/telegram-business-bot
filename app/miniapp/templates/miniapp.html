@@ -1838,6 +1838,112 @@
     padding: 0 16px 16px; line-height: 1.5;
   }
 
+  /* ── Subscription purchase redesign ───────────────────────────────────── */
+  .sub-purchase-wrap { animation: riseIn 0.3s ease backwards; }
+
+  .sub-hero-card {
+    border-radius: var(--card-radius); margin-bottom: 12px;
+    background: linear-gradient(140deg, #3a3399 0%, #1c63b0 100%);
+    padding: 24px 20px 20px; text-align: center;
+    box-shadow: 0 6px 28px rgba(88,86,214,.32);
+    position: relative; overflow: hidden;
+  }
+  .sub-hero-card::before {
+    content: ''; position: absolute; top: -40px; right: -40px;
+    width: 140px; height: 140px;
+    background: rgba(255,255,255,.06); border-radius: 50%; pointer-events: none;
+  }
+  .sub-hero-card::after {
+    content: ''; position: absolute; bottom: -30px; left: -30px;
+    width: 100px; height: 100px;
+    background: rgba(255,255,255,.04); border-radius: 50%; pointer-events: none;
+  }
+  .sub-hero-emoji { font-size: 48px; line-height: 1; display: block; margin-bottom: 10px;
+    filter: drop-shadow(0 4px 12px rgba(255,215,0,.4)); }
+  .sub-hero-title { font-size: 26px; font-weight: 900; color: #fff; letter-spacing: -0.5px; }
+  .sub-hero-desc  { font-size: 13px; color: rgba(255,255,255,.72);
+    margin-top: 6px; line-height: 1.55; max-width: 280px; margin-left: auto; margin-right: auto; }
+
+  /* Plan picker row */
+  .sub-plans-row {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 8px; margin-bottom: 12px; padding-top: 14px; /* room for badges */
+  }
+  .sub-plan-card {
+    border: 1.5px solid var(--ci-border, rgba(120,120,128,.2));
+    border-radius: 14px; padding: 14px 6px 12px;
+    text-align: center; cursor: pointer; position: relative;
+    background: var(--secondary-bg);
+    transition: border-color .16s, background .16s, box-shadow .16s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .sub-plan-card:active { transform: scale(0.96); }
+  .sub-plan-card.featured  { border-color: rgba(88,86,214,.45); }
+  .sub-plan-card.selected  {
+    border-color: #5856d6;
+    background: rgba(88,86,214,.11);
+    box-shadow: 0 0 0 1px #5856d6 inset, 0 4px 14px rgba(88,86,214,.18);
+  }
+  .sub-plan-badge {
+    position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+    background: linear-gradient(135deg, #5856d6, #2481cc);
+    color: #fff; font-size: 9px; font-weight: 800;
+    padding: 3px 9px; border-radius: 20px; white-space: nowrap;
+    letter-spacing: .3px; z-index: 1; line-height: 1.4;
+  }
+  .sub-plan-name {
+    font-size: 10px; font-weight: 700; color: var(--hint);
+    text-transform: uppercase; letter-spacing: .7px;
+    margin-bottom: 8px; line-height: 1;
+  }
+  .sub-plan-stars {
+    font-size: 20px; font-weight: 900; line-height: 1;
+    display: flex; align-items: center; justify-content: center; gap: 3px;
+  }
+  .sub-plan-stars-ico { font-size: 13px; }
+  .sub-plan-perday { font-size: 10px; color: var(--hint); margin-top: 5px; font-weight: 500; }
+  .sub-plan-save {
+    display: inline-block; margin-top: 6px;
+    background: rgba(52,199,89,.15); border: 1px solid rgba(52,199,89,.35);
+    color: #34c759; font-size: 9.5px; font-weight: 800;
+    padding: 2px 7px; border-radius: 6px; line-height: 1.4;
+  }
+
+  /* Benefits section */
+  .sub-bene-section {
+    background: var(--secondary-bg); border-radius: var(--card-radius);
+    overflow: hidden; margin-bottom: 12px;
+  }
+  .sub-bene-header {
+    padding: 13px 16px 10px; border-bottom: 1px solid var(--ci-border, rgba(120,120,128,.14));
+  }
+  .sub-bene-title {
+    font-size: 11px; font-weight: 700; color: var(--hint);
+    text-transform: uppercase; letter-spacing: .7px;
+  }
+  .sub-bene-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 1px; background: var(--ci-border, rgba(120,120,128,.14));
+  }
+  .sub-bene-item {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 11px 12px; background: var(--secondary-bg);
+    font-size: 12px; font-weight: 500; line-height: 1.4;
+  }
+  .sub-bene-ico { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+  /* CTA section */
+  .sub-cta-wrap {
+    background: var(--secondary-bg); border-radius: var(--card-radius);
+    padding: 14px 16px 16px; margin-bottom: 10px;
+  }
+  .sub-cta-info {
+    font-size: 12.5px; color: var(--hint); text-align: center;
+    margin-bottom: 11px; line-height: 1.55;
+  }
+  .sub-cta-info strong { color: var(--text); font-weight: 700; }
+  .sub-cta-info .sub-cta-save { color: #34c759; font-weight: 700; }
+
   /* ── Pet section ── */
   /* ── Pet system — redesigned ─────────────────────────────── */
   @keyframes petFloat {
@@ -2327,6 +2433,7 @@
     let crashCashedOutPayout = 0;      // payout already credited
     let crashAutoBetTimer = null;      // setTimeout for auto-bet delay
     let crashCurrentBet   = 50;        // bet amount of the current/last round
+    let selectedSubPlan   = "quarter"; // default plan key for subscription purchase
     let crashRocketAngle  = 45;        // current smoothed angle (°, standard math: 0=right, 90=up)
     let crashPrevSvgX     = null;      // previous SVG X for tangent calc
     let crashPrevSvgY     = null;      // previous SVG Y for tangent calc
@@ -3973,38 +4080,76 @@
 
     // ── Subscription section ─────────────────────────────────────────────────
 
+    // ── Subscription helpers ────────────────────────────────────────────────────
+    function _subPlans(s) {
+      const base  = s.price_stars;
+      const days  = s.duration_days;
+      return [
+        { key:"month",   label:"1 месяц",    days: days,     stars: base,                        savePct: 0,  badge: null           },
+        { key:"quarter", label:"3 месяца",   days: days * 3, stars: Math.round(base * 3 * 0.83), savePct: 17, badge: "🔥 Популярный" },
+        { key:"year",    label:"12 месяцев", days: days *12, stars: Math.round(base *12 * 0.67), savePct: 33, badge: "💡 Выгоднее"   },
+      ];
+    }
+
+    function _getActivePlan() {
+      const s = subData;
+      if (!s) return { key:"quarter", label:"3 месяца", days:90, stars:249, savePct:17 };
+      return _subPlans(s).find(p => p.key === selectedSubPlan) || _subPlans(s)[1];
+    }
+
+    function selectSubPlan(key) {
+      selectedSubPlan = key;
+      document.querySelectorAll(".sub-plan-card").forEach(c =>
+        c.classList.toggle("selected", c.dataset.plan === key)
+      );
+      const plan = _getActivePlan();
+      const btn  = document.getElementById("subBuyBtn");
+      const info = document.getElementById("subCtaInfo");
+      if (btn && !btn.disabled) {
+        btn.innerHTML = `<span class="sub-buy-star">⭐</span><span>Оформить за ${plan.stars} Stars</span>`;
+      }
+      if (info) {
+        const saveHtml = plan.savePct > 0
+          ? ` · <span class="sub-cta-save">−${plan.savePct}% экономия</span>` : "";
+        info.innerHTML = `Подписка на <strong>${plan.label}</strong> · ${plan.days} дней${saveHtml}`;
+      }
+      if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+    }
+    // ───────────────────────────────────────────────────────────────────────────
+
     function renderSubscriptionSection() {
       const s = subData;
       if (!s || !s.is_enabled) return "";
 
-      const b = s.benefits || {};
-      const mult       = parseFloat(b.daily_multiplier || 1);
-      const bonusCoins = parseInt(b.daily_bonus_coins || 0);
+      const b          = s.benefits || {};
+      const mult       = parseFloat(b.daily_multiplier  || 1);
+      const bonusCoins = parseInt(b.daily_bonus_coins   || 0);
       const feedFree   = !!b.pet_feed_free;
-      const xpMult     = parseFloat(b.xp_multiplier || 1);
-      const maxPets    = parseInt(b.max_pets_bonus || 0);
+      const xpMult     = parseFloat(b.xp_multiplier    || 1);
+      const maxPets    = parseInt(b.max_pets_bonus      || 0);
 
-      const benefitItems = [
-        { icon: "📊", text: "Расширенная история — 90 дней" },
-        { icon: "👥", text: "Полный список собеседников" },
-        { icon: "💬", text: "Анализ здоровья переписки" },
-        mult > 1       ? { icon: "🎁", text: `×${mult} монет в ежедневном бонусе` }   : null,
-        bonusCoins > 0 ? { icon: "💰", text: `+${bonusCoins} монет каждый день` }      : null,
-        feedFree       ? { icon: "🍖", text: "Кормление питомца бесплатно" }            : null,
-        xpMult > 1     ? { icon: "✨", text: `×${xpMult} XP питомцу` }                 : null,
-        maxPets > 0    ? { icon: "🐾", text: `+${maxPets} доп. питомца` }              : null,
+      const beneItems = [
+        { ico:"📊", text:"История переписки — 90 дней" },
+        { ico:"👥", text:"Полный список собеседников"  },
+        { ico:"💬", text:"Анализ здоровья чата"        },
+        mult > 1       ? { ico:"🎁", text:`×${mult} монет в бонусе`        } : null,
+        bonusCoins > 0 ? { ico:"💰", text:`+${bonusCoins} монет каждый день`} : null,
+        feedFree       ? { ico:"🍖", text:"Питомец ест бесплатно"           } : null,
+        xpMult > 1     ? { ico:"✨", text:`×${xpMult} XP питомцу`           } : null,
+        maxPets > 0    ? { ico:"🐾", text:`+${maxPets} слота питомца`       } : null,
+        { ico:"🚀", text:"Приоритетная поддержка"      },
       ].filter(Boolean);
 
-      const benefitsHtml = benefitItems.map(bi => `
-        <div class="sub-benefit-row">
-          <span class="sub-benefit-ico">${bi.icon}</span>
-          <span>${bi.text}</span>
-        </div>`).join("");
-
+      // ── Active state ───────────────────────────────────────────────────────
       if (s.is_active) {
         const daysLeft = s.days_left || 0;
         const total    = s.duration_days || 30;
         const pct      = Math.min(100, Math.round((daysLeft / total) * 100));
+        const beneHtml = beneItems.map(bi => `
+          <div class="sub-benefit-row">
+            <span class="sub-benefit-ico">${bi.ico}</span>
+            <span>${bi.text}</span>
+          </div>`).join("");
         return `
           <div class="sub-card active">
             <div class="sub-card-header">
@@ -4022,28 +4167,71 @@
               <div class="sub-progress-fill" style="width:${pct}%"></div>
             </div>
             <div class="sub-divider"></div>
-            <div class="sub-benefit-list">${benefitsHtml}</div>
+            <div class="sub-benefit-list">${beneHtml}</div>
           </div>`;
       }
 
-      // Not subscribed — offer card
-      return `
-        <div class="sub-card inactive">
-          <div class="sub-card-header">
-            <div class="sub-star-icon">⭐</div>
-            <div class="sub-card-title-wrap">
-              <div class="sub-card-title">Premium подписка</div>
-              <div class="sub-card-price">${s.price_stars} Stars · ${s.duration_days} дней</div>
+      // ── Purchase flow ──────────────────────────────────────────────────────
+      const plans = _subPlans(s);
+      const activePlan = plans.find(p => p.key === selectedSubPlan) || plans[1];
+
+      const planCardsHtml = plans.map(p => {
+        const perDay = (p.stars / p.days).toFixed(1);
+        const cls = ["sub-plan-card",
+          p.key === "quarter" ? "featured" : "",
+          p.key === selectedSubPlan ? "selected" : "",
+        ].filter(Boolean).join(" ");
+        return `
+          <div class="${cls}" data-plan="${p.key}" onclick="selectSubPlan('${p.key}')">
+            ${p.badge ? `<div class="sub-plan-badge">${p.badge}</div>` : ""}
+            <div class="sub-plan-name">${p.label}</div>
+            <div class="sub-plan-stars">
+              <span class="sub-plan-stars-ico">⭐</span>
+              <span>${p.stars}</span>
             </div>
+            <div class="sub-plan-perday">${perDay} ⭐/день</div>
+            ${p.savePct > 0 ? `<div class="sub-plan-save">−${p.savePct}%</div>` : ""}
+          </div>`;
+      }).join("");
+
+      const beneGridHtml = beneItems.map(bi => `
+        <div class="sub-bene-item">
+          <span class="sub-bene-ico">${bi.ico}</span>
+          <span>${bi.text}</span>
+        </div>`).join("");
+
+      const saveHtml = activePlan.savePct > 0
+        ? ` · <span class="sub-cta-save">−${activePlan.savePct}% экономия</span>` : "";
+
+      return `
+        <div class="sub-purchase-wrap">
+          <div class="sub-hero-card">
+            <span class="sub-hero-emoji">⭐</span>
+            <div class="sub-hero-title">Premium</div>
+            <div class="sub-hero-desc">Разблокируй все возможности и получай максимум каждый день</div>
           </div>
-          ${s.description ? `<div class="sub-card-desc">${esc(s.description)}</div>` : ""}
-          <div class="sub-divider light"></div>
-          <div class="sub-benefit-list">${benefitsHtml}</div>
-          <button class="sub-buy-btn" id="subBuyBtn">
-            <span class="sub-buy-star">⭐</span>
-            <span>Подписаться за ${s.price_stars} Stars</span>
-          </button>
-          <div class="sub-buy-note">Без автопродления · Telegram Stars</div>
+
+          <div class="sub-plans-row">
+            ${planCardsHtml}
+          </div>
+
+          <div class="sub-bene-section">
+            <div class="sub-bene-header">
+              <span class="sub-bene-title">Что входит в Premium</span>
+            </div>
+            <div class="sub-bene-grid">${beneGridHtml}</div>
+          </div>
+
+          <div class="sub-cta-wrap">
+            <div class="sub-cta-info" id="subCtaInfo">
+              Подписка на <strong>${activePlan.label}</strong> · ${activePlan.days} дней${saveHtml}
+            </div>
+            <button class="sub-buy-btn" id="subBuyBtn">
+              <span class="sub-buy-star">⭐</span>
+              <span>Оформить за ${activePlan.stars} Stars</span>
+            </button>
+            <div class="sub-buy-note">Без автопродления · Оплата через Telegram Stars</div>
+          </div>
         </div>`;
     }
 
@@ -4052,25 +4240,31 @@
       if (!btn) return;
 
       function _resetBtn() {
+        const plan = _getActivePlan();
         btn.disabled = false;
-        btn.innerHTML = `<span class="sub-buy-star">⭐</span><span>Подписаться за ${subData?.price_stars} Stars</span>`;
+        btn.innerHTML = `<span class="sub-buy-star">⭐</span><span>Оформить за ${plan.stars} Stars</span>`;
       }
 
       btn.addEventListener("click", async () => {
+        const plan = _getActivePlan();
         btn.disabled = true;
         btn.innerHTML = `<span>⏳ Загрузка…</span>`;
         try {
           if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("medium");
           const res = await fetch("/app/api/subscription/invoice", {
             method: "POST", headers: {"Content-Type":"application/json"},
-            body: JSON.stringify({initData: currentInitData}),
+            body: JSON.stringify({
+              initData:   currentInitData,
+              plan_stars: plan.stars,
+              plan_days:  plan.days,
+            }),
           });
           if (!res.ok) {
             const err = await res.json().catch(()=>({}));
             const MSG = {
               subscription_disabled: "Подписка временно недоступна.",
-              already_subscribed: "У тебя уже есть активная подписка!",
-              invoice_send_failed: "Не удалось создать счёт. Попробуй позже.",
+              already_subscribed:    "У тебя уже есть активная подписка!",
+              invoice_send_failed:   "Не удалось создать счёт. Попробуй позже.",
             };
             toastMessage(MSG[err.detail] || "Ошибка. Попробуй ещё раз.");
             _resetBtn();
@@ -4082,7 +4276,6 @@
             if (status === "paid") {
               if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
               toastMessage("⭐ Подписка оформлена! Бонусы уже активны.");
-              // Reload wallet → refresh both casino and donate tabs
               const wRes = await fetch("/app/api/wallet/info", {
                 method: "POST", headers: {"Content-Type":"application/json"},
                 body: JSON.stringify({initData: currentInitData}),
@@ -4091,7 +4284,7 @@
                 walletData = await wRes.json();
                 subData = walletData?.subscription || null;
                 renderCasino();
-                renderDonate(); // re-render donate tab to show active state
+                renderDonate();
               }
             } else if (status === "cancelled") {
               toastMessage("Оплата отменена.");
@@ -4105,7 +4298,6 @@
           if (tg?.openInvoice) {
             tg.openInvoice(data.invoice_link, _onResult);
           } else {
-            // Fallback: open invoice link in browser tab
             window.open(data.invoice_link, "_blank");
             _resetBtn();
           }

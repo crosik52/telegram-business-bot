@@ -201,6 +201,43 @@ def _apply_tiktok_opts(ydl_opts: dict, url: str, out_dir: str) -> None:
     _apply_tiktok_ua(ydl_opts)
 
 
+def _apply_instagram_opts(ydl_opts: dict, url: str, out_dir: str) -> None:
+    """Inject Instagram cookies from INSTAGRAM_COOKIES env var (same formats as TikTok)."""
+    raw = os.environ.get("INSTAGRAM_COOKIES", "").strip()
+    if not raw:
+        logger.debug("Instagram: INSTAGRAM_COOKIES not set — carousels may fail without auth")
+        return
+
+    if "\n" not in raw and "\\n" in raw:
+        raw = raw.replace("\\n", "\n")
+
+    data_lines = [l for l in raw.splitlines() if l.strip() and not l.strip().startswith("#")]
+    netscape_lines = [l for l in data_lines if len(l.split("\t")) == 7]
+    if netscape_lines:
+        cookie_path = os.path.join(out_dir, "_ig_cookies.txt")
+        with open(cookie_path, "w", encoding="utf-8") as fh:
+            fh.write(raw)
+        ydl_opts["cookiefile"] = cookie_path
+        logger.info("Instagram: Netscape cookiefile set (%d rows)", len(netscape_lines))
+        return
+
+    if raw.lstrip().startswith("["):
+        netscape_str = _json_cookies_to_netscape(raw)
+        if netscape_str:
+            cookie_path = os.path.join(out_dir, "_ig_cookies.txt")
+            with open(cookie_path, "w", encoding="utf-8") as fh:
+                fh.write(netscape_str)
+            ydl_opts["cookiefile"] = cookie_path
+            logger.info("Instagram: JSON→Netscape cookiefile set (%d bytes)", len(netscape_str))
+            return
+        logger.warning("Instagram: INSTAGRAM_COOKIES looks like JSON but failed to parse")
+
+    if "=" in raw and "\n" not in raw and "\t" not in raw:
+        ydl_opts.setdefault("http_headers", {})
+        ydl_opts["http_headers"]["Cookie"] = raw
+        logger.info("Instagram: raw Cookie header injected (%d chars)", len(raw))
+
+
 def _apply_tiktok_ua(ydl_opts: dict) -> None:
     """Inject a realistic browser User-Agent (always applied for TikTok)."""
     ydl_opts.setdefault("http_headers", {})
@@ -242,7 +279,8 @@ def _download_sync(
     """
     import yt_dlp
 
-    is_tiktok = "tiktok.com" in url.lower()
+    is_tiktok    = "tiktok.com" in url.lower()
+    is_instagram = "instagram.com" in url.lower()
 
     # ── Attempt 1: video ──────────────────────────────────────────────────────
     MAX_DURATION = 1200  # 20 minutes — anything longer won't fit in 45 MB anyway
@@ -258,6 +296,8 @@ def _download_sync(
         opts_video["progress_hooks"] = [progress_hook]
     if is_tiktok:
         _apply_tiktok_opts(opts_video, url, out_dir)
+    if is_instagram:
+        _apply_instagram_opts(opts_video, url, out_dir)
 
     def _run(opts: dict) -> None:
         with yt_dlp.YoutubeDL(opts) as ydl:
@@ -268,9 +308,9 @@ def _download_sync(
         _run(opts_video)
         video_download_ok = True
     except yt_dlp.utils.DownloadError as exc:
-        # Retry without cookies if TikTok cookie-auth failed
+        # Retry without cookies if cookie-auth failed
         if "cookiefile" in opts_video:
-            logger.warning("TikTok: cookie download failed (%s), retrying without auth", exc)
+            logger.warning("Video: cookie download failed (%s), retrying without auth", exc)
             opts_no_cookie = {k: v for k, v in opts_video.items() if k != "cookiefile"}
             try:
                 _run(opts_no_cookie)
@@ -295,12 +335,15 @@ def _download_sync(
 
     opts_photo = {
         **_build_base_opts(out_dir, MAX_BYTES),
-        # No format restriction — let yt-dlp pick the native format (images for slideshows)
+        # Carousels are multi-entry "playlists" in yt-dlp — must allow all items
+        "noplaylist": False,
     }
     if progress_hook:
         opts_photo["progress_hooks"] = [progress_hook]
     if is_tiktok:
         _apply_tiktok_opts(opts_photo, url, out_dir)
+    if is_instagram:
+        _apply_instagram_opts(opts_photo, url, out_dir)
 
     ydl_photo_ok = False
     try:
@@ -315,7 +358,6 @@ def _download_sync(
             except yt_dlp.utils.DownloadError:
                 pass  # fall through to gallery-dl
         else:
-            # e.g. "Unsupported URL" for TikTok /photo/ — fall through
             logger.debug("yt-dlp photo attempt failed (%s), will try gallery-dl", exc)
 
     if ydl_photo_ok:
@@ -352,16 +394,41 @@ def _gallery_dl_download(url: str, out_dir: str) -> list[Path]:
     """
     import subprocess, sys
 
+    cmd = [
+        sys.executable, "-m", "gallery_dl",
+        "--dest", out_dir,
+        # Force flat output — no platform subdirectories
+        "--directory", "",
+        "--filename", "{num:>03}_{filename}.{extension}",
+        "--no-mtime",
+    ]
+
+    # Inject Instagram cookies so gallery-dl can fetch login-gated carousels
+    if "instagram.com" in url.lower():
+        raw = os.environ.get("INSTAGRAM_COOKIES", "").strip()
+        if raw:
+            if "\n" not in raw and "\\n" in raw:
+                raw = raw.replace("\\n", "\n")
+            # gallery-dl expects a Netscape cookie file via --cookies
+            data_lines = [l for l in raw.splitlines() if l.strip() and not l.strip().startswith("#")]
+            netscape_lines = [l for l in data_lines if len(l.split("\t")) == 7]
+            if netscape_lines:
+                cookie_path = os.path.join(out_dir, "_ig_cookies.txt")
+                with open(cookie_path, "w", encoding="utf-8") as fh:
+                    fh.write(raw)
+                cmd += ["--cookies", cookie_path]
+            elif raw.lstrip().startswith("["):
+                netscape_str = _json_cookies_to_netscape(raw)
+                if netscape_str:
+                    cookie_path = os.path.join(out_dir, "_ig_cookies.txt")
+                    with open(cookie_path, "w", encoding="utf-8") as fh:
+                        fh.write(netscape_str)
+                    cmd += ["--cookies", cookie_path]
+
+    cmd.append(url)
+
     result = subprocess.run(
-        [
-            sys.executable, "-m", "gallery_dl",
-            "--dest", out_dir,
-            # Force flat output — no platform subdirectories
-            "--directory", "",
-            "--filename", "{num:>03}_{filename}.{extension}",
-            "--no-mtime",
-            url,
-        ],
+        cmd,
         capture_output=True,
         text=True,
         timeout=60,

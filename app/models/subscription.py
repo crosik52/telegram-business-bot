@@ -1,7 +1,8 @@
 """Subscription models.
 
-SubscriptionConfig — singleton row with all plan settings (price, benefits, etc.)
-UserSubscription   — one row per activated subscription period per user.
+SubscriptionConfig    — singleton row (id=1) with Premium plan settings.
+VipSubscriptionConfig — singleton row (id=1) with VIP plan settings.
+UserSubscription      — one row per activated subscription period per user.
 """
 from __future__ import annotations
 
@@ -19,6 +20,23 @@ DEFAULT_BENEFITS: dict = {
     "pet_feed_free":     False, # feeds cost 0 coins
     "xp_multiplier":     1.5,   # XP multiplier for all pet actions
     "max_pets_bonus":    2,     # extra alive-pets slots
+}
+
+DEFAULT_VIP_BENEFITS: dict = {
+    # All Premium benefits, amplified
+    "daily_multiplier":  3.0,
+    "daily_bonus_coins": 150,
+    "pet_feed_free":     True,
+    "xp_multiplier":     3.0,   # ×3 XP vs ×2 Premium
+    "max_pets_bonus":    5,
+    # VIP-exclusive
+    "custom_badge":      True,  # 👑 badge in profile & commands
+    "vip_pet_skin":      True,  # exclusive pet skins
+    "ai_analysis":       True,  # AI relationship analysis
+    "priority_queue":    True,  # bot answers VIP first
+    "double_referral":   True,  # ×2 referral rewards
+    "custom_pet_name":   True,  # custom pet name + color
+    "vip_leaderboard":   True,  # separate VIP leaderboard
 }
 
 
@@ -48,6 +66,27 @@ class SubscriptionConfig(Base):
     )
 
 
+class VipSubscriptionConfig(Base):
+    """Singleton row (id=1) — VIP plan settings. Same structure as SubscriptionConfig."""
+
+    __tablename__ = "vip_subscription_config"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    price_stars: Mapped[int] = mapped_column(Integer, nullable=False, default=210)
+    duration_days: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
+    title: Mapped[str] = mapped_column(String(100), nullable=False, default="VIP подписка")
+    description: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="Максимальные привилегии и AI-анализ отношений"
+    )
+    benefits: Mapped[dict] = mapped_column(JSON, nullable=False, default=lambda: dict(DEFAULT_VIP_BENEFITS))
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: dt.datetime.now(dt.timezone.utc),
+        onupdate=lambda: dt.datetime.now(dt.timezone.utc),
+    )
+
+
 class UserSubscription(Base):
     """One row per subscription period per user.
 
@@ -69,6 +108,8 @@ class UserSubscription(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     # Lifecycle status — kept in sync with is_active (see docstring above).
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    # Subscription tier: "premium" (default/legacy) or "vip"
+    sub_type: Mapped[str | None] = mapped_column(String(20), nullable=True, default="premium")
     started_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     granted_by_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

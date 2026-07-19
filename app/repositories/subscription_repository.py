@@ -6,7 +6,10 @@ import datetime as dt
 from sqlalchemy import func, outerjoin, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.subscription import DEFAULT_BENEFITS, SubscriptionConfig, UserSubscription
+from app.models.subscription import (
+    DEFAULT_BENEFITS, DEFAULT_VIP_BENEFITS,
+    SubscriptionConfig, VipSubscriptionConfig, UserSubscription,
+)
 from app.models.user import TelegramUser
 
 
@@ -35,9 +38,31 @@ class SubscriptionRepository:
         await self._session.flush()
         return config
 
+    # ── VIP Config (singleton) ────────────────────────────────────────────────
+
+    async def get_vip_config(self) -> VipSubscriptionConfig:
+        result = await self._session.execute(select(VipSubscriptionConfig).limit(1))
+        config = result.scalar_one_or_none()
+        if config is None:
+            config = VipSubscriptionConfig(is_enabled=True, benefits=dict(DEFAULT_VIP_BENEFITS))
+            self._session.add(config)
+            await self._session.flush()
+        return config
+
+    async def update_vip_config(self, **fields) -> VipSubscriptionConfig:
+        config = await self.get_vip_config()
+        allowed = {"is_enabled", "price_stars", "duration_days", "title", "description", "benefits"}
+        for key, value in fields.items():
+            if key in allowed:
+                setattr(config, key, value)
+        config.updated_at = dt.datetime.now(dt.timezone.utc)
+        await self._session.flush()
+        return config
+
     # ── User subscriptions ────────────────────────────────────────────────────
 
     async def get_active_subscription(self, user_telegram_id: int) -> UserSubscription | None:
+        """Return the highest-tier active subscription (VIP preferred over Premium)."""
         now = dt.datetime.now(dt.timezone.utc)
         result = await self._session.execute(
             select(UserSubscription)
@@ -45,6 +70,23 @@ class SubscriptionRepository:
                 UserSubscription.user_telegram_id == user_telegram_id,
                 UserSubscription.is_active.is_(True),
                 UserSubscription.expires_at > now,
+            )
+            # VIP rows first (sub_type='vip'), then by expiry descending
+            .order_by(UserSubscription.sub_type.desc(), UserSubscription.expires_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_active_vip_subscription(self, user_telegram_id: int) -> UserSubscription | None:
+        """Return the active VIP subscription for this user, if any."""
+        now = dt.datetime.now(dt.timezone.utc)
+        result = await self._session.execute(
+            select(UserSubscription)
+            .where(
+                UserSubscription.user_telegram_id == user_telegram_id,
+                UserSubscription.is_active.is_(True),
+                UserSubscription.expires_at > now,
+                UserSubscription.sub_type == "vip",
             )
             .order_by(UserSubscription.expires_at.desc())
             .limit(1)
@@ -57,6 +99,7 @@ class SubscriptionRepository:
         charge_id: str,
         stars_paid: int,
         duration_days: int,
+        sub_type: str = "premium",
     ) -> UserSubscription:
         """Activate a Stars-purchased subscription (deactivates any existing one).
 
@@ -80,6 +123,7 @@ class SubscriptionRepository:
             user_telegram_id=user_telegram_id,
             is_active=True,
             status="active",
+            sub_type=sub_type,
             started_at=now,
             expires_at=now + dt.timedelta(days=duration_days),
             granted_by_admin=False,
@@ -90,7 +134,12 @@ class SubscriptionRepository:
         await self._session.flush()
         return sub
 
-    async def grant(self, user_telegram_id: int, duration_days: int) -> UserSubscription:
+    async def grant(
+        self,
+        user_telegram_id: int,
+        duration_days: int,
+        sub_type: str = "premium",
+    ) -> UserSubscription:
         """Admin: grant subscription without payment."""
         await self._deactivate_user_subs(user_telegram_id)
         now = dt.datetime.now(dt.timezone.utc)
@@ -98,6 +147,7 @@ class SubscriptionRepository:
             user_telegram_id=user_telegram_id,
             is_active=True,
             status="active",
+            sub_type=sub_type,
             started_at=now,
             expires_at=now + dt.timedelta(days=duration_days),
             granted_by_admin=True,

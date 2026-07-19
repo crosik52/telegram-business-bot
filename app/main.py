@@ -263,8 +263,9 @@ async def lifespan(app: FastAPI):
     # schema evolution; this is a safety net for fresh deployments where
     # migrations haven't been run yet.
     # Import all models so Base.metadata knows about them before create_all.
-    import app.models.note_reminder  # noqa: F401, PLC0415
+    import app.models.note_reminder      # noqa: F401, PLC0415
     import app.models.required_channel  # noqa: F401, PLC0415
+    import app.models.subscription       # noqa: F401, PLC0415  — registers VipSubscriptionConfig
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -282,6 +283,9 @@ async def lifespan(app: FastAPI):
             ))
             await conn.execute(text(
                 "ALTER TABLE referrals ADD COLUMN IF NOT EXISTS evaluation_failures INTEGER NOT NULL DEFAULT 0"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE user_subscriptions ADD COLUMN IF NOT EXISTS sub_type VARCHAR(20) DEFAULT 'premium'"
             ))
 
     if settings.webhook_base_url:

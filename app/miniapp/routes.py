@@ -343,20 +343,36 @@ class AdminSubRevokeRequest(BaseModel):
     owner_telegram_id: int = Field(alias="ownerTelegramId")
 
 
-def _sub_status_dict(sub, config) -> dict:
+def _sub_status_dict(sub, config, vip_config=None) -> dict:
     """Serialise subscription status for API responses."""
     import datetime as _dt
     now = _dt.datetime.now(_dt.timezone.utc)
+    is_active = bool(sub is not None and sub.expires_at > now)
+    sub_type   = (getattr(sub, "sub_type", None) or "premium") if sub else None
+    is_vip     = is_active and sub_type == "vip"
+    # For active VIP, expose VIP benefits; else Premium
+    effective_benefits = config.benefits or {}
+    if is_vip and vip_config:
+        effective_benefits = vip_config.benefits or {}
     return {
         "is_enabled":    config.is_enabled,
         "price_stars":   config.price_stars,
         "duration_days": config.duration_days,
         "title":         config.title,
         "description":   config.description,
-        "benefits":      config.benefits or {},
-        "is_active":     sub is not None and sub.expires_at > now if sub else False,
+        "benefits":      effective_benefits,
+        "is_active":     is_active,
+        "is_vip":        is_vip,
+        "sub_type":      sub_type,
         "expires_at":    sub.expires_at.isoformat() if sub else None,
         "days_left":     max(0, (sub.expires_at - now).days) if sub else 0,
+        # Pass VIP config prices to frontend for rendering VIP plan cards
+        "vip_config": {
+            "is_enabled":    vip_config.is_enabled if vip_config else True,
+            "price_stars":   vip_config.price_stars if vip_config else 210,
+            "duration_days": vip_config.duration_days if vip_config else 30,
+            "benefits":      vip_config.benefits if vip_config else {},
+        } if vip_config else None,
     }
 
 
@@ -887,16 +903,17 @@ async def wallet_info(
     wallet = await repo.get_or_create(owner_id)
     can_claim, secs = repo.daily_claim_status(wallet)
 
-    sub_repo = SubscriptionRepository(session)
-    config   = await sub_repo.get_config()
-    sub      = await sub_repo.get_active_subscription(owner_id)
+    sub_repo   = SubscriptionRepository(session)
+    config     = await sub_repo.get_config()
+    vip_config = await sub_repo.get_vip_config()
+    sub        = await sub_repo.get_active_subscription(owner_id)
     return {
         "balance": wallet.balance,
         "total_earned": wallet.total_earned,
         "total_spent": wallet.total_spent,
         "can_claim_daily": can_claim,
         "seconds_until_next_claim": secs,
-        "subscription": _sub_status_dict(sub, config),
+        "subscription": _sub_status_dict(sub, config, vip_config),
     }
 
 
@@ -1993,10 +2010,11 @@ async def subscription_status(
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid init data")
     owner_id = int(user["id"])
-    sub_repo = SubscriptionRepository(session)
-    config   = await sub_repo.get_config()
-    sub      = await sub_repo.get_active_subscription(owner_id)
-    return _sub_status_dict(sub, config)
+    sub_repo   = SubscriptionRepository(session)
+    config     = await sub_repo.get_config()
+    vip_config = await sub_repo.get_vip_config()
+    sub        = await sub_repo.get_active_subscription(owner_id)
+    return _sub_status_dict(sub, config, vip_config)
 
 
 @router.post("/app/api/subscription/invoice")
@@ -2051,6 +2069,55 @@ async def subscription_invoice(
         )
     except Exception as exc:
         logger.exception("Failed to create invoice link for user %s", owner_id)
+        raise HTTPException(status_code=502, detail="invoice_send_failed") from exc
+
+    return {"ok": True, "price_stars": effective_stars, "invoice_link": invoice_link}
+
+
+@router.post("/app/api/subscription/vip/invoice")
+async def vip_subscription_invoice(
+    payload: SubscriptionInvoiceRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Create a Telegram Stars invoice for VIP subscription."""
+    from aiogram.types import LabeledPrice
+
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid init data")
+    owner_id = int(user["id"])
+
+    sub_repo   = SubscriptionRepository(session)
+    vip_config = await sub_repo.get_vip_config()
+    if not vip_config.is_enabled:
+        raise HTTPException(status_code=403, detail="subscription_disabled")
+
+    # Check for existing active VIP sub
+    existing = await sub_repo.get_active_vip_subscription(owner_id)
+    if existing:
+        raise HTTPException(status_code=409, detail="already_subscribed")
+
+    effective_stars = (
+        payload.plan_stars if payload.plan_stars and payload.plan_stars >= 1
+        else vip_config.price_stars
+    )
+    effective_days = (
+        payload.plan_days if payload.plan_days and payload.plan_days >= 1
+        else vip_config.duration_days
+    )
+
+    bot = get_bot(settings)
+    try:
+        invoice_link = await bot.create_invoice_link(
+            title=vip_config.title,
+            description=vip_config.description,
+            payload=f"vip_subscription_{owner_id}_{effective_days}",
+            provider_token="",
+            currency="XTR",
+            prices=[LabeledPrice(label=vip_config.title, amount=effective_stars)],
+        )
+    except Exception as exc:
+        logger.exception("Failed to create VIP invoice link for user %s", owner_id)
         raise HTTPException(status_code=502, detail="invoice_send_failed") from exc
 
     return {"ok": True, "price_stars": effective_stars, "invoice_link": invoice_link}

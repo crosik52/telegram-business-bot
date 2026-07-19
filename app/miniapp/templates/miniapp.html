@@ -1944,6 +1944,105 @@
   .sub-cta-info strong { color: var(--text); font-weight: 700; }
   .sub-cta-info .sub-cta-save { color: #34c759; font-weight: 700; }
 
+  /* ── Subscription tier switcher ──────────────────────────────────────── */
+  .sub-tier-row {
+    display: grid; grid-template-columns: 1fr 1fr;
+    background: var(--secondary-bg); border-radius: 14px; padding: 4px;
+    margin-bottom: 14px; box-shadow: var(--shadow);
+  }
+  .sub-tier-tab {
+    border: none; border-radius: 11px; padding: 10px 6px;
+    font-size: 13px; font-weight: 700; background: transparent;
+    color: var(--hint); touch-action: manipulation; transition: all .18s; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+  }
+  .sub-tier-tab.active {
+    background: #fff; color: #1c1c1e; box-shadow: 0 2px 8px rgba(0,0,0,.12);
+  }
+  .theme-dark .sub-tier-tab.active { background: #3a3a3c; color: #fff; }
+
+  /* VIP hero card — gold/purple gradient */
+  .sub-vip-hero {
+    border-radius: var(--card-radius); margin-bottom: 12px;
+    background: linear-gradient(140deg, #4a1a8f 0%, #9c4f00 60%, #c47800 100%);
+    padding: 24px 20px 20px; text-align: center;
+    box-shadow: 0 6px 28px rgba(180,120,0,.35);
+    position: relative; overflow: hidden;
+  }
+  .sub-vip-hero::before {
+    content: ''; position: absolute; top: -40px; right: -40px;
+    width: 150px; height: 150px;
+    background: rgba(255,215,0,.08); border-radius: 50%; pointer-events: none;
+  }
+  .sub-vip-hero::after {
+    content: ''; position: absolute; bottom: -30px; left: -30px;
+    width: 110px; height: 110px;
+    background: rgba(255,255,255,.04); border-radius: 50%; pointer-events: none;
+  }
+
+  /* VIP plan card gold selection */
+  .sub-plan-card.vip-selected {
+    border-color: #c47800;
+    background: rgba(196,120,0,.11);
+    box-shadow: 0 0 0 1px #c47800 inset, 0 4px 14px rgba(196,120,0,.22);
+  }
+  .sub-plan-card.vip-featured { border-color: rgba(196,120,0,.45); }
+  .sub-plan-badge.vip { background: linear-gradient(135deg, #9c4f00, #c47800); }
+  .sub-plan-save.vip  {
+    background: rgba(196,120,0,.15); border-color: rgba(196,120,0,.35); color: #c47800;
+  }
+
+  /* VIP buy button — gold */
+  .sub-buy-btn.vip {
+    background: linear-gradient(135deg, #9c4f00, #c47800);
+    box-shadow: 0 4px 16px rgba(180,120,0,.42);
+  }
+
+  /* VIP active card */
+  .sub-card.vip-active {
+    background: linear-gradient(140deg, #2a0f55, #5a2e00);
+    border: 1.5px solid rgba(196,120,0,.3);
+  }
+  .sub-active-badge.vip {
+    background: linear-gradient(135deg, #9c4f00, #c47800);
+  }
+
+  /* VIP benefits grid */
+  .vip-bene-header { border-bottom: 1px solid rgba(196,120,0,.2); }
+  .vip-bene-title { color: #c47800; }
+
+  /* AI analysis teaser card */
+  .ai-teaser-card {
+    border-radius: var(--card-radius); overflow: hidden;
+    background: var(--secondary-bg); box-shadow: var(--shadow);
+    margin-bottom: 12px; border: 1.5px solid rgba(88,86,214,.2);
+  }
+  .ai-teaser-header {
+    background: linear-gradient(135deg, rgba(88,86,214,.15), rgba(52,199,89,.08));
+    padding: 14px 16px 12px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .ai-teaser-ico { font-size: 28px; }
+  .ai-teaser-title { font-size: 15px; font-weight: 800; }
+  .ai-teaser-sub   { font-size: 12px; color: var(--hint); margin-top: 2px; }
+  .ai-sections-preview {
+    padding: 10px 14px 14px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+  }
+  .ai-sec-chip {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 600; color: var(--hint);
+    background: rgba(120,120,128,.08); border-radius: 9px;
+    padding: 6px 10px;
+  }
+  .ai-teaser-btn {
+    width: calc(100% - 28px); margin: 0 14px 14px;
+    border: none; border-radius: 13px; padding: 12px;
+    font-size: 14px; font-weight: 800;
+    background: linear-gradient(135deg, #5856d6, #2481cc);
+    color: #fff; touch-action: manipulation; cursor: pointer;
+  }
+
   /* ── Pet section ── */
   /* ── Pet system — redesigned ─────────────────────────────── */
   @keyframes petFloat {
@@ -2433,7 +2532,9 @@
     let crashCashedOutPayout = 0;      // payout already credited
     let crashAutoBetTimer = null;      // setTimeout for auto-bet delay
     let crashCurrentBet   = 50;        // bet amount of the current/last round
-    let selectedSubPlan   = "quarter"; // default plan key for subscription purchase
+    let selectedSubPlan   = "quarter"; // default plan key for Premium purchase
+    let selectedVipPlan   = "vip_quarter"; // default VIP plan
+    let selectedSubTier   = "premium"; // "premium" | "vip"
     let crashRocketAngle  = 45;        // current smoothed angle (°, standard math: 0=right, 90=up)
     let crashPrevSvgX     = null;      // previous SVG X for tangent calc
     let crashPrevSvgY     = null;      // previous SVG Y for tangent calc
@@ -4099,7 +4200,7 @@
 
     function selectSubPlan(key) {
       selectedSubPlan = key;
-      document.querySelectorAll(".sub-plan-card").forEach(c =>
+      document.querySelectorAll(".sub-plan-card[data-tier='premium']").forEach(c =>
         c.classList.toggle("selected", c.dataset.plan === key)
       );
       const plan = _getActivePlan();
@@ -4115,48 +4216,168 @@
       }
       if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
     }
-    // ───────────────────────────────────────────────────────────────────────────
 
-    function renderSubscriptionSection() {
+    // ── VIP plan helpers ──────────────────────────────────────────────────────
+    function _vipPlans(s) {
+      const vipCfg  = s?.vip_config || {};
+      const base    = vipCfg.price_stars  || Math.round((s?.price_stars || 99) * 2.1);
+      const baseDays = vipCfg.duration_days || s?.duration_days || 30;
+      return [
+        { key:"vip_month",   label:"1 месяц",   days: baseDays,     stars: base,                        savePct: 0,  badge: null,            tier:"vip" },
+        { key:"vip_quarter", label:"3 месяца",  days: baseDays * 3, stars: Math.round(base * 3 * 0.83), savePct: 17, badge: "🔥 Популярный", tier:"vip" },
+        { key:"vip_6mo",     label:"6 месяцев", days: baseDays * 6, stars: Math.round(base * 6 * 0.75), savePct: 25, badge: "💡 Выгоднее",   tier:"vip" },
+      ];
+    }
+
+    function _getActiveVipPlan() {
       const s = subData;
-      if (!s || !s.is_enabled) return "";
+      if (!s) return _vipPlans(null)[1];
+      return _vipPlans(s).find(p => p.key === selectedVipPlan) || _vipPlans(s)[1];
+    }
 
-      const b          = s.benefits || {};
+    function selectVipPlan(key) {
+      selectedVipPlan = key;
+      document.querySelectorAll(".sub-plan-card[data-tier='vip']").forEach(c => {
+        c.classList.toggle("vip-selected", c.dataset.plan === key);
+        c.classList.remove("selected");
+      });
+      const plan = _getActiveVipPlan();
+      const btn  = document.getElementById("subVipBuyBtn");
+      const info = document.getElementById("subVipCtaInfo");
+      if (btn && !btn.disabled) {
+        btn.innerHTML = `<span class="sub-buy-star">💎</span><span>Оформить VIP за ${plan.stars} Stars</span>`;
+      }
+      if (info) {
+        const saveHtml = plan.savePct > 0
+          ? ` · <span class="sub-cta-save" style="color:#c47800">−${plan.savePct}% экономия</span>` : "";
+        info.innerHTML = `VIP на <strong>${plan.label}</strong> · ${plan.days} дней${saveHtml}`;
+      }
+      if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+    }
+
+    function selectSubTier(tier) {
+      selectedSubTier = tier;
+      document.querySelectorAll(".sub-tier-tab").forEach(t =>
+        t.classList.toggle("active", t.dataset.tier === tier)
+      );
+      const premiumSection = document.getElementById("subPremiumSection");
+      const vipSection     = document.getElementById("subVipSection");
+      if (premiumSection) premiumSection.style.display = tier === "premium" ? "" : "none";
+      if (vipSection)     vipSection.style.display     = tier === "vip"     ? "" : "none";
+      if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // ── Shared plan card builder ───────────────────────────────────────────────
+    function _renderPlanCards(plans, selectedKey, monthlyStars, isVip) {
+      return plans.map(p => {
+        const months    = p.days / 30;
+        const perMonth  = p.stars / months;
+        const savePerMo = Math.round(monthlyStars - perMonth);
+        const isSelected = p.key === selectedKey;
+        const cls = ["sub-plan-card",
+          isVip ? (p.key.endsWith("quarter") ? "vip-featured" : "") : (p.key === "quarter" ? "featured" : ""),
+          isSelected ? (isVip ? "vip-selected" : "selected") : "",
+        ].filter(Boolean).join(" ");
+        const subLabel = savePerMo <= 0
+          ? `${Math.round(perMonth)} ⭐/мес`
+          : `−${savePerMo} ⭐/мес vs месяца`;
+        const clickFn = isVip ? `selectVipPlan('${p.key}')` : `selectSubPlan('${p.key}')`;
+        const badgeCls = isVip ? "sub-plan-badge vip" : "sub-plan-badge";
+        const saveCls  = isVip ? "sub-plan-save vip"  : "sub-plan-save";
+        return `
+          <div class="${cls}" data-plan="${p.key}" data-tier="${isVip ? 'vip' : 'premium'}" onclick="${clickFn}">
+            ${p.badge ? `<div class="${badgeCls}">${p.badge}</div>` : ""}
+            <div class="sub-plan-name">${p.label}</div>
+            <div class="sub-plan-stars">
+              <span class="sub-plan-stars-ico">${isVip ? "💎" : "⭐"}</span>
+              <span>${p.stars}</span>
+            </div>
+            <div class="sub-plan-perday">${subLabel}</div>
+            ${p.savePct > 0 ? `<div class="${saveCls}">−${p.savePct}%</div>` : ""}
+          </div>`;
+      }).join("");
+    }
+
+    function _premiumBeneItems(b) {
       const mult       = parseFloat(b.daily_multiplier  || 1);
       const bonusCoins = parseInt(b.daily_bonus_coins   || 0);
       const feedFree   = !!b.pet_feed_free;
       const xpMult     = parseFloat(b.xp_multiplier    || 1);
       const maxPets    = parseInt(b.max_pets_bonus      || 0);
-
-      const beneItems = [
+      return [
         { ico:"📊", text:"История переписки — 90 дней" },
         { ico:"👥", text:"Полный список собеседников"  },
         { ico:"💬", text:"Анализ здоровья чата"        },
-        mult > 1       ? { ico:"🎁", text:`×${mult} монет в бонусе`        } : null,
-        bonusCoins > 0 ? { ico:"💰", text:`+${bonusCoins} монет каждый день`} : null,
-        feedFree       ? { ico:"🍖", text:"Питомец ест бесплатно"           } : null,
-        xpMult > 1     ? { ico:"✨", text:`×${xpMult} XP питомцу`           } : null,
-        maxPets > 0    ? { ico:"🐾", text:`+${maxPets} слота питомца`       } : null,
-        { ico:"🚀", text:"Приоритетная поддержка"      },
+        mult > 1       ? { ico:"🎁", text:`×${mult} монет в бонусе`         } : null,
+        bonusCoins > 0 ? { ico:"💰", text:`+${bonusCoins} монет каждый день` } : null,
+        feedFree       ? { ico:"🍖", text:"Питомец ест бесплатно"            } : null,
+        xpMult > 1     ? { ico:"✨", text:`×${xpMult} XP питомцу`            } : null,
+        maxPets > 0    ? { ico:"🐾", text:`+${maxPets} слота питомца`        } : null,
+        { ico:"🚀", text:"Приоритетная поддержка" },
       ].filter(Boolean);
+    }
 
-      // ── Active state ───────────────────────────────────────────────────────
-      if (s.is_active) {
+    function _vipBeneItems(b) {
+      const xpMult     = parseFloat(b.xp_multiplier    || 3);
+      const bonusCoins = parseInt(b.daily_bonus_coins   || 150);
+      return [
+        { ico:"👑", text:"VIP-бейдж в профиле и командах" },
+        { ico:"🐉", text:"Эксклюзивные скины питомца"     },
+        { ico:"🤖", text:"AI Анализ отношений"             },
+        { ico:"⚡", text:"Приоритетная обработка команд"  },
+        { ico:"🔗", text:"×2 награды за рефералов"        },
+        { ico:"✏️",text:"Кастомное имя питомца"           },
+        { ico:"🏆", text:"VIP таблица лидеров"            },
+        { ico:"✨", text:`×${xpMult} XP питомцу`          },
+        { ico:"📜", text:"История переписки без лимита"   },
+        { ico:"💰", text:`+${bonusCoins} монет каждый день`},
+      ].filter(Boolean);
+    }
+
+    function renderSubscriptionSection() {
+      const s = subData;
+      if (!s || !s.is_enabled) return "";
+
+      const isVip    = !!s.is_vip;
+      const isActive = !!s.is_active;
+
+      // ── Active state ─────────────────────────────────────────────────────
+      if (isActive) {
         const daysLeft = s.days_left || 0;
-        const total    = s.duration_days || 30;
-        const pct      = Math.min(100, Math.round((daysLeft / total) * 100));
-        const beneHtml = beneItems.map(bi => `
+        const baseDays = s.duration_days || 30;
+        const pct      = Math.min(100, Math.round((daysLeft / baseDays) * 100));
+        const b        = s.benefits || {};
+        const beneItems = isVip ? _vipBeneItems(b) : _premiumBeneItems(b);
+        const beneHtml  = beneItems.map(bi => `
           <div class="sub-benefit-row">
             <span class="sub-benefit-ico">${bi.ico}</span>
             <span>${bi.text}</span>
           </div>`).join("");
+
+        const aiTeaserHtml = isVip ? `
+          <div class="ai-teaser-card" style="margin:14px 0 0">
+            <div class="ai-teaser-header">
+              <div class="ai-teaser-ico">🤖</div>
+              <div>
+                <div class="ai-teaser-title">AI Анализ отношений</div>
+                <div class="ai-teaser-sub">Откройте любой чат и нажмите «Проанализировать»</div>
+              </div>
+            </div>
+            <div class="ai-sections-preview">
+              ${["🧠 Общая оценка","⚖️ Баланс","❤️ Заинтересованность","💬 Стиль общения","🧩 Личность","📈 Динамика","😊 Эмоции","🚩 Флаги","📊 Статистика","🤖 AI Резюме"].map(t=>
+                `<div class="ai-sec-chip">${t}</div>`).join("")}
+            </div>
+            <button class="ai-teaser-btn" onclick="openAiAnalysisForChat()">🤖 Открыть AI Анализ</button>
+          </div>` : "";
+
         return `
-          <div class="sub-card active">
+          <div class="sub-card ${isVip ? "vip-active" : "active"}">
             <div class="sub-card-header">
-              <div class="sub-star-icon">⭐</div>
+              <div class="sub-star-icon">${isVip ? "💎" : "⭐"}</div>
               <div class="sub-card-title-wrap">
-                <div class="sub-active-badge">Premium активен</div>
-                <div class="sub-card-title">Подписка оформлена</div>
+                <div class="sub-active-badge${isVip ? " vip" : ""}">${isVip ? "VIP активен" : "Premium активен"}</div>
+                <div class="sub-card-title">${isVip ? "VIP подписка оформлена" : "Подписка оформлена"}</div>
               </div>
             </div>
             <div class="sub-days-row">
@@ -4164,105 +4385,138 @@
               <span class="sub-days-label"> дней осталось</span>
             </div>
             <div class="sub-progress-track">
-              <div class="sub-progress-fill" style="width:${pct}%"></div>
+              <div class="sub-progress-fill" style="width:${pct}%;${isVip ? "background:linear-gradient(90deg,#9c4f00,#c47800)" : ""}"></div>
             </div>
             <div class="sub-divider"></div>
             <div class="sub-benefit-list">${beneHtml}</div>
+            ${aiTeaserHtml}
           </div>`;
       }
 
-      // ── Purchase flow ──────────────────────────────────────────────────────
-      const plans = _subPlans(s);
-      const activePlan = plans.find(p => p.key === selectedSubPlan) || plans[1];
+      // ── Purchase flow — tier switcher + two sections ───────────────────────
+      const premPlans  = _subPlans(s);
+      const vipPlans   = _vipPlans(s);
+      const premActive = premPlans.find(p => p.key === selectedSubPlan) || premPlans[1];
+      const vipActive  = vipPlans.find(p => p.key === selectedVipPlan)  || vipPlans[1];
+      const premMonthly = premPlans[0].stars;
+      const vipMonthly  = vipPlans[0].stars;
 
-      // Monthly cost per plan, for "saves X⭐/month vs monthly" comparison
-      const monthlyPlan = plans.find(p => p.key === "month");
-      const monthlyPerMo = monthlyPlan ? monthlyPlan.stars : s.price_stars;
+      const premSaveHtml = premActive.savePct > 0
+        ? ` · <span class="sub-cta-save">−${premActive.savePct}% экономия</span>` : "";
+      const vipSaveHtml  = vipActive.savePct > 0
+        ? ` · <span class="sub-cta-save" style="color:#c47800">−${vipActive.savePct}% экономия</span>` : "";
 
-      const planCardsHtml = plans.map(p => {
-        const months = p.days / (s.duration_days || 30);
-        const perMonth = p.stars / months;
-        const savePerMo = Math.round(monthlyPerMo - perMonth);
-        const cls = ["sub-plan-card",
-          p.key === "quarter" ? "featured" : "",
-          p.key === selectedSubPlan ? "selected" : "",
-        ].filter(Boolean).join(" ");
+      const premBeneItems = _premiumBeneItems(s.benefits || {});
+      const vipBeneItems  = _vipBeneItems((s.vip_config && s.vip_config.benefits) || {});
 
-        const subLabel = p.key === "month"
-          ? `${Math.round(perMonth)} ⭐/мес`
-          : `−${savePerMo} ⭐/мес vs месяца`;
-
-        return `
-          <div class="${cls}" data-plan="${p.key}" onclick="selectSubPlan('${p.key}')">
-            ${p.badge ? `<div class="sub-plan-badge">${p.badge}</div>` : ""}
-            <div class="sub-plan-name">${p.label}</div>
-            <div class="sub-plan-stars">
-              <span class="sub-plan-stars-ico">⭐</span>
-              <span>${p.stars}</span>
-            </div>
-            <div class="sub-plan-perday">${subLabel}</div>
-            ${p.savePct > 0 ? `<div class="sub-plan-save">−${p.savePct}%</div>` : ""}
-          </div>`;
-      }).join("");
-
-      const beneGridHtml = beneItems.map(bi => `
-        <div class="sub-bene-item">
-          <span class="sub-bene-ico">${bi.ico}</span>
-          <span>${bi.text}</span>
-        </div>`).join("");
-
-      const saveHtml = activePlan.savePct > 0
-        ? ` · <span class="sub-cta-save">−${activePlan.savePct}% экономия</span>` : "";
+      const premBeneGrid = premBeneItems.map(bi => `
+        <div class="sub-bene-item"><span class="sub-bene-ico">${bi.ico}</span><span>${bi.text}</span></div>`).join("");
+      const vipBeneGrid  = vipBeneItems.map(bi => `
+        <div class="sub-bene-item"><span class="sub-bene-ico">${bi.ico}</span><span>${bi.text}</span></div>`).join("");
 
       return `
         <div class="sub-purchase-wrap">
-          <div class="sub-hero-card">
-            <span class="sub-hero-emoji">⭐</span>
-            <div class="sub-hero-title">Premium</div>
-            <div class="sub-hero-desc">Разблокируй все возможности и получай максимум каждый день</div>
+
+          <!-- Tier switcher -->
+          <div class="sub-tier-row">
+            <button class="sub-tier-tab${selectedSubTier === 'premium' ? ' active' : ''}"
+                    data-tier="premium" onclick="selectSubTier('premium')">⭐ Premium</button>
+            <button class="sub-tier-tab${selectedSubTier === 'vip' ? ' active' : ''}"
+                    data-tier="vip" onclick="selectSubTier('vip')">💎 VIP</button>
           </div>
 
-          <div class="sub-plans-row">
-            ${planCardsHtml}
-          </div>
-
-          <div class="sub-bene-section">
-            <div class="sub-bene-header">
-              <span class="sub-bene-title">Что входит в Premium</span>
+          <!-- ─── Premium section ─────────────────────────────────────────── -->
+          <div id="subPremiumSection" style="${selectedSubTier !== 'premium' ? 'display:none' : ''}">
+            <div class="sub-hero-card">
+              <span class="sub-hero-emoji">⭐</span>
+              <div class="sub-hero-title">Premium</div>
+              <div class="sub-hero-desc">Разблокируй все возможности и получай максимум каждый день</div>
             </div>
-            <div class="sub-bene-grid">${beneGridHtml}</div>
+            <div class="sub-plans-row">
+              ${_renderPlanCards(premPlans, selectedSubPlan, premMonthly, false)}
+            </div>
+            <div class="sub-bene-section">
+              <div class="sub-bene-header"><span class="sub-bene-title">Что входит в Premium</span></div>
+              <div class="sub-bene-grid">${premBeneGrid}</div>
+            </div>
+            <div class="sub-cta-wrap">
+              <div class="sub-cta-info" id="subCtaInfo">
+                Подписка на <strong>${premActive.label}</strong> · ${premActive.days} дней${premSaveHtml}
+              </div>
+              <button class="sub-buy-btn" id="subBuyBtn">
+                <span class="sub-buy-star">⭐</span>
+                <span>Оформить за ${premActive.stars} Stars</span>
+              </button>
+              <div class="sub-buy-note">Без автопродления · Оплата через Telegram Stars</div>
+            </div>
           </div>
 
-          <div class="sub-cta-wrap">
-            <div class="sub-cta-info" id="subCtaInfo">
-              Подписка на <strong>${activePlan.label}</strong> · ${activePlan.days} дней${saveHtml}
+          <!-- ─── VIP section ─────────────────────────────────────────────── -->
+          <div id="subVipSection" style="${selectedSubTier !== 'vip' ? 'display:none' : ''}">
+            <div class="sub-vip-hero">
+              <span class="sub-hero-emoji">💎</span>
+              <div class="sub-hero-title" style="color:#fff">VIP</div>
+              <div class="sub-hero-desc">Максимальные привилегии, AI-анализ отношений и эксклюзивные бонусы</div>
             </div>
-            <button class="sub-buy-btn" id="subBuyBtn">
-              <span class="sub-buy-star">⭐</span>
-              <span>Оформить за ${activePlan.stars} Stars</span>
-            </button>
-            <div class="sub-buy-note">Без автопродления · Оплата через Telegram Stars</div>
+            <div class="sub-plans-row">
+              ${_renderPlanCards(vipPlans, selectedVipPlan, vipMonthly, true)}
+            </div>
+            <div class="sub-bene-section" style="border:1.5px solid rgba(196,120,0,.2)">
+              <div class="sub-bene-header vip-bene-header">
+                <span class="sub-bene-title vip-bene-title">Что входит в VIP</span>
+              </div>
+              <div class="sub-bene-grid">${vipBeneGrid}</div>
+            </div>
+            <div class="ai-teaser-card">
+              <div class="ai-teaser-header">
+                <div class="ai-teaser-ico">🤖</div>
+                <div>
+                  <div class="ai-teaser-title">AI Анализ отношений — VIP эксклюзив</div>
+                  <div class="ai-teaser-sub">10 разделов: баланс, эмоции, флаги, динамика, резюме</div>
+                </div>
+              </div>
+              <div class="ai-sections-preview">
+                ${["🧠 Общая оценка","⚖️ Баланс","❤️ Заинтересованность","💬 Стиль","🧩 Личность","📈 Динамика","😊 Эмоции","🚩 Флаги","📊 Статистика","🤖 AI Резюме"].map(t=>
+                  `<div class="ai-sec-chip">${t}</div>`).join("")}
+              </div>
+            </div>
+            <div class="sub-cta-wrap" style="border:1.5px solid rgba(196,120,0,.2)">
+              <div class="sub-cta-info" id="subVipCtaInfo">
+                VIP на <strong>${vipActive.label}</strong> · ${vipActive.days} дней${vipSaveHtml}
+              </div>
+              <button class="sub-buy-btn vip" id="subVipBuyBtn">
+                <span class="sub-buy-star">💎</span>
+                <span>Оформить VIP за ${vipActive.stars} Stars</span>
+              </button>
+              <div class="sub-buy-note">Без автопродления · Оплата через Telegram Stars</div>
+            </div>
           </div>
+
         </div>`;
     }
 
-    function attachSubscriptionHandlers() {
-      const btn = document.getElementById("subBuyBtn");
-      if (!btn) return;
-
-      function _resetBtn() {
-        const plan = _getActivePlan();
-        btn.disabled = false;
-        btn.innerHTML = `<span class="sub-buy-star">⭐</span><span>Оформить за ${plan.stars} Stars</span>`;
+    // ── Shared post-payment refresh ───────────────────────────────────────────
+    async function _refreshWalletAfterSub(tierLabel) {
+      const wRes = await fetch("/app/api/wallet/info", {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({initData: currentInitData}),
+      });
+      if (wRes.ok) {
+        walletData = await wRes.json();
+        subData = walletData?.subscription || null;
+        renderCasino();
+        renderDonate();
       }
+      toastMessage(`${tierLabel} оформлен! Бонусы уже активны.`);
+    }
 
-      btn.addEventListener("click", async () => {
-        const plan = _getActivePlan();
-        btn.disabled = true;
-        btn.innerHTML = `<span>⏳ Загрузка…</span>`;
+    function _makeInvoiceHandler({ endpoint, planFn, resetFn, tierLabel }) {
+      return async () => {
+        const plan = planFn();
+        resetFn("loading");
         try {
           if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("medium");
-          const res = await fetch("/app/api/subscription/invoice", {
+          const res = await fetch(endpoint, {
             method: "POST", headers: {"Content-Type":"application/json"},
             body: JSON.stringify({
               initData:   currentInitData,
@@ -4278,45 +4532,76 @@
               invoice_send_failed:   "Не удалось создать счёт. Попробуй позже.",
             };
             toastMessage(MSG[err.detail] || "Ошибка. Попробуй ещё раз.");
-            _resetBtn();
+            resetFn("ready");
             return;
           }
           const data = await res.json();
-
           const _onResult = async (status) => {
             if (status === "paid") {
               if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
-              toastMessage("⭐ Подписка оформлена! Бонусы уже активны.");
-              const wRes = await fetch("/app/api/wallet/info", {
-                method: "POST", headers: {"Content-Type":"application/json"},
-                body: JSON.stringify({initData: currentInitData}),
-              });
-              if (wRes.ok) {
-                walletData = await wRes.json();
-                subData = walletData?.subscription || null;
-                renderCasino();
-                renderDonate();
-              }
+              await _refreshWalletAfterSub(tierLabel);
             } else if (status === "cancelled") {
               toastMessage("Оплата отменена.");
-              _resetBtn();
+              resetFn("ready");
             } else {
               toastMessage("Ошибка оплаты. Попробуй ещё раз.");
-              _resetBtn();
+              resetFn("ready");
             }
           };
-
           if (tg?.openInvoice) {
             tg.openInvoice(data.invoice_link, _onResult);
           } else {
             window.open(data.invoice_link, "_blank");
-            _resetBtn();
+            resetFn("ready");
           }
         } catch {
           toastMessage("Ошибка. Попробуй ещё раз.");
-          _resetBtn();
+          resetFn("ready");
         }
-      });
+      };
+    }
+
+    function attachSubscriptionHandlers() {
+      // ── Premium buy button ─────────────────────────────────────────────────
+      const btn = document.getElementById("subBuyBtn");
+      if (btn) {
+        const resetPrem = (state) => {
+          const plan = _getActivePlan();
+          btn.disabled = state === "loading";
+          btn.innerHTML = state === "loading"
+            ? `<span>⏳ Загрузка…</span>`
+            : `<span class="sub-buy-star">⭐</span><span>Оформить за ${plan.stars} Stars</span>`;
+        };
+        btn.addEventListener("click", _makeInvoiceHandler({
+          endpoint:  "/app/api/subscription/invoice",
+          planFn:    _getActivePlan,
+          resetFn:   resetPrem,
+          tierLabel: "⭐ Premium",
+        }));
+      }
+
+      // ── VIP buy button ─────────────────────────────────────────────────────
+      const vipBtn = document.getElementById("subVipBuyBtn");
+      if (vipBtn) {
+        const resetVip = (state) => {
+          const plan = _getActiveVipPlan();
+          vipBtn.disabled = state === "loading";
+          vipBtn.innerHTML = state === "loading"
+            ? `<span>⏳ Загрузка…</span>`
+            : `<span class="sub-buy-star">💎</span><span>Оформить VIP за ${plan.stars} Stars</span>`;
+        };
+        vipBtn.addEventListener("click", _makeInvoiceHandler({
+          endpoint:  "/app/api/subscription/vip/invoice",
+          planFn:    _getActiveVipPlan,
+          resetFn:   resetVip,
+          tierLabel: "💎 VIP",
+        }));
+      }
+    }
+
+    // ── AI Analysis stub (VIP feature) ────────────────────────────────────────
+    function openAiAnalysisForChat() {
+      toastMessage("🤖 Откройте любой чат из списка и нажмите «AI Анализ»");
     }
 
     function renderWalletCard() {

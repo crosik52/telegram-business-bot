@@ -1615,54 +1615,70 @@ async def on_pre_checkout_query(query: PreCheckoutQuery) -> None:
         await query.answer(ok=False, error_message="Unknown product")
 
 
+def _dur_label(days: int) -> str:
+    if days >= 360:   return "12 месяцев"
+    if days >= 170:   return "6 месяцев"
+    if days >= 80:    return "3 месяца"
+    if days >= 29:    return "1 месяц"
+    return f"{days} дней"
+
+
 @router.message(F.successful_payment)
 async def on_successful_payment(message: Message, bot: Bot) -> None:
-    """Activate subscription after a successful Stars payment."""
+    """Activate Premium or VIP subscription after a successful Stars payment."""
     payment = message.successful_payment
-    if payment is None or not payment.invoice_payload.startswith("subscription_"):
+    payload = payment.invoice_payload if payment else ""
+
+    is_premium = payload.startswith("subscription_")
+    is_vip     = payload.startswith("vip_subscription_")
+    if not (is_premium or is_vip):
         return
 
     user_id    = message.from_user.id
     charge_id  = payment.telegram_payment_charge_id
-    stars_paid = payment.total_amount          # Stars amount (integer)
+    stars_paid = payment.total_amount
 
-    # Payload format: "subscription_{user_id}_{duration_days}"
-    # Fall back to config duration for legacy "subscription_{user_id}" payloads
-    parts = payment.invoice_payload.split("_")
+    # Payload formats:
+    #   Premium: "subscription_{user_id}_{duration_days}"
+    #   VIP:     "vip_subscription_{user_id}_{duration_days}"
+    parts = payload.split("_")
     try:
-        duration_days = int(parts[2]) if len(parts) >= 3 else None
+        duration_days = int(parts[-1]) if len(parts) >= 3 else None
     except (ValueError, IndexError):
         duration_days = None
 
+    sub_type = "vip" if is_vip else "premium"
+
     async with session_scope() as session:
         sub_repo = SubscriptionRepository(session)
-        config   = await sub_repo.get_config()
+        if sub_type == "vip":
+            config = await sub_repo.get_vip_config()
+        else:
+            config = await sub_repo.get_config()
         effective_days = duration_days if duration_days and duration_days >= 1 else config.duration_days
-        await sub_repo.activate(user_id, charge_id, stars_paid, effective_days)
+        await sub_repo.activate(user_id, charge_id, stars_paid, effective_days, sub_type=sub_type)
         await session.commit()
 
+    dur_label = _dur_label(effective_days)
     logger.info(
-        "Subscription activated: user=%s stars=%s charge=%s duration=%sd",
-        user_id, stars_paid, charge_id, effective_days,
+        "%s subscription activated: user=%s stars=%s charge=%s duration=%sd",
+        sub_type.upper(), user_id, stars_paid, charge_id, effective_days,
     )
 
-    # Build human-friendly duration label
-    if effective_days >= 360:
-        dur_label = "12 месяцев"
-    elif effective_days >= 80:
-        dur_label = "3 месяца"
+    if sub_type == "vip":
+        text = (
+            f"💎 <b>VIP подписка активирована!</b>\n\n"
+            f"Добро пожаловать в VIP! Доступ открыт на <b>{dur_label}</b>.\n\n"
+            f"👑 Твой бейдж, скины питомца и AI-анализ уже активны — открой мини-приложение."
+        )
     else:
-        dur_label = f"{effective_days} дней"
+        text = (
+            f"⭐ <b>Premium активирован!</b>\n\n"
+            f"Спасибо за поддержку! Подписка действует <b>{dur_label}</b>.\n\n"
+            f"🎁 Все бонусы уже активны — открой мини-приложение, чтобы увидеть их."
+        )
 
     try:
-        await bot.send_message(
-            chat_id=user_id,
-            text=(
-                f"⭐ <b>Подписка активирована!</b>\n\n"
-                f"Спасибо за поддержку! Premium действует <b>{dur_label}</b>.\n\n"
-                f"🎁 Все бонусы уже активны — открой мини-приложение, чтобы увидеть их."
-            ),
-            parse_mode="HTML",
-        )
+        await bot.send_message(chat_id=user_id, text=text, parse_mode="HTML")
     except Exception:
         logger.exception("Failed to send subscription confirmation to user %s", user_id)

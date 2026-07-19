@@ -3343,6 +3343,39 @@ async def ai_relationship_analysis(
     return result
 
 
+class ContactProfileRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    chat_id:   int = Field(..., alias="chatId")
+    model_config = {"populate_by_name": True}
+
+
+@router.post("/app/api/contact/profile")
+async def contact_profile_info(
+    payload: ContactProfileRequest,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Return subscription + frame info for a contact (if they use the bot)."""
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid init data")
+
+    sub_repo = SubscriptionRepository(session)
+    sub      = await sub_repo.get_active_subscription(payload.chat_id)
+    vip_sub  = await sub_repo.get_active_vip_subscription(payload.chat_id)
+
+    from app.models.user_settings import UserSettings as _US  # noqa: PLC0415
+    us = (await session.execute(
+        select(_US).where(_US.owner_telegram_id == payload.chat_id)
+    )).scalar_one_or_none()
+
+    return {
+        "is_vip":      vip_sub is not None,
+        "is_premium":  sub is not None,
+        "frame":       (us.frame if us else "none") or "none",
+    }
+
+
 @router.post("/app/api/ai/ping")
 async def ai_ping(payload: dict, session: AsyncSession = Depends(get_db_session)) -> dict:
     """Quick Gemini connectivity test (admin/debug only)."""

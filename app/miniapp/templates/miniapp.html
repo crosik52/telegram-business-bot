@@ -2522,6 +2522,77 @@
     font-size: 14px; color: var(--hint); border: none; background: none;
   }
 
+  /* ── Contact Profile Card ────────────────────────────────────────────── */
+  .cp-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.52);
+    z-index: 3000;
+    display: flex; align-items: flex-end; justify-content: center;
+  }
+  .cp-sheet {
+    background: var(--secondary-bg);
+    border-radius: 24px 24px 0 0;
+    padding: 12px 20px 40px;
+    width: 100%; max-width: 440px;
+    box-shadow: 0 -4px 32px rgba(0,0,0,0.25);
+    animation: riseIn 0.22s ease;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  .cp-drag-handle {
+    width: 36px; height: 4px; border-radius: 2px;
+    background: rgba(120,120,128,0.28); margin-bottom: 14px;
+  }
+  .cp-avatar-wrap {
+    width: 88px; height: 88px; border-radius: 50%;
+    padding: 3px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 10px;
+    box-shadow: 0 4px 22px rgba(0,0,0,0.25);
+    transition: background 0.3s ease;
+  }
+  .cp-avatar {
+    width: 82px; height: 82px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 30px; font-weight: 800; color: #fff;
+  }
+  .cp-name {
+    font-size: 19px; font-weight: 800; text-align: center;
+    letter-spacing: -0.3px; margin-top: 2px;
+  }
+  .cp-sub-line {
+    display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+    justify-content: center; margin-bottom: 2px;
+  }
+  .cp-username { font-size: 13px; color: var(--hint); }
+  .cp-badge {
+    font-size: 11px; font-weight: 700; padding: 2px 8px;
+    border-radius: 10px; white-space: nowrap;
+  }
+  .cp-badge-vip     { background: linear-gradient(135deg,#9c4f00,#c47800); color:#fff; }
+  .cp-badge-premium { background: rgba(255,200,60,0.18); color:#d4962a; }
+  .cp-stats-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 8px; width: 100%; margin-top: 14px;
+  }
+  .cp-stat-card {
+    background: rgba(120,120,128,0.08); border-radius: 14px;
+    padding: 13px 10px; text-align: center;
+  }
+  .cp-stat-val { font-size: 19px; font-weight: 800; }
+  .cp-stat-lbl { font-size: 11px; color: var(--hint); margin-top: 3px; }
+  .cp-mutual { margin-top: 8px; }
+  .cp-actions {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    justify-content: center; margin-top: 16px; width: 100%;
+  }
+  .cp-action-btn {
+    border: none; border-radius: 20px; padding: 9px 16px;
+    font-size: 13px; font-weight: 600;
+    background: rgba(120,120,128,0.12); color: var(--text);
+    touch-action: manipulation; flex: 1; min-width: 80px;
+  }
+  .cp-action-tg { background: rgba(0,136,204,0.15); color: #0088cc; }
+
   /* Adopt modal */
   .adopt-chats { display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; margin-bottom: 12px; }
   .adopt-chat-btn {
@@ -3350,7 +3421,7 @@
         const aiBtn = `<button class="ai-btn" data-ai-chat="${s.chat_id}" data-ai-name="${s.display_name}">🤖 Анализ</button>`;
 
         return `
-          <div class="row${s.username ? " clickable" : ""}"${s.username ? ` data-username="${s.username}"` : ""}>
+          <div class="row clickable" data-chat-id="${s.chat_id}"${s.username ? ` data-username="${s.username}"` : ""}>
             <div class="rank">${medal(i)}</div>
             <div class="avatar" style="background:${colorFor(s.display_name)}">${initials(s.display_name)}</div>
             <div class="row-main">
@@ -3370,7 +3441,7 @@
               <div class="row-count">${s.message_count}</div>
               ${renderStreakBadge(s)}
             </div>
-            ${s.username ? '<div class="row-chevron">›</div>' : ""}
+            <div class="row-chevron">›</div>
           </div>
         `;
       }).join("");
@@ -3417,11 +3488,13 @@
         });
       });
       document.querySelectorAll(".row.clickable").forEach(row => {
-        row.addEventListener("click", () => {
-          const username = row.dataset.username;
+        row.addEventListener("click", (e) => {
+          // Ignore clicks on action buttons inside the row
+          if (e.target.closest("button")) return;
           if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
-          if (tg && tg.openTelegramLink) tg.openTelegramLink(`https://t.me/${username}`);
-          else window.open(`https://t.me/${username}`, "_blank");
+          const chatId = parseInt(row.dataset.chatId);
+          const contact = lastStats?.top_interlocutors?.find(c => c.chat_id === chatId);
+          if (contact) openContactProfile(contact);
         });
       });
       document.querySelectorAll(".game-btn").forEach(btn => {
@@ -3706,6 +3779,106 @@
       overlay.querySelectorAll(".game-pick").forEach(btn => {
         btn.addEventListener("click", async () => { overlay.remove(); await sendGame(chatId, btn.dataset.emoji); });
       });
+    }
+
+    // ── Contact Profile Card ──────────────────────────────────────────────────
+    const _CP_FRAME_STYLES = {
+      "none":    "linear-gradient(135deg, var(--link), #5856d6, var(--green))",
+      "stars":   "linear-gradient(135deg, #f5c842, #e8960a, #f5c842)",
+      "flowers": "linear-gradient(135deg, #ff6b9d, #c44dff, #ff6b9d)",
+      "fire":    "linear-gradient(135deg, #ff4500, #ff8c00, #ff2200)",
+      "neon":    "linear-gradient(135deg, #00f5ff, #0080ff, #7b00ff)",
+    };
+
+    function openContactProfile(s) {
+      if (!s) return;
+      const sub    = s.username ? "@" + s.username : "личный контакт";
+      const rel    = lastRelationships?.[s.chat_id];
+      const relChip = (rel?.status === "active")
+        ? `<span class="chip ${_relTierCls(rel.rel_type)}">${_relTierLabel(rel.rel_type)} Ур.${rel.level}</span>`
+        : "";
+
+      const frameStyle = _CP_FRAME_STYLES["none"];
+
+      const overlay = document.createElement("div");
+      overlay.className = "cp-overlay";
+      overlay.innerHTML = `
+        <div class="cp-sheet">
+          <div class="cp-drag-handle"></div>
+          <div class="cp-avatar-wrap" id="cpAvatarWrap" style="background:${frameStyle}">
+            <div class="cp-avatar" style="background:${colorFor(s.display_name)}">${initials(s.display_name)}</div>
+          </div>
+          <div class="cp-name">${esc2(s.display_name)}</div>
+          <div class="cp-sub-line">
+            <span class="cp-username">${esc2(sub)}</span>
+            <span id="cpBadge"></span>
+            ${relChip}
+          </div>
+          <div class="cp-stats-grid">
+            <div class="cp-stat-card">
+              <div class="cp-stat-val">${s.message_count.toLocaleString("ru-RU")}</div>
+              <div class="cp-stat-lbl">💬 Сообщений</div>
+            </div>
+            <div class="cp-stat-card">
+              <div class="cp-stat-val">${s.streak_days > 0 ? s.streak_days + " дн" : "—"}</div>
+              <div class="cp-stat-lbl">🔥 Серия</div>
+            </div>
+            <div class="cp-stat-card">
+              <div class="cp-stat-val">${s.longest_streak > 1 ? s.longest_streak + " дн" : "—"}</div>
+              <div class="cp-stat-lbl">💎 Рекорд</div>
+            </div>
+            <div class="cp-stat-card">
+              <div class="cp-stat-val">${timeAgo(s.last_message_at)}</div>
+              <div class="cp-stat-lbl">🕐 Активность</div>
+            </div>
+          </div>
+          ${s.mutual_connected ? '<div class="cp-mutual"><span class="chip mutual">🤝 взаимный</span></div>' : ""}
+          <div class="cp-actions">
+            ${s.mutual_connected ? `<button class="cp-action-btn" id="cpGameBtn">🎮 Игра</button>` : ""}
+            ${s.mutual_connected ? `<button class="cp-action-btn" id="cpRelBtn">❤️ Отношения</button>` : ""}
+            <button class="cp-action-btn" id="cpAiBtn">🤖 Анализ</button>
+            ${s.username ? `<button class="cp-action-btn cp-action-tg" id="cpTgBtn">✈️ Telegram</button>` : ""}
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+
+      overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
+
+      overlay.querySelector("#cpGameBtn")?.addEventListener("click", e => {
+        e.stopPropagation(); overlay.remove();
+        openGamePicker(s.chat_id, s.display_name);
+      });
+      overlay.querySelector("#cpRelBtn")?.addEventListener("click", e => {
+        e.stopPropagation(); overlay.remove();
+        openRelModal(parseInt(s.chat_id), s.display_name);
+      });
+      overlay.querySelector("#cpAiBtn")?.addEventListener("click", e => {
+        e.stopPropagation(); overlay.remove();
+        openAiAnalysisModal(parseInt(s.chat_id), s.display_name || "Собеседник");
+      });
+      overlay.querySelector("#cpTgBtn")?.addEventListener("click", () => {
+        if (tg?.openTelegramLink) tg.openTelegramLink(`https://t.me/${s.username}`);
+        else window.open(`https://t.me/${s.username}`, "_blank");
+      });
+
+      // Async enrich: fetch frame + subscription from backend
+      if (currentInitData) {
+        fetch("/app/api/contact/profile", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({ initData: currentInitData, chatId: s.chat_id }),
+        }).then(r => r.ok ? r.json() : null).then(data => {
+          if (!data || !overlay.parentNode) return;
+          const wrap = overlay.querySelector("#cpAvatarWrap");
+          if (wrap) wrap.style.background = _CP_FRAME_STYLES[data.frame] || _CP_FRAME_STYLES["none"];
+          const badgeEl = overlay.querySelector("#cpBadge");
+          if (badgeEl) {
+            if (data.is_vip)          { badgeEl.className = "cp-badge cp-badge-vip";     badgeEl.textContent = "💎 VIP"; }
+            else if (data.is_premium) { badgeEl.className = "cp-badge cp-badge-premium"; badgeEl.textContent = "⭐ Premium"; }
+          }
+        }).catch(() => {});
+      }
     }
 
     async function sendGame(chatId, emoji) {

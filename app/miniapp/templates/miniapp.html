@@ -1597,6 +1597,60 @@
   .crash-presets { display: flex; gap: 5px; margin-bottom: 10px; }
   .crash-presets .mines-preset-btn { min-width: 40px; }
 
+  /* ── Crash history bar ── */
+  .crash-history-bar {
+    display: flex; gap: 5px; margin-bottom: 10px; flex-wrap: wrap; min-height: 24px;
+  }
+  .crash-hist-chip {
+    padding: 2px 9px; border-radius: 8px; font-size: 11px; font-weight: 800;
+    border: 1px solid; line-height: 20px; cursor: default; letter-spacing: -0.3px;
+    transition: transform 0.1s;
+  }
+  .crash-hist-chip.low  { background: rgba(255,69,58,0.14);  border-color: rgba(255,69,58,0.40);  color: #ff453a; }
+  .crash-hist-chip.mid  { background: rgba(251,191,36,0.12); border-color: rgba(251,191,36,0.38); color: #fbbf24; }
+  .crash-hist-chip.high { background: rgba(52,199,89,0.12);  border-color: rgba(52,199,89,0.40);  color: #34c759; }
+  .crash-hist-chip.mega { background: rgba(197,186,255,0.14); border-color: rgba(197,186,255,0.45); color: #c5baff; }
+
+  /* ── Crash auto-controls ── */
+  .crash-auto-row {
+    display: flex; gap: 7px; margin-bottom: 10px; align-items: center;
+  }
+  .crash-auto-toggle {
+    display: flex; align-items: center; gap: 5px;
+    padding: 7px 12px; border-radius: 10px; cursor: pointer;
+    background: var(--ci-s2); border: 1px solid rgba(255,255,255,0.08);
+    font-size: 11.5px; font-weight: 700; color: var(--ci-muted);
+    transition: all 0.15s; white-space: nowrap; flex-shrink: 0;
+    font-family: 'Geist', system-ui, sans-serif;
+  }
+  .crash-auto-toggle.on {
+    background: rgba(124,108,255,0.16); border-color: rgba(124,108,255,0.42); color: #c5baff;
+  }
+  .crash-auto-toggle:active { transform: scale(0.93); }
+  .crash-auto-cashout-wrap {
+    flex: 1; display: flex; align-items: center; gap: 5px;
+    background: var(--ci-s2); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px; padding: 0 10px;
+  }
+  .crash-auto-cashout-wrap label {
+    font-size: 10.5px; color: var(--ci-muted); white-space: nowrap;
+    font-weight: 600; letter-spacing: 0.3px; text-transform: uppercase;
+  }
+  .crash-auto-cashout-input {
+    flex: 1; padding: 7px 0; background: transparent; border: none;
+    color: rgba(245,245,245,0.9); font-size: 13px; font-weight: 700;
+    font-family: 'Geist', system-ui, sans-serif; text-align: right;
+    outline: none; width: 0;
+  }
+  .crash-auto-cashout-input::placeholder { color: var(--ci-muted); }
+
+  /* ── Mines FOMO reveal label ── */
+  .mines-fomo-label {
+    text-align: center; font-size: 11px; color: var(--ci-muted);
+    margin-bottom: 4px; letter-spacing: 0.3px; font-weight: 600;
+    text-transform: uppercase;
+  }
+
   /* ══════════════════════════════════════════
      DONATE / SUPPORT
   ══════════════════════════════════════════ */
@@ -2254,6 +2308,14 @@
     let crashAnimFrame    = null;
     let crashStartTime    = null;
     let crashLastPathT    = 0;         // throttle SVG path updates
+    let crashHistory      = [];        // [{crash_at}] last 10 today
+    let crashAutoBet      = false;     // auto-restart after each round
+    let crashAutoCashoutAt = 0;        // 0 = off; >1 = auto-cashout target
+    let crashCashedOut    = false;     // user cashed out, rocket still flying (FOMO)
+    let crashCashedOutMult = 0;        // multiplier at the moment of cashout
+    let crashCashedOutPayout = 0;      // payout already credited
+    let crashAutoBetTimer = null;      // setTimeout for auto-bet delay
+    let crashCurrentBet   = 50;        // bet amount of the current/last round
     let lastWords  = null;     // /app/api/stats/words response
     let lastDigest = null;     // /app/api/stats/digest response
     const FREE_TOP_LIMIT = 5;  // free users see top N contacts
@@ -4280,6 +4342,39 @@
       if (inp) { inp.value = v; }
     }
 
+    function toggleCrashAutoBet() {
+      crashAutoBet = !crashAutoBet;
+      const btn = document.getElementById("crashAutoBetBtn");
+      if (btn) btn.classList.toggle("on", crashAutoBet);
+    }
+
+    function _crashHistoryChipClass(v) {
+      if (v >= 10) return "mega";
+      if (v >= 3)  return "high";
+      if (v >= 2)  return "mid";
+      return "low";
+    }
+
+    function renderCrashHistoryBar() {
+      const bar = document.getElementById("crashHistoryBar");
+      if (!bar) return;
+      if (!crashHistory.length) { bar.innerHTML = `<span style="font-size:11px;color:var(--ci-muted)">История полётов появится после первой игры</span>`; return; }
+      bar.innerHTML = crashHistory.slice().reverse().map(v =>
+        `<span class="crash-hist-chip ${_crashHistoryChipClass(v)}">${v.toFixed(2)}×</span>`
+      ).join("");
+    }
+
+    async function fetchCrashHistory() {
+      try {
+        const res = await fetch("/app/api/wallet/crash/history");
+        if (res.ok) {
+          const data = await res.json();
+          crashHistory = data.history || [];
+          renderCrashHistoryBar();
+        }
+      } catch { /* ignore */ }
+    }
+
     function renderCrashCard() {
       const balance = walletData?.balance || 0;
       const maxBet  = Math.min(500, balance);
@@ -4288,6 +4383,9 @@
           <div class="casino-card-header">
             <span class="casino-card-title">🚀 Краш</span>
             <span class="casino-card-sub">Забери до взрыва</span>
+          </div>
+          <div class="crash-history-bar" id="crashHistoryBar">
+            <span style="font-size:11px;color:var(--ci-muted)">Загружаем историю…</span>
           </div>
           <div class="crash-display" id="crashDisplay">
             <svg class="crash-svg" id="crashSvg" viewBox="0 0 300 148" preserveAspectRatio="none">
@@ -4319,6 +4417,17 @@
             <div class="flip-bet-sep"></div>
             <input type="number" id="crashBet" class="flip-bet-input"
               min="10" max="${maxBet}" value="${Math.min(50,maxBet)}"/>
+          </div>
+          <div class="crash-auto-row">
+            <button class="crash-auto-toggle${crashAutoBet?' on':''}" id="crashAutoBetBtn"
+                    onclick="toggleCrashAutoBet()">🔁 Авто</button>
+            <div class="crash-auto-cashout-wrap">
+              <label>Автовывод ×</label>
+              <input type="number" id="crashAutoCashoutInput" class="crash-auto-cashout-input"
+                min="1.1" max="200" step="0.1" placeholder="выкл"
+                value="${crashAutoCashoutAt > 0 ? crashAutoCashoutAt : ''}"
+                oninput="crashAutoCashoutAt = parseFloat(this.value)||0"/>
+            </div>
           </div>
           <button class="crash-cashout-btn" id="crashCashoutBtn"
                   onclick="doCrashCashout()" disabled>🚀 Забрать</button>
@@ -4353,6 +4462,8 @@
       });
 
       // Mines + Crash buttons now use inline onclick — no listeners needed here
+      // Fetch crash history when crash tab is active
+      if (currentCasinoGame === "crash") fetchCrashHistory();
     }
 
     function updateBalanceDisplay(newBalance) {
@@ -4713,10 +4824,35 @@
         if (statusEl) statusEl.style.display = "none";
         const resultEl = document.getElementById("minesResult");
         if (resultEl) resultEl.innerHTML =
-          `<span class="flip-won">💰 +${data.payout} монет! (×${data.multiplier.toFixed(2)})</span>`;
+          `<span class="flip-won">💰 +${data.payout} 🪙 (×${data.multiplier.toFixed(2)})</span>`;
         if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
         toastMessage(`💰 +${data.payout} монет!`);
-        setTimeout(_minesShowRestart, 700);
+
+        // FOMO reveal — show where mines were hiding
+        const minesIndices = data.mines_indices || [];
+        if (minesIndices.length > 0) {
+          // Add label above grid
+          const grid = document.getElementById("minesGrid");
+          const fomoLabel = document.createElement("div");
+          fomoLabel.className = "mines-fomo-label";
+          fomoLabel.textContent = "💣 Где прятались мины";
+          grid?.parentNode?.insertBefore(fomoLabel, grid);
+
+          // Staggered reveal of mine positions
+          minesIndices.forEach((idx, i) => {
+            setTimeout(() => {
+              const mc = document.getElementById(`mCell${idx}`);
+              if (mc && !mc.classList.contains("safe")) {
+                mc.classList.add("mine-end");
+                mc.textContent = "💣";
+              }
+            }, 300 + i * 60);
+          });
+          // Show restart after reveal animation completes
+          setTimeout(_minesShowRestart, 300 + minesIndices.length * 60 + 600);
+        } else {
+          setTimeout(_minesShowRestart, 700);
+        }
       } catch {
         if (btn) btn.disabled = false;
         toastMessage("Ошибка. Попробуй ещё раз.");
@@ -4725,8 +4861,10 @@
 
     function _minesShowRestart() {
       const grid = document.getElementById("minesGrid");
-      if (grid) grid.style.pointerEvents = "";          // ← KEY FIX: always restore
+      if (grid) grid.style.pointerEvents = "";
       document.querySelectorAll(".mines-cell").forEach(c => c.classList.add("inactive"));
+      // Remove FOMO label if present
+      document.querySelectorAll(".mines-fomo-label").forEach(el => el.remove());
       const startBtn = document.getElementById("minesStartBtn");
       const maxBet   = Math.min(500, walletData?.balance || 0);
       if (startBtn) {
@@ -4754,6 +4892,9 @@
       const resultEl = document.getElementById("crashResult");
       if (resultEl) resultEl.innerHTML = "";
 
+      // Reset FOMO state
+      crashCashedOut = false; crashCashedOutMult = 0; crashCashedOutPayout = 0;
+
       try {
         const res = await fetch("/app/api/wallet/crash/start", {
           method: "POST", headers: {"Content-Type":"application/json"},
@@ -4768,6 +4909,7 @@
         }
         const data = await res.json();
 
+        crashCurrentBet  = bet;
         crashGameActive  = true;
         crashMultiplier  = 1.0;
         crashPointAt     = data.crash_at || Infinity;
@@ -4781,7 +4923,7 @@
           cashout.textContent = `🚀 Забрать ${bet} 🪙`;
         }
 
-        // Reset SVG path and rocket to start position (svgX=4, svgY=138 at mult=1)
+        // Reset SVG path and rocket to start position
         const poly   = document.getElementById("crashPolyline");
         const fill   = document.getElementById("crashFill");
         const rocket = document.getElementById("crashRocket");
@@ -4797,6 +4939,7 @@
           rocket.style.top     = `${(138 / 148 * _H0 - 13).toFixed(0)}px`;
           rocket.style.bottom  = "";
           rocket.style.transform = "rotate(45deg)";
+          rocket.style.filter  = "drop-shadow(0 0 10px rgba(197,186,255,.9))";
         }
         if (multD)  { multD.className = "crash-mult-display flying"; multD.textContent = "1.00×";
                       multD.style.color = "#c5baff"; }
@@ -4815,60 +4958,65 @@
       const elapsed = (now - crashStartTime) / 1000;
       crashMultiplier = parseFloat(Math.exp(0.055 * elapsed).toFixed(2));
 
-      // ── 1. Auto-crash check FIRST (before any render) ────────────────────
+      // ── 1. Auto-cashout check ─────────────────────────────────────────────
+      if (!crashCashedOut && crashAutoCashoutAt > 1 && crashMultiplier >= crashAutoCashoutAt) {
+        doCrashCashout();
+        // Don't return — animation continues in FOMO mode
+      }
+
+      // ── 2. Crash point check ──────────────────────────────────────────────
       if (crashMultiplier >= crashPointAt) {
         crashGameActive = false;
         cancelAnimationFrame(crashAnimFrame); crashAnimFrame = null;
         const rocketEl  = document.getElementById("crashRocket");
         const cashoutEl = document.getElementById("crashCashoutBtn");
-        if (rocketEl)  rocketEl.textContent = "💥";
+        if (rocketEl) {
+          rocketEl.textContent = "💥";
+          rocketEl.style.filter = "drop-shadow(0 0 16px rgba(255,69,58,0.9))";
+        }
         if (cashoutEl) { cashoutEl.disabled = true; cashoutEl.classList.remove("live"); }
-        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
-        _finalizeCrashLost(bet);
+        if (tg?.HapticFeedback && !crashCashedOut) tg.HapticFeedback.notificationOccurred("error");
+        _finalizeCrashEnd(bet);
         return;
       }
 
-      // ── 2. Text + colour ──────────────────────────────────────────────────
+      // ── 3. Text + colour ──────────────────────────────────────────────────
       const multD   = document.getElementById("crashMultDisplay");
       const cashout = document.getElementById("crashCashoutBtn");
-      if (multD) {
+      if (multD && multD.classList.contains("flying")) {
         multD.textContent = `${crashMultiplier.toFixed(2)}×`;
-        if (multD.classList.contains("flying")) {
-          if      (crashMultiplier >= 5)   multD.style.color = "#f97316";
-          else if (crashMultiplier >= 2.5) multD.style.color = "#fbbf24";
-          else                             multD.style.color = "#c5baff";
-        }
+        if      (crashMultiplier >= 10)  multD.style.color = "#c5baff";
+        else if (crashMultiplier >= 5)   multD.style.color = "#f97316";
+        else if (crashMultiplier >= 2.5) multD.style.color = "#fbbf24";
+        else                             multD.style.color = "#c5baff";
       }
-      if (cashout) cashout.textContent = `🚀 Забрать ${Math.floor(bet * crashMultiplier)} 🪙`;
+      // Update cashout button: if already cashed out — show status, else show potential payout
+      if (cashout && !crashCashedOut) {
+        cashout.textContent = `🚀 Забрать ${Math.floor(bet * crashMultiplier)} 🪙`;
+      } else if (cashout && crashCashedOut) {
+        cashout.textContent = `✅ Забрал ×${crashCashedOutMult.toFixed(2)} — летим…`;
+      }
 
-      // ── 3. Rocket position + curve ────────────────────────────────────────
+      // ── 4. Rocket position + curve ────────────────────────────────────────
       const display = document.getElementById("crashDisplay");
       if (!display) { crashAnimFrame = requestAnimationFrame(_crashTick.bind(null, bet)); return; }
       const W = display.clientWidth  || 300;
       const H = display.clientHeight || 148;
 
-      // x: linear with time — 35 s fills the screen
       const T     = 35;
       const xFrac = Math.min(elapsed / T, 0.93);
-
-      // y: 1 − 1/mult → starts rising steeply, then flattens asymptotically
-      // 1× = 0 %  |  2× = 50 %  |  4× = 75 %  |  10× = 90 %
       const yFrac = Math.min(1 - 1 / Math.max(crashMultiplier, 1.001), 0.93);
 
-      // SVG coords  (viewBox "0 0 300 148";  y = 0 top,  y = 148 bottom)
-      const svgX = 4   + xFrac * 290;   // 4 px left margin
-      const svgY = 138 - yFrac * 128;   // 138 = start (near bottom), 10 = near top
+      const svgX = 4   + xFrac * 290;
+      const svgY = 138 - yFrac * 128;
 
-      // Rocket: sits at the EXACT curve tip (same maths as SVG)
       const rocket = document.getElementById("crashRocket");
       if (rocket) {
         const pxX = (svgX / 300) * W;
         const pxY = (svgY / 148) * H;
-        rocket.style.left   = `${(pxX - 13).toFixed(0)}px`;
-        rocket.style.top    = `${(pxY - 13).toFixed(0)}px`;
-        rocket.style.bottom = "";
-
-        // Fixed northeast orientation (matches original working behaviour)
+        rocket.style.left      = `${(pxX - 13).toFixed(0)}px`;
+        rocket.style.top       = `${(pxY - 13).toFixed(0)}px`;
+        rocket.style.bottom    = "";
         rocket.style.transform = "rotate(45deg)";
       }
 
@@ -4888,79 +5036,130 @@
       crashAnimFrame = requestAnimationFrame(_crashTick.bind(null, bet));
     }
 
-    async function _finalizeCrashLost(bet) {
+    // Called when rocket explodes (either player lost or player already cashed out = FOMO)
+    async function _finalizeCrashEnd(bet) {
       const multD    = document.getElementById("crashMultDisplay");
       const resultEl = document.getElementById("crashResult");
       const startBtn = document.getElementById("crashStartBtn");
-      const crashAt  = crashPointAt;
+      const cashAt   = crashPointAt;
 
-      // Reset multiplier display immediately
-      if (multD) { multD.classList.remove("flying"); multD.style.color = ""; multD.className = "crash-mult-display lost"; multD.textContent = `💥 ${crashAt.toFixed(2)}×`; }
+      if (crashCashedOut) {
+        // Player already cashed out — show FOMO result
+        if (multD) {
+          multD.classList.remove("flying");
+          multD.style.color = "";
+          multD.className = "crash-mult-display lost";
+          multD.textContent = `💥 ${cashAt.toFixed(2)}×`;
+        }
+        const fomoMsg = crashCashedOutPayout > 0
+          ? `<span class="flip-won">✅ Ты забрал ×${crashCashedOutMult.toFixed(2)} (+${crashCashedOutPayout} 🪙)</span><br><span style="font-size:12px;color:var(--ci-muted)">Краш произошёл на ×${cashAt.toFixed(2)}</span>`
+          : `<span class="flip-won">✅ Ты забрал на ×${crashCashedOutMult.toFixed(2)}</span><br><span style="font-size:12px;color:var(--ci-muted)">Краш на ×${cashAt.toFixed(2)}</span>`;
+        if (resultEl) resultEl.innerHTML = fomoMsg;
+        // Update local history and bar
+        crashHistory.push(cashAt);
+        if (crashHistory.length > 10) crashHistory.shift();
+        renderCrashHistoryBar();
+        _scheduleAutoBet(bet);
+        if (startBtn) { startBtn.style.display = ""; startBtn.disabled = false; startBtn.textContent = "🚀 Запустить"; }
+        return;
+      }
+
+      // Player did NOT cash out — notify server and show loss
+      if (multD) {
+        multD.classList.remove("flying");
+        multD.style.color = "";
+        multD.className = "crash-mult-display lost";
+        multD.textContent = `💥 ${cashAt.toFixed(2)}×`;
+      }
 
       try {
         const res = await fetch("/app/api/wallet/crash/cashout", {
           method: "POST", headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({initData: currentInitData, multiplier: crashAt}),
+          body: JSON.stringify({initData: currentInitData, multiplier: cashAt}),
         });
         if (res.ok) {
           const data = await res.json();
-          const at = (data.crash_at || crashAt).toFixed(2);
+          const at = (data.crash_at || cashAt).toFixed(2);
           if (multD) { multD.className = "crash-mult-display lost"; multD.textContent = `💥 ${at}×`; }
           if (resultEl) resultEl.innerHTML = `<span class="flip-lost">💥 Краш на ${at}× — ставка потеряна!</span>`;
           updateBalanceDisplay(data.new_balance);
+          crashHistory.push(parseFloat(at));
         } else {
-          if (resultEl) resultEl.innerHTML = `<span class="flip-lost">💥 Краш на ${crashAt.toFixed(2)}×!</span>`;
+          if (resultEl) resultEl.innerHTML = `<span class="flip-lost">💥 Краш на ${cashAt.toFixed(2)}×!</span>`;
+          crashHistory.push(cashAt);
         }
       } catch {
-        if (resultEl) resultEl.innerHTML = `<span class="flip-lost">💥 Краш на ${crashAt.toFixed(2)}×!</span>`;
+        if (resultEl) resultEl.innerHTML = `<span class="flip-lost">💥 Краш на ${cashAt.toFixed(2)}×!</span>`;
+        crashHistory.push(cashAt);
       }
+      if (crashHistory.length > 10) crashHistory.shift();
+      renderCrashHistoryBar();
+      if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
+      _scheduleAutoBet(bet);
       if (startBtn) { startBtn.style.display = ""; startBtn.disabled = false; startBtn.textContent = "🚀 Запустить"; }
     }
 
-    async function doCrashCashout() {
-      if (!crashGameActive) return;
-      crashGameActive = false;
-      if (crashAnimFrame) { cancelAnimationFrame(crashAnimFrame); crashAnimFrame = null; }
-      const cashout = document.getElementById("crashCashoutBtn");
-      if (cashout) cashout.disabled = true;
-      const multToSend = crashMultiplier;
+    function _scheduleAutoBet(bet) {
+      if (!crashAutoBet) return;
+      if (crashAutoBetTimer) clearTimeout(crashAutoBetTimer);
+      crashAutoBetTimer = setTimeout(() => {
+        crashAutoBetTimer = null;
+        const betInput = document.getElementById("crashBet");
+        if (betInput) betInput.value = bet;
+        startCrash();
+      }, 2000);
+    }
 
+    async function doCrashCashout() {
+      // Prevent double-cashout
+      if (!crashGameActive || crashCashedOut) return;
+      crashCashedOut = true;
+      crashCashedOutMult = crashMultiplier;
+
+      const cashout = document.getElementById("crashCashoutBtn");
+      if (cashout) {
+        cashout.disabled = true;
+        cashout.classList.remove("live");
+        cashout.textContent = `✅ Забрал ×${crashCashedOutMult.toFixed(2)} — летим…`;
+      }
+
+      // Animation continues — rocket flies to crashPointAt (FOMO)
       try {
         const res = await fetch("/app/api/wallet/crash/cashout", {
           method: "POST", headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({initData: currentInitData, multiplier: multToSend}),
+          body: JSON.stringify({initData: currentInitData, multiplier: crashCashedOutMult}),
         });
         if (!res.ok) throw new Error();
         const data = await res.json();
 
-        updateBalanceDisplay(data.new_balance);
-        const multD    = document.getElementById("crashMultDisplay");
-        const resultEl = document.getElementById("crashResult");
-        const startBtn = document.getElementById("crashStartBtn");
-        const rocket   = document.getElementById("crashRocket");
-
-        // Reset animated classes
-        const cashoutBtn2 = document.getElementById("crashCashoutBtn");
-        if (cashoutBtn2) cashoutBtn2.classList.remove("live");
-        if (multD) { multD.classList.remove("flying"); multD.style.color = ""; }
-
         if (data.won) {
-          if (multD) { multD.className = "crash-mult-display won"; }
-          if (resultEl) resultEl.innerHTML =
-            `<span class="flip-won">💰 +${data.payout} 🪙 (×${data.multiplier.toFixed(2)})</span>`;
+          crashCashedOutPayout = data.payout;
+          updateBalanceDisplay(data.new_balance);
           if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
           toastMessage(`🚀 +${data.payout} монет!`);
         } else {
-          if (multD) { multD.className = "crash-mult-display lost"; multD.textContent = `💥 ${data.crash_at.toFixed(2)}×`; }
-          if (rocket) rocket.textContent = "💥";
-          if (resultEl) resultEl.innerHTML =
-            `<span class="flip-lost">💥 Краш на ${data.crash_at.toFixed(2)}× — ставка потеряна!</span>`;
+          // Server says crash already happened (race condition) — end immediately
+          crashGameActive = false;
+          if (crashAnimFrame) { cancelAnimationFrame(crashAnimFrame); crashAnimFrame = null; }
+          const rocketEl = document.getElementById("crashRocket");
+          if (rocketEl) { rocketEl.textContent = "💥"; rocketEl.style.filter = "drop-shadow(0 0 16px rgba(255,69,58,0.9))"; }
+          crashCashedOutPayout = 0;
+          updateBalanceDisplay(data.new_balance);
+          const resultEl = document.getElementById("crashResult");
+          if (resultEl) resultEl.innerHTML = `<span class="flip-lost">💥 Краш на ${data.crash_at.toFixed(2)}× — ставка потеряна!</span>`;
+          const multD = document.getElementById("crashMultDisplay");
+          if (multD) { multD.classList.remove("flying"); multD.style.color = ""; multD.className = "crash-mult-display lost"; multD.textContent = `💥 ${data.crash_at.toFixed(2)}×`; }
+          crashHistory.push(data.crash_at);
+          if (crashHistory.length > 10) crashHistory.shift();
+          renderCrashHistoryBar();
           if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
+          _scheduleAutoBet(crashCurrentBet); // auto-bet with same bet
+          const startBtn = document.getElementById("crashStartBtn");
+          if (startBtn) { startBtn.style.display = ""; startBtn.disabled = false; startBtn.textContent = "🚀 Запустить"; }
         }
-        if (startBtn) { startBtn.style.display = ""; startBtn.disabled = false; startBtn.textContent = "🚀 Запустить"; }
       } catch {
-        if (cashout) { cashout.disabled = false; }
-        toastMessage("Ошибка. Попробуй ещё раз.");
+        // If request fails, still keep animation going; result shown at explosion
+        cashout && (cashout.textContent = `✅ Забрал ×${crashCashedOutMult.toFixed(2)} — летим…`);
       }
     }
 

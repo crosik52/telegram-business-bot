@@ -1073,6 +1073,7 @@ async def wallet_mines_cashout(
         "multiplier":    result.multiplier,
         "revealed_count": result.revealed_count,
         "new_balance":   result.new_balance,
+        "mines_indices": result.mines_indices,
     }
 
 
@@ -1114,6 +1115,17 @@ async def wallet_crash_cashout(
         "payout":     result.payout,
         "new_balance": result.new_balance,
     }
+
+
+@router.get("/app/api/wallet/crash/history")
+async def wallet_crash_history() -> dict:
+    """Return today's last 10 crash multipliers (public, no auth required)."""
+    import datetime as dt
+    from app.repositories.wallet_repository import _crash_history
+    today = dt.date.today()
+    today_entries = [h for h in _crash_history if h["ts"].date() == today]
+    recent = today_entries[-10:]
+    return {"history": [round(h["crash_at"], 2) for h in recent]}
 
 
 # ── Quests ────────────────────────────────────────────────────────────────────

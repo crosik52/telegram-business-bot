@@ -58,6 +58,7 @@ CRASH_HOUSE_EDGE = 0.99   # 1 % edge
 # ── Per-process game sessions (single Railway instance → fine) ──────────────
 _mines_sessions: dict[int, dict] = {}   # owner_id → session
 _crash_sessions: dict[int, dict] = {}   # owner_id → session
+_crash_history:  list[dict]      = []   # global crash history (all users, last 200)
 
 
 # ── Internal helpers ────────────────────────────────────────────────────────
@@ -140,6 +141,7 @@ class MinesCashoutResult:
     multiplier:    float
     revealed_count: int
     new_balance:   int
+    mines_indices: list  # positions of all mines (for FOMO reveal)
 
 
 @dataclass
@@ -464,8 +466,9 @@ class WalletRepository:
             raise ValueError("no_cells_revealed")
 
         revealed_count = len(sess["revealed"])
-        mult   = _mines_multiplier(sess["mines_count"], revealed_count)
-        payout = round(sess["bet"] * mult)
+        mult       = _mines_multiplier(sess["mines_count"], revealed_count)
+        payout     = round(sess["bet"] * mult)
+        mines_list = sorted(sess["mines"])   # capture before deletion
         del _mines_sessions[owner_telegram_id]
 
         wallet = await self._get_for_update(owner_telegram_id)
@@ -477,6 +480,7 @@ class WalletRepository:
         return MinesCashoutResult(
             payout=payout, multiplier=mult,
             revealed_count=revealed_count, new_balance=wallet.balance,
+            mines_indices=mines_list,
         )
 
     # ── Crash (mutation) ──────────────────────────────────────────────────
@@ -524,6 +528,14 @@ class WalletRepository:
             payout = 0
         _clamp_wallet(wallet)
         await self.session.flush()
+
+        # Record in global history (keep last 200 entries)
+        _crash_history.append({
+            "crash_at": crash_at,
+            "ts": dt.datetime.now(dt.timezone.utc),
+        })
+        if len(_crash_history) > 200:
+            del _crash_history[:-200]
 
         return CrashCashoutResult(
             won=won, crash_at=crash_at, multiplier=multiplier,

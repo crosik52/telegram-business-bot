@@ -335,6 +335,7 @@ class AdminSubGrantRequest(BaseModel):
     init_data: str = Field(alias="initData")
     owner_telegram_id: int = Field(alias="ownerTelegramId")
     duration_days: int = Field(alias="durationDays", ge=1, le=365, default=30)
+    sub_type: str = Field(alias="subType", default="premium")
 
 
 class AdminSubRevokeRequest(BaseModel):
@@ -2206,8 +2207,9 @@ async def admin_subscription_grant(
 ) -> dict:
     """Manually grant a subscription to a user."""
     _require_admin(payload.init_data)
+    sub_type = payload.sub_type if payload.sub_type in ("premium", "vip") else "premium"
     sub_repo = SubscriptionRepository(session)
-    sub = await sub_repo.grant(payload.owner_telegram_id, payload.duration_days)
+    sub = await sub_repo.grant(payload.owner_telegram_id, payload.duration_days, sub_type=sub_type)
     await session.commit()
 
     # Notify the user in their DM
@@ -2216,14 +2218,24 @@ async def admin_subscription_grant(
         _bot = get_bot(get_settings())
         if _bot:
             _expires = sub.expires_at.strftime("%d.%m.%Y")
-            await _bot.send_message(
-                payload.owner_telegram_id,
-                f"{E.STAR} <b>Premium активирован!</b>\n\n"
-                f"Администратор выдал вам Premium на <b>{payload.duration_days} дн.</b>\n"
-                f"Действует до: <b>{_expires}</b>\n\n"
-                f"Наслаждайтесь привилегиями! 🎉",
-                parse_mode="HTML",
-            )
+            if sub_type == "vip":
+                await _bot.send_message(
+                    payload.owner_telegram_id,
+                    f"💎 <b>VIP активирован!</b>\n\n"
+                    f"Администратор выдал вам VIP на <b>{payload.duration_days} дн.</b>\n"
+                    f"Действует до: <b>{_expires}</b>\n\n"
+                    f"Добро пожаловать в VIP-клуб! 👑",
+                    parse_mode="HTML",
+                )
+            else:
+                await _bot.send_message(
+                    payload.owner_telegram_id,
+                    f"{E.STAR} <b>Premium активирован!</b>\n\n"
+                    f"Администратор выдал вам Premium на <b>{payload.duration_days} дн.</b>\n"
+                    f"Действует до: <b>{_expires}</b>\n\n"
+                    f"Наслаждайтесь привилегиями! 🎉",
+                    parse_mode="HTML",
+                )
     except Exception as _exc:
         logger.warning("admin_grant: failed to notify user %s: %s",
                        payload.owner_telegram_id, _exc)

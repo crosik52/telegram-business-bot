@@ -264,6 +264,7 @@ class SubscriptionRepository:
                 "days_left":        max(0, (sub.expires_at - now).days),
                 "granted_by_admin": sub.granted_by_admin,
                 "stars_paid":       sub.stars_paid,
+                "sub_type":         sub.sub_type or "premium",
             })
 
         return {

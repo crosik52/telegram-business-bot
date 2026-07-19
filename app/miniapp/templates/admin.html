@@ -1902,6 +1902,10 @@
           <div class="sub-grant-form">
             <input type="number" id="grantUserId" placeholder="Telegram ID пользователя" min="1">
             <input type="number" id="grantDays" placeholder="Дней" value="${cfg.duration_days}" min="1" max="730" style="max-width:90px">
+            <select id="grantSubType" style="border:1.5px solid rgba(120,120,128,0.2);border-radius:10px;padding:6px 10px;font-size:13px;background:var(--bg);color:var(--text);flex-shrink:0">
+              <option value="premium">⭐ Premium</option>
+              <option value="vip">💎 VIP</option>
+            </select>
             <button class="sub-grant-btn" id="subGrantBtn">✓ Выдать</button>
           </div>
           <div style="font-size:11px;color:var(--hint);margin-top:-6px">ID можно скопировать из карточки пользователя во вкладке «Пользователи»</div>
@@ -1938,9 +1942,13 @@
       const avatarBg = colorFor(String(s.user_telegram_id));
       const avatarLetter = initials(name);
 
+      const isVip = s.sub_type === "vip";
+      const tierBadge = isVip
+        ? `<span style="background:linear-gradient(135deg,rgba(168,85,247,.2),rgba(255,204,0,.15));color:#9c4cc4;font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;vertical-align:middle">💎 VIP</span>`
+        : `<span style="background:rgba(88,86,214,.12);color:#5856d6;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;vertical-align:middle">⭐ Premium</span>`;
       const grantBadge = s.granted_by_admin
         ? `<span style="background:rgba(255,204,0,.15);color:#c9920a;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;vertical-align:middle">👑 Выдана</span>`
-        : `<span style="background:rgba(36,129,204,.12);color:var(--link);font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;vertical-align:middle">⭐ Куплена</span>`;
+        : `<span style="background:rgba(36,129,204,.12);color:var(--link);font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;vertical-align:middle">💳 Куплена</span>`;
 
       const STATUS_LABEL = { active: "активна", paused: "пауза", cancelled: "отменена", refunded: "возврат" };
       const STATUS_STYLE = {
@@ -1965,13 +1973,13 @@
 
       const actionBtn = st === "active"
         ? `<button class="sub-revoke-btn" data-user-id="${s.user_telegram_id}" data-name="${esc(name)}">✗ Отозвать</button>`
-        : `<button class="sub-grant-btn" style="padding:6px 11px;font-size:12px" data-grant-id="${s.user_telegram_id}" data-name="${esc(name)}">↩ Вернуть</button>`;
+        : `<button class="sub-grant-btn" style="padding:6px 11px;font-size:12px" data-grant-id="${s.user_telegram_id}" data-name="${esc(name)}" data-sub-type="${s.sub_type||'premium'}">↩ Вернуть</button>`;
 
       return `
         <div class="sub-subscriber-card">
           <div class="sub-sub-avatar" style="background:${avatarBg}">${esc(avatarLetter)}</div>
           <div class="sub-sub-info">
-            <div class="sub-sub-name">${esc(name)} ${grantBadge} ${statusBadge}</div>
+            <div class="sub-sub-name">${esc(name)} ${tierBadge} ${grantBadge} ${statusBadge}</div>
             <div class="sub-sub-id">${subLine}</div>
             <div class="sub-sub-meta">${expLine}</div>
           </div>
@@ -2112,18 +2120,20 @@
 
       // Grant subscription (form)
       document.getElementById("subGrantBtn")?.addEventListener("click", async (e) => {
-        const btn = e.currentTarget;
-        const userId = parseInt(document.getElementById("grantUserId").value);
-        const days   = parseInt(document.getElementById("grantDays").value) || 30;
+        const btn     = e.currentTarget;
+        const userId  = parseInt(document.getElementById("grantUserId").value);
+        const days    = parseInt(document.getElementById("grantDays").value) || 30;
+        const subType = document.getElementById("grantSubType")?.value || "premium";
         if (!userId) { showToast("⚠️ Введи Telegram ID"); return; }
         btn.disabled = true;
         try {
           const res = await fetch("/app/api/admin/subscription/grant", {
             method: "POST", headers: {"Content-Type":"application/json"},
-            body: JSON.stringify({initData, ownerTelegramId: userId, durationDays: days}),
+            body: JSON.stringify({initData, ownerTelegramId: userId, durationDays: days, subType}),
           });
           if (!res.ok) throw new Error();
-          showToast(`✅ Подписка выдана пользователю ${userId} на ${days} дн.`);
+          const tier = subType === "vip" ? "💎 VIP" : "⭐ Premium";
+          showToast(`✅ ${tier} выдан пользователю ${userId} на ${days} дн.`);
           document.getElementById("grantUserId").value = "";
           _subPage = 1;
           await reloadSubscriberList();
@@ -2185,20 +2195,22 @@
       // Restore buttons (cancelled → grant again)
       document.querySelectorAll("[data-grant-id]").forEach(btn => {
         btn.addEventListener("click", async (e) => {
-          const b      = e.currentTarget;
-          const userId = parseInt(b.dataset.grantId);
-          const name   = b.dataset.name || String(userId);
-          const days   = parseInt(document.getElementById("grantDays")?.value) || (subConfig?.duration_days || 30);
-          const ok     = await confirmAction(`Вернуть подписку ${name} на ${days} дн.?`);
+          const b       = e.currentTarget;
+          const userId  = parseInt(b.dataset.grantId);
+          const name    = b.dataset.name || String(userId);
+          const subType = b.dataset.subType || document.getElementById("grantSubType")?.value || "premium";
+          const days    = parseInt(document.getElementById("grantDays")?.value) || (subConfig?.duration_days || 30);
+          const tier    = subType === "vip" ? "💎 VIP" : "⭐ Premium";
+          const ok      = await confirmAction(`Вернуть ${tier} для ${name} на ${days} дн.?`);
           if (!ok) return;
           b.disabled = true;
           try {
             const res = await fetch("/app/api/admin/subscription/grant", {
               method: "POST", headers: {"Content-Type":"application/json"},
-              body: JSON.stringify({initData, ownerTelegramId: userId, durationDays: days}),
+              body: JSON.stringify({initData, ownerTelegramId: userId, durationDays: days, subType}),
             });
             if (!res.ok) throw new Error();
-            showToast(`✅ Подписка возвращена ${name}`);
+            showToast(`✅ ${tier} возвращён ${name}`);
             await reloadSubscriberList();
           } catch {
             showToast("❌ Ошибка");

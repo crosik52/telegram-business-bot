@@ -4175,12 +4175,23 @@
       const plans = _subPlans(s);
       const activePlan = plans.find(p => p.key === selectedSubPlan) || plans[1];
 
+      // Monthly cost per plan, for "saves X⭐/month vs monthly" comparison
+      const monthlyPlan = plans.find(p => p.key === "month");
+      const monthlyPerMo = monthlyPlan ? monthlyPlan.stars : s.price_stars;
+
       const planCardsHtml = plans.map(p => {
-        const perDay = (p.stars / p.days).toFixed(1);
+        const months = p.days / (s.duration_days || 30);
+        const perMonth = p.stars / months;
+        const savePerMo = Math.round(monthlyPerMo - perMonth);
         const cls = ["sub-plan-card",
           p.key === "quarter" ? "featured" : "",
           p.key === selectedSubPlan ? "selected" : "",
         ].filter(Boolean).join(" ");
+
+        const subLabel = p.key === "month"
+          ? `${Math.round(perMonth)} ⭐/мес`
+          : `−${savePerMo} ⭐/мес vs месяца`;
+
         return `
           <div class="${cls}" data-plan="${p.key}" onclick="selectSubPlan('${p.key}')">
             ${p.badge ? `<div class="sub-plan-badge">${p.badge}</div>` : ""}
@@ -4189,7 +4200,7 @@
               <span class="sub-plan-stars-ico">⭐</span>
               <span>${p.stars}</span>
             </div>
-            <div class="sub-plan-perday">${perDay} ⭐/день</div>
+            <div class="sub-plan-perday">${subLabel}</div>
             ${p.savePct > 0 ? `<div class="sub-plan-save">−${p.savePct}%</div>` : ""}
           </div>`;
       }).join("");

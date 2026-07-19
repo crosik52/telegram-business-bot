@@ -43,7 +43,7 @@ async def _fetch_messages(
     session: AsyncSession,
     chat_id: int,
     connection_ids: list[str],
-    limit: int = 600,
+    limit: int = 1000,
 ) -> list[Message]:
     if not connection_ids:
         return []
@@ -77,6 +77,20 @@ _MEDIA_LABEL: dict[str, str] = {
 }
 
 
+def _fmt_duration(seconds: float | None) -> str:
+    """Format seconds into human-readable Russian string."""
+    if seconds is None:
+        return "—"
+    s = int(seconds)
+    if s < 60:
+        return f"{s} сек"
+    if s < 3600:
+        return f"{s // 60} мин"
+    hours = s // 3600
+    mins  = (s % 3600) // 60
+    return f"{hours} ч {mins} мин" if mins else f"{hours} ч"
+
+
 def _local_stats(msgs: list[Message]) -> dict:
     if not msgs:
         return {}
@@ -91,48 +105,101 @@ def _local_stats(msgs: list[Message]) -> dict:
     user_words    = sum(_words(m) for m in user_msgs)
     contact_words = sum(_words(m) for m in contact_msgs)
 
-    # Initiates (who sent more "first messages" after a 3-hour gap)
-    initiates_user = 0
+    user_avg_words    = round(user_words    / max(len(user_msgs), 1), 1)
+    contact_avg_words = round(contact_words / max(len(contact_msgs), 1), 1)
+
+    # ── Initiates (who sent first after a 3-hour gap) ────────────────────────
+    initiates_user    = 0
     initiates_contact = 0
     for i, m in enumerate(msgs):
         if i == 0:
-            if m.is_outgoing:
-                initiates_user += 1
-            else:
-                initiates_contact += 1
+            if m.is_outgoing: initiates_user += 1
+            else:              initiates_contact += 1
             continue
         gap = (m.sent_at - msgs[i - 1].sent_at).total_seconds()
-        if gap > 10800:  # 3 hours
-            if m.is_outgoing:
-                initiates_user += 1
-            else:
-                initiates_contact += 1
+        if gap > 10800:
+            if m.is_outgoing: initiates_user += 1
+            else:              initiates_contact += 1
 
-    # Media counts
+    # ── Ends conversation ────────────────────────────────────────────────────
+    # Last message of each conversation block (separated by 3-hr gaps)
+    user_ends    = 0
+    contact_ends = 0
+    for i in range(1, len(msgs)):
+        gap = (msgs[i].sent_at - msgs[i - 1].sent_at).total_seconds()
+        if gap > 10800:
+            # msgs[i-1] ended the previous conversation
+            if msgs[i - 1].is_outgoing: user_ends += 1
+            else:                        contact_ends += 1
+    # Last message of the final conversation
+    if msgs[-1].is_outgoing: user_ends += 1
+    else:                     contact_ends += 1
+
+    # ── Average response times ───────────────────────────────────────────────
+    user_resp_times:    list[float] = []
+    contact_resp_times: list[float] = []
+    for i in range(1, len(msgs)):
+        gap = (msgs[i].sent_at - msgs[i - 1].sent_at).total_seconds()
+        if gap > 10800:  # new conversation block, skip
+            continue
+        if msgs[i].is_outgoing and not msgs[i - 1].is_outgoing:
+            user_resp_times.append(gap)
+        elif not msgs[i].is_outgoing and msgs[i - 1].is_outgoing:
+            contact_resp_times.append(gap)
+
+    avg_user_resp    = (sum(user_resp_times)    / len(user_resp_times))    if user_resp_times    else None
+    avg_contact_resp = (sum(contact_resp_times) / len(contact_resp_times)) if contact_resp_times else None
+
+    # ── Media counts ─────────────────────────────────────────────────────────
     media_counts: dict[str, int] = {}
     for m in msgs:
         mt = m.media_type.value if hasattr(m.media_type, "value") else str(m.media_type)
         if mt and mt not in ("none", "NONE", ""):
             media_counts[mt] = media_counts.get(mt, 0) + 1
 
-    # Date range
-    first_at = msgs[0].sent_at.strftime("%d.%m.%Y") if msgs else "-"
-    last_at  = msgs[-1].sent_at.strftime("%d.%m.%Y") if msgs else "-"
+    # ── Date range ────────────────────────────────────────────────────────────
+    first_at  = msgs[0].sent_at.strftime("%d.%m.%Y") if msgs else "-"
+    last_at   = msgs[-1].sent_at.strftime("%d.%m.%Y") if msgs else "-"
     days_span = max(1, (msgs[-1].sent_at - msgs[0].sent_at).days) if len(msgs) > 1 else 1
 
+    # ── Derived balance labels ───────────────────────────────────────────────
+    def _winner(a: int | float, b: int | float, label_a: str, label_b: str) -> str:
+        if a > b * 1.2:   return label_a
+        if b > a * 1.2:   return label_b
+        return "Поровну"
+
+    balance_initiates    = _winner(initiates_user, initiates_contact, "Вы", "Собеседник")
+    balance_ends         = _winner(user_ends, contact_ends, "Вы", "Собеседник")
+    balance_longer       = _winner(user_avg_words, contact_avg_words, "Вы", "Собеседник")
+
+    # Ignores = longer average response time
+    if avg_user_resp is not None and avg_contact_resp is not None:
+        balance_ignores = _winner(avg_user_resp, avg_contact_resp, "Вы", "Собеседник")
+    else:
+        balance_ignores = "—"
+
     return {
-        "total_messages":       len(msgs),
-        "user_messages":        len(user_msgs),
-        "contact_messages":     len(contact_msgs),
-        "user_words":           user_words,
-        "contact_words":        contact_words,
-        "initiates_user":       initiates_user,
-        "initiates_contact":    initiates_contact,
-        "media":                media_counts,
-        "first_message_date":   first_at,
-        "last_message_date":    last_at,
-        "days_span":            days_span,
-        "messages_per_day":     round(len(msgs) / days_span, 1),
+        "total_messages":          len(msgs),
+        "user_messages":           len(user_msgs),
+        "contact_messages":        len(contact_msgs),
+        "user_words":              user_words,
+        "contact_words":           contact_words,
+        "user_avg_words":          user_avg_words,
+        "contact_avg_words":       contact_avg_words,
+        "initiates_user":          initiates_user,
+        "initiates_contact":       initiates_contact,
+        "media":                   media_counts,
+        "first_message_date":      first_at,
+        "last_message_date":       last_at,
+        "days_span":               days_span,
+        "messages_per_day":        round(len(msgs) / days_span, 1),
+        # pre-computed balance
+        "balance_initiates":       balance_initiates,
+        "balance_ends":            balance_ends,
+        "balance_longer":          balance_longer,
+        "balance_ignores":         balance_ignores,
+        "avg_response_time_user":  _fmt_duration(avg_user_resp),
+        "avg_response_time_contact": _fmt_duration(avg_contact_resp),
     }
 
 
@@ -248,7 +315,13 @@ _SYSTEM_PROMPT = """Ты — аналитик отношений. Анализи
 - interest.probability: число от 0 до 100 (насколько вероятно, что собеседник заинтересован)
 - emotions: 5 чисел, в сумме дающих ~100
 - dynamics.trend: одно из "growing" | "stable" | "declining"
-- balance.initiates_first: "user" | "contact" | "equal"
+
+ОБЯЗАТЕЛЬНО заполни все поля:
+- balance.*: используй ТОЧНО предоставленные предвычисленные значения
+- style.user_tags: 3–5 коротких тегов стиля общения пользователя (примеры: "краткий", "эмоциональный", "с юмором", "вдумчивый", "прямой")
+- style.contact_tags: 3–5 коротких тегов стиля собеседника
+- personality.user_traits: 3–5 черт характера пользователя по переписке (примеры: "открытый", "заботливый", "импульсивный", "сдержанный")
+- personality.contact_traits: 3–5 черт характера собеседника
 - Всё на русском языке"""
 
 
@@ -268,7 +341,7 @@ async def analyze(
     if not api_key:
         raise ValueError("GEMINI_API_KEY not set")
 
-    msgs = await _fetch_messages(session, chat_id, connection_ids, limit=600)
+    msgs = await _fetch_messages(session, chat_id, connection_ids, limit=1000)
     if not msgs:
         raise ValueError("no_messages")
 
@@ -281,14 +354,23 @@ async def analyze(
 Базовая статистика (уже посчитана):
 - Всего сообщений: {stats['total_messages']} (Вы: {stats['user_messages']}, Собеседник: {stats['contact_messages']})
 - Слов: Вы — {stats['user_words']}, Собеседник — {stats['contact_words']}
+- Среднее слов в сообщении: Вы — {stats['user_avg_words']}, Собеседник — {stats['contact_avg_words']}
 - Инициировали разговор: Вы — {stats['initiates_user']} раз, Собеседник — {stats['initiates_contact']} раз
 - Период: {stats['first_message_date']} — {stats['last_message_date']} ({stats['days_span']} дней)
 - Среднее сообщений в день: {stats['messages_per_day']}
 
+Предвычисленные данные баланса (вставь ТОЧНО эти значения в соответствующие поля balance):
+- balance.initiates_first = "{stats['balance_initiates']}"
+- balance.ends_conversation = "{stats['balance_ends']}"
+- balance.longer_messages = "{stats['balance_longer']}"
+- balance.ignores_more = "{stats['balance_ignores']}"
+- balance.avg_response_time_user = "{stats['avg_response_time_user']}"
+- balance.avg_response_time_contact = "{stats['avg_response_time_contact']}"
+
 Переписка:
 {excerpt}
 
-Верни JSON по схеме."""
+Верни JSON по схеме. ОБЯЗАТЕЛЬНО заполни style.user_tags, style.contact_tags, personality.user_traits, personality.contact_traits — минимум 3 значения в каждом."""
 
     import asyncio  # noqa: PLC0415
     from google import genai  # noqa: PLC0415
@@ -311,7 +393,7 @@ async def analyze(
                     temperature=0.4,
                 ),
             ),
-            timeout=25.0,
+            timeout=30.0,
         )
     except asyncio.TimeoutError as exc:
         raise ValueError("gemini_timeout") from exc
@@ -332,9 +414,9 @@ async def analyze(
             raise ValueError(f"bad_json: {raw[:300]}")
 
     result = {
-        "stats":    stats,
-        "ai":       ai_data,
-        "analyzed_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "stats":         stats,
+        "ai":            ai_data,
+        "analyzed_at":   dt.datetime.now(dt.timezone.utc).isoformat(),
         "message_count": len(msgs),
     }
     _store(owner_id, chat_id, result)

@@ -205,7 +205,7 @@ def _local_stats(msgs: list[Message]) -> dict:
 
 # ── Transcript builder ────────────────────────────────────────────────────────
 
-def _build_transcript(msgs: list[Message], max_chars: int = 28_000) -> str:
+def _build_transcript(msgs: list[Message], max_chars: int = 18_000) -> str:
     lines: list[str] = []
     total = 0
     for m in msgs:
@@ -393,7 +393,7 @@ async def analyze(
                     temperature=0.4,
                 ),
             ),
-            timeout=30.0,
+            timeout=50.0,
         )
     except asyncio.TimeoutError as exc:
         raise ValueError("gemini_timeout") from exc

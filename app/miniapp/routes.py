@@ -3295,7 +3295,7 @@ async def ai_relationship_analysis(
     payload: AiAnalysisRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
     """Run Gemini AI analysis for a specific chat. VIP-only."""
-    from app.models.business import BusinessConnection   # noqa: PLC0415
+    from app.models.business_connection import BusinessConnection   # noqa: PLC0415
     from app.services.ai_analysis_service import analyze # noqa: PLC0415
 
     settings = get_settings()

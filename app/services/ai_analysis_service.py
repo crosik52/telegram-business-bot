@@ -295,7 +295,7 @@ async def analyze(
 
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel(
-        model_name="gemini-2.0-flash-lite",
+        model_name="gemini-flash-latest",
         system_instruction=_SYSTEM_PROMPT,
         generation_config=genai.GenerationConfig(temperature=0.4),
     )

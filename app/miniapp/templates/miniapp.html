@@ -7349,6 +7349,7 @@
             no_connection:    "❌ Бизнес-аккаунт не подключён",
             ai_not_configured:"⚙️ AI сервис временно недоступен",
             analysis_failed:  "❌ Ошибка анализа. Попробуй позже.",
+            gemini_timeout:   "⏱ Анализ занял слишком долго. Попробуй ещё раз.",
           };
           const errText = MSGS[err.detail] || (err.detail ? `❌ ${err.detail}` : "Ошибка. Попробуй позже.");
           body.innerHTML = `<div class="ai-loading-wrap">

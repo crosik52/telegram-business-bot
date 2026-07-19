@@ -268,7 +268,7 @@ async def analyze(
     if not api_key:
         raise ValueError("GEMINI_API_KEY not set")
 
-    msgs = await _fetch_messages(session, chat_id, connection_ids)
+    msgs = await _fetch_messages(session, chat_id, connection_ids, limit=150)
     if not msgs:
         raise ValueError("no_messages")
 
@@ -301,15 +301,20 @@ async def analyze(
         + "\n\nОтвет верни СТРОГО в формате JSON без пояснений и markdown-обёрток."
     )
     try:
-        response = await asyncio.to_thread(
-            client.models.generate_content,
-            model="gemini-flash-latest",
-            contents=full_prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=_SYSTEM_PROMPT,
-                temperature=0.4,
+        response = await asyncio.wait_for(
+            asyncio.to_thread(
+                client.models.generate_content,
+                model="gemini-flash-latest",
+                contents=full_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=_SYSTEM_PROMPT,
+                    temperature=0.4,
+                ),
             ),
+            timeout=25.0,
         )
+    except asyncio.TimeoutError as exc:
+        raise ValueError("gemini_timeout") from exc
     except Exception as exc:
         raise ValueError(f"gemini_error: {type(exc).__name__}: {exc}") from exc
 

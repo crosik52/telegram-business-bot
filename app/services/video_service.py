@@ -122,21 +122,37 @@ def extract_video_url(text: str) -> tuple[str, str] | None:
 
 # ── Download helpers (sync, run in executor) ──────────────────────────────────
 
-def _build_base_opts(out_dir: str, max_bytes: int) -> dict:
+def _find_ffmpeg() -> str:
+    """Return the full path to an ffmpeg binary.
+
+    Tries (in order):
+    1. System ffmpeg via shutil.which
+    2. Bundled static binary from imageio-ffmpeg (works on Railway / any Linux)
+    Returns empty string if neither is available.
+    """
     import shutil as _shutil
-    ffmpeg = _shutil.which("ffmpeg") or ""
+    sys_ff = _shutil.which("ffmpeg")
+    if sys_ff:
+        return sys_ff
+    try:
+        import imageio_ffmpeg as _iio
+        return _iio.get_ffmpeg_exe()
+    except Exception:
+        return ""
+
+
+def _build_base_opts(out_dir: str, max_bytes: int) -> dict:
+    ffmpeg = _find_ffmpeg()
     ffmpeg_dir = os.path.dirname(ffmpeg) if ffmpeg else ""
     logger.info("Video opts: ffmpeg=%s", ffmpeg or "NOT FOUND")
     opts: dict = {
-        "outtmpl":        os.path.join(out_dir, "%(id)s_%(autonumber)s.%(ext)s"),
-        "quiet":          True,
-        "no_warnings":    True,
-        "noplaylist":     True,
-        "max_filesize":   max_bytes,
-        # Prevent yt-dlp from hanging indefinitely on stalled connections
-        "socket_timeout": 30,
-        # Abort fragment download if it stalls for > 60 s
-        "retries":        3,
+        "outtmpl":          os.path.join(out_dir, "%(id)s_%(autonumber)s.%(ext)s"),
+        "quiet":            True,
+        "no_warnings":      True,
+        "noplaylist":       True,
+        "max_filesize":     max_bytes,
+        "socket_timeout":   30,
+        "retries":          3,
         "fragment_retries": 3,
     }
     if ffmpeg_dir:
@@ -409,19 +425,24 @@ def _download_sync(
         best = max(videos, key=lambda p: p.stat().st_size)
         # Convert any non-mp4 to mp4 so Telegram sends it as a video, not a document
         if best.suffix.lower() != ".mp4":
-            mp4_path = best.with_suffix(".mp4")
-            import subprocess as _sp
-            result = _sp.run(
-                ["ffmpeg", "-y", "-i", str(best),
-                 "-c:v", "copy", "-c:a", "aac", str(mp4_path)],
-                capture_output=True,
-            )
-            if result.returncode == 0 and mp4_path.exists():
-                best.unlink(missing_ok=True)
-                best = mp4_path
-                logger.info("Video: converted %s → mp4", best.name)
+            _ff = _find_ffmpeg()
+            if _ff:
+                mp4_path = best.with_suffix(".mp4")
+                import subprocess as _sp
+                result = _sp.run(
+                    [_ff, "-y", "-i", str(best),
+                     "-c:v", "copy", "-c:a", "aac", str(mp4_path)],
+                    capture_output=True,
+                )
+                if result.returncode == 0 and mp4_path.exists():
+                    best.unlink(missing_ok=True)
+                    best = mp4_path
+                    logger.info("Video: converted %s → mp4", best.name)
+                else:
+                    logger.warning("Video: ffmpeg conversion failed (%s), sending original",
+                                   result.stderr[-200:] if result.stderr else "no stderr")
             else:
-                logger.warning("Video: ffmpeg conversion failed, using original %s", best.suffix)
+                logger.warning("Video: ffmpeg not available, sending original %s", best.suffix)
         if best.stat().st_size > MAX_BYTES:
             best.unlink(missing_ok=True)
             raise ValueError(f"Video too large: {best.stat().st_size // (1024*1024)} MB > 45 MB")

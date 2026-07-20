@@ -123,13 +123,19 @@ def extract_video_url(text: str) -> tuple[str, str] | None:
 # ── Download helpers (sync, run in executor) ──────────────────────────────────
 
 def _build_base_opts(out_dir: str, max_bytes: int) -> dict:
-    return {
+    import shutil as _shutil
+    ffmpeg = _shutil.which("ffmpeg") or ""
+    ffmpeg_dir = os.path.dirname(ffmpeg) if ffmpeg else ""
+    opts: dict = {
         "outtmpl":     os.path.join(out_dir, "%(id)s_%(autonumber)s.%(ext)s"),
         "quiet":       True,
         "no_warnings": True,
         "noplaylist":  True,
         "max_filesize": max_bytes,
     }
+    if ffmpeg_dir:
+        opts["ffmpeg_location"] = ffmpeg_dir
+    return opts
 
 
 from app.services._cookie_utils import json_cookies_to_netscape as _json_cookies_to_netscape

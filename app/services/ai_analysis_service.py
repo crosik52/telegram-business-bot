@@ -406,6 +406,9 @@ async def analyze(
     except asyncio.TimeoutError as exc:
         raise ValueError("gemini_timeout") from exc
     except Exception as exc:
+        exc_str = str(exc)
+        if "429" in exc_str or "RESOURCE_EXHAUSTED" in exc_str or "quota" in exc_str.lower():
+            raise ValueError("gemini_quota") from exc
         raise ValueError(f"gemini_error: {type(exc).__name__}: {exc}") from exc
 
     raw = response.text.strip()

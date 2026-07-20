@@ -7265,6 +7265,9 @@
             const data = await res.json();
             if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
             if (data.new_balance != null) updateBalanceDisplay(data.new_balance);
+            // Update in-memory shopData immediately so openMyCard() gets the
+            // new theme even if the user opens the card before loadShop() returns.
+            if (shopData?.settings) shopData.settings.theme = theme;
             const label = THEMES.find(t => t.id === theme)?.label ?? theme;
             toastMessage(isOwned ? `🎨 Тема «${label}» применена на карточку!` : `🎨 Тема «${label}» куплена и применена на карточку!`);
             await loadShop();

@@ -384,14 +384,13 @@ def _download_sync(
         **_build_base_opts(out_dir, MAX_BYTES),
         # Prefer merged mp4 streams; merge_output_format forces ffmpeg remux to
         # mp4 so Telegram always gets a proper video, not a webm document.
-        # Prefer pre-merged single-file formats first so ffmpeg is NOT needed.
-        # Only fall back to split streams if no pre-merged format exists.
+        # With auth, YouTube serves DASH streams → prefer split+merge (ffmpeg available).
+        # Also include progressive mp4 fallbacks for unauthenticated / simpler cases.
         "format": (
-            "best[ext=mp4][height<=720]"
-            "/best[height<=720]"
-            "/best[ext=mp4]"
-            "/bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]"
+            "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]"
             "/bestvideo[height<=720]+bestaudio"
+            "/best[ext=mp4][height<=720]"
+            "/best[height<=720]"
             "/best"
         ),
         "merge_output_format": "mp4",
@@ -413,20 +412,28 @@ def _download_sync(
         with yt_dlp.YoutubeDL(opts) as ydl:
             ydl.download([url])
 
+    _AUTH_ERRORS = ("sign in", "login", "not available", "private video", "members only")
+
     video_download_ok = False
     try:
         _run(opts_video)
         video_download_ok = True
     except yt_dlp.utils.DownloadError as exc:
-        # Retry without cookies if cookie-auth failed
-        if "cookiefile" in opts_video:
-            logger.warning("Video: cookie download failed (%s), retrying without auth", exc)
+        exc_lower = str(exc).lower()
+        # Only retry without cookies for genuine auth failures, NOT for
+        # "Requested format is not available" (retrying without auth makes it worse).
+        is_auth_error = any(k in exc_lower for k in ("sign in", "login",
+                                                       "private video", "members only"))
+        if "cookiefile" in opts_video and is_auth_error:
+            logger.warning("Video: auth error with cookies (%s), retrying without auth", exc)
             opts_no_cookie = {k: v for k, v in opts_video.items() if k != "cookiefile"}
             try:
                 _run(opts_no_cookie)
                 video_download_ok = True
             except yt_dlp.utils.DownloadError:
                 pass  # fall through to photo attempt
+        elif not video_download_ok:
+            logger.warning("Video: download failed (%s), falling through", exc)
 
     videos, images = _scan_dir(out_dir)
 

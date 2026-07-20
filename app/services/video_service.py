@@ -245,20 +245,29 @@ def _apply_youtube_opts(ydl_opts: dict, out_dir: str) -> None:
     1. Use alternative player clients that don't require sign-in (tv, mweb).
     2. If YOUTUBE_COOKIES env var is set, inject cookies (same formats as TikTok).
     """
-    # Use player clients that bypass the "Sign in to confirm" gate.
-    # "tv" and "mweb" are unauthenticated clients accepted by YouTube's API.
-    ydl_opts["extractor_args"] = {
-        "youtube": {
-            "player_client": ["tv", "mweb", "web"],
-        }
-    }
+    # Always use Node.js to solve YouTube's n-challenge (requires Node 22+).
+    # Without this the extractor finds zero downloadable formats.
+    ydl_opts["js_runtimes"] = {"node": {}}
 
     raw = os.environ.get("YOUTUBE_COOKIES", "").strip()
     if not raw:
+        # Without cookies, try alternative player clients that bypass the bot-check.
+        # "tv" and "mweb" are unauthenticated YouTube clients.
+        ydl_opts["extractor_args"] = {
+            "youtube": {"player_client": ["tv", "mweb", "web"]}
+        }
         return
 
     if "\n" not in raw and "\\n" in raw:
         raw = raw.replace("\\n", "\n")
+
+    # Replit secrets sometimes strip real newlines, collapsing rows into one
+    # space-separated string. Reconstruct by inserting newlines before each
+    # cookie domain (e.g. " .youtube.com\t" → "\n.youtube.com\t").
+    if "\n" not in raw and "\t" in raw:
+        import re as _re
+        raw = _re.sub(r" +(?=\.[A-Za-z0-9_-]+\.[A-Za-z]+\t)", "\n", raw)
+        logger.info("YouTube: reconstructed %d lines from space-collapsed cookie data", len(raw.splitlines()))
 
     data_lines = [l for l in raw.splitlines() if l.strip() and not l.strip().startswith("#")]
     netscape_lines = [l for l in data_lines if len(l.split("\t")) == 7]

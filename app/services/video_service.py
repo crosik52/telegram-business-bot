@@ -353,11 +353,14 @@ def _download_sync(
         **_build_base_opts(out_dir, MAX_BYTES),
         # Prefer merged mp4 streams; merge_output_format forces ffmpeg remux to
         # mp4 so Telegram always gets a proper video, not a webm document.
+        # Prefer pre-merged single-file formats first so ffmpeg is NOT needed.
+        # Only fall back to split streams if no pre-merged format exists.
         "format": (
-            "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]"
-            "/bestvideo[height<=720]+bestaudio"
-            "/best[ext=mp4][height<=720]"
+            "best[ext=mp4][height<=720]"
             "/best[height<=720]"
+            "/best[ext=mp4]"
+            "/bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]"
+            "/bestvideo[height<=720]+bestaudio"
             "/best"
         ),
         "merge_output_format": "mp4",
@@ -633,8 +636,11 @@ async def handle_video_link(
     try:
         logger.info("Downloading %s media: %s", label, url)
 
-        paths, media_type = await loop.run_in_executor(
-            None, partial(_download_sync, url, tmp_dir, _progress_hook)
+        paths, media_type = await asyncio.wait_for(
+            loop.run_in_executor(
+                None, partial(_download_sync, url, tmp_dir, _progress_hook)
+            ),
+            timeout=300,  # 5-minute hard cap; yt-dlp can hang on merge
         )
 
         logger.info(

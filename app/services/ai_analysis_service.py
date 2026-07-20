@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 # ── In-memory result cache ────────────────────────────────────────────────────
 _CACHE: dict[tuple[int, int], tuple[float, dict]] = {}
-_CACHE_TTL = 7200  # 2 hours
+_CACHE_TTL = 86400  # 24 hours — free Gemini tier has tight daily token quota
 
 
 def _cached(owner_id: int, chat_id: int) -> dict | None:
@@ -390,26 +390,38 @@ async def analyze(
         user_prompt
         + "\n\nОтвет верни СТРОГО в формате JSON без пояснений и markdown-обёрток."
     )
-    try:
-        response = await asyncio.wait_for(
-            client.aio.models.generate_content(
-                model="gemini-2.0-flash",
-                contents=full_prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=_SYSTEM_PROMPT,
-                    temperature=0.4,
-                    response_mime_type="application/json",
+    # Try primary model first; if quota exhausted fall back to a model with a
+    # separate free-tier quota pool (gemini-1.5-flash).
+    _MODELS = ["gemini-2.0-flash", "gemini-1.5-flash"]
+    response = None
+    last_exc: Exception | None = None
+    for _model in _MODELS:
+        try:
+            response = await asyncio.wait_for(
+                client.aio.models.generate_content(
+                    model=_model,
+                    contents=full_prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=_SYSTEM_PROMPT,
+                        temperature=0.4,
+                        response_mime_type="application/json",
+                    ),
                 ),
-            ),
-            timeout=90.0,
-        )
-    except asyncio.TimeoutError as exc:
-        raise ValueError("gemini_timeout") from exc
-    except Exception as exc:
-        exc_str = str(exc)
-        if "429" in exc_str or "RESOURCE_EXHAUSTED" in exc_str or "quota" in exc_str.lower():
-            raise ValueError("gemini_quota") from exc
-        raise ValueError(f"gemini_error: {type(exc).__name__}: {exc}") from exc
+                timeout=90.0,
+            )
+            break  # success — stop trying
+        except asyncio.TimeoutError as exc:
+            raise ValueError("gemini_timeout") from exc
+        except Exception as exc:
+            exc_str = str(exc)
+            if "429" in exc_str or "RESOURCE_EXHAUSTED" in exc_str or "quota" in exc_str.lower():
+                logger.warning("Gemini quota hit on %s, trying next model…", _model)
+                last_exc = exc
+                continue  # try fallback
+            raise ValueError(f"gemini_error: {type(exc).__name__}: {exc}") from exc
+    else:
+        # All models exhausted quota
+        raise ValueError("gemini_quota") from last_exc
 
     raw = response.text.strip()
     raw = re.sub(r"^```(?:json)?\s*", "", raw)

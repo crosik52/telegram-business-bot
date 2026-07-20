@@ -1311,20 +1311,22 @@ async def miniapp_leaderboard(
     owner_id = int(user["id"])
 
     from app.models.wallet import UserWallet  # local to avoid circular dep
+    from app.models.subscription import UserSubscription  # local to avoid circular dep
 
     top_rows = (
         await session.execute(
             select(UserWallet.owner_telegram_id, UserWallet.balance, UserWallet.total_earned)
-            .order_by(UserWallet.total_earned.desc())
+            .order_by(UserWallet.balance.desc())
             .limit(15)
         )
     ).all()
 
     top_ids = [r[0] for r in top_rows]
     names_map: dict[int, tuple] = {}
+    subs_map: dict[int, str | None] = {}
     if top_ids:
-        name_rows = (
-            await session.execute(
+        name_rows, sub_rows = await asyncio.gather(
+            session.execute(
                 select(
                     BusinessConnection.user_telegram_id,
                     BusinessConnection.user_first_name,
@@ -1333,9 +1335,23 @@ async def miniapp_leaderboard(
                 )
                 .where(BusinessConnection.user_telegram_id.in_(top_ids))
                 .distinct(BusinessConnection.user_telegram_id)
-            )
-        ).all()
-        names_map = {r[0]: (r[1], r[2], r[3]) for r in name_rows}
+            ),
+            session.execute(
+                select(UserSubscription.user_telegram_id, UserSubscription.sub_type)
+                .where(
+                    UserSubscription.user_telegram_id.in_(top_ids),
+                    UserSubscription.is_active == True,  # noqa: E712
+                )
+                .order_by(
+                    # vip > premium: order so we pick vip first
+                    UserSubscription.sub_type.desc(),
+                    UserSubscription.id.desc(),
+                )
+                .distinct(UserSubscription.user_telegram_id)
+            ),
+        )
+        names_map = {r[0]: (r[1], r[2], r[3]) for r in name_rows.all()}
+        subs_map = {r[0]: r[1] for r in sub_rows.all()}
 
     entries = []
     my_rank: int | None = None
@@ -1353,22 +1369,23 @@ async def miniapp_leaderboard(
                 "is_self": is_self,
                 "balance": row[1],
                 "total_earned": row[2],
+                "sub_type": subs_map.get(row[0]),
             }
         )
 
     if my_rank is None:
-        own_earned = (
+        own_balance = (
             await session.execute(
-                select(UserWallet.total_earned).where(
+                select(UserWallet.balance).where(
                     UserWallet.owner_telegram_id == owner_id
                 )
             )
         ).scalar_one_or_none()
-        if own_earned is not None:
+        if own_balance is not None:
             higher = (
                 await session.execute(
                     select(func.count(UserWallet.id)).where(
-                        UserWallet.total_earned > own_earned
+                        UserWallet.balance > own_balance
                     )
                 )
             ).scalar_one()

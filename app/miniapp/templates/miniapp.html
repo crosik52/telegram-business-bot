@@ -2596,6 +2596,16 @@
     touch-action: manipulation; flex: 1; min-width: 90px;
   }
   .cp-action-tg { background: rgba(0,136,204,0.15); color: #0088cc; }
+  .cp-streak-toggle { width: 100%; margin-top: 12px; }
+  .cp-streak-mute-btn {
+    width: 100%; border: none; border-radius: 22px; padding: 11px 18px;
+    font-size: 13px; font-weight: 600;
+    background: rgba(120,120,128,0.08); color: var(--text);
+    touch-action: manipulation; transition: background 0.2s, color 0.2s;
+  }
+  .cp-streak-mute-btn.cp-streak-muted {
+    background: rgba(255,69,58,0.12); color: #ff453a;
+  }
 
   /* Adopt modal */
   .adopt-chats { display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; margin-bottom: 12px; }
@@ -3844,6 +3854,7 @@
             <button class="cp-action-btn" id="cpAiBtn">🤖 Анализ</button>
             ${s.username ? `<button class="cp-action-btn cp-action-tg" id="cpTgBtn">✈️ Telegram</button>` : ""}
           </div>
+          ${s.streak_days > 0 ? `<div class="cp-streak-toggle"><button class="cp-streak-mute-btn" id="cpStreakMuteBtn" data-muted="false">🔔 Уведомления о серии</button></div>` : ""}
         </div>
       `;
       document.body.appendChild(overlay);
@@ -3867,7 +3878,7 @@
         else window.open(`https://t.me/${s.username}`, "_blank");
       });
 
-      // Async enrich: fetch frame + subscription from backend
+      // Async enrich: fetch frame + subscription + streak_muted from backend
       if (currentInitData) {
         fetch("/app/api/contact/profile", {
           method: "POST",
@@ -3882,8 +3893,37 @@
             if (data.is_vip)          { badgeEl.className = "cp-badge cp-badge-vip";     badgeEl.textContent = "💎 VIP"; }
             else if (data.is_premium) { badgeEl.className = "cp-badge cp-badge-premium"; badgeEl.textContent = "⭐ Premium"; }
           }
+          // Set initial streak mute state
+          const muteBtn = overlay.querySelector("#cpStreakMuteBtn");
+          if (muteBtn) {
+            const muted = !!data.streak_muted;
+            muteBtn.dataset.muted = muted ? "true" : "false";
+            muteBtn.textContent = muted ? "🔕 Серия отключена" : "🔔 Уведомления о серии";
+            if (muted) muteBtn.classList.add("cp-streak-muted");
+          }
         }).catch(() => {});
       }
+
+      // Streak mute toggle
+      overlay.querySelector("#cpStreakMuteBtn")?.addEventListener("click", async () => {
+        const btn = overlay.querySelector("#cpStreakMuteBtn");
+        if (!btn || !currentInitData) return;
+        const nowMuted = btn.dataset.muted === "true";
+        const newMuted = !nowMuted;
+        btn.disabled = true;
+        try {
+          const res = await fetch("/app/api/contact/streak-mute", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ initData: currentInitData, chatId: s.chat_id, muted: newMuted }),
+          });
+          if (!res.ok) throw new Error();
+          btn.dataset.muted = newMuted ? "true" : "false";
+          btn.textContent = newMuted ? "🔕 Серия отключена" : "🔔 Уведомления о серии";
+          newMuted ? btn.classList.add("cp-streak-muted") : btn.classList.remove("cp-streak-muted");
+        } catch { /* ignore */ }
+        btn.disabled = false;
+      });
     }
 
     async function sendGame(chatId, emoji) {

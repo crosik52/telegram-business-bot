@@ -18,3 +18,5 @@ class UserSettings(Base):
     pinned_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     # JSON list of theme slugs the user has purchased (NULL treated as ["default"])
     owned_themes: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # JSON list of chat_ids for which streak notifications are silenced
+    muted_streaks: Mapped[list | None] = mapped_column(JSON, nullable=True)

@@ -177,6 +177,17 @@ async def _is_mutual(session: AsyncSession, contact_id: int) -> bool:
 
 # ── Success notification ──────────────────────────────────────────────────────
 
+async def _is_streak_muted(session: AsyncSession, owner_id: int, chat_id: int) -> bool:
+    """Return True if the owner has silenced streak notifications for this contact."""
+    from app.models.user_settings import UserSettings as _US
+    us = (await session.execute(
+        select(_US).where(_US.owner_telegram_id == owner_id)
+    )).scalar_one_or_none()
+    if us is None:
+        return False
+    return chat_id in (us.muted_streaks or [])
+
+
 async def maybe_notify_streak_continued(
     bot: Any,
     session: AsyncSession,
@@ -189,12 +200,16 @@ async def maybe_notify_streak_continued(
 
     - Mutual (both have the bot): send into the business chat, deduped by pair key.
     - Single (only owner): send DM to owner.
+    - Silenced: skip if owner muted this contact's streaks.
     """
     today = dt.date.today()
     key   = _pk(owner_id, chat_id)
 
     if _success_sent.get(key) == today:
         return  # already sent from one side today
+
+    if await _is_streak_muted(session, owner_id, chat_id):
+        return
 
     # Only fire on the very first message of today from this chat
     if await _count_today(session, connection_ids, chat_id) != 1:
@@ -296,6 +311,9 @@ async def run_reminder_check(bot: Any) -> None:
                     key = _pk(owner_id, chat_id)
                     if _remind_sent.get(key) == today:
                         continue  # already reminded (from either side)
+
+                    if await _is_streak_muted(session, owner_id, chat_id):
+                        continue  # owner silenced this contact
 
                     if await _count_today(session, connection_ids, chat_id) > 0:
                         continue  # streak safe today

@@ -3354,26 +3354,79 @@ async def contact_profile_info(
     payload: ContactProfileRequest,
     session: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """Return subscription + frame info for a contact (if they use the bot)."""
+    """Return subscription + frame + streak-mute info for a contact."""
     settings = get_settings()
     user = verify_init_data(payload.init_data, settings.telegram_bot_token)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid init data")
+
+    owner_id = user["id"]
 
     sub_repo = SubscriptionRepository(session)
     sub      = await sub_repo.get_active_subscription(payload.chat_id)
     vip_sub  = await sub_repo.get_active_vip_subscription(payload.chat_id)
 
     from app.models.user_settings import UserSettings as _US  # noqa: PLC0415
-    us = (await session.execute(
+    # Contact's settings (for frame/subscription badge)
+    contact_us = (await session.execute(
         select(_US).where(_US.owner_telegram_id == payload.chat_id)
     )).scalar_one_or_none()
 
+    # Owner's settings (for streak mute list)
+    owner_us = (await session.execute(
+        select(_US).where(_US.owner_telegram_id == owner_id)
+    )).scalar_one_or_none()
+
+    muted = list(owner_us.muted_streaks or []) if owner_us else []
+    streak_muted = payload.chat_id in muted
+
     return {
-        "is_vip":      vip_sub is not None,
-        "is_premium":  sub is not None,
-        "frame":       (us.frame if us else "none") or "none",
+        "is_vip":        vip_sub is not None,
+        "is_premium":    sub is not None,
+        "frame":         (contact_us.frame if contact_us else "none") or "none",
+        "streak_muted":  streak_muted,
     }
+
+
+class StreakMuteRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    chat_id:   int = Field(..., alias="chatId")
+    muted:     bool
+    model_config = {"populate_by_name": True}
+
+
+@router.post("/app/api/contact/streak-mute")
+async def contact_streak_mute(
+    payload: StreakMuteRequest,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Toggle streak notifications for a specific contact on/off."""
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid init data")
+
+    owner_id = user["id"]
+
+    from app.models.user_settings import UserSettings as _US  # noqa: PLC0415
+    us = (await session.execute(
+        select(_US).where(_US.owner_telegram_id == owner_id)
+    )).scalar_one_or_none()
+
+    if us is None:
+        us = _US(owner_telegram_id=owner_id)
+        session.add(us)
+
+    muted = list(us.muted_streaks or [])
+    if payload.muted and payload.chat_id not in muted:
+        muted.append(payload.chat_id)
+    elif not payload.muted and payload.chat_id in muted:
+        muted.remove(payload.chat_id)
+
+    us.muted_streaks = muted
+    await session.commit()
+
+    return {"streak_muted": payload.chat_id in muted}
 
 
 @router.post("/app/api/ai/ping")

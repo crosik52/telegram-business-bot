@@ -238,6 +238,55 @@ def _apply_instagram_opts(ydl_opts: dict, url: str, out_dir: str) -> None:
         logger.info("Instagram: raw Cookie header injected (%d chars)", len(raw))
 
 
+def _apply_youtube_opts(ydl_opts: dict, out_dir: str) -> None:
+    """Apply YouTube-specific yt-dlp options to bypass bot-detection.
+
+    Strategy (applied in order, all at once):
+    1. Use alternative player clients that don't require sign-in (tv, mweb).
+    2. If YOUTUBE_COOKIES env var is set, inject cookies (same formats as TikTok).
+    """
+    # Use player clients that bypass the "Sign in to confirm" gate.
+    # "tv" and "mweb" are unauthenticated clients accepted by YouTube's API.
+    ydl_opts["extractor_args"] = {
+        "youtube": {
+            "player_client": ["tv", "mweb", "web"],
+        }
+    }
+
+    raw = os.environ.get("YOUTUBE_COOKIES", "").strip()
+    if not raw:
+        return
+
+    if "\n" not in raw and "\\n" in raw:
+        raw = raw.replace("\\n", "\n")
+
+    data_lines = [l for l in raw.splitlines() if l.strip() and not l.strip().startswith("#")]
+    netscape_lines = [l for l in data_lines if len(l.split("\t")) == 7]
+    if netscape_lines:
+        cookie_path = os.path.join(out_dir, "_yt_cookies.txt")
+        with open(cookie_path, "w", encoding="utf-8") as fh:
+            fh.write(raw)
+        ydl_opts["cookiefile"] = cookie_path
+        logger.info("YouTube: Netscape cookiefile set (%d rows)", len(netscape_lines))
+        return
+
+    if raw.lstrip().startswith("["):
+        netscape_str = _json_cookies_to_netscape(raw)
+        if netscape_str:
+            cookie_path = os.path.join(out_dir, "_yt_cookies.txt")
+            with open(cookie_path, "w", encoding="utf-8") as fh:
+                fh.write(netscape_str)
+            ydl_opts["cookiefile"] = cookie_path
+            logger.info("YouTube: JSON→Netscape cookiefile set (%d bytes)", len(netscape_str))
+            return
+        logger.warning("YouTube: YOUTUBE_COOKIES looks like JSON but failed to parse")
+
+    if "=" in raw and "\n" not in raw and "\t" not in raw:
+        ydl_opts.setdefault("http_headers", {})
+        ydl_opts["http_headers"]["Cookie"] = raw
+        logger.info("YouTube: raw Cookie header injected (%d chars)", len(raw))
+
+
 def _apply_tiktok_ua(ydl_opts: dict) -> None:
     """Inject a realistic browser User-Agent (always applied for TikTok)."""
     ydl_opts.setdefault("http_headers", {})
@@ -281,6 +330,7 @@ def _download_sync(
 
     is_tiktok    = "tiktok.com" in url.lower()
     is_instagram = "instagram.com" in url.lower()
+    is_youtube   = "youtube.com" in url.lower() or "youtu.be" in url.lower()
 
     # ── Attempt 1: video ──────────────────────────────────────────────────────
     MAX_DURATION = 1200  # 20 minutes — anything longer won't fit in 45 MB anyway
@@ -298,6 +348,8 @@ def _download_sync(
         _apply_tiktok_opts(opts_video, url, out_dir)
     if is_instagram:
         _apply_instagram_opts(opts_video, url, out_dir)
+    if is_youtube:
+        _apply_youtube_opts(opts_video, out_dir)
 
     def _run(opts: dict) -> None:
         with yt_dlp.YoutubeDL(opts) as ydl:

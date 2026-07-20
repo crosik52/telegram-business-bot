@@ -345,7 +345,16 @@ def _download_sync(
     MAX_DURATION = 1200  # 20 minutes — anything longer won't fit in 45 MB anyway
     opts_video = {
         **_build_base_opts(out_dir, MAX_BYTES),
-        "format": "best[ext=mp4][height<=720]/best[ext=mp4]/best",
+        # Prefer merged mp4 streams; merge_output_format forces ffmpeg remux to
+        # mp4 so Telegram always gets a proper video, not a webm document.
+        "format": (
+            "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]"
+            "/bestvideo[height<=720]+bestaudio"
+            "/best[ext=mp4][height<=720]"
+            "/best[height<=720]"
+            "/best"
+        ),
+        "merge_output_format": "mp4",
         "match_filter": lambda info, *, incomplete=False: (
             f"Video too long (> {MAX_DURATION // 60} min)"
             if (info.get("duration") or 0) > MAX_DURATION else None
@@ -383,6 +392,21 @@ def _download_sync(
 
     if video_download_ok and videos:
         best = max(videos, key=lambda p: p.stat().st_size)
+        # Convert any non-mp4 to mp4 so Telegram sends it as a video, not a document
+        if best.suffix.lower() != ".mp4":
+            mp4_path = best.with_suffix(".mp4")
+            import subprocess as _sp
+            result = _sp.run(
+                ["ffmpeg", "-y", "-i", str(best),
+                 "-c:v", "copy", "-c:a", "aac", str(mp4_path)],
+                capture_output=True,
+            )
+            if result.returncode == 0 and mp4_path.exists():
+                best.unlink(missing_ok=True)
+                best = mp4_path
+                logger.info("Video: converted %s → mp4", best.name)
+            else:
+                logger.warning("Video: ffmpeg conversion failed, using original %s", best.suffix)
         if best.stat().st_size > MAX_BYTES:
             best.unlink(missing_ok=True)
             raise ValueError(f"Video too large: {best.stat().st_size // (1024*1024)} MB > 45 MB")

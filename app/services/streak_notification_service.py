@@ -84,7 +84,9 @@ async def _count_today(
 
 # ── Message text ──────────────────────────────────────────────────────────────
 
-def _success_text(days: int) -> str:
+# ── Mutual (both have the bot) — sent into the chat, seen by both sides ───────
+
+def _success_text_mutual(days: int) -> str:
     if days >= 100:
         return f"🏆 <b>Наша серия {days} дней!</b>\nЭто легенда 👑"
     if days >= 30:
@@ -96,7 +98,7 @@ def _success_text(days: int) -> str:
     return f"🔥 <b>Наша серия {days} дней продолжается!</b>\nТак держать 😊"
 
 
-def _remind_text(days: int) -> str:
+def _remind_text_mutual(days: int) -> str:
     if days >= 30:
         return (
             f"⏰ <b>Наша серия {days} дней под угрозой!</b>\n"
@@ -113,6 +115,66 @@ def _remind_text(days: int) -> str:
     )
 
 
+# ── Single (only owner has the bot) — DM to the owner ────────────────────────
+
+def _success_text_dm(name: str, days: int) -> str:
+    if days >= 100:
+        return (
+            f"🏆 <b>Серия 100+ дней с {name}!</b>\n"
+            f"Сегодня {days}-й день подряд — это легенда 👑"
+        )
+    if days >= 30:
+        return (
+            f"🚀 <b>Серия {days} дней с {name}</b>\n"
+            f"Месяц и больше — марафон продолжается 💪"
+        )
+    if days >= 14:
+        return (
+            f"🔥🔥 <b>Серия {days} дней с {name}</b>\n"
+            f"Две недели подряд — так держать!"
+        )
+    if days >= 7:
+        return (
+            f"🔥 <b>Серия {days} дней с {name}</b>\n"
+            f"Целая неделя без пропусков!"
+        )
+    return (
+        f"🔥 <b>Серия {days} дней с {name} продолжается!</b>\n"
+        f"Так держать 😊"
+    )
+
+
+def _remind_text_dm(name: str, days: int) -> str:
+    if days >= 30:
+        return (
+            f"⏰ <b>Серия {days} дней с {name} под угрозой!</b>\n"
+            f"Напиши сегодня, чтобы не потерять марафон 🏃"
+        )
+    if days >= 7:
+        return (
+            f"⏰ <b>Не забудь написать {name}</b>\n"
+            f"Серия {days} дней — напиши сегодня, чтобы не прервать 🔥"
+        )
+    return (
+        f"⏰ <b>Напомни о себе {name}</b>\n"
+        f"Серия {days} дней — напиши что-нибудь сегодня 😊"
+    )
+
+
+# ── Mutual check helper ───────────────────────────────────────────────────────
+
+async def _is_mutual(session: AsyncSession, contact_id: int) -> bool:
+    """Return True if the contact also has an active business connection."""
+    from app.models.business_connection import BusinessConnection as BCModel
+    row = await session.execute(
+        select(BCModel.business_connection_id).where(
+            BCModel.user_telegram_id == contact_id,
+            BCModel.is_blocked.is_(False),
+        ).limit(1)
+    )
+    return row.scalar_one_or_none() is not None
+
+
 # ── Success notification ──────────────────────────────────────────────────────
 
 async def maybe_notify_streak_continued(
@@ -121,9 +183,13 @@ async def maybe_notify_streak_continued(
     owner_id: int,
     connection_ids: list[str],
     chat_id: int,
-    contact_name: str,          # kept for backward-compat, no longer used in text
+    contact_name: str,
 ) -> None:
-    """Send streak-continued message in the business chat (deduped across both sides)."""
+    """Send streak-continued notification.
+
+    - Mutual (both have the bot): send into the business chat, deduped by pair key.
+    - Single (only owner): send DM to owner.
+    """
     today = dt.date.today()
     key   = _pk(owner_id, chat_id)
 
@@ -139,22 +205,36 @@ async def maybe_notify_streak_continued(
     if streak < MIN_STREAK:
         return
 
-    bc_id = connection_ids[0] if connection_ids else None
+    bc_id  = connection_ids[0] if connection_ids else None
     if not bc_id:
         return
 
-    # Claim the slot — prevents the other side (if they also have the bot) from sending
+    mutual = await _is_mutual(session, chat_id)
+
+    # Claim the slot before awaiting send to prevent races
     _success_sent[key] = today
     try:
-        await bot.send_message(
-            chat_id=chat_id,
-            text=_success_text(streak),
-            parse_mode="HTML",
-            business_connection_id=bc_id,
-        )
-        logger.info(
-            "Streak success sent owner=%s → chat=%s streak=%s", owner_id, chat_id, streak
-        )
+        if mutual:
+            await bot.send_message(
+                chat_id=chat_id,
+                text=_success_text_mutual(streak),
+                parse_mode="HTML",
+                business_connection_id=bc_id,
+            )
+            logger.info(
+                "Streak success (mutual) sent owner=%s → chat=%s streak=%s",
+                owner_id, chat_id, streak,
+            )
+        else:
+            await bot.send_message(
+                chat_id=owner_id,
+                text=_success_text_dm(contact_name, streak),
+                parse_mode="HTML",
+            )
+            logger.info(
+                "Streak success (DM) sent owner=%s chat=%s streak=%s",
+                owner_id, chat_id, streak,
+            )
     except Exception as exc:
         logger.warning(
             "Streak success failed owner=%s chat=%s: %s", owner_id, chat_id, exc
@@ -233,19 +313,46 @@ async def run_reminder_check(bot: Any) -> None:
                 if _remind_sent.get(key) == today:
                     continue  # claimed by the other side between iterations
 
-                bc_id = connection_ids[0]
+                bc_id  = connection_ids[0]
+                mutual = await _is_mutual(session, best_chat_id)
+
+                # Resolve contact name (needed only for single-owner DM text)
+                contact_name = f"#{best_chat_id}"
+                if not mutual:
+                    from app.models.user import TelegramUser
+                    user_row = await session.execute(
+                        select(TelegramUser).where(
+                            TelegramUser.telegram_user_id == best_chat_id
+                        )
+                    )
+                    user_obj = user_row.scalar_one_or_none()
+                    if user_obj:
+                        parts = [p for p in [user_obj.first_name, user_obj.last_name] if p]
+                        contact_name = " ".join(parts) or contact_name
+
                 _remind_sent[key] = today  # claim before await to prevent races
                 try:
-                    await bot.send_message(
-                        chat_id=best_chat_id,
-                        text=_remind_text(best_streak),
-                        parse_mode="HTML",
-                        business_connection_id=bc_id,
-                    )
-                    logger.info(
-                        "Streak reminder sent owner=%s → chat=%s streak=%s",
-                        owner_id, best_chat_id, best_streak,
-                    )
+                    if mutual:
+                        await bot.send_message(
+                            chat_id=best_chat_id,
+                            text=_remind_text_mutual(best_streak),
+                            parse_mode="HTML",
+                            business_connection_id=bc_id,
+                        )
+                        logger.info(
+                            "Streak reminder (mutual) sent owner=%s → chat=%s streak=%s",
+                            owner_id, best_chat_id, best_streak,
+                        )
+                    else:
+                        await bot.send_message(
+                            chat_id=owner_id,
+                            text=_remind_text_dm(contact_name, best_streak),
+                            parse_mode="HTML",
+                        )
+                        logger.info(
+                            "Streak reminder (DM) sent owner=%s chat=%s streak=%s",
+                            owner_id, best_chat_id, best_streak,
+                        )
                 except Exception as exc:
                     logger.warning(
                         "Streak reminder failed owner=%s chat=%s: %s",

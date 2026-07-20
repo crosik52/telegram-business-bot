@@ -277,15 +277,20 @@ def _apply_youtube_opts(ydl_opts: dict, out_dir: str) -> None:
     # Always use Node.js to solve YouTube's n-challenge (requires Node 22+).
     ydl_opts["js_runtimes"] = {"node": {}}
 
-    # Always set player_client fallbacks — they help bypass bot checks with OR without cookies.
-    ydl_opts["extractor_args"] = {
-        "youtube": {"player_client": ["tv", "mweb", "web"]}
-    }
-
     raw = os.environ.get("YOUTUBE_COOKIES", "").strip()
     if not raw:
-        logger.info("YouTube: no YOUTUBE_COOKIES set, using player_client bypass only")
+        # Without cookies use unauthenticated TV/mweb clients to bypass bot-check.
+        logger.info("YouTube: no YOUTUBE_COOKIES set, using tv/mweb player_client bypass")
+        ydl_opts["extractor_args"] = {
+            "youtube": {"player_client": ["tv", "mweb", "web"]}
+        }
         return
+
+    # Cookies present: use the standard web client so DASH streams are available.
+    # tv/mweb clients don't expose DASH format lists → "format not available" errors.
+    ydl_opts["extractor_args"] = {
+        "youtube": {"player_client": ["web"]}
+    }
 
     # ── Normalise newlines ────────────────────────────────────────────────────
     if "\n" not in raw and "\\n" in raw:
@@ -384,13 +389,12 @@ def _download_sync(
         **_build_base_opts(out_dir, MAX_BYTES),
         # Prefer merged mp4 streams; merge_output_format forces ffmpeg remux to
         # mp4 so Telegram always gets a proper video, not a webm document.
-        # With auth, YouTube serves DASH streams → prefer split+merge (ffmpeg available).
-        # Also include progressive mp4 fallbacks for unauthenticated / simpler cases.
+        # With auth: YouTube serves DASH (bestvideo+bestaudio); ffmpeg merges to mp4.
+        # No ext= filters — they block DASH streams on some player clients.
         "format": (
-            "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]"
-            "/bestvideo[height<=720]+bestaudio"
-            "/best[ext=mp4][height<=720]"
+            "bestvideo[height<=720]+bestaudio"
             "/best[height<=720]"
+            "/bestvideo+bestaudio"
             "/best"
         ),
         "merge_output_format": "mp4",

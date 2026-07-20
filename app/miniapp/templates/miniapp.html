@@ -2447,71 +2447,126 @@
 
   /* ── Shop tab ────────────────────────────────────────────── */
   #shopContent { padding-bottom: 20px; }
+  /* ── Shop: balance bar ── */
   .shop-balance-bar {
     background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
-    border-radius: var(--card-radius); padding: 16px 16px 14px;
+    border-radius: var(--card-radius); padding: 18px 16px 14px;
     margin-bottom: 14px; text-align: center;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.18);
   }
   .shop-coin-amount {
-    font-size: 28px; font-weight: 900; letter-spacing: -0.5px;
-    color: #f59e0b; display: flex; align-items: center; justify-content: center; gap: 6px;
+    font-size: 32px; font-weight: 900; letter-spacing: -1px;
+    color: #f59e0b; display: flex; align-items: center; justify-content: center; gap: 8px;
   }
-  .shop-coin-sub { font-size: 12px; color: rgba(255,255,255,0.45); margin-top: 2px; }
-  .shop-earn-chips { display: flex; gap: 8px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
+  .shop-coin-sub { font-size: 12px; color: rgba(255,255,255,0.4); margin-top: 3px; }
+  .shop-earn-chips { display: flex; gap: 6px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
   .shop-earn-chip {
-    background: rgba(255,255,255,0.08); border-radius: 20px;
-    padding: 4px 10px; font-size: 11.5px; color: rgba(255,255,255,0.7);
-    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.07); border-radius: 20px;
+    padding: 4px 10px; font-size: 11px; color: rgba(255,255,255,0.6);
+    border: 1px solid rgba(255,255,255,0.1);
   }
+
+  /* ── Shop: section title ── */
   .shop-section-title {
-    font-size: 14px; font-weight: 800; margin: 14px 0 8px;
-    display: flex; align-items: center; gap: 6px; letter-spacing: -0.1px;
+    font-size: 10px; font-weight: 800; margin: 16px 0 8px;
+    letter-spacing: 0.8px; text-transform: uppercase;
+    color: rgba(255,255,255,0.4);
+    display: flex; align-items: center; gap: 6px;
   }
+
+  /* ── Coin packages (Stars → Coins) ── */
+  .coin-pkg-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    margin-bottom: 4px;
+  }
+  .coin-pkg-card {
+    border-radius: 16px; padding: 14px 12px 12px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center;
+    position: relative; overflow: hidden;
+    animation: riseIn 0.25s ease backwards;
+    transition: border-color 0.15s;
+  }
+  .coin-pkg-card.featured {
+    border-color: rgba(245,158,11,0.4);
+    background: linear-gradient(145deg,rgba(245,158,11,0.08),rgba(234,88,12,0.06));
+  }
+  .coin-pkg-card.top {
+    border-color: rgba(168,85,247,0.4);
+    background: linear-gradient(145deg,rgba(168,85,247,0.08),rgba(108,92,231,0.06));
+  }
+  .coin-pkg-bonus {
+    position: absolute; top: 8px; right: 8px;
+    font-size: 9px; font-weight: 900; letter-spacing: 0.3px;
+    padding: 2px 6px; border-radius: 6px;
+    background: rgba(245,158,11,0.22); color: #f59e0b;
+  }
+  .coin-pkg-card.top .coin-pkg-bonus { background: rgba(168,85,247,0.25); color: #c084fc; }
+  .coin-pkg-ico { font-size: 28px; line-height: 1; margin-bottom: 2px; }
+  .coin-pkg-amount { font-size: 20px; font-weight: 900; letter-spacing: -0.5px; color: #f59e0b; }
+  .coin-pkg-label { font-size: 10.5px; color: rgba(255,255,255,0.45); font-weight: 600; }
+  .coin-pkg-btn {
+    margin-top: 8px; border: none; border-radius: 10px; padding: 8px 0; width: 100%;
+    font-size: 12px; font-weight: 800; cursor: pointer;
+    touch-action: manipulation; transition: transform 0.1s, opacity 0.15s;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    background: rgba(255,255,255,0.1); color: #fff;
+  }
+  .coin-pkg-card.featured .coin-pkg-btn { background: rgba(245,158,11,0.25); color: #f59e0b; }
+  .coin-pkg-card.top .coin-pkg-btn { background: rgba(168,85,247,0.25); color: #c084fc; }
+  .coin-pkg-btn:active { transform: scale(0.94); }
+  .coin-pkg-btn:disabled { opacity: 0.35; }
+  .coin-pkg-stars { font-size: 13px; }
+
+  /* ── Shop: items grid ── */
   .shop-items-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 9px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
     margin-bottom: 4px;
   }
   .shop-item-wide { grid-column: 1 / -1; }
   .shop-item {
-    background: var(--secondary-bg); border-radius: 14px;
-    padding: 13px 12px 11px; display: flex; flex-direction: column;
-    align-items: center; gap: 4px; text-align: center;
-    box-shadow: 0 1px 6px rgba(0,0,0,0.06); position: relative;
+    background: rgba(255,255,255,0.05); border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.07);
+    padding: 13px 10px 11px; display: flex; flex-direction: column;
+    align-items: center; gap: 4px; text-align: center; position: relative;
     animation: riseIn 0.25s ease backwards;
   }
-  .shop-item-wide .shop-item { flex-direction: row; text-align: left; gap: 10px; padding: 12px 14px; }
+  .shop-item-wide .shop-item {
+    flex-direction: row; text-align: left; gap: 12px; padding: 12px 14px;
+  }
   .shop-item-icon { font-size: 28px; line-height: 1; }
-  .shop-item-wide .shop-item-icon { font-size: 32px; }
+  .shop-item-wide .shop-item-icon { font-size: 30px; flex-shrink: 0; }
   .shop-item-body { flex: 1; min-width: 0; }
   .shop-item-name { font-size: 12.5px; font-weight: 700; line-height: 1.3; }
-  .shop-item-desc { font-size: 11px; color: var(--hint); margin-top: 1px; line-height: 1.35; }
+  .shop-item-desc { font-size: 11px; color: var(--hint); margin-top: 2px; line-height: 1.35; }
   .shop-item-price {
-    font-size: 11.5px; font-weight: 800; margin-top: 4px;
-    background: rgba(245,158,11,0.13); color: #d97706;
-    border-radius: 6px; padding: 2px 7px; display: inline-block;
+    font-size: 11.5px; font-weight: 800; margin-top: 5px;
+    background: rgba(245,158,11,0.12); color: #d97706;
+    border-radius: 6px; padding: 2px 8px; display: inline-block;
   }
   .shop-buy-btn {
-    border: none; border-radius: 9px; padding: 7px 10px;
+    border: none; border-radius: 9px; padding: 8px 10px;
     font-size: 11.5px; font-weight: 800; margin-top: 6px;
     touch-action: manipulation; transition: transform 0.1s, opacity 0.18s;
     width: 100%; cursor: pointer;
   }
-  .shop-item-wide .shop-buy-btn { width: auto; flex-shrink: 0; margin-top: 0; padding: 8px 14px; }
+  .shop-item-wide .shop-buy-btn { width: auto; flex-shrink: 0; margin-top: 0; padding: 9px 16px; }
   .shop-buy-btn:active { transform: scale(0.93); }
   .shop-buy-btn:disabled { opacity: 0.35; }
-  .shop-buy-amber  { background: rgba(245,158,11,0.15); color: #d97706; }
-  .shop-buy-purple { background: rgba(124,58,237,0.14); color: #7c3aed; }
-  .shop-buy-teal   { background: rgba(20,184,166,0.14); color: #0d9488; }
-  .shop-buy-pink   { background: rgba(225,29,72,0.14);  color: #e11d48; }
-  .shop-buy-blue   { background: rgba(36,129,204,0.14); color: var(--link); }
+  .shop-buy-amber  { background: rgba(245,158,11,0.16); color: #d97706; }
+  .shop-buy-purple { background: rgba(124,58,237,0.15); color: #8b5cf6; }
+  .shop-buy-teal   { background: rgba(20,184,166,0.15); color: #14b8a6; }
+  .shop-buy-pink   { background: rgba(225,29,72,0.15);  color: #f43f5e; }
+  .shop-buy-blue   { background: rgba(59,130,246,0.15); color: #60a5fa; }
+
+  /* ── Active boost banner ── */
   .shop-active-boost {
-    background: rgba(20,184,166,0.12); border: 1px solid rgba(20,184,166,0.3);
-    border-radius: var(--card-radius); padding: 10px 12px; margin-bottom: 10px;
-    display: flex; align-items: center; gap: 8px;
+    background: rgba(20,184,166,0.1); border: 1px solid rgba(20,184,166,0.3);
+    border-radius: 14px; padding: 10px 14px; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 10px;
     animation: riseIn 0.25s ease;
   }
-  .shop-boost-text { font-size: 12.5px; font-weight: 700; color: #0d9488; }
+  .shop-boost-text { font-size: 12.5px; font-weight: 700; color: #2dd4bf; }
   .shop-boost-sub  { font-size: 11px; color: var(--hint); }
   .theme-picker { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 6px; margin-bottom: 4px; }
   .theme-btn {
@@ -7070,35 +7125,39 @@
       }
     }
 
+    // ── Coin packages config (mirrors backend COIN_PACKAGES) ──────────────
+    const COIN_PKGS = [
+      { id: "starter", stars: 50,  coins: 500,  label: "Стартовый",  bonus: null,   ico: "🪙",  cls: "" },
+      { id: "basic",   stars: 100, coins: 1100, label: "Базовый",    bonus: "+10%", ico: "💰",  cls: "" },
+      { id: "popular", stars: 250, coins: 3000, label: "Популярный", bonus: "+20%", ico: "💎",  cls: "featured" },
+      { id: "max",     stars: 500, coins: 6500, label: "Максимум",   bonus: "+30%", ico: "👑",  cls: "top" },
+    ];
+
     function renderShop() {
       if (!shopData || !walletData) return;
       const el = document.getElementById("shopContent");
-      const bal = walletData.balance ?? 0;
-      const prices = shopData.prices || {};
+      const bal      = walletData.balance ?? 0;
+      const prices   = shopData.prices   || {};
       const settings = shopData.settings || {};
-      // Apply the user's active theme immediately
       applyTheme(settings.theme || "default");
       const boosts   = shopData.active_boosts || [];
       const dxpBoost = boosts.find(b => b.boost_type === "double_xp");
+      const chats    = petData?.available_chats || [];
 
-      // Active boost banner
       const boostBanner = dxpBoost ? `
         <div class="shop-active-boost">
-          <span style="font-size:22px">⚡</span>
+          <span style="font-size:24px">⚡</span>
           <div>
-            <div class="shop-boost-text">Двойной XP активен!</div>
-            <div class="shop-boost-sub">Осталось ${dxpBoost.hours_left} ч.</div>
+            <div class="shop-boost-text">Двойной XP активен</div>
+            <div class="shop-boost-sub">Осталось ${dxpBoost.hours_left} ч. · множитель ×2</div>
           </div>
         </div>` : "";
 
-      // Chats for gift/pin
-      const chats = petData?.available_chats || [];
-
       el.innerHTML = `
-        <!-- Balance header -->
+        <!-- ── Balance ── -->
         <div class="shop-balance-bar">
           <div class="shop-coin-amount">🪙 ${bal.toLocaleString("ru-RU")}</div>
-          <div class="shop-coin-sub">твои монеты</div>
+          <div class="shop-coin-sub">монеты на балансе</div>
           <div class="shop-earn-chips">
             <span class="shop-earn-chip">📅 Ежедневный бонус</span>
             <span class="shop-earn-chip">📋 Квесты</span>
@@ -7108,84 +7167,63 @@
 
         ${boostBanner}
 
-        <!-- Питомцы -->
-        <div class="shop-section-title">🐾 Питомцы</div>
-        <div class="shop-items-grid">
-          <div class="shop-item" style="animation-delay:0.05s">
-            <span class="shop-item-icon">🍣</span>
-            <span class="shop-item-name">Покормить</span>
-            <span class="shop-item-price">${prices.double_xp != null ? (prices.gift ?? 20) : 20} 🪙</span>
-            <button class="shop-buy-btn shop-buy-amber" onclick="switchMainTab('casino')">Перейти →</button>
-          </div>
-          <div class="shop-item" style="animation-delay:0.08s">
-            <span class="shop-item-icon">✏️</span>
-            <span class="shop-item-name">Переименовать</span>
-            <span class="shop-item-price">50 🪙</span>
-            <button class="shop-buy-btn shop-buy-amber" onclick="switchMainTab('casino')">Перейти →</button>
-          </div>
+        <!-- ── Купить монеты за Stars ── -->
+        <div class="shop-section-title">⭐ Купить монеты · Telegram Stars</div>
+        <div class="coin-pkg-grid">
+          ${COIN_PKGS.map((pkg, i) => `
+            <div class="coin-pkg-card ${pkg.cls}" style="animation-delay:${0.04 + i * 0.04}s">
+              ${pkg.bonus ? `<div class="coin-pkg-bonus">${pkg.bonus}</div>` : ""}
+              <div class="coin-pkg-ico">${pkg.ico}</div>
+              <div class="coin-pkg-amount">${pkg.coins.toLocaleString("ru-RU")}</div>
+              <div class="coin-pkg-label">${pkg.label}</div>
+              <button class="coin-pkg-btn" data-pkg="${pkg.id}">
+                <span class="coin-pkg-stars">⭐</span> ${pkg.stars}
+              </button>
+            </div>`).join("")}
         </div>
 
-        <!-- Казино -->
-        <div class="shop-section-title">🎰 Казино</div>
-        <div class="shop-items-grid">
-          <div class="shop-item" style="animation-delay:0.1s">
-            <span class="shop-item-icon">🎰</span>
-            <span class="shop-item-name">Слоты</span>
-            <span class="shop-item-price">от 10 🪙</span>
-            <button class="shop-buy-btn shop-buy-purple" onclick="switchMainTab('casino')">Играть →</button>
-          </div>
-          <div class="shop-item" style="animation-delay:0.12s">
-            <span class="shop-item-icon">🪙</span>
-            <span class="shop-item-name">Монетка</span>
-            <span class="shop-item-price">10–500 🪙</span>
-            <button class="shop-buy-btn shop-buy-purple" onclick="switchMainTab('casino')">Играть →</button>
-          </div>
-        </div>
-
-        <!-- Бусты -->
+        <!-- ── Бусты ── -->
         <div class="shop-section-title">⚡ Бусты</div>
         <div class="shop-items-grid">
-          <div class="shop-item" style="animation-delay:0.14s">
+          <div class="shop-item" style="animation-delay:0.18s">
             <span class="shop-item-icon">⚡</span>
             <span class="shop-item-name">Двойной XP</span>
+            <span class="shop-item-desc">${dxpBoost ? `Активен · +24ч за повтор` : "×2 очков 24 часа"}</span>
             <span class="shop-item-price">${prices.double_xp ?? 200} 🪙</span>
             <button class="shop-buy-btn shop-buy-teal" id="buyDxpBtn"
               ${bal < (prices.double_xp ?? 200) ? "disabled" : ""}>
-              ${dxpBoost ? `+24ч` : "Купить"}
+              ${dxpBoost ? "+24ч" : "Купить"}
             </button>
           </div>
-          <div class="shop-item" style="animation-delay:0.16s">
+          <div class="shop-item" style="animation-delay:0.21s">
             <span class="shop-item-icon">📌</span>
             <span class="shop-item-name">Закрепить чат</span>
+            <span class="shop-item-desc">${settings.pinned_chat_id ? "Закреплён · изменить" : "Чат всегда первый"}</span>
             <span class="shop-item-price">${prices.pin_chat ?? 75} 🪙</span>
-            <button class="shop-buy-btn shop-buy-teal" id="pinChatBtn"
+            <button class="shop-buy-btn shop-buy-blue" id="pinChatBtn"
               ${chats.length === 0 ? "disabled" : ""}>
               ${settings.pinned_chat_id ? "Изменить" : "Выбрать"}
             </button>
           </div>
         </div>
 
-        <!-- Кастомизация -->
+        <!-- ── Темы ── -->
         <div class="shop-section-title">🎨 Темы оформления</div>
         <div class="theme-card-grid">
           ${THEMES.map(t => {
-            const owned  = (settings.owned_themes || ["default"]).includes(t.id) || t.free;
-            const active = settings.theme === t.id;
-            const price  = (prices.theme_prices || {})[t.id] ?? t.price ?? 100;
-            const canBuy = bal >= price;
-            let btnText, btnStyle, btnDisabled;
+            const owned    = (settings.owned_themes || ["default"]).includes(t.id) || t.free;
+            const active   = settings.theme === t.id;
+            const price    = (prices.theme_prices || {})[t.id] ?? t.price ?? 100;
+            const canBuy   = bal >= price;
+            let btnText, btnStyle, btnDis;
             if (active) {
-              btnText    = "✓ Активна";
-              btnStyle   = `background:var(--link);color:#fff`;
-              btnDisabled = true;
+              btnText = "✓ Активна"; btnStyle = `background:var(--link);color:#fff`; btnDis = true;
             } else if (owned) {
-              btnText    = "Активировать";
-              btnStyle   = `background:rgba(120,120,128,0.12);color:var(--text)`;
-              btnDisabled = false;
+              btnText = "Применить"; btnStyle = `background:rgba(255,255,255,0.1);color:var(--text)`; btnDis = false;
             } else {
-              btnText    = price === 0 ? "Бесплатно" : `${price} 🪙`;
-              btnStyle   = `background:var(--link);color:#fff`;
-              btnDisabled = !canBuy && price > 0;
+              btnText = price === 0 ? "Бесплатно" : `${price} 🪙`;
+              btnStyle = `background:var(--link);color:#fff`;
+              btnDis = !canBuy && price > 0;
             }
             return `
             <div class="theme-card${active ? " active-theme" : ""}" data-theme="${t.id}">
@@ -7193,36 +7231,31 @@
               <div class="theme-card-swatch" style="background:${t.swatch}"></div>
               <div class="theme-card-name">${t.emoji} ${t.label}</div>
               <div class="theme-card-desc">${t.desc}</div>
-              <button class="theme-card-btn"
-                data-theme="${t.id}"
-                data-owned="${owned}"
-                style="${btnStyle}"
-                ${btnDisabled ? "disabled" : ""}>
-                ${btnText}
-              </button>
+              <button class="theme-card-btn" data-theme="${t.id}" data-owned="${owned}"
+                style="${btnStyle}" ${btnDis ? "disabled" : ""}>${btnText}</button>
             </div>`;
           }).join("")}
         </div>
-        <div class="section-title" style="font-size:12px;color:var(--hint);margin-top:10px;margin-bottom:6px">Рамка профиля · ${prices.frame ?? 150} 🪙</div>
+
+        <!-- ── Рамки ── -->
+        <div class="shop-section-title" style="margin-top:16px">🖼 Рамка профиля · ${prices.frame ?? 150} 🪙</div>
         <div class="frame-picker">
           ${FRAMES.map(f => `
-            <button class="frame-btn ${settings.frame === f.id ? "active" : ""}"
-              data-frame="${f.id}"
-              ${bal < (prices.frame ?? 150) && settings.frame !== f.id ? "disabled" : ""}
-              ${settings.frame === f.id ? "disabled" : ""}>
+            <button class="frame-btn ${settings.frame === f.id ? "active" : ""}" data-frame="${f.id}"
+              ${settings.frame === f.id || (bal < (prices.frame ?? 150) && settings.frame !== f.id) ? "disabled" : ""}>
               <span class="frame-btn-icon">${f.emoji}</span>
               <span>${f.label}</span>
             </button>`).join("")}
         </div>
 
-        <!-- Подарки -->
+        <!-- ── Подарки ── -->
         <div class="shop-section-title">🎁 Подарки</div>
         <div class="shop-items-grid shop-item-wide">
           <div class="shop-item">
             <span class="shop-item-icon">🎁</span>
             <div class="shop-item-body">
               <div class="shop-item-name">Подарить монеты собеседнику</div>
-              <div class="shop-item-desc">Стоит ${prices.gift ?? 30} 🪙 · Получит ${prices.gift_amount ?? 50} 🪙</div>
+              <div class="shop-item-desc">Спишется ${prices.gift ?? 30} 🪙 · собеседник получит ${prices.gift_amount ?? 50} 🪙</div>
             </div>
             <button class="shop-buy-btn shop-buy-pink" id="giftCoinsBtn"
               ${chats.length === 0 || bal < (prices.gift ?? 30) ? "disabled" : ""}>
@@ -7230,12 +7263,66 @@
             </button>
           </div>
         </div>
+        <div style="height:12px"></div>
       `;
 
       attachShopHandlers(prices, settings, chats, bal);
     }
 
+    async function buyCoinPackage(pkgId, btn) {
+      const orig = btn.innerHTML;
+      btn.disabled = true; btn.innerHTML = "⏳";
+      try {
+        const res = await fetch("/app/api/shop/coins/invoice", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initData: currentInitData, packageId: pkgId }),
+        });
+        if (!res.ok) throw new Error("Ошибка создания счёта");
+        const data = await res.json();
+
+        if (!tg?.openInvoice) {
+          // Fallback: open invoice link in browser
+          window.open(data.invoice_link, "_blank");
+          btn.disabled = false; btn.innerHTML = orig;
+          return;
+        }
+
+        tg.openInvoice(data.invoice_link, (status) => {
+          btn.disabled = false; btn.innerHTML = orig;
+          if (status === "paid") {
+            if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+            toastMessage(`🪙 ${data.coins.toLocaleString("ru-RU")} монет зачислено!`);
+            // Reload wallet data after a moment for the DB to commit
+            setTimeout(async () => {
+              try {
+                const wRes = await fetch("/app/api/wallet/info", {
+                  method: "POST", headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ initData: currentInitData }),
+                });
+                if (wRes.ok) {
+                  walletData = await wRes.json();
+                  updateBalanceDisplay(walletData.balance);
+                  renderShop();
+                }
+              } catch {}
+            }, 1500);
+          } else if (status === "failed") {
+            toastMessage("❌ Платёж не прошёл");
+          }
+          // "cancelled" — silent
+        });
+      } catch (e) {
+        btn.disabled = false; btn.innerHTML = orig;
+        toastMessage(e.message || "Ошибка");
+      }
+    }
+
     function attachShopHandlers(prices, settings, chats, bal) {
+      // Coin package buttons
+      document.querySelectorAll(".coin-pkg-btn[data-pkg]").forEach(btn => {
+        btn.addEventListener("click", () => buyCoinPackage(btn.dataset.pkg, btn));
+      });
+
       // Double XP boost
       document.getElementById("buyDxpBtn")?.addEventListener("click", async () => {
         const btn = document.getElementById("buyDxpBtn");
@@ -7278,39 +7365,32 @@
         });
       });
 
-      // Theme card buttons (buy or activate)
+      // Theme card buttons
       document.querySelectorAll(".theme-card-btn[data-theme]").forEach(btn => {
         btn.addEventListener("click", async () => {
-          const theme = btn.dataset.theme;
+          const theme   = btn.dataset.theme;
           const isOwned = btn.dataset.owned === "true";
           btn.disabled = true; btn.textContent = "⏳";
           try {
-            const endpoint = isOwned
-              ? "/app/api/shop/theme/activate"
-              : "/app/api/shop/theme";
+            const endpoint = isOwned ? "/app/api/shop/theme/activate" : "/app/api/shop/theme";
             const res = await fetch(endpoint, {
               method: "POST", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ initData: currentInitData, theme }),
             });
             if (!res.ok) {
               const e = await res.json().catch(() => ({}));
-              throw new Error({
-                insufficient_coins: "Недостаточно монет 🪙",
-                not_owned: "Тема не куплена",
-              }[e.detail] || "Ошибка");
+              throw new Error({ insufficient_coins: "Недостаточно монет 🪙", not_owned: "Тема не куплена" }[e.detail] || "Ошибка");
             }
             const data = await res.json();
             if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
             if (data.new_balance != null) updateBalanceDisplay(data.new_balance);
             applyTheme(theme);
             const label = THEMES.find(t => t.id === theme)?.label ?? theme;
-            toastMessage(isOwned
-              ? `🎨 Тема «${label}» активирована!`
-              : `🎨 Тема «${label}» куплена и применена!`);
+            toastMessage(isOwned ? `🎨 Тема «${label}» применена!` : `🎨 Тема «${label}» куплена и применена!`);
             await loadShop();
           } catch (e) {
             btn.disabled = false;
-            btn.textContent = isOwned ? "Активировать" : btn.textContent;
+            btn.textContent = isOwned ? "Применить" : btn.textContent;
             toastMessage(e.message);
           }
         });
@@ -7333,7 +7413,7 @@
             const data = await res.json();
             if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
             updateBalanceDisplay(data.new_balance);
-            toastMessage(`🖼 Рамка «${FRAMES.find(f=>f.id===frame)?.label}» применена!`);
+            toastMessage(`🖼 Рамка «${FRAMES.find(f => f.id === frame)?.label}» применена!`);
             await loadShop();
           } catch (e) { btn.disabled = false; toastMessage(e.message); }
         });
@@ -7355,7 +7435,7 @@
             const data = await res.json();
             if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
             updateBalanceDisplay(data.new_balance);
-            toastMessage(`🎁 Подарок отправлен в чат с ${chatName}! Получит 50 🪙`);
+            toastMessage(`🎁 Подарок отправлен в чат с ${chatName}! Получит ${prices.gift_amount ?? 50} 🪙`);
             await loadShop();
           } catch (e) { toastMessage(e.message); }
         });

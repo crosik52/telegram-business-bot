@@ -13,6 +13,14 @@ from app.models.shop_config import DEFAULT_SHOP_CONFIG, ShopConfig
 from app.models.user_settings import UserSettings
 from app.models.wallet import UserWallet
 
+# ── Coin packages purchasable with Telegram Stars ─────────────────────────────
+COIN_PACKAGES: dict[str, dict] = {
+    "starter": {"stars": 50,  "coins": 500,  "label": "Стартовый",  "bonus": None},
+    "basic":   {"stars": 100, "coins": 1100, "label": "Базовый",    "bonus": "+10%"},
+    "popular": {"stars": 250, "coins": 3000, "label": "Популярный", "bonus": "+20%"},
+    "max":     {"stars": 500, "coins": 6500, "label": "Максимум",   "bonus": "+30%"},
+}
+
 # ── Module-level fallback prices (used if DB has no config row) ───────────────
 BOOST_DOUBLE_XP_COST  = 200
 BOOST_DOUBLE_XP_HOURS = 24
@@ -325,6 +333,30 @@ class ShopRepository:
 
         await self._session.flush()
         return {"new_balance": new_balance, "gifted_amount": amount}
+
+    # ── Stars coin purchase ───────────────────────────────────────────────────
+
+    async def add_coins_from_purchase(self, owner_id: int, coins: int) -> int:
+        """Credit coins to wallet after a successful Stars payment. Returns new balance."""
+        result = await self._session.execute(
+            select(UserWallet)
+            .where(UserWallet.owner_telegram_id == owner_id)
+            .with_for_update()
+        )
+        wallet = result.scalar_one_or_none()
+        if wallet is None:
+            wallet = UserWallet(
+                owner_telegram_id=owner_id,
+                balance=coins,
+                total_earned=coins,
+                total_spent=0,
+            )
+            self._session.add(wallet)
+        else:
+            wallet.balance = min(999_999, wallet.balance + coins)
+            wallet.total_earned = (wallet.total_earned or 0) + coins
+        await self._session.flush()
+        return wallet.balance
 
     # ── Double-XP check (used by pet_repository) ──────────────────────────────
 

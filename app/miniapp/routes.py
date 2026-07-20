@@ -29,7 +29,7 @@ from app.repositories.shop_repository import (
     ShopRepository,
     BOOST_DOUBLE_XP_COST, BOOST_DOUBLE_XP_HOURS,
     PIN_CHAT_COST, THEME_COST, FRAME_COST, GIFT_COST, GIFT_AMOUNT,
-    VALID_THEMES, VALID_FRAMES,
+    VALID_THEMES, VALID_FRAMES, COIN_PACKAGES,
 )
 from app.repositories.quest_repository import QUESTS, QuestRepository
 from app.repositories.referral_repository import ReferralRepository
@@ -2073,6 +2073,45 @@ async def subscription_invoice(
         raise HTTPException(status_code=502, detail="invoice_send_failed") from exc
 
     return {"ok": True, "price_stars": effective_stars, "invoice_link": invoice_link}
+
+
+class CoinPackageInvoiceRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    init_data: str = Field(alias="initData")
+    package_id: str = Field(alias="packageId")
+
+
+@router.post("/app/api/shop/coins/invoice")
+async def shop_coins_invoice(payload: CoinPackageInvoiceRequest) -> dict:
+    """Create a Telegram Stars invoice link for buying a coin package."""
+    from aiogram.types import LabeledPrice
+
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid init data")
+    owner_id = int(user["id"])
+
+    pkg = COIN_PACKAGES.get(payload.package_id)
+    if pkg is None:
+        raise HTTPException(status_code=422, detail="unknown_package")
+
+    bonus_text = f" (бонус {pkg['bonus']})" if pkg.get("bonus") else ""
+    bot = get_bot(settings)
+    try:
+        invoice_link = await bot.create_invoice_link(
+            title=f"{pkg['coins']:,} монет".replace(",", " "),
+            description=f"Пополнение кошелька на {pkg['coins']} 🪙{bonus_text}",
+            payload=f"coins_{owner_id}_{payload.package_id}",
+            provider_token="",   # Telegram Stars
+            currency="XTR",
+            prices=[LabeledPrice(label=f"{pkg['coins']} монет", amount=pkg["stars"])],
+        )
+    except Exception as exc:
+        logger.exception("Failed to create coins invoice for user %s", owner_id)
+        raise HTTPException(status_code=502, detail="invoice_send_failed") from exc
+
+    return {"ok": True, "invoice_link": invoice_link, "stars": pkg["stars"], "coins": pkg["coins"]}
 
 
 @router.post("/app/api/subscription/vip/invoice")

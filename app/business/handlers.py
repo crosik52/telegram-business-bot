@@ -1608,8 +1608,9 @@ async def on_chosen_inline_result(result: ChosenInlineResult, bot: Bot) -> None:
 
 @router.pre_checkout_query()
 async def on_pre_checkout_query(query: PreCheckoutQuery) -> None:
-    """Validate and accept subscription pre-checkout queries."""
-    if query.invoice_payload.startswith("subscription_"):
+    """Validate and accept Stars payment pre-checkout queries."""
+    ok_prefixes = ("subscription_", "vip_subscription_", "coins_")
+    if query.invoice_payload.startswith(ok_prefixes):
         await query.answer(ok=True)
     else:
         await query.answer(ok=False, error_message="Unknown product")
@@ -1625,18 +1626,54 @@ def _dur_label(days: int) -> str:
 
 @router.message(F.successful_payment)
 async def on_successful_payment(message: Message, bot: Bot) -> None:
-    """Activate Premium or VIP subscription after a successful Stars payment."""
+    """Handle successful Stars payments: coins purchase or subscription activation."""
     payment = message.successful_payment
     payload = payment.invoice_payload if payment else ""
-
-    is_premium = payload.startswith("subscription_")
-    is_vip     = payload.startswith("vip_subscription_")
-    if not (is_premium or is_vip):
-        return
 
     user_id    = message.from_user.id
     charge_id  = payment.telegram_payment_charge_id
     stars_paid = payment.total_amount
+
+    # ── Coin package purchase ─────────────────────────────────────────────────
+    if payload.startswith("coins_"):
+        # Payload: coins_{user_id}_{package_id}
+        parts = payload.split("_", 2)
+        package_id = parts[2] if len(parts) == 3 else None
+
+        from app.repositories.shop_repository import COIN_PACKAGES, ShopRepository
+        pkg = COIN_PACKAGES.get(package_id) if package_id else None
+
+        if pkg:
+            async with session_scope() as session:
+                shop_repo = ShopRepository(session)
+                new_balance = await shop_repo.add_coins_from_purchase(user_id, pkg["coins"])
+                await session.commit()
+            logger.info(
+                "Coins purchased: user=%s package=%s coins=%s stars=%s charge=%s balance_after=%s",
+                user_id, package_id, pkg["coins"], stars_paid, charge_id, new_balance,
+            )
+            bonus_line = f"🎁 Бонус {pkg['bonus']} уже учтён!\n\n" if pkg.get("bonus") else ""
+            text = (
+                f"🪙 <b>Монеты зачислены!</b>\n\n"
+                f"{bonus_line}"
+                f"<b>+{pkg['coins']:,}".replace(",", " ") + f" монет</b> добавлено на баланс.\n"
+                f"Баланс: <b>{new_balance:,}".replace(",", " ") + " 🪙</b>\n\n"
+                f"Открой мини-приложение, чтобы потратить!"
+            )
+        else:
+            text = "🪙 Монеты зачислены! Открой мини-приложение."
+
+        try:
+            await bot.send_message(chat_id=user_id, text=text, parse_mode="HTML")
+        except Exception:
+            logger.exception("Failed to send coins confirmation to user %s", user_id)
+        return
+
+    # ── Subscription activation ───────────────────────────────────────────────
+    is_premium = payload.startswith("subscription_")
+    is_vip     = payload.startswith("vip_subscription_")
+    if not (is_premium or is_vip):
+        return
 
     # Payload formats:
     #   Premium: "subscription_{user_id}_{duration_days}"

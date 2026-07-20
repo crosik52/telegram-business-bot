@@ -224,12 +224,21 @@
     border-radius: 50%;
     background: linear-gradient(135deg, var(--link) 0%, #5856d6 50%, var(--green) 100%);
     display: flex; align-items: center; justify-content: center;
-    font-size: 26px; font-weight: 800; color: #fff;
+    padding: 3px;
     box-shadow: 0 4px 18px rgba(0,0,0,0.22);
-    overflow: hidden;
+    cursor: pointer;
+    transition: background 0.3s ease, transform 0.15s ease;
     position: relative;
   }
-  .header .avatar-ring img {
+  .header .avatar-ring:active { transform: scale(0.93); }
+  .header .avatar-inner {
+    width: 62px; height: 62px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; font-weight: 800; color: #fff;
+    overflow: hidden;
+    background: var(--secondary-bg);
+  }
+  .header .avatar-inner img {
     width: 100%; height: 100%;
     object-fit: cover;
     border-radius: 50%;
@@ -2732,7 +2741,9 @@
 </head>
 <body>
   <div class="header" id="appHeader">
-    <div class="avatar-ring" id="headerAvatar">📊</div>
+    <div class="avatar-ring" id="headerRing">
+      <div class="avatar-inner" id="headerAvatar">📊</div>
+    </div>
     <h1 id="greeting">Моя статистика</h1>
     <p id="subtitle">Загружаем данные…</p>
     <div class="header-actions" id="headerActions" style="display:none">
@@ -3905,6 +3916,11 @@
       "neon":    "linear-gradient(135deg, #00f5ff, #0080ff, #7b00ff)",
     };
 
+    function applyMyFrame(frame) {
+      const ring = document.getElementById("headerRing");
+      if (ring) ring.style.background = _CP_FRAME_STYLES[frame] || _CP_FRAME_STYLES["none"];
+    }
+
     function openContactProfile(s) {
       if (!s) return;
       const _e  = v => String(v || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
@@ -4025,6 +4041,78 @@
         } catch { /* ignore */ }
         btn.disabled = false;
       });
+    }
+
+    // ── My Profile Card ──────────────────────────────────────────────────────
+    function openMyCard() {
+      const u = tg?.initDataUnsafe?.user;
+      if (!u) return;
+      const sub        = walletData?.subscription || {};
+      const name       = ((u.first_name || "") + " " + (u.last_name || "")).trim() || "Ты";
+      const frame      = shopData?.settings?.frame || "none";
+      const frameGrad  = _CP_FRAME_STYLES[frame] || _CP_FRAME_STYLES["none"];
+      const isVip      = !!sub.is_vip;
+      const isPremium  = !!sub.is_active && !isVip;
+      const badge = isVip
+        ? `<span class="cp-badge cp-badge-vip">💎 VIP</span>`
+        : isPremium
+        ? `<span class="cp-badge cp-badge-premium">⭐ Premium</span>`
+        : "";
+      const msgs    = lastStats?.total_messages ?? 0;
+      const streak  = lastStats?.streak_days    ?? 0;
+      const longest = lastStats?.longest_streak ?? 0;
+      const _e = v => String(v || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+      const overlay = document.createElement("div");
+      overlay.className = "cp-overlay";
+      overlay.innerHTML = `
+        <button class="cp-close-btn" id="myCardClose">✕</button>
+        <div class="cp-sheet">
+          <div class="cp-avatar-wrap" style="background:${frameGrad}">
+            <div class="cp-avatar" id="myCardAvatar" style="background:${colorFor(name)}">${initials(name)}</div>
+          </div>
+          <div class="cp-name">${_e(name)}</div>
+          <div class="cp-sub-line">
+            ${u.username ? `<span class="cp-username">@${_e(u.username)}</span>` : ""}
+            ${badge}
+          </div>
+          <div class="cp-stats-grid">
+            <div class="cp-stat-card">
+              <div class="cp-stat-val">${msgs.toLocaleString("ru-RU")}</div>
+              <div class="cp-stat-lbl">💬 Сообщений</div>
+            </div>
+            <div class="cp-stat-card">
+              <div class="cp-stat-val">${streak > 0 ? streak + " дн" : "—"}</div>
+              <div class="cp-stat-lbl">🔥 Серия</div>
+            </div>
+            <div class="cp-stat-card">
+              <div class="cp-stat-val">${longest > 1 ? longest + " дн" : "—"}</div>
+              <div class="cp-stat-lbl">💎 Рекорд</div>
+            </div>
+            <div class="cp-stat-card">
+              <div class="cp-stat-val">${(walletData?.balance ?? 0).toLocaleString("ru-RU")}</div>
+              <div class="cp-stat-lbl">🪙 Монет</div>
+            </div>
+          </div>
+          <div style="margin-top:14px;font-size:12px;color:var(--hint);text-align:center;padding:0 16px">
+            Так выглядит твоя карточка для других
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+      overlay.querySelector("#myCardClose").addEventListener("click", () => overlay.remove());
+      overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
+
+      if (u.photo_url) {
+        const avatarEl = overlay.querySelector("#myCardAvatar");
+        if (avatarEl) {
+          const img = document.createElement("img");
+          img.src = u.photo_url; img.alt = u.first_name || "";
+          img.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:50%;display:block";
+          img.onerror = () => {};
+          avatarEl.innerHTML = ""; avatarEl.style.background = "";
+          avatarEl.appendChild(img);
+        }
+      }
     }
 
     async function sendGame(chatId, emoji) {
@@ -4246,6 +4334,7 @@
 
     // Apply immediately — before any network call
     applyUserAvatar();
+    document.getElementById("headerRing")?.addEventListener("click", openMyCard);
 
     // ── Load data ──
     async function loadStats(isRefresh) {
@@ -7145,6 +7234,7 @@
       const prices   = shopData.prices   || {};
       const settings = shopData.settings || {};
       applyTheme(settings.theme || "default");
+      applyMyFrame(settings.frame || "none");
       const boosts   = shopData.active_boosts || [];
       const dxpBoost = boosts.find(b => b.boost_type === "double_xp");
       const chats    = petData?.available_chats || [];

@@ -269,38 +269,41 @@ def _apply_instagram_opts(ydl_opts: dict, url: str, out_dir: str) -> None:
 def _apply_youtube_opts(ydl_opts: dict, out_dir: str) -> None:
     """Apply YouTube-specific yt-dlp options to bypass bot-detection.
 
-    Strategy (applied in order, all at once):
-    1. Use alternative player clients that don't require sign-in (tv, mweb).
-    2. If YOUTUBE_COOKIES env var is set, inject cookies (same formats as TikTok).
+    Strategy:
+    1. Always set Node.js for n-challenge + tv/mweb/web player clients.
+    2. If YOUTUBE_COOKIES is set, also inject cookies (cookiefile preferred).
+       Cookies + player clients together give the best success rate.
     """
     # Always use Node.js to solve YouTube's n-challenge (requires Node 22+).
-    # Without this the extractor finds zero downloadable formats.
     ydl_opts["js_runtimes"] = {"node": {}}
+
+    # Always set player_client fallbacks — they help bypass bot checks with OR without cookies.
+    ydl_opts["extractor_args"] = {
+        "youtube": {"player_client": ["tv", "mweb", "web"]}
+    }
 
     raw = os.environ.get("YOUTUBE_COOKIES", "").strip()
     if not raw:
-        # Without cookies, try alternative player clients that bypass the bot-check.
-        # "tv" and "mweb" are unauthenticated YouTube clients.
-        ydl_opts["extractor_args"] = {
-            "youtube": {"player_client": ["tv", "mweb", "web"]}
-        }
+        logger.info("YouTube: no YOUTUBE_COOKIES set, using player_client bypass only")
         return
 
+    # ── Normalise newlines ────────────────────────────────────────────────────
     if "\n" not in raw and "\\n" in raw:
         raw = raw.replace("\\n", "\n")
 
-    # Replit secrets sometimes strip real newlines, collapsing rows into one
-    # space-separated string. Reconstruct by inserting newlines before each
-    # cookie domain (e.g. " .youtube.com\t" → "\n.youtube.com\t").
+    # Replit secrets sometimes collapse real newlines to spaces; reconstruct.
     if "\n" not in raw and "\t" in raw:
         import re as _re
-        raw = _re.sub(r" +(?=\.[A-Za-z0-9_-]+\.[A-Za-z]+\t)", "\n", raw)
-        logger.info("YouTube: reconstructed %d lines from space-collapsed cookie data", len(raw.splitlines()))
+        raw = _re.sub(r" +(?=\.?[A-Za-z0-9_-]+\.[A-Za-z]+\t)", "\n", raw)
+        logger.info("YouTube: reconstructed %d lines from space-collapsed cookies", len(raw.splitlines()))
 
+    # ── Detect format and write cookiefile ───────────────────────────────────
     data_lines = [l for l in raw.splitlines() if l.strip() and not l.strip().startswith("#")]
     netscape_lines = [l for l in data_lines if len(l.split("\t")) == 7]
+
+    cookie_path = os.path.join(out_dir, "_yt_cookies.txt")
+
     if netscape_lines:
-        cookie_path = os.path.join(out_dir, "_yt_cookies.txt")
         with open(cookie_path, "w", encoding="utf-8") as fh:
             fh.write(raw)
         ydl_opts["cookiefile"] = cookie_path
@@ -310,18 +313,24 @@ def _apply_youtube_opts(ydl_opts: dict, out_dir: str) -> None:
     if raw.lstrip().startswith("["):
         netscape_str = _json_cookies_to_netscape(raw)
         if netscape_str:
-            cookie_path = os.path.join(out_dir, "_yt_cookies.txt")
             with open(cookie_path, "w", encoding="utf-8") as fh:
                 fh.write(netscape_str)
             ydl_opts["cookiefile"] = cookie_path
             logger.info("YouTube: JSON→Netscape cookiefile set (%d bytes)", len(netscape_str))
             return
-        logger.warning("YouTube: YOUTUBE_COOKIES looks like JSON but failed to parse")
+        logger.warning("YouTube: YOUTUBE_COOKIES looks like JSON but parse failed")
 
-    if "=" in raw and "\n" not in raw and "\t" not in raw:
+    # Last resort: raw Cookie header (weaker than cookiefile but better than nothing)
+    if "=" in raw:
+        # Use only the first line in case reconstruction produced multiple
+        first_line = raw.splitlines()[0].strip()
         ydl_opts.setdefault("http_headers", {})
-        ydl_opts["http_headers"]["Cookie"] = raw
-        logger.info("YouTube: raw Cookie header injected (%d chars)", len(raw))
+        ydl_opts["http_headers"]["Cookie"] = first_line
+        logger.warning("YouTube: falling back to raw Cookie header (%d chars) — "
+                       "may still fail bot check; provide Netscape cookie file", len(first_line))
+    else:
+        logger.warning("YouTube: YOUTUBE_COOKIES set but format unrecognised (len=%d, "
+                       "preview=%.80r) — proceeding without cookies", len(raw), raw)
 
 
 def _apply_tiktok_ua(ydl_opts: dict) -> None:

@@ -796,6 +796,48 @@
   .ai-pie-legend-row { display: flex; align-items: center; gap: 6px; font-size: 12px; }
   .ai-pie-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 
+  /* ratio bars (balance / stats) */
+  .ai-ratio-wrap { margin-bottom: 4px; }
+  .ai-ratio-bar {
+    display: flex; height: 28px; border-radius: 8px; overflow: hidden;
+    background: rgba(120,120,128,.08); gap: 2px;
+  }
+  .ai-ratio-a, .ai-ratio-b {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: rgba(255,255,255,.92);
+    transition: width .45s cubic-bezier(.4,0,.2,1); min-width: 0;
+  }
+  .ai-ratio-labels {
+    display: flex; justify-content: space-between;
+    font-size: 10.5px; color: var(--hint); margin-top: 4px;
+  }
+  .ai-ratio-section-lbl {
+    font-size: 10px; color: var(--hint); font-weight: 700;
+    text-transform: uppercase; letter-spacing: .5px; margin: 12px 0 6px;
+  }
+  .ai-ratio-section-lbl:first-child { margin-top: 0; }
+
+  /* score gauge */
+  .ai-score-gauge-wrap { display: flex; flex-direction: column; align-items: center; padding: 4px 0 8px; }
+  .ai-score-gauge-num { font-size: 38px; font-weight: 900; line-height: 1; margin-top: -36px; }
+  .ai-score-gauge-sub { font-size: 10px; color: var(--hint); margin-top: 2px; }
+
+  /* interest ring */
+  .ai-interest-wrap { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
+  .ai-interest-ring-label { font-size: 30px; font-weight: 900; line-height: 1; }
+  .ai-interest-ring-sub { font-size: 11px; color: var(--hint); margin-top: 2px; }
+
+  /* dynamics stats row */
+  .ai-dyn-stats {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px;
+  }
+  .ai-dyn-stat {
+    background: rgba(120,120,128,.07); border-radius: 10px;
+    padding: 8px 4px; text-align: center;
+  }
+  .ai-dyn-val { font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ai-dyn-lbl { font-size: 9px; color: var(--hint); margin-top: 2px; text-transform: uppercase; letter-spacing: .3px; }
+
   /* loading state */
   .ai-loading-wrap { display: flex; flex-direction: column; align-items: center; padding: 60px 20px; gap: 14px; }
   .ai-loading-spinner {
@@ -7579,6 +7621,8 @@
         const data = await res.json();
         body.innerHTML = renderAiReport(data, name);
         _drawEmotionChart(data.ai?.emotions);
+        _drawInterestArc(Math.round((data.ai?.interest?.probability) || 0),
+          (() => { const p = Math.round((data.ai?.interest?.probability)||0); return p>=60?"#34c759":p>=35?"#ff9500":"#ff3b30"; })());
       } catch (e) {
         body.innerHTML = `<div class="ai-loading-wrap">
           <div style="font-size:36px">😔</div>
@@ -7587,109 +7631,141 @@
       }
     }
 
+    function _ratioBar(aNum, bNum, aLabel, bLabel, aColor, bColor) {
+      const tot  = (aNum + bNum) || 1;
+      const aPct = Math.round(aNum / tot * 100);
+      const bPct = 100 - aPct;
+      return `<div class="ai-ratio-wrap">
+        <div class="ai-ratio-bar">
+          <div class="ai-ratio-a" style="width:${aPct}%;background:${aColor}">${aPct > 14 ? aPct + "%" : ""}</div>
+          <div class="ai-ratio-b" style="width:${bPct}%;background:${bColor}">${bPct > 14 ? bPct + "%" : ""}</div>
+        </div>
+        <div class="ai-ratio-labels"><span style="color:${aColor}">● ${aLabel}</span><span style="color:${bColor}">● ${bLabel}</span></div>
+      </div>`;
+    }
+
     function renderAiReport(data, name) {
       const ai    = data.ai    || {};
       const stats = data.stats || {};
-      const esc2 = s => String(s || "").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      const esc2  = s => String(s || "").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 
-      // ── 1. General score ─────────────────────────────────────────────────
-      const gs      = ai.general_score || {};
-      const score   = Math.min(10, Math.max(0, gs.score || 5));
-      const scorePct = score * 10;
+      // ── 1. Score ─────────────────────────────────────────────────────────
+      const gs         = ai.general_score || {};
+      const score      = Math.min(10, Math.max(1, gs.score || 0));
       const scoreColor = score >= 7 ? "#34c759" : score >= 5 ? "#ff9500" : "#ff3b30";
+      const scoreR = 48, scoreCx = 70, scoreCy = 58;
+      const scoreLen = Math.PI * scoreR;
+      const scoreFill = (score / 10) * scoreLen;
 
       // ── 2. Balance ───────────────────────────────────────────────────────
       const bal = ai.balance || {};
-      const initMap = { user: "Вы", contact: esc2(name), equal: "Поровну" };
+      const um  = stats.user_messages    || 0;
+      const cm  = stats.contact_messages || 0;
+      const uw  = stats.user_words       || 0;
+      const cw  = stats.contact_words    || 0;
+      const ui  = stats.initiates_user   || 0;
+      const ci  = stats.initiates_contact|| 0;
 
       // ── 3. Interest ──────────────────────────────────────────────────────
-      const int_ = ai.interest || {};
-      const intPct = Math.round(int_.probability || 0);
+      const int_     = ai.interest || {};
+      const intPct   = Math.round(int_.probability || 0);
       const intColor = intPct >= 60 ? "#34c759" : intPct >= 35 ? "#ff9500" : "#ff3b30";
       const indicators = (int_.indicators || []).slice(0, 8);
 
-      // ── 4. Style / 5. Personality ─────────────────────────────────────
-      const style = ai.style || {};
+      // ── 4/5. Style / Personality ─────────────────────────────────────────
+      const style = ai.style       || {};
       const pers  = ai.personality || {};
 
-      // ── 7. Emotions — drawn by canvas ─────────────────────────────────
-      const emo = ai.emotions || {};
-
-      // ── 8/9. Flags ───────────────────────────────────────────────────
+      // ── 8/9. Flags ───────────────────────────────────────────────────────
       const redFlags   = (ai.red_flags   || []).slice(0, 8);
       const greenFlags = (ai.green_flags || []).slice(0, 8);
 
-      // ── 10. Stats (local) ─────────────────────────────────────────────
+      // ── 10. Stats ────────────────────────────────────────────────────────
       const media = stats.media || {};
       const mediaItems = [
-        ["📷", "Фото",     media.photo       || 0],
-        ["🎥", "Видео",    media.video       || 0],
-        ["🎙", "Голос",    media.voice       || 0],
-        ["⭕", "Кружки",   media.video_note  || 0],
-        ["😊", "Стикеры",  media.sticker     || 0],
-        ["📎", "Файлы",    media.document    || 0],
-      ].filter(([,, n]) => n > 0);
+        ["📷","Фото",    media.photo      || 0],
+        ["🎥","Видео",   media.video      || 0],
+        ["🎙","Голос",   media.voice      || 0],
+        ["⭕","Кружки",  media.video_note || 0],
+        ["😊","Стикеры", media.sticker   || 0],
+        ["📎","Файлы",   media.document  || 0],
+      ].filter(([,,n]) => n > 0);
 
       const flagsHtml = (arr, ico, color) => arr.length
-        ? arr.map(f => `<div class="ai-flag-row"><span class="ai-flag-ico">${ico}</span><span style="color:${color}">${esc2(f)}</span></div>`).join("")
+        ? arr.map(f=>`<div class="ai-flag-row"><span class="ai-flag-ico">${ico}</span><span style="color:${color}">${esc2(f)}</span></div>`).join("")
         : `<div style="color:var(--hint);font-size:13px;padding:6px 0">Не обнаружено</div>`;
 
-      const tagCloud = (tags, cls="") => (tags||[]).map(t => `<span class="ai-tag ${cls}">${esc2(t)}</span>`).join("");
+      const tagCloud = (tags, cls="") => (tags||[]).map(t=>`<span class="ai-tag ${cls}">${esc2(t)}</span>`).join("");
 
       const indicatorHtml = indicators.map(ind => {
-        const lvl = (ind.level || "medium").toLowerCase();
-        const barColor = lvl === "high" ? "#34c759" : lvl === "low" ? "#ff3b30" : "#ff9500";
-        const barPct   = lvl === "high" ? 85 : lvl === "low" ? 25 : 55;
+        const lvl = (ind.level||"medium").toLowerCase();
+        const bc  = lvl==="high"?"#34c759":lvl==="low"?"#ff3b30":"#ff9500";
+        const bp  = lvl==="high"?85:lvl==="low"?25:55;
         return `<div class="ai-indicator-row">
           <span class="ai-indicator-name">${esc2(ind.name)}</span>
-          <div class="ai-indicator-bar-track">
-            <div class="ai-indicator-bar-fill" style="width:${barPct}%;background:${barColor}"></div>
-          </div>
-          <span class="ai-indicator-val" style="color:${barColor}">${esc2(ind.value||"")}</span>
+          <div class="ai-indicator-bar-track"><div class="ai-indicator-bar-fill" style="width:${bp}%;background:${bc}"></div></div>
+          <span class="ai-indicator-val" style="color:${bc}">${esc2(ind.value||"")}</span>
         </div>`;
       }).join("");
 
       return `
-        <!-- 1. General score -->
+        <!-- 1. Score gauge -->
         <div class="ai-sec">
           <div class="ai-sec-head"><span class="ai-sec-ico">🧠</span><span class="ai-sec-label">Общая оценка общения</span></div>
-          <div class="ai-sec-body" style="display:flex;gap:16px;align-items:flex-start">
-            <div>
-              <div class="ai-score-num" style="color:${scoreColor}">${score.toFixed(1)}</div>
-              <div style="font-size:10px;color:var(--hint);margin-top:2px">из 10</div>
+          <div class="ai-sec-body">
+            <div class="ai-score-gauge-wrap">
+              <svg width="140" height="72" viewBox="0 0 140 72" overflow="visible" style="display:block">
+                <defs>
+                  <linearGradient id="sgGrad" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stop-color="#5856d6"/>
+                    <stop offset="100%" stop-color="${scoreColor}"/>
+                  </linearGradient>
+                </defs>
+                <path d="M ${scoreCx-scoreR} ${scoreCy} A ${scoreR} ${scoreR} 0 0 1 ${scoreCx+scoreR} ${scoreCy}"
+                  fill="none" stroke="rgba(120,120,128,.15)" stroke-width="9" stroke-linecap="round"/>
+                <path d="M ${scoreCx-scoreR} ${scoreCy} A ${scoreR} ${scoreR} 0 0 1 ${scoreCx+scoreR} ${scoreCy}"
+                  fill="none" stroke="url(#sgGrad)" stroke-width="9" stroke-linecap="round"
+                  stroke-dasharray="${scoreFill.toFixed(1)} ${scoreLen.toFixed(1)}"/>
+              </svg>
+              <div class="ai-score-gauge-num" style="color:${scoreColor}">${score.toFixed(1)}</div>
+              <div class="ai-score-gauge-sub">из 10</div>
             </div>
-            <div style="flex:1">
-              <div class="ai-score-track"><div class="ai-score-fill" style="width:${scorePct}%;background:linear-gradient(90deg,#5856d6,${scoreColor})"></div></div>
-              <div class="ai-score-label">${esc2(gs.label || "")}</div>
-              <div class="ai-score-desc">${esc2(gs.description || "")}</div>
-            </div>
+            <div style="text-align:center;font-size:15px;font-weight:800;margin-top:4px">${esc2(gs.label||"")}</div>
+            <div style="font-size:12.5px;color:var(--hint);margin-top:6px;line-height:1.6">${esc2(gs.description||"")}</div>
           </div>
         </div>
 
-        <!-- 2. Balance -->
+        <!-- 2. Balance с диаграммами -->
         <div class="ai-sec">
           <div class="ai-sec-head"><span class="ai-sec-ico">⚖️</span><span class="ai-sec-label">Баланс отношений</span></div>
           <div class="ai-sec-body">
-            <div class="ai-balance-grid">
-              <div class="ai-balance-card"><div class="ai-balance-val">${initMap[bal.initiates_first] || esc2(bal.initiates_first)||"—"}</div><div class="ai-balance-lbl">Чаще начинает</div></div>
-              <div class="ai-balance-card"><div class="ai-balance-val">${esc2(bal.ends_conversation)||"—"}</div><div class="ai-balance-lbl">Чаще заканчивает</div></div>
+            <div class="ai-ratio-section-lbl">Сообщений</div>
+            ${_ratioBar(um, cm, "Вы "+um, esc2(name)+" "+cm, "#5856d6", "#34c759")}
+            <div class="ai-ratio-section-lbl">Слов</div>
+            ${_ratioBar(uw, cw, "Вы "+(uw).toLocaleString(), esc2(name)+" "+(cw).toLocaleString(), "#5856d6", "#34c759")}
+            <div class="ai-ratio-section-lbl">Начинали разговор</div>
+            ${_ratioBar(ui, ci, "Вы "+ui, esc2(name)+" "+ci, "#5856d6", "#34c759")}
+            <div class="ai-balance-grid" style="margin-top:14px">
               <div class="ai-balance-card"><div class="ai-balance-val">${esc2(bal.avg_response_time_user)||"—"}</div><div class="ai-balance-lbl">Ответ — Вы</div></div>
               <div class="ai-balance-card"><div class="ai-balance-val">${esc2(bal.avg_response_time_contact)||"—"}</div><div class="ai-balance-lbl">Ответ — ${esc2(name)}</div></div>
+              <div class="ai-balance-card"><div class="ai-balance-val">${esc2(bal.ends_conversation)||"—"}</div><div class="ai-balance-lbl">Чаще заканчивает</div></div>
               <div class="ai-balance-card"><div class="ai-balance-val">${esc2(bal.ignores_more)||"—"}</div><div class="ai-balance-lbl">Чаще игнорирует</div></div>
-              <div class="ai-balance-card"><div class="ai-balance-val">${esc2(bal.longer_messages)||"—"}</div><div class="ai-balance-lbl">Пишет длиннее</div></div>
             </div>
           </div>
         </div>
 
-        <!-- 3. Interest -->
+        <!-- 3. Interest с кольцом -->
         <div class="ai-sec">
           <div class="ai-sec-head"><span class="ai-sec-ico">❤️</span><span class="ai-sec-label">Заинтересованность ${esc2(name)}</span></div>
-          <div class="ai-sec-body" style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
-            <div style="text-align:center">
-              <div class="ai-interest-pct" style="color:${intColor}">${intPct}%</div>
-              <div style="font-size:10px;color:var(--hint);margin-top:3px">вероятность</div>
+          <div class="ai-sec-body">
+            <div class="ai-interest-wrap">
+              <canvas id="aiIntCanvas" width="84" height="84" style="flex-shrink:0"></canvas>
+              <div>
+                <div class="ai-interest-ring-label" style="color:${intColor}">${intPct}%</div>
+                <div class="ai-interest-ring-sub">вероятность интереса</div>
+              </div>
             </div>
-            <div style="flex:1;min-width:160px">${indicatorHtml}</div>
+            ${indicatorHtml}
           </div>
         </div>
 
@@ -7698,9 +7774,9 @@
           <div class="ai-sec-head"><span class="ai-sec-ico">💬</span><span class="ai-sec-label">Стиль общения</span></div>
           <div class="ai-sec-body">
             <div class="ai-tag-lbl">Вы</div>
-            <div class="ai-tags">${tagCloud(style.user_tags) || '<span style="color:var(--hint);font-size:12px">нет данных</span>'}</div>
+            <div class="ai-tags">${tagCloud(style.user_tags)||'<span style="color:var(--hint);font-size:12px">нет данных</span>'}</div>
             <div class="ai-tag-lbl" style="margin-top:10px">${esc2(name)}</div>
-            <div class="ai-tags">${tagCloud(style.contact_tags, "contact") || '<span style="color:var(--hint);font-size:12px">нет данных</span>'}</div>
+            <div class="ai-tags">${tagCloud(style.contact_tags,"contact")||'<span style="color:var(--hint);font-size:12px">нет данных</span>'}</div>
           </div>
         </div>
 
@@ -7709,9 +7785,9 @@
           <div class="ai-sec-head"><span class="ai-sec-ico">🧩</span><span class="ai-sec-label">Особенности личности</span></div>
           <div class="ai-sec-body">
             <div class="ai-tag-lbl">Вы</div>
-            <div class="ai-tags">${tagCloud(pers.user_traits) || '<span style="color:var(--hint);font-size:12px">нет данных</span>'}</div>
+            <div class="ai-tags">${tagCloud(pers.user_traits)||'<span style="color:var(--hint);font-size:12px">нет данных</span>'}</div>
             <div class="ai-tag-lbl" style="margin-top:10px">${esc2(name)}</div>
-            <div class="ai-tags">${tagCloud(pers.contact_traits, "contact") || '<span style="color:var(--hint);font-size:12px">нет данных</span>'}</div>
+            <div class="ai-tags">${tagCloud(pers.contact_traits,"contact")||'<span style="color:var(--hint);font-size:12px">нет данных</span>'}</div>
           </div>
         </div>
 
@@ -7719,20 +7795,32 @@
         <div class="ai-sec">
           <div class="ai-sec-head"><span class="ai-sec-ico">📈</span><span class="ai-sec-label">Динамика отношений</span></div>
           <div class="ai-sec-body">
-            ${(() => { const dyn = ai.dynamics||{}; const trendIco = dyn.trend==="growing"?"📈":dyn.trend==="declining"?"📉":"➡️";
-              return `<div style="font-size:28px;margin-bottom:6px">${trendIco}</div>
-              <div style="font-size:14px;font-weight:700">${esc2(dyn.trend_description||"")}</div>
-              <div style="font-size:12.5px;color:var(--hint);margin-top:6px;line-height:1.55">${esc2(dyn.activity_note||"")}</div>
-              <div style="font-size:12px;color:var(--hint);margin-top:10px">Период: ${esc2(stats.first_message_date||"?")} — ${esc2(stats.last_message_date||"?")} · ${stats.days_span||0} дн. · ${stats.messages_per_day||0} сообщ/день</div>`; })()}
+            ${(()=>{const dyn=ai.dynamics||{};
+              const ico = dyn.trend==="growing"?"📈":dyn.trend==="declining"?"📉":"➡️";
+              const clr = dyn.trend==="growing"?"#34c759":dyn.trend==="declining"?"#ff3b30":"#ff9500";
+              return `<div style="display:flex;align-items:center;gap:12px">
+                <div style="font-size:34px">${ico}</div>
+                <div>
+                  <div style="font-size:14px;font-weight:800;color:${clr}">${esc2(dyn.trend_description||"")}</div>
+                  <div style="font-size:12px;color:var(--hint);margin-top:3px;line-height:1.5">${esc2(dyn.activity_note||"")}</div>
+                </div>
+              </div>
+              <div class="ai-dyn-stats">
+                <div class="ai-dyn-stat"><div class="ai-dyn-val">${stats.days_span||0}</div><div class="ai-dyn-lbl">дней</div></div>
+                <div class="ai-dyn-stat"><div class="ai-dyn-val">${stats.messages_per_day||0}</div><div class="ai-dyn-lbl">сообщ/день</div></div>
+                <div class="ai-dyn-stat"><div class="ai-dyn-val">${esc2(stats.first_message_date||"?")}</div><div class="ai-dyn-lbl">первое</div></div>
+                <div class="ai-dyn-stat"><div class="ai-dyn-val">${esc2(stats.last_message_date||"?")}</div><div class="ai-dyn-lbl">последнее</div></div>
+              </div>`;
+            })()}
           </div>
         </div>
 
-        <!-- 7. Emotions (canvas pie) -->
+        <!-- 7. Emotions (donut) -->
         <div class="ai-sec">
           <div class="ai-sec-head"><span class="ai-sec-ico">😊</span><span class="ai-sec-label">Анализ эмоций</span></div>
           <div class="ai-sec-body">
             <div class="ai-pie-wrap">
-              <canvas id="aiEmoPie" width="120" height="120"></canvas>
+              <canvas id="aiEmoPie" width="130" height="130"></canvas>
               <div class="ai-pie-legend" id="aiEmoPieLegend"></div>
             </div>
           </div>
@@ -7741,13 +7829,13 @@
         <!-- 8. Red flags -->
         <div class="ai-sec">
           <div class="ai-sec-head"><span class="ai-sec-ico">🚩</span><span class="ai-sec-label">Красные флаги</span></div>
-          <div class="ai-sec-body">${flagsHtml(redFlags, "🚩", "var(--danger)")}</div>
+          <div class="ai-sec-body">${flagsHtml(redFlags,"🚩","var(--danger)")}</div>
         </div>
 
         <!-- 9. Green flags -->
         <div class="ai-sec">
           <div class="ai-sec-head"><span class="ai-sec-ico">💚</span><span class="ai-sec-label">Зелёные флаги</span></div>
-          <div class="ai-sec-body">${flagsHtml(greenFlags, "✅", "#34c759")}</div>
+          <div class="ai-sec-body">${flagsHtml(greenFlags,"✅","#34c759")}</div>
         </div>
 
         <!-- 10. Stats -->
@@ -7756,21 +7844,22 @@
           <div class="ai-sec-body">
             <div class="ai-stats-grid">
               <div class="ai-stat-cell"><div class="ai-stat-cell-val">${stats.total_messages||0}</div><div class="ai-stat-cell-lbl">Сообщений</div></div>
-              <div class="ai-stat-cell"><div class="ai-stat-cell-val">${stats.user_messages||0}</div><div class="ai-stat-cell-lbl">От вас</div></div>
-              <div class="ai-stat-cell"><div class="ai-stat-cell-val">${stats.contact_messages||0}</div><div class="ai-stat-cell-lbl">От ${esc2(name)}</div></div>
-              <div class="ai-stat-cell"><div class="ai-stat-cell-val">${(stats.user_words||0).toLocaleString()}</div><div class="ai-stat-cell-lbl">Слов — вы</div></div>
-              <div class="ai-stat-cell"><div class="ai-stat-cell-val">${(stats.contact_words||0).toLocaleString()}</div><div class="ai-stat-cell-lbl">Слов — ${esc2(name)}</div></div>
-              <div class="ai-stat-cell"><div class="ai-stat-cell-val">${stats.initiates_user||0}/${stats.initiates_contact||0}</div><div class="ai-stat-cell-lbl">Начал разговор</div></div>
-              ${mediaItems.map(([ico, lbl, n]) => `<div class="ai-stat-cell"><div class="ai-stat-cell-val">${ico} ${n}</div><div class="ai-stat-cell-lbl">${lbl}</div></div>`).join("")}
+              <div class="ai-stat-cell"><div class="ai-stat-cell-val">${um}</div><div class="ai-stat-cell-lbl">От вас</div></div>
+              <div class="ai-stat-cell"><div class="ai-stat-cell-val">${cm}</div><div class="ai-stat-cell-lbl">От ${esc2(name)}</div></div>
+              <div class="ai-stat-cell"><div class="ai-stat-cell-val">${(uw).toLocaleString()}</div><div class="ai-stat-cell-lbl">Слов — вы</div></div>
+              <div class="ai-stat-cell"><div class="ai-stat-cell-val">${(cw).toLocaleString()}</div><div class="ai-stat-cell-lbl">Слов — ${esc2(name)}</div></div>
+              <div class="ai-stat-cell"><div class="ai-stat-cell-val">${ui}/${ci}</div><div class="ai-stat-cell-lbl">Начал разговор</div></div>
+              ${mediaItems.map(([ico,lbl,n])=>`<div class="ai-stat-cell"><div class="ai-stat-cell-val">${ico} ${n}</div><div class="ai-stat-cell-lbl">${lbl}</div></div>`).join("")}
             </div>
           </div>
         </div>
 
-        <!-- 11. AI Summary -->
+        <!-- 11. Summary -->
         <div class="ai-sec" style="margin-bottom:24px">
           <div class="ai-sec-head"><span class="ai-sec-ico">🤖</span><span class="ai-sec-label">AI Резюме</span></div>
-          <div class="ai-sec-body"><div class="ai-summary-text">${esc2(ai.summary || "Резюме недоступно")}</div>
-          <div style="font-size:10.5px;color:var(--hint);margin-top:10px;line-height:1.5">⚠️ Анализ основан только на тексте переписки и не является психологическим заключением. Выводы — вероятностные наблюдения, а не факты.</div>
+          <div class="ai-sec-body">
+            <div class="ai-summary-text">${esc2(ai.summary||"Резюме недоступно")}</div>
+            <div style="font-size:10.5px;color:var(--hint);margin-top:10px;line-height:1.5">⚠️ Анализ основан только на тексте переписки и не является психологическим заключением. Выводы — вероятностные наблюдения, а не факты.</div>
           </div>
         </div>`;
     }
@@ -7780,39 +7869,88 @@
       const legend = document.getElementById("aiEmoPieLegend");
       if (!canvas || !emo) return;
       const slices = [
-        { label: "Позитив",     value: emo.positive   || 0, color: "#34c759" },
-        { label: "Нейтральность",value: emo.neutral    || 0, color: "#8e8e93" },
-        { label: "Поддержка",   value: emo.support     || 0, color: "#5856d6" },
-        { label: "Раздражение", value: emo.irritation  || 0, color: "#ff9500" },
-        { label: "Грусть",      value: emo.sadness     || 0, color: "#ff3b30" },
+        { label: "Позитив",      value: emo.positive   || 0, color: "#34c759" },
+        { label: "Нейтральность",value: emo.neutral     || 0, color: "#8e8e93" },
+        { label: "Поддержка",    value: emo.support     || 0, color: "#5856d6" },
+        { label: "Раздражение",  value: emo.irritation  || 0, color: "#ff9500" },
+        { label: "Грусть",       value: emo.sadness     || 0, color: "#ff3b30" },
       ].filter(s => s.value > 0);
-      const total = slices.reduce((a, s) => a + s.value, 0) || 1;
-      const ctx = canvas.getContext("2d");
+      const total   = slices.reduce((a, s) => a + s.value, 0) || 1;
+      const ctx     = canvas.getContext("2d");
+      const cx = 65, cy = 65, r = 56, inner = 36, gap = 0.03;
       let angle = -Math.PI / 2;
-      const cx = 60, cy = 60, r = 52, inner = 28;
+
       slices.forEach(sl => {
         const sweep = (sl.value / total) * Math.PI * 2;
         ctx.beginPath();
         ctx.moveTo(cx, cy);
-        ctx.arc(cx, cy, r, angle, angle + sweep);
+        ctx.arc(cx, cy, r, angle + gap, angle + sweep - gap);
         ctx.closePath();
         ctx.fillStyle = sl.color;
         ctx.fill();
         angle += sweep;
       });
+
+      // Donut hole — use destination-out for true transparency
+      ctx.globalCompositeOperation = "destination-out";
       ctx.beginPath();
       ctx.arc(cx, cy, inner, 0, Math.PI * 2);
-      ctx.fillStyle = "var(--secondary-bg, #1c1c1e)";
+      ctx.fillStyle = "#000";
       ctx.fill();
-      if (legend) {
-        legend.innerHTML = slices.map(sl =>
-          `<div class="ai-pie-legend-row">
-            <div class="ai-pie-dot" style="background:${sl.color}"></div>
-            <span>${sl.label}</span>
-            <span style="margin-left:auto;font-weight:700">${Math.round((sl.value/total)*100)}%</span>
-          </div>`
-        ).join("");
+      ctx.globalCompositeOperation = "source-over";
+
+      // Dominant emotion label in center
+      const dominant = slices.reduce((a, b) => b.value > a.value ? b : a, slices[0]);
+      if (dominant) {
+        const pct = Math.round(dominant.value / total * 100);
+        ctx.textAlign    = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle    = dominant.color;
+        ctx.font         = "bold 14px system-ui, -apple-system, sans-serif";
+        ctx.fillText(pct + "%", cx, cy - 7);
+        ctx.fillStyle = "rgba(142,142,147,0.9)";
+        ctx.font      = "10px system-ui, -apple-system, sans-serif";
+        const short = dominant.label.length > 10 ? dominant.label.slice(0, 9) + "…" : dominant.label;
+        ctx.fillText(short, cx, cy + 8);
       }
+
+      if (legend) {
+        legend.innerHTML = slices.map(sl => {
+          const pct = Math.round(sl.value / total * 100);
+          return `<div class="ai-pie-legend-row">
+            <div class="ai-pie-dot" style="background:${sl.color}"></div>
+            <span style="flex:1">${sl.label}</span>
+            <span style="font-weight:700;color:${sl.color}">${pct}%</span>
+          </div>`;
+        }).join("");
+      }
+    }
+
+    function _drawInterestArc(pct, color) {
+      const canvas = document.getElementById("aiIntCanvas");
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      const cx = 42, cy = 42, r = 34, lw = 8;
+      // Arc from -135° to 135° (270° sweep)
+      const startA = Math.PI * 0.75;
+      const sweepA = Math.PI * 1.5;
+
+      // Track
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, startA, startA + sweepA);
+      ctx.strokeStyle = "rgba(120,120,128,.15)";
+      ctx.lineWidth   = lw;
+      ctx.lineCap     = "round";
+      ctx.stroke();
+
+      // Fill
+      const fillEnd = startA + (pct / 100) * sweepA;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, startA, fillEnd);
+      ctx.strokeStyle = color;
+      ctx.lineWidth   = lw;
+      ctx.lineCap     = "round";
+      ctx.stroke();
     }
 
     function attachReferralDonateHandlers() {

@@ -126,12 +126,18 @@ def _build_base_opts(out_dir: str, max_bytes: int) -> dict:
     import shutil as _shutil
     ffmpeg = _shutil.which("ffmpeg") or ""
     ffmpeg_dir = os.path.dirname(ffmpeg) if ffmpeg else ""
+    logger.info("Video opts: ffmpeg=%s", ffmpeg or "NOT FOUND")
     opts: dict = {
-        "outtmpl":     os.path.join(out_dir, "%(id)s_%(autonumber)s.%(ext)s"),
-        "quiet":       True,
-        "no_warnings": True,
-        "noplaylist":  True,
-        "max_filesize": max_bytes,
+        "outtmpl":        os.path.join(out_dir, "%(id)s_%(autonumber)s.%(ext)s"),
+        "quiet":          True,
+        "no_warnings":    True,
+        "noplaylist":     True,
+        "max_filesize":   max_bytes,
+        # Prevent yt-dlp from hanging indefinitely on stalled connections
+        "socket_timeout": 30,
+        # Abort fragment download if it stalls for > 60 s
+        "retries":        3,
+        "fragment_retries": 3,
     }
     if ffmpeg_dir:
         opts["ffmpeg_location"] = ffmpeg_dir

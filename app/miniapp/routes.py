@@ -3443,6 +3443,7 @@ async def contact_profile_info(
         "is_vip":        vip_sub is not None,
         "is_premium":    sub is not None,
         "frame":         (contact_us.frame if contact_us else "none") or "none",
+        "theme":         (contact_us.theme if contact_us else "default") or "default",
         "streak_muted":  streak_muted,
     }
 

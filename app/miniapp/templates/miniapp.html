@@ -32,125 +32,8 @@
     --theme-glow: none;
   }
 
-  /* ── ❄️ Frost theme ──────────────────────────────────────────────────────── */
-  [data-theme="frost"] {
-    --bg: #070d1a;
-    --secondary-bg: #0d1630;
-    --text: #c8daff;
-    --hint: rgba(147,197,253,0.5);
-    --link: #3b82f6;
-    --button: #3b82f6;
-    --button-text: #ffffff;
-    --green: #34d399;
-    --red: #f87171;
-    --orange: #fb923c;
-    --theme-accent: #3b82f6;
-    --theme-accent2: #6366f1;
-    --theme-card-bg: rgba(255,255,255,0.04);
-    --theme-card-border: rgba(99,130,255,0.12);
-    --theme-glow: 0 0 20px rgba(99,102,241,0.15);
-    --shadow: 0 2px 12px rgba(0,0,0,0.4);
-  }
-  [data-theme="frost"] body { background: linear-gradient(180deg,#070d1a 0%,#0a1428 60%,#060c18 100%) !important; color: #c8daff !important; }
-  [data-theme="frost"] .card,
-  [data-theme="frost"] .shop-item,
-  [data-theme="frost"] .digest-card,
-  [data-theme="frost"] .streak-banner,
-  [data-theme="frost"] .stat-section,
-  [data-theme="frost"] .sub-card,
-  [data-theme="frost"] .ref-stat-card,
-  [data-theme="frost"] .ref-milestone,
-  [data-theme="frost"] .ref-referral-item,
-  [data-theme="frost"] .casino-section,
-  [data-theme="frost"] .shop-item,
-  [data-theme="frost"] .pet-card,
-  [data-theme="frost"] .balance-btn-row button,
-  [data-theme="frost"] .header-card {
-    background: var(--theme-card-bg) !important;
-    border: 1px solid var(--theme-card-border) !important;
-    backdrop-filter: blur(10px);
-  }
-  [data-theme="frost"] .tab-item.active { color: #93c5fd !important; }
-  [data-theme="frost"] .tab-item.active .tab-icon-wrap { filter: drop-shadow(0 0 6px rgba(99,102,241,0.8)); }
-
-  /* ── 🔥 Ember theme ──────────────────────────────────────────────────────── */
-  [data-theme="ember"] {
-    --bg: #0e0a07;
-    --secondary-bg: #1c1007;
-    --text: #f5e8d0;
-    --hint: rgba(251,146,60,0.5);
-    --link: #f97316;
-    --button: #f97316;
-    --button-text: #ffffff;
-    --green: #34d399;
-    --red: #ef4444;
-    --orange: #f59e0b;
-    --theme-accent: #f97316;
-    --theme-accent2: #ef4444;
-    --theme-card-bg: rgba(255,255,255,0.03);
-    --theme-card-border: rgba(251,146,60,0.1);
-    --theme-glow: 0 0 20px rgba(249,115,22,0.1);
-    --shadow: 0 2px 12px rgba(0,0,0,0.5);
-  }
-  [data-theme="ember"] body { background: #0e0a07 !important; color: #f5e8d0 !important; }
-  [data-theme="ember"] .card,
-  [data-theme="ember"] .shop-item,
-  [data-theme="ember"] .digest-card,
-  [data-theme="ember"] .streak-banner,
-  [data-theme="ember"] .stat-section,
-  [data-theme="ember"] .sub-card,
-  [data-theme="ember"] .ref-stat-card,
-  [data-theme="ember"] .ref-milestone,
-  [data-theme="ember"] .ref-referral-item,
-  [data-theme="ember"] .casino-section,
-  [data-theme="ember"] .pet-card,
-  [data-theme="ember"] .balance-btn-row button,
-  [data-theme="ember"] .header-card {
-    background: var(--theme-card-bg) !important;
-    border: 1px solid var(--theme-card-border) !important;
-  }
-  [data-theme="ember"] .tab-item.active { color: #fb923c !important; }
-  [data-theme="ember"] .tab-item.active .tab-icon-wrap { filter: drop-shadow(0 0 6px rgba(249,115,22,0.9)); }
-
-  /* ── 💜 Violet Dream theme ───────────────────────────────────────────────── */
-  [data-theme="violet_dream"] {
-    --bg: #08040f;
-    --secondary-bg: #110820;
-    --text: #f0e8ff;
-    --hint: rgba(196,181,253,0.45);
-    --link: #8b5cf6;
-    --button: #8b5cf6;
-    --button-text: #ffffff;
-    --green: #34d399;
-    --red: #f87171;
-    --orange: #fb923c;
-    --theme-accent: #8b5cf6;
-    --theme-accent2: #ec4899;
-    --theme-card-bg: rgba(139,92,246,0.07);
-    --theme-card-border: rgba(167,139,250,0.15);
-    --theme-glow: 0 0 24px rgba(139,92,246,0.15);
-    --shadow: 0 2px 12px rgba(0,0,0,0.5);
-  }
-  [data-theme="violet_dream"] body { background: #08040f !important; color: #f0e8ff !important; }
-  [data-theme="violet_dream"] .card,
-  [data-theme="violet_dream"] .shop-item,
-  [data-theme="violet_dream"] .digest-card,
-  [data-theme="violet_dream"] .streak-banner,
-  [data-theme="violet_dream"] .stat-section,
-  [data-theme="violet_dream"] .sub-card,
-  [data-theme="violet_dream"] .ref-stat-card,
-  [data-theme="violet_dream"] .ref-milestone,
-  [data-theme="violet_dream"] .ref-referral-item,
-  [data-theme="violet_dream"] .casino-section,
-  [data-theme="violet_dream"] .pet-card,
-  [data-theme="violet_dream"] .balance-btn-row button,
-  [data-theme="violet_dream"] .header-card {
-    background: var(--theme-card-bg) !important;
-    border: 1px solid var(--theme-card-border) !important;
-    backdrop-filter: blur(12px);
-  }
-  [data-theme="violet_dream"] .tab-item.active { color: #c4b5fd !important; }
-  [data-theme="violet_dream"] .tab-item.active .tab-icon-wrap { filter: drop-shadow(0 0 6px rgba(167,139,250,0.9)); }
+  /* Themes are applied only to profile cards, not the app interface.
+     See _CP_THEME_STYLES in JS and the --cp-* CSS vars below. */
 
   /* ── Theme card in shop ──────────────────────────────────────────────────── */
   .theme-card-grid {
@@ -2384,10 +2267,7 @@
     background: rgba(255,200,60,0.15); color: #c8960a;
     margin-bottom: 7px;
   }
-  [data-theme="dark"] .pet-rel-bonus-badge,
-  [data-theme="frost"] .pet-rel-bonus-badge,
-  [data-theme="ember"] .pet-rel-bonus-badge,
-  [data-theme="violet_dream"] .pet-rel-bonus-badge { color: #f5c842; background: rgba(245,200,66,0.18); }
+  [data-theme="dark"] .pet-rel-bonus-badge { color: #f5c842; background: rgba(245,200,66,0.18); }
   .pet-rel-bonus-label { font-weight: 400; opacity: 0.75; }
 
   .pet-achievements-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
@@ -2635,18 +2515,19 @@
   /* ── Contact Profile Card ────────────────────────────────────────────── */
   .cp-overlay {
     position: fixed; inset: 0;
-    background: var(--bg);
+    background: var(--cp-bg, var(--bg));
     z-index: 3000;
     display: flex; flex-direction: column;
     overflow-y: auto;
     animation: sFadeIn 0.18s ease;
+    transition: background 0.25s ease;
   }
   .cp-close-btn {
     position: sticky; top: 0; z-index: 1;
     align-self: flex-start;
     margin: 14px 16px 0;
     border: none; background: rgba(120,120,128,0.15);
-    color: var(--hint); border-radius: 50%;
+    color: var(--cp-hint, var(--hint)); border-radius: 50%;
     width: 34px; height: 34px; font-size: 18px; line-height: 1;
     display: flex; align-items: center; justify-content: center;
     touch-action: manipulation; flex-shrink: 0;
@@ -2672,12 +2553,13 @@
   .cp-name {
     font-size: 22px; font-weight: 800; text-align: center;
     letter-spacing: -0.4px; margin-top: 2px;
+    color: var(--cp-text, var(--text));
   }
   .cp-sub-line {
     display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
     justify-content: center; margin-bottom: 4px;
   }
-  .cp-username { font-size: 14px; color: var(--hint); }
+  .cp-username { font-size: 14px; color: var(--cp-hint, var(--hint)); }
   .cp-badge {
     font-size: 12px; font-weight: 700; padding: 3px 9px;
     border-radius: 10px; white-space: nowrap;
@@ -2689,11 +2571,11 @@
     gap: 10px; width: 100%; margin-top: 20px;
   }
   .cp-stat-card {
-    background: rgba(120,120,128,0.08); border-radius: 16px;
+    background: var(--cp-stat-bg, rgba(120,120,128,0.08)); border-radius: 16px;
     padding: 16px 10px; text-align: center;
   }
-  .cp-stat-val { font-size: 22px; font-weight: 800; }
-  .cp-stat-lbl { font-size: 12px; color: var(--hint); margin-top: 4px; }
+  .cp-stat-val { font-size: 22px; font-weight: 800; color: var(--cp-text, var(--text)); }
+  .cp-stat-lbl { font-size: 12px; color: var(--cp-hint, var(--hint)); margin-top: 4px; }
   .cp-mutual { margin-top: 10px; }
   .cp-actions {
     display: flex; flex-wrap: wrap; gap: 10px;
@@ -3916,6 +3798,28 @@
       "neon":    "linear-gradient(135deg, #00f5ff, #0080ff, #7b00ff)",
     };
 
+    // Card theme styles — applied to profile card overlay (--cp-* vars)
+    const _CP_THEME_STYLES = {
+      "default":      null, // uses Telegram's native colors
+      "frost":        { bg: "linear-gradient(160deg,#060c18 0%,#0d1e40 45%,#0a1628 100%)", text: "#c8daff", hint: "rgba(147,197,253,0.55)", statBg: "rgba(99,130,255,0.10)" },
+      "ember":        { bg: "linear-gradient(160deg,#0b0805 0%,#241208 45%,#180a05 100%)", text: "#f5e8d0", hint: "rgba(251,146,60,0.55)",  statBg: "rgba(251,146,60,0.09)" },
+      "violet_dream": { bg: "linear-gradient(160deg,#07030e 0%,#170630 45%,#0f071c 100%)", text: "#f0e8ff", hint: "rgba(196,181,253,0.55)", statBg: "rgba(139,92,246,0.10)" },
+      "dark_forest":  { bg: "linear-gradient(160deg,#050f05 0%,#0e2410 45%,#071408 100%)", text: "#d4f0d0", hint: "rgba(134,239,172,0.55)", statBg: "rgba(74,222,128,0.09)" },
+      "ocean":        { bg: "linear-gradient(160deg,#04080f 0%,#0a1e38 45%,#061525 100%)", text: "#d0e8f5", hint: "rgba(103,232,249,0.55)",  statBg: "rgba(6,182,212,0.09)" },
+      "sunset":       { bg: "linear-gradient(160deg,#100800 0%,#2a1005 45%,#1a0a00 100%)", text: "#fde8d0", hint: "rgba(251,146,60,0.55)",  statBg: "rgba(251,146,60,0.09)" },
+      "lavender":     { bg: "linear-gradient(160deg,#0e0520 0%,#1e0a50 45%,#150738 100%)", text: "#e8d8ff", hint: "rgba(196,181,253,0.55)", statBg: "rgba(124,58,237,0.10)" },
+    };
+
+    // Apply theme CSS vars to a cp-overlay element
+    function _applyCardTheme(overlayEl, theme) {
+      const t = _CP_THEME_STYLES[theme];
+      if (!t) return; // default — no vars needed
+      overlayEl.style.setProperty("--cp-bg",      t.bg);
+      overlayEl.style.setProperty("--cp-text",    t.text);
+      overlayEl.style.setProperty("--cp-hint",    t.hint);
+      overlayEl.style.setProperty("--cp-stat-bg", t.statBg);
+    }
+
     function applyMyFrame(frame) {
       const ring = document.getElementById("headerRing");
       if (ring) ring.style.background = _CP_FRAME_STYLES[frame] || _CP_FRAME_STYLES["none"];
@@ -4005,6 +3909,7 @@
           if (!data || !overlay.parentNode) return;
           const wrap = overlay.querySelector("#cpAvatarWrap");
           if (wrap) wrap.style.background = _CP_FRAME_STYLES[data.frame] || _CP_FRAME_STYLES["none"];
+          _applyCardTheme(overlay, data.theme || "default");
           const badgeEl = overlay.querySelector("#cpBadge");
           if (badgeEl) {
             if (data.is_vip)          { badgeEl.className = "cp-badge cp-badge-vip";     badgeEl.textContent = "💎 VIP"; }
@@ -4050,6 +3955,7 @@
       const sub        = walletData?.subscription || {};
       const name       = ((u.first_name || "") + " " + (u.last_name || "")).trim() || "Ты";
       const frame      = shopData?.settings?.frame || "none";
+      const theme      = shopData?.settings?.theme || "default";
       const frameGrad  = _CP_FRAME_STYLES[frame] || _CP_FRAME_STYLES["none"];
       const isVip      = !!sub.is_vip;
       const isPremium  = !!sub.is_active && !isVip;
@@ -4099,6 +4005,7 @@
           </div>
         </div>`;
       document.body.appendChild(overlay);
+      _applyCardTheme(overlay, theme);
       overlay.querySelector("#myCardClose").addEventListener("click", () => overlay.remove());
       overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
 
@@ -4172,129 +4079,9 @@
       setTimeout(() => t.classList.remove("show"), 2200);
     }
 
-    // ── Theme application ──────────────────────────────────────────────────
-    // Telegram WebApp sets background-color / CSS vars as INLINE styles on
-    // <html> and <body>, which beat any CSS rule. We fight fire with fire:
-    // apply theme by calling element.style.setProperty() — inline styles with
-    // the highest possible priority. The [data-theme] CSS attribute is kept
-    // only for tab-bar active-colour overrides that need CSS cascade.
-    const THEME_DEFS = {
-      frost: {
-        vars: {
-          '--bg':                '#070d1a',
-          '--secondary-bg':      '#0d1630',
-          '--text':              '#c8daff',
-          '--hint':              'rgba(147,197,253,0.5)',
-          '--link':              '#3b82f6',
-          '--button':            '#3b82f6',
-          '--button-text':       '#ffffff',
-          '--green':             '#34d399',
-          '--red':               '#f87171',
-          '--orange':            '#fb923c',
-          '--shadow':            '0 2px 12px rgba(0,0,0,0.4)',
-          '--streak-1':          '#60a5fa',
-          '--streak-2':          '#3b82f6',
-          '--streak-3':          '#6366f1',
-          '--streak-legendary':  '#818cf8',
-          '--theme-card-bg':     'rgba(255,255,255,0.04)',
-          '--theme-card-border': 'rgba(99,130,255,0.14)',
-        },
-        bodyBg: 'linear-gradient(180deg,#070d1a 0%,#0a1428 60%,#060c18 100%)',
-        bodyColor: '#c8daff',
-      },
-      ember: {
-        vars: {
-          '--bg':                '#0e0a07',
-          '--secondary-bg':      '#1c1007',
-          '--text':              '#f5e8d0',
-          '--hint':              'rgba(251,146,60,0.5)',
-          '--link':              '#f97316',
-          '--button':            '#f97316',
-          '--button-text':       '#ffffff',
-          '--green':             '#34d399',
-          '--red':               '#ef4444',
-          '--orange':            '#f59e0b',
-          '--shadow':            '0 2px 12px rgba(0,0,0,0.5)',
-          '--streak-1':          '#fb923c',
-          '--streak-2':          '#f97316',
-          '--streak-3':          '#ef4444',
-          '--streak-legendary':  '#fbbf24',
-          '--theme-card-bg':     'rgba(255,255,255,0.04)',
-          '--theme-card-border': 'rgba(251,146,60,0.12)',
-        },
-        bodyBg: '#0e0a07',
-        bodyColor: '#f5e8d0',
-      },
-      violet_dream: {
-        vars: {
-          '--bg':                '#08040f',
-          '--secondary-bg':      '#110820',
-          '--text':              '#f0e8ff',
-          '--hint':              'rgba(196,181,253,0.45)',
-          '--link':              '#8b5cf6',
-          '--button':            '#8b5cf6',
-          '--button-text':       '#ffffff',
-          '--green':             '#34d399',
-          '--red':               '#f87171',
-          '--orange':            '#fb923c',
-          '--shadow':            '0 2px 12px rgba(0,0,0,0.5)',
-          '--streak-1':          '#c4b5fd',
-          '--streak-2':          '#a78bfa',
-          '--streak-3':          '#8b5cf6',
-          '--streak-legendary':  '#ec4899',
-          '--theme-card-bg':     'rgba(139,92,246,0.09)',
-          '--theme-card-border': 'rgba(167,139,250,0.18)',
-        },
-        bodyBg: '#08040f',
-        bodyColor: '#f0e8ff',
-      },
-    };
-
-    // All CSS vars we may set inline — cleared on theme reset
-    const THEME_VAR_KEYS = [
-      '--bg','--secondary-bg','--text','--hint',
-      '--link','--button','--button-text',
-      '--green','--red','--orange','--shadow',
-      '--streak-1','--streak-2','--streak-3','--streak-legendary',
-      '--theme-card-bg','--theme-card-border',
-    ];
-
-    function applyTheme(theme) {
-      const root = document.documentElement;
-
-      // 1. Clear previously injected inline CSS vars
-      THEME_VAR_KEYS.forEach(k => root.style.removeProperty(k));
-      document.body.style.removeProperty('background');
-      document.body.style.removeProperty('color');
-
-      // 2. Clear data-theme (used for tab active colours in CSS)
-      root.removeAttribute('data-theme');
-
-      const def = THEME_DEFS[theme];
-      if (def) {
-        // 3. Inject vars inline on <html> — beats any CSS rule including
-        //    Telegram's own inline vars (same layer, declared later = wins)
-        Object.entries(def.vars).forEach(([k, v]) => root.style.setProperty(k, v));
-
-        // 4. Force body background + color — defeats Telegram's inline body style
-        document.body.style.setProperty('background', def.bodyBg, 'important');
-        document.body.style.setProperty('color',      def.bodyColor, 'important');
-
-        // 5. Keep data-theme for CSS-only tab active colour overrides
-        root.setAttribute('data-theme', theme);
-      }
-
-      try { localStorage.setItem('app_theme', theme || 'default'); } catch (_) {}
-    }
-
-    // Apply persisted theme immediately — before any network call or
-    // Telegram SDK colour injection
-    (function () {
-      try {
-        const saved = localStorage.getItem('app_theme');
-        if (saved && saved !== 'default') applyTheme(saved);
-      } catch (_) {}
-    })();
+    // Themes decorate only the profile card — not the app interface.
+    // See _CP_THEME_STYLES and _applyCardTheme() for card theming.
+    function applyTheme(_theme) { /* no-op */ }
 
     // ── User avatar (module-level, persists across all tab switches) ──────────
     function _avatarSetInitials(el, u) {
@@ -7233,7 +7020,6 @@
       const bal      = walletData.balance ?? 0;
       const prices   = shopData.prices   || {};
       const settings = shopData.settings || {};
-      applyTheme(settings.theme || "default");
       applyMyFrame(settings.frame || "none");
       const boosts   = shopData.active_boosts || [];
       const dxpBoost = boosts.find(b => b.boost_type === "double_xp");
@@ -7479,9 +7265,8 @@
             const data = await res.json();
             if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
             if (data.new_balance != null) updateBalanceDisplay(data.new_balance);
-            applyTheme(theme);
             const label = THEMES.find(t => t.id === theme)?.label ?? theme;
-            toastMessage(isOwned ? `🎨 Тема «${label}» применена!` : `🎨 Тема «${label}» куплена и применена!`);
+            toastMessage(isOwned ? `🎨 Тема «${label}» применена на карточку!` : `🎨 Тема «${label}» куплена и применена на карточку!`);
             await loadShop();
           } catch (e) {
             btn.disabled = false;

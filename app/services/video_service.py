@@ -480,6 +480,12 @@ def _download_sync(
         **_build_base_opts(out_dir, MAX_BYTES),
         # Carousels are multi-entry "playlists" in yt-dlp — must allow all items
         "noplaylist": False,
+        # Reject long videos early (same cap as the video attempt) so we don't
+        # waste bandwidth on a file we'll throw away after the size check.
+        "match_filter": lambda info, *, incomplete=False: (
+            f"Video too long (> {MAX_DURATION // 60} min)"
+            if (info.get("duration") or 0) > MAX_DURATION else None
+        ),
     }
     if progress_hook:
         opts_photo["progress_hooks"] = [progress_hook]
@@ -488,7 +494,18 @@ def _download_sync(
     if is_instagram:
         _apply_instagram_opts(opts_photo, url, out_dir)
     if is_youtube:
-        _apply_youtube_opts(opts_photo, out_dir)
+        # Photo fallback uses bypass clients (tv/mweb/web) instead of web-only.
+        # web-only client (used in attempt 1) requires DASH and fails for many videos;
+        # bypass clients expose non-DASH formats and succeed more often.
+        # merge_output_format="mp4" (in base opts) ensures mp4 output.
+        opts_photo["js_runtimes"] = {"node": {}}
+        opts_photo["extractor_args"] = {
+            "youtube": {"player_client": ["tv", "mweb", "web"]}
+        }
+        # Re-use cookie file if the video attempt already wrote it.
+        _yt_cookies = os.path.join(out_dir, "_yt_cookies.txt")
+        if os.path.exists(_yt_cookies):
+            opts_photo["cookiefile"] = _yt_cookies
 
     ydl_photo_ok = False
     try:
@@ -508,7 +525,13 @@ def _download_sync(
     if ydl_photo_ok:
         videos2, images2 = _scan_dir(out_dir)
         if videos2:
-            return [max(videos2, key=lambda p: p.stat().st_size)], "video"
+            best2 = max(videos2, key=lambda p: p.stat().st_size)
+            if best2.stat().st_size > MAX_BYTES:
+                best2.unlink(missing_ok=True)
+                raise ValueError(
+                    f"Video too large: {best2.stat().st_size // (1024 * 1024)} MB > 45 MB"
+                )
+            return [best2], "video"
         if images2:
             return sorted(images2, key=lambda p: p.name)[:MAX_PHOTOS], "photo"
 

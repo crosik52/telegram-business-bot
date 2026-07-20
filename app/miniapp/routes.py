@@ -1344,9 +1344,10 @@ async def miniapp_leaderboard(
                     UserSubscription.user_telegram_id.in_(top_ids),
                     UserSubscription.is_active == True,  # noqa: E712
                 )
+                # DISTINCT ON requires ORDER BY to start with the same column
                 .order_by(
-                    # vip > premium: pick vip over premium for same user
-                    UserSubscription.sub_type.desc(),
+                    UserSubscription.user_telegram_id,
+                    UserSubscription.sub_type.desc(),  # vip > premium alphabetically
                     UserSubscription.id.desc(),
                 )
                 .distinct(UserSubscription.user_telegram_id)

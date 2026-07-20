@@ -146,14 +146,16 @@ def _build_base_opts(out_dir: str, max_bytes: int) -> dict:
     ffmpeg_dir = os.path.dirname(ffmpeg) if ffmpeg else ""
     logger.info("Video opts: ffmpeg=%s", ffmpeg or "NOT FOUND")
     opts: dict = {
-        "outtmpl":          os.path.join(out_dir, "%(id)s_%(autonumber)s.%(ext)s"),
-        "quiet":            True,
-        "no_warnings":      True,
-        "noplaylist":       True,
-        "max_filesize":     max_bytes,
-        "socket_timeout":   30,
-        "retries":          3,
-        "fragment_retries": 3,
+        "outtmpl":             os.path.join(out_dir, "%(id)s_%(autonumber)s.%(ext)s"),
+        "quiet":               True,
+        "no_warnings":         True,
+        "noplaylist":          True,
+        "max_filesize":        max_bytes,
+        "socket_timeout":      30,
+        "retries":             3,
+        "fragment_retries":    3,
+        # Always merge split streams to mp4 (not webm/mkv) when ffmpeg is available.
+        "merge_output_format": "mp4",
     }
     if ffmpeg_dir:
         opts["ffmpeg_location"] = ffmpeg_dir
@@ -485,6 +487,8 @@ def _download_sync(
         _apply_tiktok_opts(opts_photo, url, out_dir)
     if is_instagram:
         _apply_instagram_opts(opts_photo, url, out_dir)
+    if is_youtube:
+        _apply_youtube_opts(opts_photo, out_dir)
 
     ydl_photo_ok = False
     try:

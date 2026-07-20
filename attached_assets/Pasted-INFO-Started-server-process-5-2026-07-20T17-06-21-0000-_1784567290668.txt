@@ -1,0 +1,191 @@
+INFO:     Started server process [5]
+2026-07-20T17:06:21+0000 | INFO     | app.main | Database dialect: postgresql (persistent)
+2026-07-20T17:06:21+0000 | INFO     | app.main | Telegram webhook set to https://telegram-business-bot-production.up.railway.app/webhook
+2026-07-20T17:06:21+0000 | INFO     | app.main | Telegram chat menu button set to open mini app
+2026-07-20T17:06:21+0000 | INFO     | app.main | Telethon not configured (TELEGRAM_API_ID / TELEGRAM_API_HASH / TELETHON_SESSION_STR missing) — view-once media will fall back to Bot API only.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+2026-07-20T17:06:22+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745899587
+2026-07-20T17:06:22+0000 | INFO     | app.services.message_service | Stored new business message chat_id=94216436 message_id=26202 media=text
+2026-07-20T17:06:22+0000 | INFO     | aiogram.event | Update id=745899587 is handled. Duration 27 ms by bot id=1162707887
+2026-07-20T17:06:22+0000 | INFO     | http | POST /webhook -> 200 (29.8ms)
+2026-07-20T17:06:24+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745899588
+2026-07-20T17:06:24+0000 | INFO     | app.services.message_service | Stored new business message chat_id=94216436 message_id=26203 media=text
+2026-07-20T17:06:24+0000 | INFO     | aiogram.event | Update id=745899588 is handled. Duration 15 ms by bot id=1162707887
+2026-07-20T17:06:24+0000 | INFO     | http | POST /webhook -> 200 (16.9ms)
+2026-07-20T17:06:27+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745899589
+2026-07-20T17:06:27+0000 | INFO     | app.services.message_service | Stored new business message chat_id=94216436 message_id=26204 media=text
+2026-07-20T17:06:27+0000 | INFO     | aiogram.event | Update id=745899589 is handled. Duration 8 ms by bot id=1162707887
+2026-07-20T17:06:27+0000 | INFO     | http | POST /webhook -> 200 (12.1ms)
+2026-07-20T17:06:27+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745899590
+2026-07-20T17:06:27+0000 | INFO     | app.services.message_service | Stored new business message chat_id=7367673014 message_id=1017915 media=text
+2026-07-20T17:06:27+0000 | INFO     | aiogram.event | Update id=745899590 is handled. Duration 8 ms by bot id=1162707887
+2026-07-20T17:06:28+0000 | INFO     | http | POST /webhook -> 200 (9.5ms)
+2026-07-20T17:06:30+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745899591
+2026-07-20T17:06:30+0000 | INFO     | app.services.message_service | Stored new business message chat_id=94216436 message_id=26205 media=text
+2026-07-20T17:06:30+0000 | INFO     | aiogram.event | Update id=745899591 is handled. Duration 13 ms by bot id=1162707887
+2026-07-20T17:06:30+0000 | INFO     | http | POST /webhook -> 200 (15.2ms)
+2026-07-20T17:06:32+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745899592
+2026-07-20T17:06:32+0000 | INFO     | app.services.message_service | Stored new business message chat_id=94216436 message_id=26206 media=text
+2026-07-20T17:06:32+0000 | INFO     | aiogram.event | Update id=745899592 is handled. Duration 10 ms by bot id=1162707887
+2026-07-20T17:06:32+0000 | INFO     | http | POST /webhook -> 200 (12.4ms)
+2026-07-20T17:06:34+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745899593
+2026-07-20T17:06:34+0000 | INFO     | app.services.message_service | Stored new business message chat_id=94216436 message_id=26207 media=text
+2026-07-20T17:06:34+0000 | INFO     | aiogram.event | Update id=745899593 is handled. Duration 12 ms by bot id=1162707887
+2026-07-20T17:06:34+0000 | INFO     | http | POST /webhook -> 200 (13.0ms)
+2026-07-20T17:06:46+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745899594
+2026-07-20T17:06:46+0000 | INFO     | app.services.message_service | Stored new business message chat_id=7367673014 message_id=1017916 media=text
+2026-07-20T17:06:46+0000 | INFO     | aiogram.event | Update id=745899594 is handled. Duration 10 ms by bot id=1162707887
+2026-07-20T17:06:46+0000 | INFO     | http | POST /webhook -> 200 (10.7ms)
+2026-07-20T17:06:49+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745899595
+2026-07-20T17:06:49+0000 | INFO     | app.services.message_service | Stored new business message chat_id=7367673014 message_id=1017917 media=text
+2026-07-20T17:06:49+0000 | INFO     | aiogram.event | Update id=745899595 is handled. Duration 8 ms by bot id=1162707887
+2026-07-20T17:06:49+0000 | INFO     | http | POST /webhook -> 200 (11.0ms)
+2026-07-20T17:06:56+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745899596
+2026-07-20T17:06:56+0000 | INFO     | app.services.message_service | Stored new business message chat_id=7367673014 message_id=1017918 media=text
+2026-07-20T17:06:56+0000 | INFO     | aiogram.event | Update id=745899596 is handled. Duration 9 ms by bot id=1162707887
+2026-07-20T17:06:56+0000 | INFO     | http | POST /webhook -> 200 (11.0ms)
+2026-07-20T17:07:04+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745899597
+2026-07-20T17:07:04+0000 | INFO     | app.services.message_service | Stored new business message chat_id=7367673014 message_id=1017919 media=text
+2026-07-20T17:07:04+0000 | INFO     | aiogram.event | Update id=745899597 is handled. Duration 12 ms by bot id=1162707887
+2026-07-20T17:07:04+0000 | INFO     | http | POST /webhook -> 200 (13.6ms)
+2026-07-20T17:07:08+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745899598
+2026-07-20T17:07:08+0000 | INFO     | app.services.message_service | Stored new business message chat_id=7367673014 message_id=1017920 media=text
+2026-07-20T17:07:08+0000 | INFO     | aiogram.event | Update id=745899598 is handled. Duration 9 ms by bot id=1162707887
+2026-07-20T17:07:08+0000 | INFO     | http | POST /webhook -> 200 (11.4ms)
+2026-07-20T17:07:12+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745899599
+2026-07-20T17:07:12+0000 | INFO     | app.services.message_service | Stored new business message chat_id=94216436 message_id=26208 media=text
+2026-07-20T17:07:12+0000 | INFO     | app.business.handlers | dot-save: triggered owner=8339035726 chat=94216436 reply_to=26207
+2026-07-20T17:07:12+0000 | INFO     | aiogram.event | Update id=745899599 is handled. Duration 9 ms by bot id=1162707887
+2026-07-20T17:07:12+0000 | INFO     | app.business.handlers | dot-save: message 26207 is non-media (type=MediaType.TEXT) — skipping
+2026-07-20T17:07:12+0000 | INFO     | http | POST /webhook -> 200 (11.8ms)
+2026-07-20T17:07:14+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745899600
+2026-07-20T17:07:14+0000 | INFO     | app.services.message_service | Stored new business message chat_id=94216436 message_id=26209 media=photo
+2026-07-20T17:07:15+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745899602
+2026-07-20T17:07:15+0000 | INFO     | app.services.message_service | Stored new business message chat_id=859073238 message_id=1452198 media=text
+2026-07-20T17:07:15+0000 | INFO     | aiogram.event | Update id=745899602 is handled. Duration 12 ms by bot id=1162707887
+2026-07-20T17:07:15+0000 | INFO     | http | POST /webhook -> 200 (14.3ms)
+2026-07-20T17:07:15+0000 | INFO     | aiogram.event | Update id=745899600 is handled. Duration 1275 ms by bot id=1162707887
+2026-07-20T17:07:15+0000 | INFO     | http | POST /webhook -> 200 (1276.9ms)
+2026-07-20T17:07:15+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745899601
+2026-07-20T17:07:15+0000 | INFO     | app.services.message_service | Stored new business message chat_id=94216436 message_id=26210 media=photo
+2026-07-20T17:07:16+0000 | INFO     | aiogram.event | Update id=745899601 is handled. Duration 684 ms by bot id=1162707887
+2026-07-20T17:07:16+0000 | INFO     | http | POST /webhook -> 200 (685.4ms)
+2026-07-20T17:07:16+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745899603
+2026-07-20T17:07:16+0000 | INFO     | app.services.message_service | Stored new business message chat_id=5206239564 message_id=1410766 media=text
+2026-07-20T17:07:16+0000 | INFO     | app.business.handlers | dot-save: triggered owner=5688354783 chat=5206239564 reply_to=1410764
+2026-07-20T17:07:16+0000 | INFO     | aiogram.event | Update id=745899603 is handled. Duration 10 ms by bot id=1162707887
+2026-07-20T17:07:16+0000 | INFO     | http | POST /webhook -> 200 (11.3ms)
+2026-07-20T17:07:16+0000 | INFO     | app.business.handlers | dot-save: message 1410764 is non-media (type=MediaType.TEXT) — skipping
+2026-07-20T17:07:20+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745899604
+2026-07-20T17:07:20+0000 | INFO     | app.services.message_service | Stored new business message chat_id=5688354783 message_id=563873 media=text
+2026-07-20T17:07:20+0000 | INFO     | app.business.handlers | Video link detected (youtube) in chat=5688354783 can_reply=True
+2026-07-20T17:07:20+0000 | INFO     | aiogram.event | Update id=745899604 is handled. Duration 7 ms by bot id=1162707887
+2026-07-20T17:07:20+0000 | INFO     | http | POST /webhook -> 200 (8.7ms)
+2026-07-20T17:07:20+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745899605
+2026-07-20T17:07:20+0000 | INFO     | app.services.message_service | Stored new business message chat_id=1335699132 message_id=1410767 media=text
+2026-07-20T17:07:20+0000 | INFO     | aiogram.event | Update id=745899605 is handled. Duration 7 ms by bot id=1162707887
+2026-07-20T17:07:20+0000 | INFO     | http | POST /webhook -> 200 (7.9ms)
+2026-07-20T17:07:21+0000 | INFO     | app.services.video_service | Downloading YouTube media: https://youtu.be/irVNGjRFZGk?si=_W9qGjp6J0XUmpiN
+2026-07-20T17:07:21+0000 | INFO     | app.services.video_service | Video opts: ffmpeg=/usr/bin/ffmpeg
+2026-07-20T17:07:21+0000 | INFO     | app.services.video_service | YouTube: Netscape cookiefile set (22 rows)
+ERROR: [youtube] irVNGjRFZGk: Requested format is not available. Use --list-formats for a list of available formats
+2026-07-20T17:07:24+0000 | WARNING  | app.services.video_service | Video: download failed (ERROR: [youtube] irVNGjRFZGk: Requested format is not available. Use --list-formats for a list of available formats), falling through
+2026-07-20T17:07:24+0000 | INFO     | app.services.video_service | Video opts: ffmpeg=/usr/bin/ffmpeg
+
+[download]   0.0% of   40.36MiB at  Unknown B/s ETA Unknown
+[download]   0.0% of   40.36MiB at  Unknown B/s ETA Unknown
+[download]   0.0% of   40.36MiB at    5.48MiB/s ETA 00:07  
+[download]   0.0% of   40.36MiB at    4.97MiB/s ETA 00:08
+[download]   0.1% of   40.36MiB at    8.49MiB/s ETA 00:04
+[download]   0.2% of   40.36MiB at   12.47MiB/s ETA 00:03
+[download]   0.3% of   40.36MiB at   18.06MiB/s ETA 00:02
+[download]   0.6% of   40.36MiB at   29.19MiB/s ETA 00:01
+[download]   1.2% of   40.36MiB at   46.36MiB/s ETA 00:00
+[download]   2.5% of   40.36MiB at   78.06MiB/s ETA 00:00
+
+[download]   5.0% of   40.36MiB at  135.74MiB/s ETA 00:00
+[download]   9.9% of   40.36MiB at  235.84MiB/s ETA 00:00
+[download]  19.8% of   40.36MiB at  381.80MiB/s ETA 00:00
+[download]  24.0% of   40.36MiB at  433.35MiB/s ETA 00:00
+[download]  24.0% of   40.36MiB at  Unknown B/s ETA Unknown
+[download]  24.0% of   40.36MiB at  Unknown B/s ETA Unknown
+[download]  24.0% of   40.36MiB at    6.44MiB/s ETA 00:04  
+[download]  24.0% of   40.36MiB at   10.93MiB/s ETA 00:02
+[download]  24.1% of   40.36MiB at   19.90MiB/s ETA 00:01
+[download]  24.1% of   40.36MiB at   34.33MiB/s ETA 00:00
+
+[download]  24.3% of   40.36MiB at   59.50MiB/s ETA 00:00
+[download]  24.6% of   40.36MiB at   97.25MiB/s ETA 00:00
+[download]  25.2% of   40.36MiB at  161.66MiB/s ETA 00:00
+[download]  26.5% of   40.36MiB at  252.73MiB/s ETA 00:00
+[download]  28.9% of   40.36MiB at  374.49MiB/s ETA 00:00
+[download]  33.9% of   40.36MiB at  576.06MiB/s ETA 00:00
+[download]  43.8% of   40.36MiB at  796.26MiB/s ETA 00:00
+[download]  48.1% of   40.36MiB at  855.09MiB/s ETA 00:00
+[download]  48.1% of   40.36MiB at  Unknown B/s ETA Unknown
+[download]  48.1% of   40.36MiB at    2.46MiB/s ETA 00:08  
+
+[download]  48.1% of   40.36MiB at    3.90MiB/s ETA 00:05
+[download]  48.1% of   40.36MiB at    5.18MiB/s ETA 00:04
+[download]  48.1% of   40.36MiB at    9.11MiB/s ETA 00:02
+[download]  48.2% of   40.36MiB at   17.22MiB/s ETA 00:01
+[download]  48.4% of   40.36MiB at   32.74MiB/s ETA 00:00
+[download]  48.7% of   40.36MiB at   61.59MiB/s ETA 00:00
+[download]  49.3% of   40.36MiB at  113.53MiB/s ETA 00:00
+[download]  50.5% of   40.36MiB at  203.65MiB/s ETA 00:00
+[download]  53.0% of   40.36MiB at  345.65MiB/s ETA 00:00
+[download]  58.0% of   40.36MiB at  534.14MiB/s ETA 00:00
+
+[download]  67.9% of   40.36MiB at  741.80MiB/s ETA 00:00
+[download]  72.6% of   40.36MiB at  791.79MiB/s ETA 00:00
+[download]  72.6% of   40.36MiB at  Unknown B/s ETA Unknown
+[download]  72.6% of   40.36MiB at  Unknown B/s ETA Unknown
+[download]  72.6% of   40.36MiB at  Unknown B/s ETA Unknown
+[download]  72.7% of   40.36MiB at   14.29MiB/s ETA 00:00  
+[download]  72.7% of   40.36MiB at   18.13MiB/s ETA 00:00
+[download]  72.8% of   40.36MiB at   32.39MiB/s ETA 00:00
+[download]  72.9% of   40.36MiB at   54.63MiB/s ETA 00:00
+[download]  73.2% of   40.36MiB at   88.81MiB/s ETA 00:00
+
+[download]  73.9% of   40.36MiB at  146.98MiB/s ETA 00:00
+[download]  75.1% of   40.36MiB at  244.57MiB/s ETA 00:00
+[download]  77.6% of   40.36MiB at  398.28MiB/s ETA 00:00
+[download]  82.5% of   40.36MiB at  620.12MiB/s ETA 00:00
+[download]  92.4% of   40.36MiB at  848.32MiB/s ETA 00:00
+[download]  96.9% of   40.36MiB at  896.06MiB/s ETA 00:00
+[download]  96.9% of   40.36MiB at  Unknown B/s ETA Unknown
+[download]  96.9% of   40.36MiB at  Unknown B/s ETA Unknown
+[download]  96.9% of   40.36MiB at  Unknown B/s ETA Unknown
+[download]  96.9% of   40.36MiB at  Unknown B/s ETA Unknown
+
+[download]  96.9% of   40.36MiB at  Unknown B/s ETA Unknown
+[download]  97.0% of   40.36MiB at   47.53MiB/s ETA 00:00  
+[download]  97.2% of   40.36MiB at   82.91MiB/s ETA 00:00
+[download]  97.5% of   40.36MiB at  148.47MiB/s ETA 00:00
+[download]  98.1% of   40.36MiB at  259.52MiB/s ETA 00:00
+[download]  99.3% of   40.36MiB at  440.89MiB/s ETA 00:00
+[download] 100.0% of   40.36MiB at  498.36MiB/s ETA 00:00
+[download] 100% of   40.36MiB in 00:00:00 at 334.87MiB/s 
+                                                        
+
+[download]   0.0% of    2.16MiB at  Unknown B/s ETA Unknown
+
+[download]   0.1% of    2.16MiB at  Unknown B/s ETA Unknown
+[download]   0.3% of    2.16MiB at  Unknown B/s ETA Unknown
+[download]   0.7% of    2.16MiB at  Unknown B/s ETA Unknown
+[download]   1.4% of    2.16MiB at   28.51MiB/s ETA 00:00  
+[download]   2.9% of    2.16MiB at   50.46MiB/s ETA 00:00
+[download]   5.8% of    2.16MiB at   87.71MiB/s ETA 00:00
+[download]  11.6% of    2.16MiB at  152.61MiB/s ETA 00:00
+[download]  23.1% of    2.16MiB at  227.88MiB/s ETA 00:00
+[download]  46.3% of    2.16MiB at  363.89MiB/s ETA 00:00
+[download]  92.7% of    2.16MiB at  449.98MiB/s ETA 00:00
+
+[download] 100.0% of    2.16MiB at  454.08MiB/s ETA 00:00
+[download] 100% of    2.16MiB in 00:00:00 at 174.53MiB/s 
+                                                        
+2026-07-20T17:07:25+0000 | INFO     | app.services.video_service | Downloaded 1 file(s) as video from YouTube, uploading to chat 5688354783
+2026-07-20T17:07:31+0000 | INFO     | app.services.video_service | Media delivered to chat_id=5688354783 (video)
+
+

@@ -392,9 +392,8 @@ async def analyze(
     )
     try:
         response = await asyncio.wait_for(
-            asyncio.to_thread(
-                client.models.generate_content,
-                model="gemini-flash-latest",
+            client.aio.models.generate_content(
+                model="gemini-2.0-flash",
                 contents=full_prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=_SYSTEM_PROMPT,
@@ -402,7 +401,7 @@ async def analyze(
                     response_mime_type="application/json",
                 ),
             ),
-            timeout=50.0,
+            timeout=90.0,
         )
     except asyncio.TimeoutError as exc:
         raise ValueError("gemini_timeout") from exc

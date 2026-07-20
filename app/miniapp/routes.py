@@ -1325,8 +1325,8 @@ async def miniapp_leaderboard(
     names_map: dict[int, tuple] = {}
     subs_map: dict[int, str | None] = {}
     if top_ids:
-        name_rows, sub_rows = await asyncio.gather(
-            session.execute(
+        name_rows = (
+            await session.execute(
                 select(
                     BusinessConnection.user_telegram_id,
                     BusinessConnection.user_first_name,
@@ -1335,23 +1335,25 @@ async def miniapp_leaderboard(
                 )
                 .where(BusinessConnection.user_telegram_id.in_(top_ids))
                 .distinct(BusinessConnection.user_telegram_id)
-            ),
-            session.execute(
+            )
+        ).all()
+        sub_rows = (
+            await session.execute(
                 select(UserSubscription.user_telegram_id, UserSubscription.sub_type)
                 .where(
                     UserSubscription.user_telegram_id.in_(top_ids),
                     UserSubscription.is_active == True,  # noqa: E712
                 )
                 .order_by(
-                    # vip > premium: order so we pick vip first
+                    # vip > premium: pick vip over premium for same user
                     UserSubscription.sub_type.desc(),
                     UserSubscription.id.desc(),
                 )
                 .distinct(UserSubscription.user_telegram_id)
-            ),
-        )
-        names_map = {r[0]: (r[1], r[2], r[3]) for r in name_rows.all()}
-        subs_map = {r[0]: r[1] for r in sub_rows.all()}
+            )
+        ).all()
+        names_map = {r[0]: (r[1], r[2], r[3]) for r in name_rows}
+        subs_map = {r[0]: r[1] for r in sub_rows}
 
     entries = []
     my_rank: int | None = None

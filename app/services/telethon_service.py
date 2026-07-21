@@ -74,6 +74,53 @@ def is_available() -> bool:
     return _client is not None
 
 
+async def is_view_once(chat_id: int, message_id: int) -> bool:
+    """Return True if the message contains view-once (ttl_seconds > 0) media."""
+    if _client is None:
+        return False
+    try:
+        msg = await _client.get_messages(chat_id, ids=message_id)
+        if msg is None or not msg.media:
+            return False
+        return bool(getattr(msg.media, "ttl_seconds", 0))
+    except Exception:
+        return False
+
+
+async def download_view_once_only(chat_id: int, message_id: int) -> bytes | None:
+    """Download media bytes ONLY if the message is view-once (ttl_seconds > 0).
+
+    Returns None for regular media so the caller doesn't waste DB space.
+    """
+    if _client is None:
+        return None
+    try:
+        msg = await _client.get_messages(chat_id, ids=message_id)
+        if msg is None or not msg.media:
+            return None
+        if not getattr(msg.media, "ttl_seconds", 0):
+            logger.debug(
+                "Telethon: skipping non-view-once media chat=%s msg=%s", chat_id, message_id
+            )
+            return None
+        buf = io.BytesIO()
+        result = await _client.download_media(msg, file=buf)
+        if result is None:
+            return None
+        data = buf.getvalue()
+        logger.info(
+            "Telethon: downloaded view-once %d B from chat=%s msg=%s",
+            len(data), chat_id, message_id,
+        )
+        return data
+    except Exception as exc:
+        logger.warning(
+            "Telethon: failed to download view-once chat=%s msg=%s: %s",
+            chat_id, message_id, exc,
+        )
+        return None
+
+
 async def download_message_media(chat_id: int, message_id: int) -> bytes | None:
     """Download media from *message_id* in *chat_id* via the user session.
 

@@ -854,46 +854,31 @@ async def on_business_message(message: Message, bot: Bot) -> None:
             _download_tasks.add(_streak_task)
             _streak_task.add_done_callback(_download_tasks.discard)
 
-        # ── Media download / cache ────────────────────────────────────────────
-        # ALL incoming media is cached synchronously before the webhook
-        # response returns.  This is the only reliable way to capture
-        # view-once / self-destructing media — the file is still accessible
-        # immediately on arrival but may expire the moment the recipient opens
-        # it.  Forwarding to the owner happens later, automatically, via the
-        # deleted_business_messages event (like @SaveModMyBot).
+        # ── Media download / cache (view-once only) ───────────────────────────
+        # Regular media file_ids stored in the `messages` table never expire,
+        # so there is no need to download their bytes — the file_id is enough
+        # to resend the media when a delete notification arrives.
+        #
+        # View-once / self-destructing media (ttl_seconds > 0) is different:
+        # its content expires the moment the recipient opens it.  We capture
+        # the bytes via Telethon immediately on arrival and store them so the
+        # delete handler can forward them to the owner.
         _file_id, _file_uq_id, _media_type_str = _get_file_info(message)
-        if _file_id and _file_uq_id and _media_type_str:
-            # ── 1. Bot API (fast path) ────────────────────────────────────────
-            _cached_ok = await media_cache_service.download_and_cache(
-                bot, session, _file_id, _file_uq_id, _media_type_str
-            )
-            if _cached_ok:
-                logger.debug("media cached via bot_api: %s", _file_uq_id)
-            else:
-                # ── 2. Telethon fallback ──────────────────────────────────────
-                # Fires when Bot API blocks the file (view-once / ttl_period).
-                from app.services import telethon_service as _tls
-                if _tls.is_available():
-                    _raw = await _tls.download_message_media(
-                        message.chat.id, message.message_id
+        if _file_uq_id and _media_type_str:
+            from app.services import telethon_service as _tls
+            if _tls.is_available():
+                # download_view_once_only checks ttl_seconds and returns None
+                # for regular media, so we never cache regular file bytes.
+                _raw = await _tls.download_view_once_only(
+                    message.chat.id, message.message_id
+                )
+                if _raw:
+                    await media_cache_service.store_bytes(
+                        session, _file_uq_id, _file_id or "", _media_type_str, _raw
                     )
-                    if _raw:
-                        await media_cache_service.store_bytes(
-                            session, _file_uq_id, _file_id, _media_type_str, _raw
-                        )
-                        logger.info(
-                            "media cached via telethon: %s (%d B)",
-                            _file_uq_id, len(_raw),
-                        )
-                    else:
-                        logger.info(
-                            "media not cached (bot_api+telethon both failed): %s",
-                            _file_uq_id,
-                        )
-                else:
-                    logger.debug(
-                        "media not cached (bot_api failed, telethon not configured): %s",
-                        _file_uq_id,
+                    logger.info(
+                        "media cached via telethon (view-once): %s (%d B)",
+                        _file_uq_id, len(_raw),
                     )
 
         # --- view-once save: owner replies to any message to trigger capture ---

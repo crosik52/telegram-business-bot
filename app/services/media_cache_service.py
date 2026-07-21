@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime as dt
 import io
+import os
 
 from aiogram import Bot
 from aiogram.types import BufferedInputFile
@@ -22,11 +23,12 @@ from app.models.media_cache import MediaCache
 logger = get_logger(__name__)
 
 # Skip files larger than this to keep DB size manageable.
-_MAX_BYTES = 50 * 1024 * 1024  # 50 MB
+# Override with MEDIA_CACHE_MAX_MB env var (default 10 MB).
+_MAX_BYTES = int(os.environ.get("MEDIA_CACHE_MAX_MB", "10")) * 1024 * 1024
 
-# How long to keep cached media before purging (self-destructing media is
-# consumed within seconds/minutes; 7 days is very generous).
-_CACHE_TTL_DAYS = 7
+# How long to keep cached media before purging.
+# Override with MEDIA_CACHE_TTL_DAYS env var (default 2 days).
+_CACHE_TTL_DAYS = int(os.environ.get("MEDIA_CACHE_TTL_DAYS", "2"))
 
 
 async def download_and_cache(

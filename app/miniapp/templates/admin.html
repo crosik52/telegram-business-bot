@@ -480,7 +480,7 @@
   .sheet-header h2 { margin: 0 0 3px; font-size: 17px; font-weight: 700; }
   .sheet-header p  { margin: 0; color: var(--hint); font-size: 12.5px; }
   .sheet-divider { height: 1px; background: rgba(255,255,255,0.07); flex-shrink: 0; }
-  .sheet-body { overflow-y: auto; padding: 14px 14px 28px; }
+  .sheet-body { overflow-y: auto; padding: 14px 14px calc(max(20px, env(safe-area-inset-bottom)) + 64px); }
 
   /* ── Chat cards (in sheet) ── */
   .chat-card {

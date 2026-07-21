@@ -62,24 +62,6 @@ async def _db_get(
         return None
 
 
-async def invalidate_cache(
-    session: AsyncSession, owner_id: int, chat_id: int
-) -> None:
-    """Evict the cached analysis for (owner_id, chat_id) from both L1 and DB.
-
-    Call this whenever messages are deleted from the chat so users don't see
-    a stale analysis after clearing their history.
-    """
-    _CACHE.pop((owner_id, chat_id), None)
-    await session.execute(
-        sa_delete(AiAnalysisCache).where(
-            AiAnalysisCache.owner_id == owner_id,
-            AiAnalysisCache.chat_id == chat_id,
-        )
-    )
-    # Note: caller is responsible for committing the session.
-
-
 async def _db_set(
     session: AsyncSession, owner_id: int, chat_id: int, result: dict
 ) -> None:

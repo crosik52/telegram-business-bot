@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 # L2 (database):  survives Railway deploys; checked when L1 misses.
 _CACHE: dict[tuple[int, int], tuple[float, dict]] = {}
 _CACHE_TTL = 86400  # 24 hours
+_L1_MAX_SIZE = int(os.environ.get("AI_L1_CACHE_MAX_SIZE", "500"))
 
 def _l1_get(owner_id: int, chat_id: int) -> dict | None:
     entry = _CACHE.get((owner_id, chat_id))
@@ -39,7 +40,12 @@ def _l1_get(owner_id: int, chat_id: int) -> dict | None:
 
 
 def _l1_set(owner_id: int, chat_id: int, result: dict) -> None:
-    _CACHE[(owner_id, chat_id)] = (time.time(), result)
+    key = (owner_id, chat_id)
+    # Enforce max-size cap: evict the oldest entry before inserting a new key.
+    if key not in _CACHE and len(_CACHE) >= _L1_MAX_SIZE:
+        oldest_key = min(_CACHE, key=lambda k: _CACHE[k][0])
+        _CACHE.pop(oldest_key, None)
+    _CACHE[key] = (time.time(), result)
 
 
 def _l1_evict_expired() -> int:

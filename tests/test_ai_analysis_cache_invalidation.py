@@ -35,7 +35,7 @@ from app.services.ai_analysis_service import (
     invalidate_cache,
     invalidate_cache_for_owner,
 )
-from app.services.ai_analysis_service import _l1_get, _db_get, _l1_evict_expired
+from app.services.ai_analysis_service import _l1_get, _l1_set, _db_get, _l1_evict_expired, _L1_MAX_SIZE
 
 DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -442,3 +442,55 @@ def test_l1_evict_expired_on_empty_cache():
     assert len(_CACHE) == 0, "Cache should be empty at start of test (autouse fixture)"
     evicted = _l1_evict_expired()
     assert evicted == 0
+
+
+# ---------------------------------------------------------------------------
+# Tests: _L1_MAX_SIZE cap — oldest entry is evicted when limit is reached
+# ---------------------------------------------------------------------------
+
+def test_l1_set_evicts_oldest_when_cap_reached():
+    """_l1_set must evict the oldest entry when the cache is at _L1_MAX_SIZE."""
+    # Fill the cache to exactly the cap using synthetic keys.
+    base_ts = time.time() - 1000  # 1000 seconds ago — older than any new entry
+    for i in range(_L1_MAX_SIZE):
+        key = (10000 + i, 20000 + i)
+        # Stagger timestamps so entry 0 is clearly the oldest.
+        _CACHE[key] = (base_ts + i, {"score": i})
+
+    oldest_key = (10000, 20000)
+    assert oldest_key in _CACHE, "Oldest key must be present before cap is triggered"
+    assert len(_CACHE) == _L1_MAX_SIZE, "Cache must be exactly at max size"
+
+    # Insert one more unique key — this should evict the oldest.
+    new_key = (99999, 99999)
+    _l1_set(*new_key, {"score": 42})
+
+    assert len(_CACHE) == _L1_MAX_SIZE, (
+        "_l1_set must keep cache at _L1_MAX_SIZE after eviction"
+    )
+    assert oldest_key not in _CACHE, (
+        "The oldest entry must be evicted when the cache cap is reached"
+    )
+    assert new_key in _CACHE, "The newly inserted entry must be present in the cache"
+
+
+def test_l1_set_does_not_evict_when_updating_existing_key():
+    """_l1_set must not evict any entry when updating a key already in the cache."""
+    # Fill to the cap.
+    base_ts = time.time() - 500
+    for i in range(_L1_MAX_SIZE):
+        key = (20000 + i, 30000 + i)
+        _CACHE[key] = (base_ts + i, {"score": i})
+
+    assert len(_CACHE) == _L1_MAX_SIZE
+
+    # Update an existing key — size must stay the same, no eviction.
+    existing_key = (20000, 30000)
+    _l1_set(*existing_key, {"score": 99})
+
+    assert len(_CACHE) == _L1_MAX_SIZE, (
+        "Updating an existing key must not change cache size"
+    )
+    assert _CACHE[existing_key][1] == {"score": 99}, (
+        "Updated value must be stored correctly"
+    )

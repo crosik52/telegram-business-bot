@@ -230,7 +230,14 @@ def _apply_tiktok_opts(ydl_opts: dict, url: str, out_dir: str) -> None:
 
 
 def _apply_instagram_opts(ydl_opts: dict, url: str, out_dir: str) -> None:
-    """Inject Instagram cookies from INSTAGRAM_COOKIES env var (same formats as TikTok)."""
+    """Apply Instagram-specific download options.
+
+    Force pre-merged mp4 selection (not DASH bestvideo+bestaudio).
+    DASH streams on Instagram can be HEVC or H.264 High/10-bit which
+    iOS Telegram cannot play — pre-merged mp4 is always H.264 Baseline.
+    """
+    ydl_opts["format"] = "best[ext=mp4][height<=720]/best[ext=mp4]/best"
+
     raw = os.environ.get("INSTAGRAM_COOKIES", "").strip()
     if not raw:
         logger.debug("Instagram: INSTAGRAM_COOKIES not set — carousels may fail without auth")

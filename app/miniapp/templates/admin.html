@@ -881,6 +881,7 @@
       <button class="action-btn" style="text-align:left;padding:13px 16px;font-size:14px;border-radius:14px" onclick="switchTab('shop');closeMoreMenu()">🛒 Магазин</button>
       <button class="action-btn" style="text-align:left;padding:13px 16px;font-size:14px;border-radius:14px" onclick="switchTab('referral');closeMoreMenu()">🔗 Рефералы</button>
       <button class="action-btn" id="btnInfographic2" style="text-align:left;padding:13px 16px;font-size:14px;border-radius:14px" onclick="downloadInfographic(this);closeMoreMenu()">📊 Инфографика</button>
+      <button class="action-btn" style="text-align:left;padding:13px 16px;font-size:14px;border-radius:14px" onclick="switchTab('db');closeMoreMenu()">🗄️ База данных</button>
     </div>
   </div>
 
@@ -1134,6 +1135,7 @@
       else if (tab === "subscription") loadSubscriptionTab();
       else if (tab === "shop")         loadShopAdminTab();
       else if (tab === "referral")     loadReferralAdminTab();
+      else if (tab === "db")           loadDbTab();
     }
 
     function render() {
@@ -2947,6 +2949,93 @@
         } catch { showToast("❌ Ошибка при сохранении"); }
         finally { saveBtn.disabled = false; saveBtn.textContent = "💾 Сохранить настройки"; }
       });
+    }
+
+    /* ── DB stats tab ─────────────────────────────────────────────────────── */
+    async function loadDbTab() {
+      const content  = document.getElementById("content");
+      const subtitle = document.getElementById("subtitle");
+      subtitle.textContent = "База данных — размеры и чистка";
+      content.innerHTML = `<div class="empty skeleton"><span class="big-emoji">🗄️</span>Загружаем статистику…</div>`;
+      const fetchOpts = { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({initData}) };
+      try {
+        const res  = await fetch("/app/api/admin/db/stats", fetchOpts);
+        if (!res.ok) throw new Error(res.status);
+        const data = await res.json();
+        if (currentTab !== "db") return;
+
+        const maxBytes = Math.max(...(data.tables || []).map(t => t.bytes || 0), 1);
+        const tableRows = (data.tables || []).map(t => {
+          const pct = Math.round((t.bytes || 0) / maxBytes * 100);
+          const barColor = t.table_name === "messages" ? "var(--danger)" : "var(--link)";
+          return `
+            <div style="margin-bottom:14px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
+                <span style="font-weight:700;font-size:13px">${esc(t.table_name)}</span>
+                <span style="font-size:12px;color:var(--hint)">${esc(t.total_size)}</span>
+              </div>
+              <div style="background:rgba(120,120,128,.12);border-radius:4px;height:6px">
+                <div style="width:${pct}%;height:6px;border-radius:4px;background:${barColor};transition:width .4s"></div>
+              </div>
+              <div style="font-size:11px;color:var(--hint);margin-top:2px">
+                ${(t.live_rows||0).toLocaleString("ru-RU")} строк
+                ${t.dead_rows > 0 ? ` · <span style="color:var(--orange)">${t.dead_rows.toLocaleString("ru-RU")} мёртвых</span>` : ""}
+                · таблица ${esc(t.table_size)} + индексы ${esc(t.index_size)}
+              </div>
+            </div>`;
+        }).join("");
+
+        content.innerHTML = `
+          <div class="card" style="margin-bottom:14px">
+            <div style="font-size:13px;color:var(--hint);margin-bottom:4px">Всего занято</div>
+            <div style="font-size:28px;font-weight:800">${esc(data.db_size)}</div>
+          </div>
+          <div class="card" style="margin-bottom:14px">
+            <div style="font-weight:700;margin-bottom:12px">Таблицы</div>
+            ${tableRows || '<span style="color:var(--hint)">Нет данных</span>'}
+          </div>
+          <div class="card">
+            <div style="font-weight:700;margin-bottom:6px">Экстренная чистка</div>
+            <div style="font-size:12px;color:var(--hint);margin-bottom:12px;line-height:1.5">
+              Удаляет сообщения старше указанного количества дней и запускает VACUUM ANALYZE.
+              Обычное расписание: каждые 6 ч, хранить ${esc(String(document.dbKeepDays||30))} дней.
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+              <label style="font-size:13px;white-space:nowrap">Хранить дней:</label>
+              <input id="dbKeepDays" type="number" min="7" max="365" value="30"
+                style="width:80px;border:1.5px solid rgba(120,120,128,0.25);border-radius:10px;padding:6px 10px;font-size:13px;background:var(--secondary-bg);color:var(--text)"/>
+            </div>
+            <button id="dbCleanupBtn" class="action-btn" style="width:100%;padding:12px;font-size:14px;font-weight:700;background:rgba(255,64,64,0.12);color:var(--danger);border:1.5px solid rgba(255,64,64,0.25)"
+              onclick="runDbCleanup()">🧹 Запустить чистку</button>
+            <div id="dbCleanupResult" style="margin-top:10px;font-size:13px;text-align:center"></div>
+          </div>`;
+      } catch {
+        if (currentTab !== "db") return;
+        content.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить статистику БД.</div>`;
+      }
+    }
+
+    async function runDbCleanup() {
+      const btn = document.getElementById("dbCleanupBtn");
+      const res = document.getElementById("dbCleanupResult");
+      const keepDays = parseInt(document.getElementById("dbKeepDays")?.value) || 30;
+      if (!confirm(`Удалить сообщения старше ${keepDays} дн. и запустить VACUUM? Это займёт несколько секунд.`)) return;
+      btn.disabled = true; btn.textContent = "⏳ Чистим…";
+      if (res) res.textContent = "";
+      try {
+        const r = await fetch("/app/api/admin/db/cleanup", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData, keepDays}),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || r.status);
+        if (res) res.innerHTML = `<span style="color:var(--green)">✅ Удалено ${(data.deleted_messages||0).toLocaleString("ru-RU")} сообщений, ${data.deleted_cache||0} кеш-записей. VACUUM выполнен.</span>`;
+        // Reload stats after cleanup
+        setTimeout(loadDbTab, 1500);
+      } catch(e) {
+        if (res) res.innerHTML = `<span style="color:var(--danger)">❌ Ошибка: ${esc(String(e))}</span>`;
+        btn.disabled = false; btn.textContent = "🧹 Запустить чистку";
+      }
     }
 
   </script>

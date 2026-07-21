@@ -187,6 +187,53 @@ async def purge_old_messages(
     return total
 
 
+async def get_table_sizes(session: AsyncSession) -> dict:
+    """Return sizes of all user tables + total DB size. PostgreSQL only."""
+    from sqlalchemy import text  # noqa: PLC0415
+    try:
+        rows_result = await session.execute(text("""
+            SELECT
+                relname                                                      AS table_name,
+                pg_size_pretty(pg_total_relation_size(relid))                AS total_size,
+                pg_size_pretty(pg_relation_size(relid))                      AS table_size,
+                pg_size_pretty(pg_total_relation_size(relid)
+                               - pg_relation_size(relid))                    AS index_size,
+                n_live_tup                                                   AS live_rows,
+                n_dead_tup                                                   AS dead_rows,
+                pg_total_relation_size(relid)                                AS bytes
+            FROM pg_stat_user_tables
+            ORDER BY pg_total_relation_size(relid) DESC
+            LIMIT 20
+        """))
+        tables = [dict(r._mapping) for r in rows_result.all()]
+        # Convert bytes to int for JSON (pg returns Decimal sometimes)
+        for t in tables:
+            t["bytes"] = int(t["bytes"])
+            t["live_rows"] = int(t["live_rows"])
+            t["dead_rows"] = int(t["dead_rows"])
+
+        db_result = await session.execute(
+            text("SELECT pg_size_pretty(pg_database_size(current_database())) AS db_size")
+        )
+        db_size = db_result.scalar() or "—"
+        return {"tables": tables, "db_size": db_size}
+    except Exception as exc:
+        return {"tables": [], "db_size": "—", "error": str(exc)}
+
+
+async def vacuum_tables(table_names: list[str]) -> None:
+    """Run VACUUM ANALYZE on the given tables (must be outside a transaction)."""
+    from app.database.session import get_engine  # noqa: PLC0415
+    from sqlalchemy import text  # noqa: PLC0415
+    engine = get_engine()
+    # VACUUM cannot run inside a transaction → use AUTOCOMMIT isolation level
+    async with engine.execution_options(isolation_level="AUTOCOMMIT").connect() as conn:
+        for tbl in table_names:
+            # Table name is an internal constant — safe to interpolate
+            await conn.execute(text(f"VACUUM ANALYZE {tbl}"))
+            logger.info("VACUUM ANALYZE %s complete", tbl)
+
+
 async def purge_old_media_cache(
     session: AsyncSession,
     max_age_days: int = _CACHE_TTL_DAYS,

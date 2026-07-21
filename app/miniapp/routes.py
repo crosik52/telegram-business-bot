@@ -66,6 +66,12 @@ class AdminUserStatsRequest(BaseModel):
     owner_telegram_id: int = Field(alias="ownerTelegramId")
 
 
+class AdminDbCleanupRequest(BaseModel):
+    model_config = {"populate_by_name": True}
+    init_data: str = Field(alias="initData")
+    keep_days: int = Field(default=30, alias="keepDays")
+
+
 class AdminInitDataOnlyRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -3549,6 +3555,40 @@ async def admin_ai_invalidate_cache(
         scope,
     )
     return {"ok": True, "owner_id": payload.owner_id, "scope": scope}
+
+
+# ── DB stats / cleanup (admin) ────────────────────────────────────────────────
+
+@router.post("/app/api/admin/db/stats")
+async def admin_db_stats(
+    payload: AdminInitDataOnlyRequest,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Return per-table sizes + total DB size. PostgreSQL only."""
+    _require_admin(payload.init_data)
+    from app.services.media_cache_service import get_table_sizes  # noqa: PLC0415
+    return await get_table_sizes(session)
+
+
+@router.post("/app/api/admin/db/cleanup")
+async def admin_db_cleanup(
+    payload: AdminDbCleanupRequest,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Immediately purge old messages + media cache and run VACUUM ANALYZE."""
+    admin_user = _require_admin(payload.init_data)
+    from app.services.media_cache_service import (  # noqa: PLC0415
+        purge_old_messages, purge_old_media_cache, vacuum_tables,
+    )
+    keep_days = max(7, min(payload.keep_days, 365))
+    deleted_msgs  = await purge_old_messages(session, max_age_days=keep_days)
+    deleted_cache = await purge_old_media_cache(session)
+    await vacuum_tables(["messages", "message_edit_history", "media_cache"])
+    logger.info(
+        "Admin @%s ran DB cleanup: keep_days=%d, deleted msgs=%d cache=%d",
+        admin_user.get("username"), keep_days, deleted_msgs, deleted_cache,
+    )
+    return {"ok": True, "deleted_messages": deleted_msgs, "deleted_cache": deleted_cache, "keep_days": keep_days}
 
 
 @router.post("/app/api/ai/ping")

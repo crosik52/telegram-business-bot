@@ -237,7 +237,8 @@ async def _cleanup_loop() -> None:
             async for session in get_db_session():
                 await purge_old_media_cache(session)
             async for session in get_db_session():
-                await purge_old_messages(session, max_age_days=90)
+                keep_days = int(os.environ.get("MESSAGE_RETENTION_DAYS", "30"))
+                await purge_old_messages(session, max_age_days=keep_days)
             _l1_evict_expired()
         except Exception:
             logger.exception("DB cleanup failed — will retry next cycle")

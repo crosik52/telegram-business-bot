@@ -230,21 +230,7 @@ def _apply_tiktok_opts(ydl_opts: dict, url: str, out_dir: str) -> None:
 
 
 def _apply_instagram_opts(ydl_opts: dict, url: str, out_dir: str) -> None:
-    """Inject Instagram cookies and force H.264 video codec.
-
-    Instagram sometimes serves HEVC (H.265) which Telegram cannot play —
-    video freezes on first frame while audio continues. We prefer avc1 (H.264)
-    explicitly; fall back to any format only if H.264 is unavailable.
-    """
-    # Override format to prefer H.264 (avc1) — Telegram-compatible codec.
-    ydl_opts["format"] = (
-        "bestvideo[vcodec^=avc1][height<=720]+bestaudio"
-        "/best[vcodec^=avc1][height<=720]"
-        "/bestvideo[height<=720]+bestaudio"
-        "/best[height<=720]"
-        "/bestvideo+bestaudio/best"
-    )
-
+    """Inject Instagram cookies from INSTAGRAM_COOKIES env var (same formats as TikTok)."""
     raw = os.environ.get("INSTAGRAM_COOKIES", "").strip()
     if not raw:
         logger.debug("Instagram: INSTAGRAM_COOKIES not set — carousels may fail without auth")
@@ -290,6 +276,9 @@ def _apply_youtube_opts(ydl_opts: dict, out_dir: str) -> None:
     """
     # Always use Node.js to solve YouTube's n-challenge (requires Node 22+).
     ydl_opts["js_runtimes"] = {"node": {}}
+    # YouTube serves DASH streams (bestvideo+bestaudio separately) — ffmpeg must
+    # merge them into mp4. Not set globally to avoid forcing DASH on Instagram/TikTok.
+    ydl_opts["merge_output_format"] = "mp4"
 
     raw = os.environ.get("YOUTUBE_COOKIES", "").strip()
     if not raw:
@@ -443,7 +432,9 @@ def _download_sync(
         # With auth: YouTube serves DASH (bestvideo+bestaudio); ffmpeg merges to mp4.
         # No ext= filters — they block DASH streams on some player clients.
         "format": video_fmt,
-        "merge_output_format": "mp4",
+        # merge_output_format is set per-platform (YouTube only) — not globally,
+        # because it causes yt-dlp to prefer DASH streams which may be HEVC on
+        # Instagram/TikTok, breaking Telegram playback.
         "match_filter": lambda info, *, incomplete=False: (
             f"Video too long (> {MAX_DURATION // 60} min)"
             if (info.get("duration") or 0) > MAX_DURATION else None

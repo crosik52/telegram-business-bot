@@ -1,0 +1,20 @@
+RROR: [youtube] uWJJAQJS7ow: Requested format is not available. Use --list-formats for a list of available formats
+ERROR: [youtube] uWJJAQJS7ow: Requested format is not available. Use --list-formats for a list of available formats
+2026-07-21T07:21:19+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745902851
+2026-07-21T07:21:19+0000 | INFO     | app.services.message_service | Stored new business message chat_id=733875729 message_id=1997270 media=text
+2026-07-21T07:21:20+0000 | INFO     | aiogram.event | Update id=745902851 is handled. Duration 35 ms by bot id=1162707887
+2026-07-21T07:21:20+0000 | INFO     | http | POST /webhook -> 200 (37.8ms)
+ERROR: [youtube] uWJJAQJS7ow: This video is DRM protected
+2026-07-21T07:21:22+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745902852
+2026-07-21T07:21:22+0000 | INFO     | app.services.message_service | Stored new business message chat_id=733875729 message_id=1997271 media=text
+2026-07-21T07:21:22+0000 | INFO     | aiogram.event | Update id=745902852 is handled. Duration 31 ms by bot id=1162707887
+2026-07-21T07:21:22+0000 | INFO     | http | POST /webhook -> 200 (34.1ms)
+2026-07-21T07:21:23+0000 | WARNING  | app.services.video_service | Media download/send failed for https://youtube.com/shorts/uWJJAQJS7ow?is=mPOAOh3eW0mp4BVp (YouTube): All download attempts failed for https://youtube.com/shorts/uWJJAQJS7ow?is=mPOAOh3eW0mp4BVp. Remaining files: ['_yt_cookies.txt']
+2026-07-21T07:21:25+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745902853
+2026-07-21T07:21:25+0000 | INFO     | app.services.message_service | Stored new business message chat_id=733875729 message_id=1997272 media=text
+2026-07-21T07:21:25+0000 | INFO     | aiogram.event | Update id=745902853 is handled. Duration 37 ms by bot id=1162707887
+2026-07-21T07:21:25+0000 | INFO     | http | POST /webhook -> 200 (38.3ms)
+2026-07-21T07:21:32+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745902854
+2026-07-21T07:21:32+0000 | INFO     | app.services.message_service | Stored new business message chat_id=733875729 message_id=1997273 media=text
+2026-07-21T07:21:32+0000 | INFO     | aiogram.event | Update id=745902854 is handled. Duration 35 ms by bot id=1162707887
+2026-07-21T07:21:32+0000 | INFO     | http | POST /webhook -> 200 (36.7ms)

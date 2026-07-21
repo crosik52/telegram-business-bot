@@ -364,16 +364,25 @@ def _scan_dir(out_dir: str) -> tuple[list[Path], list[Path]]:
     return videos, images
 
 
+_QUALITY_FORMATS: dict[str, str] = {
+    "720": "bestvideo[height<=720]+bestaudio/best[height<=720]/bestvideo+bestaudio/best",
+    "480": "bestvideo[height<=480]+bestaudio/best[height<=480]/bestvideo+bestaudio/best",
+    "360": "bestvideo[height<=360]+bestaudio/best[height<=360]/bestvideo+bestaudio/best",
+}
+
+
 def _download_sync(
     url: str,
     out_dir: str,
     progress_hook: Callable | None = None,
+    quality: str = "720",
 ) -> tuple[list[Path], str]:
     """Download *url* into *out_dir* using yt-dlp.
 
     Returns (files, media_type) where:
     - media_type == "video": files is a list with one video Path
     - media_type == "photo": files is a list of image Paths (sorted, max 10)
+    - media_type == "audio": files is a list with one audio Path
 
     Raises on unrecoverable failure.
     """
@@ -383,20 +392,41 @@ def _download_sync(
     is_instagram = "instagram.com" in url.lower()
     is_youtube   = "youtube.com" in url.lower() or "youtu.be" in url.lower()
 
+    def _run(opts: dict) -> None:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            ydl.download([url])
+
+    # ── Audio-only shortcut (YouTube quality picker "audio") ─────────────────
+    if quality == "audio" and is_youtube:
+        opts_audio = {
+            **_build_base_opts(out_dir, MAX_BYTES),
+            "format": "bestaudio[ext=m4a]/bestaudio/best",
+        }
+        _apply_youtube_opts(opts_audio, out_dir)
+        try:
+            _run(opts_audio)
+        except yt_dlp.utils.DownloadError as exc:
+            raise FileNotFoundError(f"Audio download failed: {exc}") from exc
+        candidates = [
+            p for p in Path(out_dir).rglob("*")
+            if p.is_file() and not p.name.startswith("_")
+            and p.stat().st_size > 0
+            and p.suffix.lower() not in _IMAGE_EXTS
+        ]
+        if not candidates:
+            raise FileNotFoundError(f"No audio file found for {url}")
+        return [max(candidates, key=lambda p: p.stat().st_size)], "audio"
+
     # ── Attempt 1: video ──────────────────────────────────────────────────────
     MAX_DURATION = 1200  # 20 minutes — anything longer won't fit in 45 MB anyway
+    video_fmt = _QUALITY_FORMATS.get(quality, _QUALITY_FORMATS["720"])
     opts_video = {
         **_build_base_opts(out_dir, MAX_BYTES),
         # Prefer merged mp4 streams; merge_output_format forces ffmpeg remux to
         # mp4 so Telegram always gets a proper video, not a webm document.
         # With auth: YouTube serves DASH (bestvideo+bestaudio); ffmpeg merges to mp4.
         # No ext= filters — they block DASH streams on some player clients.
-        "format": (
-            "bestvideo[height<=720]+bestaudio"
-            "/best[height<=720]"
-            "/bestvideo+bestaudio"
-            "/best"
-        ),
+        "format": video_fmt,
         "merge_output_format": "mp4",
         "match_filter": lambda info, *, incomplete=False: (
             f"Video too long (> {MAX_DURATION // 60} min)"
@@ -411,10 +441,6 @@ def _download_sync(
         _apply_instagram_opts(opts_video, url, out_dir)
     if is_youtube:
         _apply_youtube_opts(opts_video, out_dir)
-
-    def _run(opts: dict) -> None:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            ydl.download([url])
 
     _AUTH_ERRORS = ("sign in", "login", "not available", "private video", "members only")
 
@@ -624,15 +650,19 @@ async def handle_video_link(
     url: str,
     platform: str,
     link_message_id: int | None = None,
+    quality: str = "720",
 ) -> None:
     """Download *url*, showing live progress, then deliver the media.
 
     If *link_message_id* is provided it is deleted from the chat after
     the media is successfully sent, so the original link disappears.
+    *quality* is one of "720", "480", "360", "audio" (YouTube only).
     """
     import shutil
 
     label   = _PLATFORM_LABELS.get(platform, platform)
+    _QUALITY_LABELS = {"720": " 720p", "480": " 480p", "360": " 360p", "audio": " 🎵"}
+    quality_suffix  = _QUALITY_LABELS.get(quality, "")
     tmp_dir = tempfile.mkdtemp(prefix="vidbot_")
     loop    = asyncio.get_running_loop()
 
@@ -642,7 +672,7 @@ async def handle_video_link(
         status_msg = await bot.send_message(
             chat_id=chat_id,
             business_connection_id=business_connection_id,
-            text=f"⏳ Скачиваю {label}...",
+            text=f"⏳ Скачиваю {label}{quality_suffix}...",
         )
     except Exception as exc:
         logger.warning("Could not send status message to chat_id=%s: %s", chat_id, exc)
@@ -696,7 +726,7 @@ async def handle_video_link(
         _spinner_idx[0] = (_spinner_idx[0] + 1) % len(_SPINNERS)
         icon = _SPINNERS[_spinner_idx[0]]
         asyncio.run_coroutine_threadsafe(
-            _edit_status(f"{icon} Скачиваю {label}...\n{bar}{speed_str}"), loop
+            _edit_status(f"{icon} Скачиваю {label}{quality_suffix}...\n{bar}{speed_str}"), loop
         )
 
     try:
@@ -704,7 +734,7 @@ async def handle_video_link(
 
         paths, media_type = await asyncio.wait_for(
             loop.run_in_executor(
-                None, partial(_download_sync, url, tmp_dir, _progress_hook)
+                None, partial(_download_sync, url, tmp_dir, _progress_hook, quality)
             ),
             timeout=300,  # 5-minute hard cap; yt-dlp can hang on merge
         )
@@ -715,7 +745,15 @@ async def handle_video_link(
         )
         await _edit_status("📤 Загружаю в Telegram...")
 
-        if media_type == "photo":
+        if media_type == "audio":
+            await _delete_status()
+            await bot.send_audio(
+                chat_id=chat_id,
+                business_connection_id=business_connection_id,
+                audio=FSInputFile(paths[0]),
+            )
+
+        elif media_type == "photo":
             await _delete_status()
             if len(paths) == 1:
                 await bot.send_photo(

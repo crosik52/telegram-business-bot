@@ -101,6 +101,50 @@ async def _db_set(
     await session.commit()
 
 
+async def invalidate_cache(
+    session: AsyncSession, owner_id: int, chat_id: int
+) -> None:
+    """Delete the cached analysis for a single (owner_id, chat_id) pair.
+
+    Called when messages are deleted for a chat so stale results are not
+    served until the TTL expires.
+    """
+    _CACHE.pop((owner_id, chat_id), None)
+    await session.execute(
+        sa_delete(AiAnalysisCache).where(
+            AiAnalysisCache.owner_id == owner_id,
+            AiAnalysisCache.chat_id == chat_id,
+        )
+    )
+    await session.commit()
+    logger.debug(
+        "Analysis cache invalidated for owner=%s chat=%s", owner_id, chat_id
+    )
+
+
+async def invalidate_cache_for_owner(
+    session: AsyncSession, owner_id: int
+) -> None:
+    """Delete ALL cached analyses for an owner.
+
+    Called when a BusinessConnection is revoked so no stale analyses remain
+    across any of the owner's chats.
+    """
+    # Evict every matching L1 entry.
+    stale_keys = [k for k in list(_CACHE) if k[0] == owner_id]
+    for k in stale_keys:
+        _CACHE.pop(k, None)
+    await session.execute(
+        sa_delete(AiAnalysisCache).where(AiAnalysisCache.owner_id == owner_id)
+    )
+    await session.commit()
+    logger.debug(
+        "Analysis cache invalidated for all chats of owner=%s (%d L1 entries evicted)",
+        owner_id,
+        len(stale_keys),
+    )
+
+
 # ── Per-user daily rate-limit (cost control on paid Gemini tier) ──────────────
 # Tracks {owner_id: (utc_date_str, count)} — resets automatically each UTC day.
 _DAILY_COUNTS: dict[int, tuple[str, int]] = {}

@@ -3499,6 +3499,45 @@ async def contact_streak_mute(
     return {"streak_muted": payload.chat_id in muted}
 
 
+class AiCacheInvalidateRequest(BaseModel):
+    init_data:  str       = Field(...,        alias="initData")
+    owner_id:   int       = Field(...,        alias="ownerId")
+    chat_id:    int | None = Field(default=None, alias="chatId")
+    model_config = {"populate_by_name": True}
+
+
+@router.post("/app/api/admin/ai/invalidate_cache")
+async def admin_ai_invalidate_cache(
+    payload: AiCacheInvalidateRequest,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Manually invalidate a cached AI analysis (admin only).
+
+    - If ``chatId`` is provided, only that (owner, chat) entry is removed.
+    - If ``chatId`` is omitted, ALL cached analyses for the owner are removed.
+    """
+    from app.services.ai_analysis_service import (  # noqa: PLC0415
+        invalidate_cache, invalidate_cache_for_owner,
+    )
+
+    admin_user = _require_admin(payload.init_data)
+
+    if payload.chat_id is not None:
+        await invalidate_cache(session, payload.owner_id, payload.chat_id)
+        scope = f"chat={payload.chat_id}"
+    else:
+        await invalidate_cache_for_owner(session, payload.owner_id)
+        scope = "all chats"
+
+    logger.info(
+        "Admin @%s invalidated AI analysis cache for owner=%s scope=%s",
+        admin_user.get("username"),
+        payload.owner_id,
+        scope,
+    )
+    return {"ok": True, "owner_id": payload.owner_id, "scope": scope}
+
+
 @router.post("/app/api/ai/ping")
 async def ai_ping(payload: dict, session: AsyncSession = Depends(get_db_session)) -> dict:
     """Quick Gemini connectivity test (admin/debug only)."""

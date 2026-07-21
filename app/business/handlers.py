@@ -60,6 +60,7 @@ from app.repositories.chat_settings_repository import ChatSettingsRepository
 from app.repositories.subscription_repository import SubscriptionRepository
 from app.business import permissions
 from app.services import audio_service, media_cache_service
+from app.services import ai_analysis_service
 from app.services.message_service import MessageService
 from app.services.video_service import extract_video_url, handle_video_link
 
@@ -743,6 +744,11 @@ async def on_business_connection(connection: BusinessConnection) -> None:
             for k in keys_to_clear:
                 _panic_tracker.clear(k)
             _bc_cache.pop(connection.id, None)
+            # Invalidate all cached analyses for this owner — the connection is
+            # gone so every cached result is now stale / unauthorised.
+            await ai_analysis_service.invalidate_cache_for_owner(
+                session, connection.user.id
+            )
         else:
             _bc_cache[connection.id] = (connection.user.id, connection.can_reply)
 
@@ -1232,6 +1238,13 @@ async def on_deleted_business_messages(deleted: BusinessMessagesDeleted, bot: Bo
                     "Chat %s is muted; skipping delete notifications", deleted.chat.id
                 )
                 to_notify.clear()
+
+        # Invalidate any cached AI analysis for this chat — deleting messages
+        # means the cached result is now based on incomplete history.
+        if connection is not None:
+            await ai_analysis_service.invalidate_cache(
+                session, connection.user_telegram_id, deleted.chat.id
+            )
 
     if not to_notify or connection is None:
         return

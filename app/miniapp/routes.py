@@ -3407,7 +3407,7 @@ async def ai_relationship_analysis(
         logger.exception("AI analysis failed for user=%s chat=%s: %s", owner_id, payload.chat_id, msg)
         raise HTTPException(status_code=500, detail=f"analysis_failed: {msg}") from exc
 
-    result["analyses_remaining"] = get_remaining(owner_id)
+    result["analyses_remaining"] = await get_remaining(session, owner_id)
     result["analyses_limit"] = DAILY_ANALYSIS_LIMIT
     return result
 

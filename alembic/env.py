@@ -13,6 +13,7 @@ from alembic import context
 from app.config import get_settings
 from app.database.base import Base
 from app.models import (  # noqa: F401  (ensure models are registered on Base)
+    AiAnalysisDailyCount,
     BusinessConnection,
     ChatPet,
     DailyQuestCompletion,

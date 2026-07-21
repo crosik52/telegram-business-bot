@@ -20,6 +20,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.ai_analysis_cache import AiAnalysisCache
+from app.models.ai_analysis_daily_count import AiAnalysisDailyCount
 from app.models.message import MediaType, Message
 
 logger = logging.getLogger(__name__)
@@ -146,40 +147,51 @@ async def invalidate_cache_for_owner(
 
 
 # ── Per-user daily rate-limit (cost control on paid Gemini tier) ──────────────
-# Tracks {owner_id: (utc_date_str, count)} — resets automatically each UTC day.
-_DAILY_COUNTS: dict[int, tuple[str, int]] = {}
+# Counts are persisted in `ai_analysis_daily_counts` so they survive deploys.
 DAILY_ANALYSIS_LIMIT = int(os.environ.get("AI_ANALYSIS_DAILY_LIMIT", "10"))
 
 
-def _get_utc_date() -> str:
-    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")
+def _get_utc_date() -> dt.date:
+    return dt.datetime.now(dt.timezone.utc).date()
 
 
-def _check_rate_limit(owner_id: int) -> bool:
+async def _get_daily_count(session: AsyncSession, owner_id: int) -> int:
+    """Return how many analyses the owner has run today (UTC)."""
+    today = _get_utc_date()
+    row = await session.scalar(
+        select(AiAnalysisDailyCount).where(
+            AiAnalysisDailyCount.owner_id == owner_id,
+            AiAnalysisDailyCount.date == today,
+        )
+    )
+    return row.count if row is not None else 0
+
+
+async def _check_rate_limit(session: AsyncSession, owner_id: int) -> bool:
     """Return True if the user is within their daily limit, False if exceeded."""
+    count = await _get_daily_count(session, owner_id)
+    return count < DAILY_ANALYSIS_LIMIT
+
+
+async def _increment_daily_count(session: AsyncSession, owner_id: int) -> None:
+    """Atomically increment (or create) today's usage row in the DB."""
     today = _get_utc_date()
-    entry = _DAILY_COUNTS.get(owner_id)
-    if entry is None or entry[0] != today:
-        return True  # new day or first request
-    return entry[1] < DAILY_ANALYSIS_LIMIT
+    stmt = (
+        pg_insert(AiAnalysisDailyCount)
+        .values(owner_id=owner_id, date=today, count=1)
+        .on_conflict_do_update(
+            index_elements=["owner_id", "date"],
+            set_={"count": AiAnalysisDailyCount.count + 1},
+        )
+    )
+    await session.execute(stmt)
+    await session.commit()
 
 
-def _increment_daily_count(owner_id: int) -> None:
-    today = _get_utc_date()
-    entry = _DAILY_COUNTS.get(owner_id)
-    if entry is None or entry[0] != today:
-        _DAILY_COUNTS[owner_id] = (today, 1)
-    else:
-        _DAILY_COUNTS[owner_id] = (today, entry[1] + 1)
-
-
-def get_remaining(owner_id: int) -> int:
+async def get_remaining(session: AsyncSession, owner_id: int) -> int:
     """Return how many fresh AI analyses the user can still run today."""
-    today = _get_utc_date()
-    entry = _DAILY_COUNTS.get(owner_id)
-    if entry is None or entry[0] != today:
-        return DAILY_ANALYSIS_LIMIT
-    return max(0, DAILY_ANALYSIS_LIMIT - entry[1])
+    count = await _get_daily_count(session, owner_id)
+    return max(0, DAILY_ANALYSIS_LIMIT - count)
 
 
 # ── Message fetching ──────────────────────────────────────────────────────────
@@ -508,7 +520,7 @@ async def analyze(
 
     # Per-user daily rate-limit — cost control on paid Gemini tier.
     # Cached results bypass this check (they don't hit the API).
-    if not _check_rate_limit(owner_id):
+    if not await _check_rate_limit(session, owner_id):
         logger.warning(
             "Daily AI analysis limit (%d) reached for user %s",
             DAILY_ANALYSIS_LIMIT,
@@ -563,7 +575,7 @@ async def analyze(
     )
     # Consume one daily slot before hitting the API (prevents concurrent
     # requests from all slipping past the check simultaneously).
-    _increment_daily_count(owner_id)
+    await _increment_daily_count(session, owner_id)
 
     # Try primary model first; if quota exhausted fall back to a model with a
     # separate paid-tier quota pool (gemini-1.5-flash).

@@ -1,4 +1,5 @@
 from app.models.admin_action_log import AdminActionLog
+from app.models.ai_analysis_daily_count import AiAnalysisDailyCount
 from app.models.analysis_result import AnalysisResult
 from app.models.boost import UserBoost
 from app.models.business_connection import BusinessConnection
@@ -14,6 +15,7 @@ from app.models.wallet import UserWallet
 
 __all__ = [
     "AdminActionLog",
+    "AiAnalysisDailyCount",
     "AnalysisResult",
     "BusinessConnection",
     "ChatPet",

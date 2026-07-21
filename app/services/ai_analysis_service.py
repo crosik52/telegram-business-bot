@@ -588,7 +588,9 @@ async def analyze(
 
     # Try primary model first; if quota exhausted fall back to a model with a
     # separate paid-tier quota pool (gemini-1.5-flash).
-    _MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-lite", "gemini-1.5-flash"]
+    # gemini-2.5-flash / gemini-2.5-flash-lite (unversioned) are deprecated for
+    # new API keys and return 404 NOT_FOUND.  Start with the stable 2.0 tier.
+    _MODELS = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-1.5-flash-8b"]
     response = None
     last_exc: Exception | None = None
     for _model in _MODELS:
@@ -610,13 +612,20 @@ async def analyze(
             raise ValueError("gemini_timeout") from exc
         except Exception as exc:
             exc_str = str(exc)
-            if "429" in exc_str or "RESOURCE_EXHAUSTED" in exc_str or "quota" in exc_str.lower():
-                logger.warning("Gemini quota hit on %s, trying next model…", _model)
+            # Fall through to next model on quota exhaustion OR model deprecation (404 NOT_FOUND).
+            if (
+                "429" in exc_str
+                or "RESOURCE_EXHAUSTED" in exc_str
+                or "quota" in exc_str.lower()
+                or "NOT_FOUND" in exc_str
+                or "no longer available" in exc_str.lower()
+            ):
+                logger.warning("Gemini model %s unavailable (%s), trying next…", _model, exc_str[:120])
                 last_exc = exc
                 continue  # try fallback
             raise ValueError(f"gemini_error: {type(exc).__name__}: {exc}") from exc
     else:
-        # All models exhausted quota
+        # All models exhausted / unavailable
         raise ValueError("gemini_quota") from last_exc
 
     raw = response.text.strip()

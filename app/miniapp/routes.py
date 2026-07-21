@@ -1041,7 +1041,10 @@ async def wallet_mines_start(
         raise HTTPException(status_code=401, detail="Invalid init data")
     repo = WalletRepository(session)
     try:
-        result = await repo.mines_start(int(user["id"]), payload.bet, payload.mines_count)
+        result = await repo.mines_start(
+            int(user["id"]), payload.bet, payload.mines_count,
+            first_name=user.get("first_name", "Игрок"),
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return {
@@ -1109,7 +1112,10 @@ async def wallet_crash_start(
         raise HTTPException(status_code=401, detail="Invalid init data")
     repo = WalletRepository(session)
     try:
-        result = await repo.crash_start(int(user["id"]), payload.bet)
+        result = await repo.crash_start(
+            int(user["id"]), payload.bet,
+            first_name=user.get("first_name", "Игрок"),
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return {"ok": result.ok, "new_balance": result.new_balance, "crash_at": result.crash_at}
@@ -1135,6 +1141,13 @@ async def wallet_crash_cashout(
         "payout":     result.payout,
         "new_balance": result.new_balance,
     }
+
+
+@router.get("/app/api/wallet/live_players")
+async def wallet_live_players() -> dict:
+    """Return live game activity for mines and crash. No auth required."""
+    from app.repositories.wallet_repository import get_live_players  # noqa: PLC0415
+    return get_live_players()
 
 
 @router.get("/app/api/wallet/crash/history")

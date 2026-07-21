@@ -59,6 +59,7 @@ CRASH_HOUSE_EDGE = 0.99   # 1 % edge
 _mines_sessions: dict[int, dict] = {}   # owner_id → session
 _crash_sessions: dict[int, dict] = {}   # owner_id → session
 _crash_history:  list[dict]      = []   # global crash history (all users, last 200)
+_live_events:    list[dict]      = []   # recent cashout/mine/crash events (last 100)
 
 
 # ── Internal helpers ────────────────────────────────────────────────────────
@@ -384,7 +385,7 @@ class WalletRepository:
 
     # ── Mines (mutation) ──────────────────────────────────────────────────
     async def mines_start(
-        self, owner_telegram_id: int, bet: int, mines_count: int
+        self, owner_telegram_id: int, bet: int, mines_count: int, first_name: str = "Игрок"
     ) -> "MinesStartResult":
         bet         = max(MINES_BET_MIN, min(bet, MINES_BET_MAX))
         mines_count = max(MINES_MIN_COUNT, min(mines_count, MINES_MAX_COUNT))
@@ -403,6 +404,7 @@ class WalletRepository:
         mines_set = set(positions[:mines_count])
 
         _mines_sessions[owner_telegram_id] = {
+            "name": first_name[:14],
             "bet": bet,
             "mines": mines_set,
             "revealed": [],
@@ -431,6 +433,13 @@ class WalletRepository:
             bet        = sess["bet"]
             mines_list = sorted(sess["mines"])
             revealed   = list(sess["revealed"])
+            _live_events.append({
+                "game": "mines", "type": "mine",
+                "name": sess.get("name", "Игрок"), "bet": bet,
+                "ts": dt.datetime.now(dt.timezone.utc),
+            })
+            if len(_live_events) > 100:
+                del _live_events[:-100]
             del _mines_sessions[owner_telegram_id]
             wallet = await self._get_for_update(owner_telegram_id)
             return MinesRevealResult(
@@ -469,6 +478,14 @@ class WalletRepository:
         mult       = _mines_multiplier(sess["mines_count"], revealed_count)
         payout     = round(sess["bet"] * mult)
         mines_list = sorted(sess["mines"])   # capture before deletion
+        _live_events.append({
+            "game": "mines", "type": "cashout",
+            "name": sess.get("name", "Игрок"), "bet": sess["bet"],
+            "mult": mult, "payout": payout,
+            "ts": dt.datetime.now(dt.timezone.utc),
+        })
+        if len(_live_events) > 100:
+            del _live_events[:-100]
         del _mines_sessions[owner_telegram_id]
 
         wallet = await self._get_for_update(owner_telegram_id)
@@ -485,7 +502,7 @@ class WalletRepository:
 
     # ── Crash (mutation) ──────────────────────────────────────────────────
     async def crash_start(
-        self, owner_telegram_id: int, bet: int
+        self, owner_telegram_id: int, bet: int, first_name: str = "Игрок"
     ) -> "CrashStartResult":
         bet = max(CRASH_BET_MIN, min(bet, CRASH_BET_MAX))
 
@@ -500,6 +517,7 @@ class WalletRepository:
 
         crash_at = _generate_crash_point()
         _crash_sessions[owner_telegram_id] = {
+            "name": first_name[:14],
             "bet": bet, "crash_at": crash_at,
             "started_at": dt.datetime.now(dt.timezone.utc),
         }
@@ -530,10 +548,18 @@ class WalletRepository:
         await self.session.flush()
 
         # Record in global history (keep last 200 entries)
-        _crash_history.append({
-            "crash_at": crash_at,
-            "ts": dt.datetime.now(dt.timezone.utc),
+        _now = dt.datetime.now(dt.timezone.utc)
+        _crash_history.append({"crash_at": crash_at, "ts": _now})
+        _live_events.append({
+            "game": "crash",
+            "type": "crash_won" if won else "crash_lost",
+            "name": sess.get("name", "Игрок"), "bet": bet,
+            "mult": multiplier if won else round(crash_at, 2),
+            "payout": payout,
+            "ts": _now,
         })
+        if len(_live_events) > 100:
+            del _live_events[:-100]
         if len(_crash_history) > 200:
             del _crash_history[:-200]
 
@@ -574,3 +600,38 @@ class WalletRepository:
             server_side=server_side, won=won,
             amount_change=amount_change, new_balance=wallet.balance,
         )
+
+
+# ── Live players (module-level, no DB needed) ────────────────────────────────
+
+def get_live_players() -> dict:
+    """Return current active game sessions and recent events (last 20 s).
+
+    Called by the public /app/api/wallet/live_players endpoint.
+    No authentication required — only anonymised names and bets are exposed.
+    """
+    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=20)
+
+    active = []
+    for sess in list(_mines_sessions.values()):
+        active.append({
+            "game":     "mines",
+            "name":     sess.get("name", "Игрок"),
+            "bet":      sess["bet"],
+            "revealed": len(sess.get("revealed", [])),
+            "mines_count": sess.get("mines_count", 5),
+        })
+    for sess in list(_crash_sessions.values()):
+        active.append({
+            "game": "crash",
+            "name": sess.get("name", "Игрок"),
+            "bet":  sess["bet"],
+        })
+
+    recent = [
+        {k: v for k, v in e.items() if k != "ts"}
+        for e in _live_events
+        if e["ts"] >= cutoff
+    ]
+
+    return {"active": active, "recent": recent}

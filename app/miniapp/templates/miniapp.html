@@ -1582,6 +1582,32 @@
   .mines-cashout-btn:not(:disabled):hover { background: rgba(52,199,89,0.22); box-shadow: 0 4px 12px rgba(52,199,89,0.2); }
   .mines-cashout-btn:disabled { opacity: 0.28; cursor: default; }
   .mines-result { text-align: center; font-size: 16px; font-weight: 700; min-height: 24px; margin-top: 8px; }
+  /* ── Live players panel ───────────────────────────────────────────── */
+  .live-panel {
+    margin-top: 12px;
+    background: rgba(120,120,128,0.07);
+    border-radius: 12px;
+    padding: 9px 12px 8px;
+  }
+  .live-panel-head {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 10.5px; font-weight: 700; letter-spacing: .05em;
+    color: var(--hint); text-transform: uppercase; margin-bottom: 7px;
+  }
+  .live-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #34c759; flex-shrink: 0;
+    animation: livePulse 1.4s ease-in-out infinite;
+  }
+  @keyframes livePulse { 0%,100%{opacity:1} 50%{opacity:.28} }
+  .live-row {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 12.5px; padding: 4px 0; gap: 8px;
+  }
+  .live-row + .live-row { border-top: 1px solid rgba(120,120,128,.1); }
+  .live-lname { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+  .live-detail { color: var(--hint); font-size: 12px; white-space: nowrap; }
+  .live-won { color: #34c759; font-size: 12px; white-space: nowrap; }
+  .live-lost { color: #ff3b30; font-size: 12px; white-space: nowrap; }
 
   /* ── Crash / Rocket ── */
   .crash-display {
@@ -2741,6 +2767,7 @@
     let crashCashedOutMult = 0;        // multiplier at the moment of cashout
     let crashCashedOutPayout = 0;      // payout already credited
     let crashAutoBetTimer = null;      // setTimeout for auto-bet delay
+    let livePlayersTimer  = null;      // setInterval for live players panel
     let crashCurrentBet   = 50;        // bet amount of the current/last round
     let selectedSubPlan   = "quarter"; // default plan key for Premium purchase
     let selectedVipPlan   = "vip_quarter"; // default VIP plan
@@ -4482,6 +4509,7 @@
 
     function switchCasinoGame(g) {
       if (g === currentCasinoGame) return;
+      clearInterval(livePlayersTimer); livePlayersTimer = null;
       currentCasinoGame = g;
       renderCasino();
     }
@@ -5188,6 +5216,10 @@
             💣 Начать за ${selBet} 🪙
           </button>
           <div class="mines-result" id="minesResult"></div>
+          <div class="live-panel">
+            <div class="live-panel-head"><span class="live-dot"></span>В игре сейчас</div>
+            <div id="livePlayersBody"><span style="font-size:12px;color:var(--hint)">Загружаем…</span></div>
+          </div>
         </div>`;
     }
 
@@ -5229,6 +5261,61 @@
       if (v >= 3)  return "high";
       if (v >= 2)  return "mid";
       return "low";
+    }
+
+    async function fetchLivePlayers() {
+      try {
+        const res = await fetch("/app/api/wallet/live_players");
+        if (!res.ok) return;
+        const data = await res.json();
+        _renderLivePlayers(data);
+      } catch { /* silent */ }
+    }
+
+    function _renderLivePlayers(data) {
+      const el = document.getElementById("livePlayersBody");
+      if (!el) return;
+      const game   = currentCasinoGame;  // "mines" | "crash"
+      const active = (data.active || []).filter(p => p.game === game);
+      const recent = (data.recent || []).filter(p => p.game === game).slice(0, 6);
+      if (!active.length && !recent.length) {
+        el.innerHTML = `<span style="font-size:12px;color:var(--hint)">Пока никого нет — будь первым!</span>`;
+        return;
+      }
+      let html = "";
+      for (const p of active) {
+        const detail = game === "mines"
+          ? `${p.bet} 🪙 · открыто ${p.revealed}`
+          : `${p.bet} 🪙 летит…`;
+        html += `<div class="live-row">
+          <span class="live-lname">👤 ${esc2(p.name)}</span>
+          <span class="live-detail">${detail}</span>
+        </div>`;
+      }
+      for (const e of recent) {
+        if (e.type === "cashout") {
+          html += `<div class="live-row">
+            <span class="live-lname">✅ ${esc2(e.name)}</span>
+            <span class="live-won">${e.mult}× · +${e.payout} 🪙</span>
+          </div>`;
+        } else if (e.type === "mine") {
+          html += `<div class="live-row">
+            <span class="live-lname">💥 ${esc2(e.name)}</span>
+            <span class="live-lost">мина · −${e.bet} 🪙</span>
+          </div>`;
+        } else if (e.type === "crash_won") {
+          html += `<div class="live-row">
+            <span class="live-lname">✅ ${esc2(e.name)}</span>
+            <span class="live-won">${e.mult}× · +${e.payout} 🪙</span>
+          </div>`;
+        } else if (e.type === "crash_lost") {
+          html += `<div class="live-row">
+            <span class="live-lname">💥 ${esc2(e.name)}</span>
+            <span class="live-lost">сгорел · −${e.bet} 🪙</span>
+          </div>`;
+        }
+      }
+      el.innerHTML = html;
     }
 
     function renderCrashHistoryBar() {
@@ -5368,6 +5455,10 @@
           <button class="crash-start-btn" id="crashStartBtn"
                   onclick="startCrash()">🚀 Запустить</button>
           <div class="crash-result-msg" id="crashResult"></div>
+          <div class="live-panel">
+            <div class="live-panel-head"><span class="live-dot"></span>В игре сейчас</div>
+            <div id="livePlayersBody"><span style="font-size:12px;color:var(--hint)">Загружаем…</span></div>
+          </div>
         </div>`;
     }
 
@@ -5398,6 +5489,12 @@
       // Mines + Crash buttons now use inline onclick — no listeners needed here
       // Fetch crash history when crash tab is active
       if (currentCasinoGame === "crash") fetchCrashHistory();
+      // Live players polling for mines / crash tabs
+      clearInterval(livePlayersTimer); livePlayersTimer = null;
+      if (currentCasinoGame === "mines" || currentCasinoGame === "crash") {
+        fetchLivePlayers();
+        livePlayersTimer = setInterval(fetchLivePlayers, 3000);
+      }
     }
 
     function updateBalanceDisplay(newBalance) {

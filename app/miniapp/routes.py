@@ -3581,14 +3581,13 @@ async def admin_db_cleanup(
         purge_old_messages, purge_old_media_cache, vacuum_tables,
     )
     keep_days = max(7, min(payload.keep_days, 365))
-    deleted_msgs  = await purge_old_messages(session, max_age_days=keep_days)
     deleted_cache = await purge_old_media_cache(session)
-    await vacuum_tables(["messages", "message_edit_history", "media_cache"])
+    await vacuum_tables(["media_cache"])
     logger.info(
-        "Admin @%s ran DB cleanup: keep_days=%d, deleted msgs=%d cache=%d",
-        admin_user.get("username"), keep_days, deleted_msgs, deleted_cache,
+        "Admin @%s ran media_cache cleanup: deleted=%d",
+        admin_user.get("username"), deleted_cache,
     )
-    return {"ok": True, "deleted_messages": deleted_msgs, "deleted_cache": deleted_cache, "keep_days": keep_days}
+    return {"ok": True, "deleted_messages": 0, "deleted_cache": deleted_cache}
 
 
 @router.post("/app/api/ai/ping")

@@ -590,7 +590,8 @@ async def analyze(
     # separate paid-tier quota pool (gemini-1.5-flash).
     # gemini-2.5-flash / gemini-2.5-flash-lite (unversioned) are deprecated for
     # new API keys and return 404 NOT_FOUND.  Start with the stable 2.0 tier.
-    _MODELS = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-1.5-flash-8b"]
+    # 2.5-lite first (separate quota pool from 2.0); 1.5-* removed — not on v1beta for this key.
+    _MODELS = ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"]
     response = None
     last_exc: Exception | None = None
     for _model in _MODELS:

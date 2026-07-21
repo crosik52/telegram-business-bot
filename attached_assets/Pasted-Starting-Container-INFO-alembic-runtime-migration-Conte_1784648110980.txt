@@ -1,0 +1,105 @@
+Starting Container
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade s3t4u5v6w7x8 -> t4u5v6w7x8y9, ai_daily_count: persist per-user daily AI analysis usage across deploys.
+INFO:     Started server process [5]
+INFO:     Waiting for application startup.
+2026-07-21T15:32:07+0000 | INFO     | app.main | Starting Telegram Business Bot (environment=production)
+2026-07-21T15:32:07+0000 | INFO     | app.main | Database dialect: postgresql (persistent)
+2026-07-21T15:32:08+0000 | INFO     | app.main | Telegram webhook set to https://telegram-business-bot-production.up.railway.app/webhook
+2026-07-21T15:32:08+0000 | INFO     | app.main | Telegram chat menu button set to open mini app
+2026-07-21T15:32:08+0000 | INFO     | app.main | Telethon not configured (TELEGRAM_API_ID / TELEGRAM_API_HASH / TELETHON_SESSION_STR missing) — view-once media will fall back to Bot API only.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+2026-07-21T15:32:08+0000 | INFO     | http | POST /webhook -> 200 (80.4ms)
+2026-07-21T15:32:08+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745906968
+2026-07-21T15:32:08+0000 | INFO     | app.services.message_service | Stored new business message chat_id=5902864460 message_id=1803476 media=text
+2026-07-21T15:32:08+0000 | INFO     | aiogram.event | Update id=745906968 is handled. Duration 78 ms by bot id=1162707887
+2026-07-21T15:32:08+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745906969
+2026-07-21T15:32:08+0000 | INFO     | app.services.message_service | Stored new business message chat_id=5902864460 message_id=1803477 media=text
+2026-07-21T15:32:08+0000 | INFO     | aiogram.event | Update id=745906969 is handled. Duration 35 ms by bot id=1162707887
+2026-07-21T15:32:08+0000 | INFO     | http | POST /webhook -> 200 (37.8ms)
+2026-07-21T15:32:09+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745906970
+2026-07-21T15:32:09+0000 | INFO     | app.services.message_service | Stored new business message chat_id=5902864460 message_id=1803478 media=text
+2026-07-21T15:32:09+0000 | INFO     | aiogram.event | Update id=745906970 is handled. Duration 28 ms by bot id=1162707887
+2026-07-21T15:32:09+0000 | INFO     | http | POST /webhook -> 200 (29.1ms)
+2026-07-21T15:32:26+0000 | INFO     | app.services.message_service | Marked message deleted chat_id=5902864460 message_id=1803477
+2026-07-21T15:32:26+0000 | INFO     | app.services.message_service | Marked message deleted chat_id=5902864460 message_id=1803476
+2026-07-21T15:32:26+0000 | INFO     | aiogram.event | Update id=745906972 is handled. Duration 88 ms by bot id=1162707887
+2026-07-21T15:32:26+0000 | INFO     | http | POST /webhook -> 200 (91.1ms)
+2026-07-21T15:32:23+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745906971
+2026-07-21T15:32:23+0000 | INFO     | app.services.message_service | Stored new business message chat_id=2040216796 message_id=685717 media=text
+2026-07-21T15:32:23+0000 | INFO     | aiogram.event | Update id=745906971 is handled. Duration 31 ms by bot id=1162707887
+2026-07-21T15:32:23+0000 | INFO     | http | POST /webhook -> 200 (32.8ms)
+2026-07-21T15:32:26+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745906972
+2026-07-21T15:32:26+0000 | INFO     | app.services.message_service | Marked message deleted chat_id=5902864460 message_id=1803478
+2026-07-21T15:32:31+0000 | INFO     | http | GET /app -> 200 (54.4ms)
+2026-07-21T15:32:31+0000 | INFO     | http | POST /app/api/shop/status -> 200 (52.1ms)
+2026-07-21T15:32:31+0000 | INFO     | http | POST /app/api/activity -> 200 (146.8ms)
+2026-07-21T15:32:31+0000 | INFO     | http | POST /app/api/relationships/list -> 200 (181.1ms)
+2026-07-21T15:32:31+0000 | INFO     | http | POST /app/api/stats/digest -> 200 (201.9ms)
+2026-07-21T15:32:32+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745906973
+2026-07-21T15:32:32+0000 | INFO     | http | POST /app/api/stats/words -> 200 (508.1ms)
+2026-07-21T15:32:32+0000 | WARNING  | app.services.message_service | Received delete event for untracked message chat_id=5902864460 message_id=1770930
+2026-07-21T15:32:32+0000 | INFO     | aiogram.event | Update id=745906973 is handled. Duration 169 ms by bot id=1162707887
+2026-07-21T15:32:32+0000 | INFO     | http | POST /webhook -> 200 (171.2ms)
+2026-07-21T15:32:32+0000 | INFO     | http | POST /app/api/stats -> 200 (676.4ms)
+2026-07-21T15:32:35+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745906974
+2026-07-21T15:32:35+0000 | INFO     | app.services.message_service | Stored new business message chat_id=2040216796 message_id=685718 media=text
+2026-07-21T15:32:35+0000 | INFO     | aiogram.event | Update id=745906974 is handled. Duration 40 ms by bot id=1162707887
+2026-07-21T15:32:35+0000 | INFO     | http | POST /webhook -> 200 (42.9ms)
+2026-07-21T15:32:40+0000 | INFO     | google_genai.models | AFC is enabled with max remote calls: 10.
+2026-07-21T15:32:40+0000 | WARNING  | app.services.ai_analysis_service | Gemini model gemini-2.0-flash unavailable (429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and ), trying next…
+2026-07-21T15:32:40+0000 | INFO     | google_genai.models | AFC is enabled with max remote calls: 10.
+2026-07-21T15:32:41+0000 | WARNING  | app.services.ai_analysis_service | Gemini model gemini-2.0-flash-lite unavailable (429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and ), trying next…
+2026-07-21T15:32:41+0000 | INFO     | google_genai.models | AFC is enabled with max remote calls: 10.
+2026-07-21T15:32:41+0000 | WARNING  | app.services.ai_analysis_service | Gemini model gemini-1.5-flash unavailable (404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-flash is not found for API version v1beta, or is no), trying next…
+2026-07-21T15:32:41+0000 | INFO     | google_genai.models | AFC is enabled with max remote calls: 10.
+2026-07-21T15:32:41+0000 | WARNING  | app.services.ai_analysis_service | Gemini model gemini-1.5-flash-8b unavailable (404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-flash-8b is not found for API version v1beta, or is), trying next…
+2026-07-21T15:32:41+0000 | INFO     | http | POST /app/api/ai/relationship_analysis -> 503 (2985.6ms)
+2026-07-21T15:33:08+0000 | INFO     | app.services.media_cache_service | media_cache: purged 6 rows older than 7 days
+2026-07-21T15:33:38+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745906975
+2026-07-21T15:33:38+0000 | INFO     | app.services.message_service | Stored new business message chat_id=7367673014 message_id=1426276 media=text
+2026-07-21T15:33:38+0000 | INFO     | app.business.handlers | dot-save: triggered owner=965523764 chat=7367673014 reply_to=1426275
+2026-07-21T15:33:38+0000 | INFO     | aiogram.event | Update id=745906975 is handled. Duration 46 ms by bot id=1162707887
+2026-07-21T15:33:38+0000 | INFO     | http | POST /webhook -> 200 (48.0ms)
+2026-07-21T15:33:38+0000 | INFO     | app.business.handlers | dot-save: found photo file_id=AgACAgIAAxkBAAEVw2Nq…
+2026-07-21T15:33:38+0000 | INFO     | app.business.handlers | dot-save: photo is regular media (bot_api ok) — skipping silently
+2026-07-21T15:33:56+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745906976
+2026-07-21T15:33:56+0000 | INFO     | app.services.message_service | Stored new business message chat_id=1415182331 message_id=1453051 media=other
+2026-07-21T15:33:56+0000 | INFO     | aiogram.event | Update id=745906976 is handled. Duration 33 ms by bot id=1162707887
+2026-07-21T15:33:56+0000 | INFO     | http | POST /webhook -> 200 (36.6ms)
+2026-07-21T15:34:07+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745906977
+2026-07-21T15:34:07+0000 | INFO     | app.services.message_service | Stored new business message chat_id=8336979229 message_id=1803479 media=text
+2026-07-21T15:34:07+0000 | INFO     | aiogram.event | Update id=745906977 is handled. Duration 29 ms by bot id=1162707887
+2026-07-21T15:34:07+0000 | INFO     | http | POST /webhook -> 200 (30.8ms)
+2026-07-21T15:34:12+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745906978
+2026-07-21T15:34:12+0000 | INFO     | app.services.message_service | Stored new business message chat_id=8336979229 message_id=1803480 media=video_note
+2026-07-21T15:34:14+0000 | INFO     | aiogram.event | Update id=745906978 is handled. Duration 1864 ms by bot id=1162707887
+2026-07-21T15:34:14+0000 | INFO     | http | POST /webhook -> 200 (1866.1ms)
+2026-07-21T15:34:34+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745906980
+2026-07-21T15:34:34+0000 | INFO     | app.services.message_service | Stored new business message chat_id=8336979229 message_id=1803483 media=video_note
+2026-07-21T15:34:26+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745906979
+2026-07-21T15:34:26+0000 | INFO     | app.services.message_service | Marked message deleted chat_id=8336979229 message_id=1803480
+2026-07-21T15:34:28+0000 | INFO     | aiogram.event | Update id=745906979 is handled. Duration 1393 ms by bot id=1162707887
+2026-07-21T15:34:28+0000 | INFO     | http | POST /webhook -> 200 (1396.1ms)
+2026-07-21T15:34:35+0000 | INFO     | aiogram.event | Update id=745906980 is handled. Duration 1257 ms by bot id=1162707887
+2026-07-21T15:34:35+0000 | INFO     | http | POST /webhook -> 200 (1259.3ms)
+2026-07-21T15:34:39+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745906981
+2026-07-21T15:34:39+0000 | INFO     | app.services.message_service | Stored new business message chat_id=8373670725 message_id=1426277 media=photo
+2026-07-21T15:34:40+0000 | INFO     | aiogram.event | Update id=745906981 is handled. Duration 942 ms by bot id=1162707887
+2026-07-21T15:34:40+0000 | INFO     | http | POST /webhook -> 200 (944.1ms)
+2026-07-21T15:34:47+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745906982
+2026-07-21T15:34:47+0000 | INFO     | app.services.message_service | Stored new business message chat_id=8373670725 message_id=1426278 media=text
+2026-07-21T15:34:47+0000 | INFO     | aiogram.event | Update id=745906982 is handled. Duration 31 ms by bot id=1162707887
+2026-07-21T15:34:47+0000 | INFO     | http | POST /webhook -> 200 (34.2ms)
+2026-07-21T15:34:48+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745906983
+2026-07-21T15:34:48+0000 | INFO     | app.services.message_service | Stored new business message chat_id=8336979229 message_id=1803484 media=text
+2026-07-21T15:34:48+0000 | INFO     | app.business.handlers | dot-save: triggered owner=1056583564 chat=8336979229 reply_to=1803479
+2026-07-21T15:34:48+0000 | INFO     | aiogram.event | Update id=745906983 is handled. Duration 29 ms by bot id=1162707887
+2026-07-21T15:34:48+0000 | INFO     | http | POST /webhook -> 200 (31.3ms)
+2026-07-21T15:34:48+0000 | INFO     | app.business.handlers | dot-save: message 1803479 is non-media (type=MediaType.TEXT) — skipping
+2026-07-21T15:34:49+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745906984
+2026-07-21T15:34:49+0000 | INFO     | app.services.message_service | Stored new business message chat_id=8373670725 message_id=1426279 media=text
+2026-07-21T15:34:49+0000 | INFO     | aiogram.event | Update id=745906984 is handled. Duration 28 ms by bot id=1162707887
+2026-07-21T15:34:49+0000 | INFO     | http | POST /webhook -> 200 (29.7ms)

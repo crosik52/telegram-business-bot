@@ -2712,6 +2712,7 @@
     let currentInitData = "";
     let currentTab = "stats";
     let walletData = null;
+    let _userCardSettings = { theme: "default", frame: "none" }; // eagerly loaded; used by openMyCard before shopData is ready
     let casinoLoaded = false;
     let questsLoaded = false;
     let questData    = null;
@@ -3958,8 +3959,8 @@
       if (!u) return;
       const sub        = walletData?.subscription || {};
       const name       = ((u.first_name || "") + " " + (u.last_name || "")).trim() || "Ты";
-      const frame      = shopData?.settings?.frame || "none";
-      const theme      = shopData?.settings?.theme || "default";
+      const frame      = shopData?.settings?.frame || _userCardSettings.frame || "none";
+      const theme      = shopData?.settings?.theme || _userCardSettings.theme || "default";
       const frameGrad  = _CP_FRAME_STYLES[frame] || _CP_FRAME_STYLES["none"];
       const isVip      = !!sub.is_vip;
       const isPremium  = !!sub.is_active && !isVip;
@@ -4150,13 +4151,14 @@
         const post = (url) => fetch(url, {method:"POST", headers:hdr, body}).catch(()=>null);
         const _hardTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error("load_timeout")), 14000));
 
-        const [statsRes, actRes, wordsRes, digestRes, relRes] = await Promise.race([
+        const [statsRes, actRes, wordsRes, digestRes, relRes, cardSettingsRes] = await Promise.race([
           Promise.all([
             post("/app/api/stats"),
             post("/app/api/activity"),
             post("/app/api/stats/words"),
             post("/app/api/stats/digest"),
             post("/app/api/relationships/list"),
+            post("/app/api/shop/status"),
           ]),
           _hardTimeout,
         ]);
@@ -4164,6 +4166,12 @@
         if (!statsRes.ok) throw new Error("bad_status");
         const stats = await statsRes.json();
         lastStats  = stats;
+        if (cardSettingsRes && cardSettingsRes.ok) {
+          try {
+            const _cs = await cardSettingsRes.json();
+            if (_cs.settings) _userCardSettings = { theme: _cs.settings.theme || "default", frame: _cs.settings.frame || "none" };
+          } catch {}
+        }
         lastActivity = actRes  && actRes.ok  ? ((await actRes.json()).activity || {}) : {};
         lastWords    = wordsRes  && wordsRes.ok  ? await wordsRes.json()  : null;
         lastDigest   = digestRes && digestRes.ok ? await digestRes.json() : null;
@@ -7003,6 +7011,7 @@
         if (!wRes.ok) throw new Error();
         walletData = await wRes.json();
         shopData   = sRes.ok ? await sRes.json() : { active_boosts: [], settings: {}, prices: {} };
+        if (shopData.settings) _userCardSettings = { theme: shopData.settings.theme || "default", frame: shopData.settings.frame || "none" };
         petData    = pRes.ok ? await pRes.json() : { pets: [], available_chats: [] };
         shopLoaded = true;
         renderShop();

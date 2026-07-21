@@ -586,12 +586,19 @@ async def analyze(
     # requests from all slipping past the check simultaneously).
     await _increment_daily_count(session, owner_id)
 
-    # Try primary model first; if quota exhausted fall back to a model with a
-    # separate paid-tier quota pool (gemini-1.5-flash).
-    # gemini-2.5-flash / gemini-2.5-flash-lite (unversioned) are deprecated for
-    # new API keys and return 404 NOT_FOUND.  Start with the stable 2.0 tier.
-    # 2.5-lite first (separate quota pool from 2.0); 1.5-* removed — not on v1beta for this key.
-    _MODELS = ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"]
+    # Working models verified against this API key (July 2026):
+    #   gemini-3.5-flash-lite  — OK (primary)
+    #   gemini-flash-lite-latest — OK (alias for current lite)
+    #   gemini-3.5-flash       — 503 under high demand (temporary), falls through
+    #   gemini-2.0-flash*      — 429 quota exhausted on free tier, last resort
+    #   gemini-2.5-* / 1.5-*  — 404 "no longer available" on this key
+    _MODELS = [
+        "gemini-3.5-flash-lite",
+        "gemini-flash-lite-latest",
+        "gemini-3.5-flash",
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite",
+    ]
     response = None
     last_exc: Exception | None = None
     for _model in _MODELS:
@@ -616,7 +623,9 @@ async def analyze(
             # Fall through to next model on quota exhaustion OR model deprecation (404 NOT_FOUND).
             if (
                 "429" in exc_str
+                or "503" in exc_str
                 or "RESOURCE_EXHAUSTED" in exc_str
+                or "UNAVAILABLE" in exc_str
                 or "quota" in exc_str.lower()
                 or "NOT_FOUND" in exc_str
                 or "no longer available" in exc_str.lower()

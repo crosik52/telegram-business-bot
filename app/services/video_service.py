@@ -778,6 +778,20 @@ async def handle_video_link(
 
     except Exception as exc:
         logger.warning("Media download/send failed for %s (%s): %s", url, label, exc)
+        # Show a user-facing error instead of silently deleting the status.
+        if isinstance(exc, asyncio.TimeoutError):
+            err_text = "⏱ Скачивание заняло слишком много времени — попробуй позже"
+        elif isinstance(exc, ValueError) and "too large" in str(exc).lower():
+            err_text = "❌ Видео слишком большое для отправки через Telegram (лимит 45 МБ)"
+        elif isinstance(exc, ValueError) and "too long" in str(exc).lower():
+            err_text = "❌ Видео слишком длинное для скачивания"
+        elif isinstance(exc, FileNotFoundError):
+            err_text = "❌ Не удалось скачать — видео недоступно или удалено"
+        else:
+            err_text = "❌ Не удалось скачать видео"
+        await _edit_status(err_text)
+        # Auto-delete the error message after 12 seconds so it doesn't litter the chat.
+        await asyncio.sleep(12)
         await _delete_status()
 
     finally:

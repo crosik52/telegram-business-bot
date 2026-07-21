@@ -206,9 +206,11 @@ def _local_stats(msgs: list[Message]) -> dict:
 # ── Transcript builder ────────────────────────────────────────────────────────
 
 def _build_transcript(msgs: list[Message], max_chars: int = 18_000) -> str:
+    # Iterate newest-first so the char budget keeps RECENT messages.
+    # After collecting, reverse back to chronological order for the AI.
     lines: list[str] = []
     total = 0
-    for m in msgs:
+    for m in reversed(msgs):
         ts   = m.sent_at.strftime("%d.%m %H:%M")
         who  = "Вы" if m.is_outgoing else "Собеседник"
         text = (m.text or m.caption or "").strip()
@@ -218,9 +220,10 @@ def _build_transcript(msgs: list[Message], max_chars: int = 18_000) -> str:
         line = f"[{ts}] {who}: {text}"
         total += len(line)
         if total > max_chars:
-            lines.append("... (старые сообщения пропущены)")
+            lines.append("... (ранние сообщения пропущены)")
             break
         lines.append(line)
+    lines.reverse()  # chronological order for the AI
     return "\n".join(lines)
 
 
@@ -392,7 +395,7 @@ async def analyze(
     )
     # Try primary model first; if quota exhausted fall back to a model with a
     # separate free-tier quota pool (gemini-1.5-flash).
-    _MODELS = ["gemini-2.0-flash", "gemini-1.5-flash"]
+    _MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-lite", "gemini-1.5-flash"]
     response = None
     last_exc: Exception | None = None
     for _model in _MODELS:

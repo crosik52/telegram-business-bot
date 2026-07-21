@@ -3391,6 +3391,10 @@ async def ai_relationship_analysis(
             raise HTTPException(status_code=404, detail="no_messages") from exc
         if "GEMINI_API_KEY" in detail:
             raise HTTPException(status_code=503, detail="ai_not_configured") from exc
+        if detail == "gemini_quota":
+            raise HTTPException(status_code=503, detail="gemini_quota") from exc
+        if detail == "gemini_timeout":
+            raise HTTPException(status_code=504, detail="gemini_timeout") from exc
         # Pass through real error message for debugging
         logger.exception("AI analysis ValueError for user=%s chat=%s: %s", owner_id, payload.chat_id, detail)
         raise HTTPException(status_code=500, detail=f"analysis_failed: {detail}") from exc

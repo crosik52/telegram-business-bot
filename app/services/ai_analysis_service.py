@@ -611,6 +611,7 @@ async def analyze(
                         system_instruction=_SYSTEM_PROMPT,
                         temperature=0.4,
                         response_mime_type="application/json",
+                        response_schema=_SCHEMA,
                     ),
                 ),
                 timeout=90.0,

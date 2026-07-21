@@ -3586,6 +3586,34 @@ async def admin_db_cleanup(
     return {"ok": True, "deleted_cache": deleted_cache}
 
 
+@router.post("/app/api/admin/db/vacuum_full")
+async def admin_vacuum_full(
+    payload: AdminInitDataOnlyRequest,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Run VACUUM FULL ANALYZE on all user tables + CHECKPOINT to reclaim OS disk space."""
+    from sqlalchemy import text  # noqa: PLC0415
+    from app.database.session import get_engine  # noqa: PLC0415
+
+    admin_user = _require_admin(payload.init_data)
+    engine = get_engine()
+    async with engine.execution_options(isolation_level="AUTOCOMMIT").connect() as conn:
+        # CHECKPOINT flushes WAL and helps release WAL segment files
+        await conn.execute(text("CHECKPOINT"))
+        # VACUUM FULL on all user tables (including their TOAST tables)
+        result = await conn.execute(text(
+            "SELECT relname FROM pg_stat_user_tables ORDER BY pg_total_relation_size(relid) DESC"
+        ))
+        tables = [row[0] for row in result.fetchall()]
+        for tbl in tables:
+            await conn.execute(text(f"VACUUM FULL ANALYZE {tbl}"))
+            logger.info("VACUUM FULL ANALYZE %s complete", tbl)
+        await conn.execute(text("CHECKPOINT"))
+
+    logger.info("Admin @%s ran full VACUUM on %d tables", admin_user.get("username"), len(tables))
+    return {"ok": True, "tables_vacuumed": tables}
+
+
 @router.post("/app/api/admin/db/wipe_media_cache")
 async def admin_wipe_media_cache(
     payload: AdminInitDataOnlyRequest,

@@ -3004,11 +3004,36 @@
               onclick="runDbCleanup()">🧹 Удалить старше 2 дней</button>
             <button id="dbWipeBtn" class="action-btn" style="width:100%;padding:12px;font-size:14px;font-weight:700;margin-top:8px;background:rgba(255,64,64,0.22);color:var(--danger);border:1.5px solid rgba(255,64,64,0.45)"
               onclick="runDbWipe()">🗑️ Удалить весь медиакеш</button>
+            <button id="dbVacuumBtn" class="action-btn" style="width:100%;padding:12px;font-size:14px;font-weight:700;margin-top:8px;background:rgba(255,159,10,0.12);color:var(--orange);border:1.5px solid rgba(255,159,10,0.3)"
+              onclick="runVacuumFull()">⚡ VACUUM FULL всей базы</button>
             <div id="dbCleanupResult" style="margin-top:10px;font-size:13px;text-align:center"></div>
           </div>`;
       } catch {
         if (currentTab !== "db") return;
         content.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить статистику БД.</div>`;
+      }
+    }
+
+    async function runVacuumFull() {
+      if (!confirm("Запустить VACUUM FULL по всей базе?\nЭто освободит реальное место на диске. Займёт 10–60 секунд, во время выполнения таблицы временно блокируются.")) return;
+      const btn = document.getElementById("dbVacuumBtn");
+      const res = document.getElementById("dbCleanupResult");
+      btn.disabled = true; btn.textContent = "⏳ Выполняем…";
+      if (res) res.textContent = "";
+      try {
+        const r = await fetch("/app/api/admin/db/vacuum_full", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData}),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || r.status);
+        const n = (data.tables_vacuumed || []).length;
+        if (res) res.innerHTML = `<span style="color:var(--green)">✅ VACUUM FULL выполнен для ${n} таблиц + CHECKPOINT.</span>`;
+        setTimeout(loadDbTab, 1500);
+      } catch(e) {
+        if (res) res.innerHTML = `<span style="color:var(--danger)">❌ Ошибка: ${esc(String(e))}</span>`;
+      } finally {
+        btn.disabled = false; btn.textContent = "⚡ VACUUM FULL всей базы";
       }
     }
 

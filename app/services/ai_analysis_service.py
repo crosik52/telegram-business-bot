@@ -15,7 +15,7 @@ import re
 import time
 from typing import Any
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, delete as sa_delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,9 +29,6 @@ logger = logging.getLogger(__name__)
 # L2 (database):  survives Railway deploys; checked when L1 misses.
 _CACHE: dict[tuple[int, int], tuple[float, dict]] = {}
 _CACHE_TTL = 86400  # 24 hours
-
-# ── In-process L1 cache (avoids DB round-trips within a single process run) ──
-_MEM_CACHE: dict[tuple[int, int], tuple[float, dict]] = {}
 
 def _l1_get(owner_id: int, chat_id: int) -> dict | None:
     entry = _CACHE.get((owner_id, chat_id))
@@ -62,6 +59,24 @@ async def _db_get(
         return json.loads(row.result_json)
     except Exception:
         return None
+
+
+async def invalidate_cache(
+    session: AsyncSession, owner_id: int, chat_id: int
+) -> None:
+    """Evict the cached analysis for (owner_id, chat_id) from both L1 and DB.
+
+    Call this whenever messages are deleted from the chat so users don't see
+    a stale analysis after clearing their history.
+    """
+    _CACHE.pop((owner_id, chat_id), None)
+    await session.execute(
+        sa_delete(AiAnalysisCache).where(
+            AiAnalysisCache.owner_id == owner_id,
+            AiAnalysisCache.chat_id == chat_id,
+        )
+    )
+    # Note: caller is responsible for committing the session.
 
 
 async def _db_set(

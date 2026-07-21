@@ -1215,6 +1215,13 @@ async def on_deleted_business_messages(deleted: BusinessMessagesDeleted, bot: Bo
 
             to_notify.append(removed)
 
+        # Invalidate AI analysis cache whenever any messages are deleted so the
+        # user doesn't see a stale report after clearing their chat history.
+        if connection is not None and deleted.message_ids:
+            from app.services.ai_analysis_service import invalidate_cache  # noqa: PLC0415
+            await invalidate_cache(session, connection.user_telegram_id, deleted.chat.id)
+            await session.commit()
+
         # Check per-chat mute (same chat for the whole event).
         if to_notify:
             chat_repo = ChatSettingsRepository(session)

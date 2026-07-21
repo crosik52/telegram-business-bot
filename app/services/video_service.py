@@ -154,8 +154,6 @@ def _build_base_opts(out_dir: str, max_bytes: int) -> dict:
         "socket_timeout":      30,
         "retries":             3,
         "fragment_retries":    3,
-        # Always merge split streams to mp4 (not webm/mkv) when ffmpeg is available.
-        "merge_output_format": "mp4",
     }
     if ffmpeg_dir:
         opts["ffmpeg_location"] = ffmpeg_dir
@@ -480,12 +478,6 @@ def _download_sync(
         **_build_base_opts(out_dir, MAX_BYTES),
         # Carousels are multi-entry "playlists" in yt-dlp — must allow all items
         "noplaylist": False,
-        # Reject long videos early (same cap as the video attempt) so we don't
-        # waste bandwidth on a file we'll throw away after the size check.
-        "match_filter": lambda info, *, incomplete=False: (
-            f"Video too long (> {MAX_DURATION // 60} min)"
-            if (info.get("duration") or 0) > MAX_DURATION else None
-        ),
     }
     if progress_hook:
         opts_photo["progress_hooks"] = [progress_hook]

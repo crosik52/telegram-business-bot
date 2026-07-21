@@ -2,7 +2,8 @@
 
 Fetches the last N messages for a chat, computes raw stats locally,
 then asks Gemini to produce a structured 10-section relationship report.
-Results are cached in-memory per (owner_id, chat_id) for 24 hours.
+Results are cached in the database per (owner_id, chat_id) for 24 hours
+(survives Railway deploys) with a fast in-memory L1 layer on top.
 """
 from __future__ import annotations
 
@@ -15,26 +16,72 @@ import time
 from typing import Any
 
 from sqlalchemy import and_, func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.ai_analysis_cache import AiAnalysisCache
 from app.models.message import MediaType, Message
 
 logger = logging.getLogger(__name__)
 
-# ── In-memory result cache ────────────────────────────────────────────────────
+# ── Result cache — L1 in-memory + L2 database ────────────────────────────────
+# L1 (in-memory): fast path, avoids repeated JSON parsing within same process.
+# L2 (database):  survives Railway deploys; checked when L1 misses.
 _CACHE: dict[tuple[int, int], tuple[float, dict]] = {}
 _CACHE_TTL = 86400  # 24 hours
 
 
-def _cached(owner_id: int, chat_id: int) -> dict | None:
+def _l1_get(owner_id: int, chat_id: int) -> dict | None:
     entry = _CACHE.get((owner_id, chat_id))
     if entry and (time.time() - entry[0]) < _CACHE_TTL:
         return entry[1]
     return None
 
 
-def _store(owner_id: int, chat_id: int, result: dict) -> None:
+def _l1_set(owner_id: int, chat_id: int, result: dict) -> None:
     _CACHE[(owner_id, chat_id)] = (time.time(), result)
+
+
+async def _db_get(
+    session: AsyncSession, owner_id: int, chat_id: int
+) -> dict | None:
+    """Return cached result from DB if it exists and is within TTL."""
+    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=_CACHE_TTL)
+    row = await session.scalar(
+        select(AiAnalysisCache).where(
+            AiAnalysisCache.owner_id == owner_id,
+            AiAnalysisCache.chat_id == chat_id,
+            AiAnalysisCache.analyzed_at >= cutoff,
+        )
+    )
+    if row is None:
+        return None
+    try:
+        return json.loads(row.result_json)
+    except Exception:
+        return None
+
+
+async def _db_set(
+    session: AsyncSession, owner_id: int, chat_id: int, result: dict
+) -> None:
+    """Upsert analysis result into DB cache."""
+    now = dt.datetime.now(dt.timezone.utc)
+    stmt = (
+        pg_insert(AiAnalysisCache)
+        .values(
+            owner_id=owner_id,
+            chat_id=chat_id,
+            result_json=json.dumps(result, ensure_ascii=False),
+            analyzed_at=now,
+        )
+        .on_conflict_do_update(
+            index_elements=["owner_id", "chat_id"],
+            set_={"result_json": json.dumps(result, ensure_ascii=False), "analyzed_at": now},
+        )
+    )
+    await session.execute(stmt)
+    await session.commit()
 
 
 # ── Per-user daily rate-limit (cost control on paid Gemini tier) ──────────────
@@ -371,10 +418,23 @@ async def analyze(
     connection_ids: list[str],
     contact_name: str = "Собеседник",
 ) -> dict:
-    """Run AI analysis for a chat. Returns cached result if fresh."""
-    cached = _cached(owner_id, chat_id)
-    if cached:
-        return cached
+    """Run AI analysis for a chat. Returns cached result if fresh.
+
+    Cache hierarchy:
+      L1 — in-memory dict (fast, per-process, lost on restart)
+      L2 — database row (survives restarts/deploys)
+    Gemini API is only called when both caches miss.
+    """
+    # L1 check
+    hit = _l1_get(owner_id, chat_id)
+    if hit:
+        return hit
+
+    # L2 check — DB cache survives deploys
+    db_hit = await _db_get(session, owner_id, chat_id)
+    if db_hit:
+        _l1_set(owner_id, chat_id, db_hit)  # warm L1 for next request
+        return db_hit
 
     # Per-user daily rate-limit — cost control on paid Gemini tier.
     # Cached results bypass this check (they don't hit the API).
@@ -487,5 +547,6 @@ async def analyze(
         "analyzed_at":   dt.datetime.now(dt.timezone.utc).isoformat(),
         "message_count": len(msgs),
     }
-    _store(owner_id, chat_id, result)
+    _l1_set(owner_id, chat_id, result)
+    await _db_set(session, owner_id, chat_id, result)
     return result

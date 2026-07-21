@@ -26,12 +26,16 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.database.base import Base
 from app.models.ai_analysis_cache import AiAnalysisCache
+import time
+
 from app.services import ai_analysis_service
 from app.services.ai_analysis_service import (
     _CACHE,
+    _CACHE_TTL,
     invalidate_cache,
     invalidate_cache_for_owner,
 )
+from app.services.ai_analysis_service import _l1_get, _db_get
 
 DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -291,3 +295,87 @@ async def test_invalidate_cache_for_owner_is_idempotent(session_factory):
 
     async with session_factory() as sess2:
         await invalidate_cache_for_owner(sess2, owner_id)
+
+
+# ---------------------------------------------------------------------------
+# Tests: TTL expiry — stale entries must not be served
+# ---------------------------------------------------------------------------
+
+def test_l1_get_returns_none_for_expired_entry():
+    """_l1_get must return None when the cached timestamp is older than _CACHE_TTL."""
+    owner_id, chat_id = 5001, 6001
+    stale_ts = time.time() - _CACHE_TTL - 1  # one second past the TTL boundary
+    _CACHE[(owner_id, chat_id)] = (stale_ts, {"score": 9})
+
+    result = _l1_get(owner_id, chat_id)
+
+    assert result is None, (
+        "_l1_get must return None for an L1 entry whose timestamp exceeds _CACHE_TTL"
+    )
+
+
+def test_l1_get_returns_value_for_fresh_entry():
+    """_l1_get must return the cached value when the entry is within _CACHE_TTL."""
+    owner_id, chat_id = 5002, 6002
+    fresh_ts = time.time() - (_CACHE_TTL // 2)  # well within TTL
+    payload = {"score": 8}
+    _CACHE[(owner_id, chat_id)] = (fresh_ts, payload)
+
+    result = _l1_get(owner_id, chat_id)
+
+    assert result == payload, (
+        "_l1_get must return the cached dict for a fresh L1 entry"
+    )
+
+
+@pytest.mark.asyncio
+async def test_db_get_returns_none_for_expired_row(session_factory):
+    """_db_get must return None when the DB row's analyzed_at is older than _CACHE_TTL."""
+    import datetime as dt
+
+    owner_id, chat_id = 5003, 6003
+    stale_ts = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=_CACHE_TTL + 60)
+
+    async with session_factory() as sess:
+        row = AiAnalysisCache(
+            owner_id=owner_id,
+            chat_id=chat_id,
+            result_json=json.dumps({"score": 7}),
+            analyzed_at=stale_ts,
+        )
+        sess.add(row)
+        await sess.commit()
+
+    async with session_factory() as sess:
+        result = await _db_get(sess, owner_id, chat_id)
+
+    assert result is None, (
+        "_db_get must return None for a DB row whose analyzed_at is older than _CACHE_TTL"
+    )
+
+
+@pytest.mark.asyncio
+async def test_db_get_returns_value_for_fresh_row(session_factory):
+    """_db_get must return the cached dict when the DB row is within _CACHE_TTL."""
+    import datetime as dt
+
+    owner_id, chat_id = 5004, 6004
+    fresh_ts = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=_CACHE_TTL // 2)
+    payload = {"score": 6}
+
+    async with session_factory() as sess:
+        row = AiAnalysisCache(
+            owner_id=owner_id,
+            chat_id=chat_id,
+            result_json=json.dumps(payload),
+            analyzed_at=fresh_ts,
+        )
+        sess.add(row)
+        await sess.commit()
+
+    async with session_factory() as sess:
+        result = await _db_get(sess, owner_id, chat_id)
+
+    assert result == payload, (
+        "_db_get must return the cached dict for a row whose analyzed_at is within _CACHE_TTL"
+    )

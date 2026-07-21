@@ -3600,7 +3600,7 @@ async def admin_wipe_media_cache(
     result = await session.execute(sa_delete(MediaCache))
     deleted = result.rowcount or 0
     await session.commit()
-    await vacuum_tables(["media_cache"])
+    await vacuum_tables(["media_cache"], full=True)
     logger.info("Admin @%s wiped ALL media_cache: %d rows deleted", admin_user.get("username"), deleted)
     return {"ok": True, "deleted_cache": deleted}
 

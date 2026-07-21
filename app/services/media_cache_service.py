@@ -223,17 +223,23 @@ async def get_table_sizes(session: AsyncSession) -> dict:
         return {"tables": [], "db_size": "—", "error": str(exc)}
 
 
-async def vacuum_tables(table_names: list[str]) -> None:
-    """Run VACUUM ANALYZE on the given tables (must be outside a transaction)."""
+async def vacuum_tables(table_names: list[str], full: bool = False) -> None:
+    """Run VACUUM [FULL] ANALYZE on the given tables (must be outside a transaction).
+
+    ``full=True`` uses VACUUM FULL which rewrites the table and returns disk
+    space to the OS.  It takes an exclusive lock — use only when the table can
+    afford a brief write pause (e.g. just after a wipe).
+    """
     from app.database.session import get_engine  # noqa: PLC0415
     from sqlalchemy import text  # noqa: PLC0415
     engine = get_engine()
     # VACUUM cannot run inside a transaction → use AUTOCOMMIT isolation level
+    variant = "VACUUM FULL ANALYZE" if full else "VACUUM ANALYZE"
     async with engine.execution_options(isolation_level="AUTOCOMMIT").connect() as conn:
         for tbl in table_names:
             # Table name is an internal constant — safe to interpolate
-            await conn.execute(text(f"VACUUM ANALYZE {tbl}"))
-            logger.info("VACUUM ANALYZE %s complete", tbl)
+            await conn.execute(text(f"{variant} {tbl}"))
+            logger.info("%s %s complete", variant, tbl)
 
 
 async def purge_old_media_cache(

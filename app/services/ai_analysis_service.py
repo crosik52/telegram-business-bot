@@ -30,6 +30,8 @@ logger = logging.getLogger(__name__)
 _CACHE: dict[tuple[int, int], tuple[float, dict]] = {}
 _CACHE_TTL = 86400  # 24 hours
 
+# ── In-process L1 cache (avoids DB round-trips within a single process run) ──
+_MEM_CACHE: dict[tuple[int, int], tuple[float, dict]] = {}
 
 def _l1_get(owner_id: int, chat_id: int) -> dict | None:
     entry = _CACHE.get((owner_id, chat_id))

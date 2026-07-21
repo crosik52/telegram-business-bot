@@ -7,6 +7,7 @@ a single ASGI app. Runs entirely in webhook mode — polling is never used.
 from __future__ import annotations
 
 import asyncio
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI

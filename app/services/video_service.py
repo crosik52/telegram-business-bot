@@ -280,9 +280,11 @@ def _apply_youtube_opts(ydl_opts: dict, out_dir: str) -> None:
     raw = os.environ.get("YOUTUBE_COOKIES", "").strip()
     if not raw:
         # Without cookies use unauthenticated TV/mweb clients to bypass bot-check.
+        # "web" client triggers "Sign in to confirm you're not a bot" on datacenter IPs
+        # without valid cookies — exclude it here.
         logger.info("YouTube: no YOUTUBE_COOKIES set, using tv/mweb player_client bypass")
         ydl_opts["extractor_args"] = {
-            "youtube": {"player_client": ["tv", "mweb", "web"]}
+            "youtube": {"player_client": ["tv", "mweb"]}
         }
         return
 
@@ -457,6 +459,11 @@ def _download_sync(
         if "cookiefile" in opts_video and is_auth_error:
             logger.warning("Video: auth error with cookies (%s), retrying without auth", exc)
             opts_no_cookie = {k: v for k, v in opts_video.items() if k != "cookiefile"}
+            # Switch from "web" (requires cookies) to tv/mweb (no auth needed)
+            if is_youtube:
+                opts_no_cookie["extractor_args"] = {
+                    "youtube": {"player_client": ["tv", "mweb"]}
+                }
             try:
                 _run(opts_no_cookie)
                 video_download_ok = True
@@ -518,7 +525,9 @@ def _download_sync(
         # merge_output_format="mp4" (in base opts) ensures mp4 output.
         opts_photo["js_runtimes"] = {"node": {}}
         opts_photo["extractor_args"] = {
-            "youtube": {"player_client": ["tv", "mweb", "web"]}
+            # Exclude "web" — it triggers "Sign in to confirm bot" on datacenter IPs
+            # without valid cookies. tv/mweb don't require authentication.
+            "youtube": {"player_client": ["tv", "mweb"]}
         }
         # Re-use cookie file if the video attempt already wrote it.
         _yt_cookies = os.path.join(out_dir, "_yt_cookies.txt")

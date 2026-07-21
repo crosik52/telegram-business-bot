@@ -3393,6 +3393,8 @@ async def ai_relationship_analysis(
             raise HTTPException(status_code=503, detail="ai_not_configured") from exc
         if detail == "gemini_quota":
             raise HTTPException(status_code=503, detail="gemini_quota") from exc
+        if detail == "gemini_rate_limit":
+            raise HTTPException(status_code=429, detail="gemini_rate_limit") from exc
         if detail == "gemini_timeout":
             raise HTTPException(status_code=504, detail="gemini_timeout") from exc
         # Pass through real error message for debugging

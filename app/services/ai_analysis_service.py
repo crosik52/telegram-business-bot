@@ -2,7 +2,7 @@
 
 Fetches the last N messages for a chat, computes raw stats locally,
 then asks Gemini to produce a structured 10-section relationship report.
-Results are cached in-memory per (owner_id, chat_id) for 2 hours.
+Results are cached in-memory per (owner_id, chat_id) for 24 hours.
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 # ── In-memory result cache ────────────────────────────────────────────────────
 _CACHE: dict[tuple[int, int], tuple[float, dict]] = {}
-_CACHE_TTL = 86400  # 24 hours — free Gemini tier has tight daily token quota
+_CACHE_TTL = 86400  # 24 hours
 
 
 def _cached(owner_id: int, chat_id: int) -> dict | None:
@@ -35,6 +35,34 @@ def _cached(owner_id: int, chat_id: int) -> dict | None:
 
 def _store(owner_id: int, chat_id: int, result: dict) -> None:
     _CACHE[(owner_id, chat_id)] = (time.time(), result)
+
+
+# ── Per-user daily rate-limit (cost control on paid Gemini tier) ──────────────
+# Tracks {owner_id: (utc_date_str, count)} — resets automatically each UTC day.
+_DAILY_COUNTS: dict[int, tuple[str, int]] = {}
+DAILY_ANALYSIS_LIMIT = int(os.environ.get("AI_ANALYSIS_DAILY_LIMIT", "10"))
+
+
+def _get_utc_date() -> str:
+    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")
+
+
+def _check_rate_limit(owner_id: int) -> bool:
+    """Return True if the user is within their daily limit, False if exceeded."""
+    today = _get_utc_date()
+    entry = _DAILY_COUNTS.get(owner_id)
+    if entry is None or entry[0] != today:
+        return True  # new day or first request
+    return entry[1] < DAILY_ANALYSIS_LIMIT
+
+
+def _increment_daily_count(owner_id: int) -> None:
+    today = _get_utc_date()
+    entry = _DAILY_COUNTS.get(owner_id)
+    if entry is None or entry[0] != today:
+        _DAILY_COUNTS[owner_id] = (today, 1)
+    else:
+        _DAILY_COUNTS[owner_id] = (today, entry[1] + 1)
 
 
 # ── Message fetching ──────────────────────────────────────────────────────────
@@ -348,6 +376,16 @@ async def analyze(
     if cached:
         return cached
 
+    # Per-user daily rate-limit — cost control on paid Gemini tier.
+    # Cached results bypass this check (they don't hit the API).
+    if not _check_rate_limit(owner_id):
+        logger.warning(
+            "Daily AI analysis limit (%d) reached for user %s",
+            DAILY_ANALYSIS_LIMIT,
+            owner_id,
+        )
+        raise ValueError("gemini_rate_limit")
+
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise ValueError("GEMINI_API_KEY not set")
@@ -393,8 +431,12 @@ async def analyze(
         user_prompt
         + "\n\nОтвет верни СТРОГО в формате JSON без пояснений и markdown-обёрток."
     )
+    # Consume one daily slot before hitting the API (prevents concurrent
+    # requests from all slipping past the check simultaneously).
+    _increment_daily_count(owner_id)
+
     # Try primary model first; if quota exhausted fall back to a model with a
-    # separate free-tier quota pool (gemini-1.5-flash).
+    # separate paid-tier quota pool (gemini-1.5-flash).
     _MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-lite", "gemini-1.5-flash"]
     response = None
     last_exc: Exception | None = None

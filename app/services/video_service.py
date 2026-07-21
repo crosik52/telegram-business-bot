@@ -230,7 +230,21 @@ def _apply_tiktok_opts(ydl_opts: dict, url: str, out_dir: str) -> None:
 
 
 def _apply_instagram_opts(ydl_opts: dict, url: str, out_dir: str) -> None:
-    """Inject Instagram cookies from INSTAGRAM_COOKIES env var (same formats as TikTok)."""
+    """Inject Instagram cookies and force H.264 video codec.
+
+    Instagram sometimes serves HEVC (H.265) which Telegram cannot play —
+    video freezes on first frame while audio continues. We prefer avc1 (H.264)
+    explicitly; fall back to any format only if H.264 is unavailable.
+    """
+    # Override format to prefer H.264 (avc1) — Telegram-compatible codec.
+    ydl_opts["format"] = (
+        "bestvideo[vcodec^=avc1][height<=720]+bestaudio"
+        "/best[vcodec^=avc1][height<=720]"
+        "/bestvideo[height<=720]+bestaudio"
+        "/best[height<=720]"
+        "/bestvideo+bestaudio/best"
+    )
+
     raw = os.environ.get("INSTAGRAM_COOKIES", "").strip()
     if not raw:
         logger.debug("Instagram: INSTAGRAM_COOKIES not set — carousels may fail without auth")

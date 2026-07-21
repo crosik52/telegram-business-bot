@@ -3,16 +3,16 @@
 Stores Gemini analysis results per (owner_id, chat_id) so results survive
 deploys and avoid re-calling the API within the 24-hour TTL window.
 
-Revision ID: r2s3t4u5v6w7
-Revises: q1r2s3t4u5v6
+Revision ID: s3t4u5v6w7x8
+Revises: r2s3t4u5v6w7
 Create Date: 2026-07-21
 """
 
 from alembic import op
 import sqlalchemy as sa
 
-revision = "r2s3t4u5v6w7"
-down_revision = "q1r2s3t4u5v6"
+revision = "s3t4u5v6w7x8"
+down_revision = "r2s3t4u5v6w7"
 branch_labels = None
 depends_on = None
 

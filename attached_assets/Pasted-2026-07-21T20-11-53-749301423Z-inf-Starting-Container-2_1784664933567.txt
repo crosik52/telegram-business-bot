@@ -1,0 +1,239 @@
+2026-07-21T20:11:53.749301423Z [inf]  Starting Container
+2026-07-21T20:11:54.439126469Z [err]  INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+2026-07-21T20:11:54.439129175Z [err]  INFO  [alembic.runtime.migration] Will assume transactional DDL.
+2026-07-21T20:11:57.666147083Z [err]  INFO:     Started server process [5]
+2026-07-21T20:11:57.666150574Z [err]  INFO:     Waiting for application startup.
+2026-07-21T20:11:57.666154748Z [inf]  2026-07-21T20:11:57+0000 | INFO     | app.main | Starting Telegram Business Bot (environment=production)
+2026-07-21T20:11:57.666157861Z [inf]  2026-07-21T20:11:57+0000 | INFO     | app.main | Database dialect: postgresql (persistent)
+2026-07-21T20:11:58.455183850Z [inf]  2026-07-21T20:11:58+0000 | INFO     | app.main | Telegram webhook set to https://telegram-business-bot-production.up.railway.app/webhook
+2026-07-21T20:11:58.504362242Z [inf]  2026-07-21T20:11:58+0000 | INFO     | app.main | Telegram chat menu button set to open mini app
+2026-07-21T20:11:58.504365544Z [inf]  2026-07-21T20:11:58+0000 | INFO     | app.main | Telethon not configured (TELEGRAM_API_ID / TELEGRAM_API_HASH / TELETHON_SESSION_STR missing) — view-once media will fall back to Bot API only.
+2026-07-21T20:11:58.504370422Z [err]  INFO:     Application startup complete.
+2026-07-21T20:11:58.504373863Z [err]  INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+2026-07-21T20:12:02.108322905Z [inf]  2026-07-21T20:12:02+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910197
+2026-07-21T20:12:02.443661448Z [inf]  2026-07-21T20:12:02+0000 | INFO     | aiogram.event | Update id=745910197 is handled. Duration 61 ms by bot id=1162707887
+2026-07-21T20:12:02.443671050Z [inf]  2026-07-21T20:12:02+0000 | INFO     | http | POST /webhook -> 200 (63.4ms)
+2026-07-21T20:12:02.443714950Z [inf]  2026-07-21T20:12:02+0000 | INFO     | app.services.message_service | Stored new business message chat_id=2040216796 message_id=686117 media=video
+2026-07-21T20:12:05.446981019Z [inf]  2026-07-21T20:12:05+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910198
+2026-07-21T20:12:05.446984401Z [inf]  2026-07-21T20:12:05+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218651 media=text
+2026-07-21T20:12:05.446987777Z [inf]  2026-07-21T20:12:05+0000 | INFO     | aiogram.event | Update id=745910198 is handled. Duration 37 ms by bot id=1162707887
+2026-07-21T20:12:05.446991504Z [inf]  2026-07-21T20:12:05+0000 | INFO     | http | POST /webhook -> 200 (37.7ms)
+2026-07-21T20:12:08.000694297Z [inf]  2026-07-21T20:12:07+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910199
+2026-07-21T20:12:08.027306040Z [inf]  2026-07-21T20:12:08+0000 | INFO     | app.services.message_service | Stored new business message chat_id=2040216796 message_id=686118 media=text
+2026-07-21T20:12:08.034543569Z [inf]  2026-07-21T20:12:08+0000 | INFO     | aiogram.event | Update id=745910199 is handled. Duration 32 ms by bot id=1162707887
+2026-07-21T20:12:08.034547003Z [inf]  2026-07-21T20:12:08+0000 | INFO     | http | POST /webhook -> 200 (32.9ms)
+2026-07-21T20:12:11.894329588Z [inf]  2026-07-21T20:12:11+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910200
+2026-07-21T20:12:11.923621929Z [inf]  2026-07-21T20:12:11+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218652 media=text
+2026-07-21T20:12:11.930669934Z [inf]  2026-07-21T20:12:11+0000 | INFO     | aiogram.event | Update id=745910200 is handled. Duration 31 ms by bot id=1162707887
+2026-07-21T20:12:11.930676798Z [inf]  2026-07-21T20:12:11+0000 | INFO     | http | POST /webhook -> 200 (33.3ms)
+2026-07-21T20:12:15.702396694Z [inf]  2026-07-21T20:12:15+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910201
+2026-07-21T20:12:15.728251128Z [inf]  2026-07-21T20:12:15+0000 | INFO     | app.services.message_service | Stored new business message chat_id=2040216796 message_id=686119 media=text
+2026-07-21T20:12:15.729845708Z [inf]  2026-07-21T20:12:15+0000 | INFO     | aiogram.event | Update id=745910201 is handled. Duration 28 ms by bot id=1162707887
+2026-07-21T20:12:15.729850597Z [inf]  2026-07-21T20:12:15+0000 | INFO     | http | POST /webhook -> 200 (30.1ms)
+2026-07-21T20:12:16.808423635Z [inf]  2026-07-21T20:12:16+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910202
+2026-07-21T20:12:16.832439661Z [inf]  2026-07-21T20:12:16+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218653 media=text
+2026-07-21T20:12:16.835920597Z [inf]  2026-07-21T20:12:16+0000 | INFO     | aiogram.event | Update id=745910202 is handled. Duration 28 ms by bot id=1162707887
+2026-07-21T20:12:16.835923725Z [inf]  2026-07-21T20:12:16+0000 | INFO     | http | POST /webhook -> 200 (28.3ms)
+2026-07-21T20:12:17.982820832Z [inf]  2026-07-21T20:12:17+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910203
+2026-07-21T20:12:18.003069892Z [inf]  2026-07-21T20:12:18+0000 | INFO     | app.services.message_service | Stored new business message chat_id=2040216796 message_id=686120 media=text
+2026-07-21T20:12:18.011264498Z [inf]  2026-07-21T20:12:18+0000 | INFO     | aiogram.event | Update id=745910203 is handled. Duration 26 ms by bot id=1162707887
+2026-07-21T20:12:18.011268266Z [inf]  2026-07-21T20:12:18+0000 | INFO     | http | POST /webhook -> 200 (27.5ms)
+2026-07-21T20:12:20.490436007Z [inf]  2026-07-21T20:12:20+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910204
+2026-07-21T20:12:20.490441897Z [inf]  2026-07-21T20:12:20+0000 | INFO     | app.services.message_service | Stored new business message chat_id=2040216796 message_id=686121 media=text
+2026-07-21T20:12:20.490446442Z [inf]  2026-07-21T20:12:20+0000 | INFO     | aiogram.event | Update id=745910204 is handled. Duration 27 ms by bot id=1162707887
+2026-07-21T20:12:20.490450844Z [inf]  2026-07-21T20:12:20+0000 | INFO     | http | POST /webhook -> 200 (27.5ms)
+2026-07-21T20:12:21.624419135Z [inf]  2026-07-21T20:12:21+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910205
+2026-07-21T20:12:21.644179059Z [inf]  2026-07-21T20:12:21+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218654 media=text
+2026-07-21T20:12:21.649993696Z [inf]  2026-07-21T20:12:21+0000 | INFO     | aiogram.event | Update id=745910205 is handled. Duration 25 ms by bot id=1162707887
+2026-07-21T20:12:21.649996515Z [inf]  2026-07-21T20:12:21+0000 | INFO     | http | POST /webhook -> 200 (27.3ms)
+2026-07-21T20:12:23.482473108Z [inf]  2026-07-21T20:12:23+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910206
+2026-07-21T20:12:23.482477033Z [inf]  2026-07-21T20:12:23+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218655 media=text
+2026-07-21T20:12:23.482481171Z [inf]  2026-07-21T20:12:23+0000 | INFO     | aiogram.event | Update id=745910206 is handled. Duration 24 ms by bot id=1162707887
+2026-07-21T20:12:23.482484456Z [inf]  2026-07-21T20:12:23+0000 | INFO     | http | POST /webhook -> 200 (25.3ms)
+2026-07-21T20:12:23.482488333Z [inf]  2026-07-21T20:12:23+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910207
+2026-07-21T20:12:23.482491524Z [inf]  2026-07-21T20:12:23+0000 | INFO     | app.services.message_service | Stored new business message chat_id=2040216796 message_id=686122 media=text
+2026-07-21T20:12:23.482494427Z [inf]  2026-07-21T20:12:23+0000 | INFO     | aiogram.event | Update id=745910207 is handled. Duration 26 ms by bot id=1162707887
+2026-07-21T20:12:23.482507298Z [inf]  2026-07-21T20:12:23+0000 | INFO     | http | POST /webhook -> 200 (27.7ms)
+2026-07-21T20:12:24.696880972Z [inf]  2026-07-21T20:12:24+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910208
+2026-07-21T20:12:24.720935326Z [inf]  2026-07-21T20:12:24+0000 | INFO     | app.services.message_service | Stored new business message chat_id=2040216796 message_id=686123 media=text
+2026-07-21T20:12:24.727825958Z [inf]  2026-07-21T20:12:24+0000 | INFO     | aiogram.event | Update id=745910208 is handled. Duration 27 ms by bot id=1162707887
+2026-07-21T20:12:24.727829505Z [inf]  2026-07-21T20:12:24+0000 | INFO     | http | POST /webhook -> 200 (27.9ms)
+2026-07-21T20:12:26.049937690Z [inf]  2026-07-21T20:12:26+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910209
+2026-07-21T20:12:26.083563173Z [inf]  2026-07-21T20:12:26+0000 | INFO     | app.services.message_service | Stored new business message chat_id=2040216796 message_id=686124 media=text
+2026-07-21T20:12:26.086156579Z [inf]  2026-07-21T20:12:26+0000 | INFO     | aiogram.event | Update id=745910209 is handled. Duration 35 ms by bot id=1162707887
+2026-07-21T20:12:26.086163873Z [inf]  2026-07-21T20:12:26+0000 | INFO     | http | POST /webhook -> 200 (35.6ms)
+2026-07-21T20:12:28.499392365Z [inf]  2026-07-21T20:12:28+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910210
+2026-07-21T20:12:28.499458350Z [inf]  2026-07-21T20:12:28+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218656 media=text
+2026-07-21T20:12:28.499467139Z [inf]  2026-07-21T20:12:28+0000 | INFO     | aiogram.event | Update id=745910210 is handled. Duration 28 ms by bot id=1162707887
+2026-07-21T20:12:28.499472648Z [inf]  2026-07-21T20:12:28+0000 | INFO     | http | POST /webhook -> 200 (28.6ms)
+2026-07-21T20:12:30.500963459Z [inf]  2026-07-21T20:12:30+0000 | INFO     | http | POST /webhook -> 200 (28.1ms)
+2026-07-21T20:12:30.500969364Z [inf]  2026-07-21T20:12:30+0000 | INFO     | app.business.handlers | dot-save: message 686124 is non-media (type=MediaType.TEXT) — skipping
+2026-07-21T20:12:30.500978100Z [inf]  2026-07-21T20:12:30+0000 | INFO     | app.services.message_service | Stored new business message chat_id=2040216796 message_id=686125 media=text
+2026-07-21T20:12:30.500983510Z [inf]  2026-07-21T20:12:30+0000 | INFO     | app.business.handlers | dot-save: triggered owner=739637012 chat=2040216796 reply_to=686124
+2026-07-21T20:12:30.500989091Z [inf]  2026-07-21T20:12:30+0000 | INFO     | aiogram.event | Update id=745910211 is handled. Duration 27 ms by bot id=1162707887
+2026-07-21T20:12:30.500993089Z [inf]  2026-07-21T20:12:30+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910211
+2026-07-21T20:12:33.685333339Z [inf]  2026-07-21T20:12:33+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910212
+2026-07-21T20:12:33.710273918Z [inf]  2026-07-21T20:12:33+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218657 media=text
+2026-07-21T20:12:33.717133130Z [inf]  2026-07-21T20:12:33+0000 | INFO     | aiogram.event | Update id=745910212 is handled. Duration 31 ms by bot id=1162707887
+2026-07-21T20:12:33.717137324Z [inf]  2026-07-21T20:12:33+0000 | INFO     | http | POST /webhook -> 200 (33.1ms)
+2026-07-21T20:12:34.563733758Z [inf]  2026-07-21T20:12:34+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910213
+2026-07-21T20:12:34.563737865Z [inf]  2026-07-21T20:12:34+0000 | INFO     | app.services.message_service | Stored new business message chat_id=2040216796 message_id=686126 media=text
+2026-07-21T20:12:34.563741078Z [inf]  2026-07-21T20:12:34+0000 | INFO     | aiogram.event | Update id=745910213 is handled. Duration 29 ms by bot id=1162707887
+2026-07-21T20:12:34.563743808Z [inf]  2026-07-21T20:12:34+0000 | INFO     | http | POST /webhook -> 200 (30.8ms)
+2026-07-21T20:12:35.524165379Z [inf]  2026-07-21T20:12:35+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910214
+2026-07-21T20:12:35.524170906Z [inf]  2026-07-21T20:12:35+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218658 media=text
+2026-07-21T20:12:35.524175904Z [inf]  2026-07-21T20:12:35+0000 | INFO     | aiogram.event | Update id=745910214 is handled. Duration 26 ms by bot id=1162707887
+2026-07-21T20:12:35.524180560Z [inf]  2026-07-21T20:12:35+0000 | INFO     | http | POST /webhook -> 200 (27.7ms)
+2026-07-21T20:12:40.175422679Z [inf]  2026-07-21T20:12:40+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910215
+2026-07-21T20:12:40.198153567Z [inf]  2026-07-21T20:12:40+0000 | INFO     | app.services.message_service | Stored new business message chat_id=2040216796 message_id=686127 media=text
+2026-07-21T20:12:40.510887682Z [inf]  2026-07-21T20:12:40+0000 | INFO     | aiogram.event | Update id=745910215 is handled. Duration 27 ms by bot id=1162707887
+2026-07-21T20:12:40.510907196Z [inf]  2026-07-21T20:12:40+0000 | INFO     | http | POST /webhook -> 200 (28.1ms)
+2026-07-21T20:12:41.538825473Z [inf]  2026-07-21T20:12:41+0000 | INFO     | http | GET /app/admin -> 200 (18.7ms)
+2026-07-21T20:12:41.724379828Z [inf]  2026-07-21T20:12:41+0000 | INFO     | http | GET /favicon.ico -> 404 (0.5ms)
+2026-07-21T20:12:41.790560742Z [inf]  2026-07-21T20:12:41+0000 | INFO     | http | POST /app/api/admin/overview -> 200 (118.0ms)
+2026-07-21T20:12:45.970512786Z [inf]  2026-07-21T20:12:45+0000 | INFO     | http | POST /app/api/admin/db/stats -> 200 (33.3ms)
+2026-07-21T20:13:05.961480359Z [inf]  2026-07-21T20:12:58+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910216
+2026-07-21T20:13:05.961484944Z [inf]  2026-07-21T20:12:58+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218659 media=text
+2026-07-21T20:13:05.961489969Z [inf]  2026-07-21T20:12:58+0000 | INFO     | aiogram.event | Update id=745910216 is handled. Duration 26 ms by bot id=1162707887
+2026-07-21T20:13:05.961494949Z [inf]  2026-07-21T20:12:58+0000 | INFO     | http | POST /webhook -> 200 (27.2ms)
+2026-07-21T20:13:05.961500206Z [inf]  2026-07-21T20:12:58+0000 | INFO     | app.services.media_cache_service | media_cache: purged 1 rows older than 2 days
+2026-07-21T20:13:05.961504726Z [inf]  2026-07-21T20:12:58+0000 | ERROR    | app.main | DB cleanup failed — will retry next cycle
+2026-07-21T20:13:05.961508695Z [inf]  Traceback (most recent call last):
+2026-07-21T20:13:05.961512805Z [inf]    File "/app/app/main.py", line 240, in _cleanup_loop
+2026-07-21T20:13:05.961516621Z [inf]      keep_days = int(os.environ.get("MESSAGE_RETENTION_DAYS", "30"))
+2026-07-21T20:13:05.961520377Z [inf]                      ^^
+2026-07-21T20:13:05.961524392Z [inf]  NameError: name 'os' is not defined. Did you forget to import 'os'
+2026-07-21T20:13:08.118348590Z [inf]  2026-07-21T20:13:08+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910217
+2026-07-21T20:13:08.254739551Z [inf]  2026-07-21T20:13:08+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218660 media=text
+2026-07-21T20:13:08.583891393Z [inf]  2026-07-21T20:13:08+0000 | INFO     | aiogram.event | Update id=745910217 is handled. Duration 327 ms by bot id=1162707887
+2026-07-21T20:13:08.583899565Z [inf]  2026-07-21T20:13:08+0000 | INFO     | http | POST /webhook -> 200 (328.3ms)
+2026-07-21T20:13:12.878901300Z [inf]  2026-07-21T20:13:12+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910218
+2026-07-21T20:13:13.603423434Z [inf]  2026-07-21T20:13:13+0000 | INFO     | app.business.handlers | dot-save: triggered owner=739637012 chat=2040216796 reply_to=686127
+2026-07-21T20:13:13.603431749Z [inf]  2026-07-21T20:13:13+0000 | INFO     | app.business.handlers | dot-save: message 686127 is non-media (type=MediaType.TEXT) — skipping
+2026-07-21T20:13:13.603436610Z [inf]  2026-07-21T20:13:13+0000 | INFO     | aiogram.event | Update id=745910218 is handled. Duration 689 ms by bot id=1162707887
+2026-07-21T20:13:13.603441049Z [inf]  2026-07-21T20:13:13+0000 | INFO     | http | POST /webhook -> 200 (690.7ms)
+2026-07-21T20:13:13.603449955Z [inf]  2026-07-21T20:13:13+0000 | INFO     | app.services.message_service | Stored new business message chat_id=2040216796 message_id=686128 media=text
+2026-07-21T20:13:13.684312895Z [inf]  2026-07-21T20:13:13+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910219
+2026-07-21T20:13:14.179121543Z [inf]  2026-07-21T20:13:14+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218661 media=text
+2026-07-21T20:13:14.607526244Z [inf]  2026-07-21T20:13:14+0000 | INFO     | aiogram.event | Update id=745910219 is handled. Duration 669 ms by bot id=1162707887
+2026-07-21T20:13:14.607529486Z [inf]  2026-07-21T20:13:14+0000 | INFO     | http | POST /webhook -> 200 (670.2ms)
+2026-07-21T20:13:18.607669695Z [inf]  2026-07-21T20:13:18+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910220
+2026-07-21T20:13:18.607673016Z [inf]  2026-07-21T20:13:18+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218662 media=text
+2026-07-21T20:13:18.667588614Z [inf]  2026-07-21T20:13:18+0000 | INFO     | aiogram.event | Update id=745910220 is handled. Duration 262 ms by bot id=1162707887
+2026-07-21T20:13:18.667593178Z [inf]  2026-07-21T20:13:18+0000 | INFO     | http | POST /webhook -> 200 (262.5ms)
+2026-07-21T20:13:20.085412522Z [inf]  2026-07-21T20:13:20+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910221
+2026-07-21T20:13:20.138752976Z [inf]  2026-07-21T20:13:20+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218663 media=text
+2026-07-21T20:13:20.246870118Z [inf]  2026-07-21T20:13:20+0000 | INFO     | aiogram.event | Update id=745910221 is handled. Duration 160 ms by bot id=1162707887
+2026-07-21T20:13:20.246873358Z [inf]  2026-07-21T20:13:20+0000 | INFO     | http | POST /webhook -> 200 (161.0ms)
+2026-07-21T20:13:20.667378170Z [inf]  2026-07-21T20:13:20+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910222
+2026-07-21T20:13:20.694215929Z [inf]  2026-07-21T20:13:20+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218664 media=text
+2026-07-21T20:13:20.732849953Z [inf]  2026-07-21T20:13:20+0000 | INFO     | aiogram.event | Update id=745910222 is handled. Duration 65 ms by bot id=1162707887
+2026-07-21T20:13:20.732854923Z [inf]  2026-07-21T20:13:20+0000 | INFO     | http | POST /webhook -> 200 (67.2ms)
+2026-07-21T20:13:24.615462812Z [inf]  2026-07-21T20:13:24+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910223
+2026-07-21T20:13:24.615466601Z [inf]  2026-07-21T20:13:24+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218665 media=text
+2026-07-21T20:13:24.981595831Z [inf]  2026-07-21T20:13:24+0000 | INFO     | aiogram.event | Update id=745910223 is handled. Duration 620 ms by bot id=1162707887
+2026-07-21T20:13:24.981605207Z [inf]  2026-07-21T20:13:24+0000 | INFO     | http | POST /webhook -> 200 (622.1ms)
+2026-07-21T20:13:33.761369923Z [inf]  2026-07-21T20:13:33+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910224
+2026-07-21T20:13:33.786087529Z [inf]  2026-07-21T20:13:33+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218666 media=text
+2026-07-21T20:13:33.845387766Z [inf]  2026-07-21T20:13:33+0000 | INFO     | aiogram.event | Update id=745910224 is handled. Duration 82 ms by bot id=1162707887
+2026-07-21T20:13:33.845390348Z [inf]  2026-07-21T20:13:33+0000 | INFO     | http | POST /webhook -> 200 (83.4ms)
+2026-07-21T20:13:36.969450012Z [inf]  2026-07-21T20:13:36+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910225
+2026-07-21T20:13:36.991680998Z [inf]  2026-07-21T20:13:36+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218667 media=sticker
+2026-07-21T20:13:37.041209703Z [inf]  2026-07-21T20:13:37+0000 | INFO     | aiogram.event | Update id=745910225 is handled. Duration 70 ms by bot id=1162707887
+2026-07-21T20:13:37.041212954Z [inf]  2026-07-21T20:13:37+0000 | INFO     | http | POST /webhook -> 200 (71.4ms)
+2026-07-21T20:13:41.949077116Z [inf]  2026-07-21T20:13:41+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910226
+2026-07-21T20:13:41.971603216Z [inf]  2026-07-21T20:13:41+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218668 media=text
+2026-07-21T20:13:49.088304387Z [inf]  2026-07-21T20:13:49+0000 | INFO     | aiogram.event | Update id=745910226 is handled. Duration 7141 ms by bot id=1162707887
+2026-07-21T20:13:49.088307291Z [inf]  2026-07-21T20:13:49+0000 | INFO     | http | POST /webhook -> 200 (7142.1ms)
+2026-07-21T20:13:49.236115084Z [inf]  2026-07-21T20:13:49+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910227
+2026-07-21T20:13:49.260379816Z [inf]  2026-07-21T20:13:49+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218669 media=text
+2026-07-21T20:13:49.260382655Z [inf]  2026-07-21T20:13:49+0000 | INFO     | app.business.handlers | dot-save: triggered owner=1549898350 chat=888323651 reply_to=218666
+2026-07-21T20:13:49.279041374Z [inf]  2026-07-21T20:13:49+0000 | INFO     | app.business.handlers | dot-save: message 218666 is non-media (type=MediaType.TEXT) — skipping
+2026-07-21T20:13:49.279044211Z [inf]  2026-07-21T20:13:49+0000 | INFO     | aiogram.event | Update id=745910227 is handled. Duration 43 ms by bot id=1162707887
+2026-07-21T20:13:49.279046893Z [inf]  2026-07-21T20:13:49+0000 | INFO     | http | POST /webhook -> 200 (45.0ms)
+2026-07-21T20:13:49.680190286Z [inf]  2026-07-21T20:13:49+0000 | INFO     | aiogram.event | Update id=745910228 is handled. Duration 38 ms by bot id=1162707887
+2026-07-21T20:13:49.680196274Z [inf]  2026-07-21T20:13:49+0000 | INFO     | http | POST /webhook -> 200 (38.6ms)
+2026-07-21T20:13:49.680209809Z [inf]  2026-07-21T20:13:49+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910228
+2026-07-21T20:13:49.680217144Z [inf]  2026-07-21T20:13:49+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218670 media=text
+2026-07-21T20:13:50.923241960Z [inf]  2026-07-21T20:13:50+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910229
+2026-07-21T20:13:50.948400599Z [inf]  2026-07-21T20:13:50+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218671 media=text
+2026-07-21T20:13:50.954844013Z [inf]  2026-07-21T20:13:50+0000 | INFO     | aiogram.event | Update id=745910229 is handled. Duration 32 ms by bot id=1162707887
+2026-07-21T20:13:50.954849406Z [inf]  2026-07-21T20:13:50+0000 | INFO     | http | POST /webhook -> 200 (32.6ms)
+2026-07-21T20:13:55.948024573Z [inf]  2026-07-21T20:13:55+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910230
+2026-07-21T20:13:55.972848491Z [inf]  2026-07-21T20:13:55+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218672 media=text
+2026-07-21T20:14:15.973124636Z [inf]  2026-07-21T20:14:07+0000 | INFO     | aiogram.event | Update id=745910231 is handled. Duration 45 ms by bot id=1162707887
+2026-07-21T20:14:15.973132770Z [inf]  2026-07-21T20:14:07+0000 | INFO     | http | POST /webhook -> 200 (46.4ms)
+2026-07-21T20:14:15.973137778Z [inf]  2026-07-21T20:14:07+0000 | INFO     | app.services.media_cache_service | VACUUM ANALYZE media_cache complete
+2026-07-21T20:14:15.973141953Z [inf]  2026-07-21T20:14:07+0000 | INFO     | app.miniapp.routes | Admin @niggathree wiped ALL media_cache: 1491 rows deleted
+2026-07-21T20:14:15.973146218Z [inf]  2026-07-21T20:14:07+0000 | INFO     | http | POST /app/api/admin/db/wipe_media_cache -> 200 (66458.9ms)
+2026-07-21T20:14:15.973150807Z [inf]  2026-07-21T20:14:07+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910232
+2026-07-21T20:14:15.973170850Z [inf]  2026-07-21T20:14:06+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910234
+2026-07-21T20:14:15.973175009Z [inf]  2026-07-21T20:14:06+0000 | INFO     | app.services.message_service | Stored new business message chat_id=2040216796 message_id=686129 media=text
+2026-07-21T20:14:15.973179272Z [inf]  2026-07-21T20:14:07+0000 | INFO     | aiogram.event | Update id=745910230 is handled. Duration 11264 ms by bot id=1162707887
+2026-07-21T20:14:15.973183222Z [inf]  2026-07-21T20:14:07+0000 | INFO     | http | POST /webhook -> 200 (11265.4ms)
+2026-07-21T20:14:15.973186915Z [inf]  2026-07-21T20:14:07+0000 | INFO     | aiogram.event | Update id=745910234 is handled. Duration 1199 ms by bot id=1162707887
+2026-07-21T20:14:15.973190372Z [inf]  2026-07-21T20:14:07+0000 | INFO     | http | POST /webhook -> 200 (1201.5ms)
+2026-07-21T20:14:15.973193929Z [inf]  2026-07-21T20:14:07+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910231
+2026-07-21T20:14:15.973197677Z [inf]  2026-07-21T20:14:07+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218673 media=text
+2026-07-21T20:14:15.975161222Z [inf]  2026-07-21T20:14:07+0000 | INFO     | http | POST /webhook -> 200 (34.5ms)
+2026-07-21T20:14:15.975168285Z [inf]  2026-07-21T20:14:07+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218674 media=text
+2026-07-21T20:14:15.975170217Z [inf]  2026-07-21T20:14:08+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910236
+2026-07-21T20:14:15.975174366Z [inf]  2026-07-21T20:14:07+0000 | INFO     | aiogram.event | Update id=745910232 is handled. Duration 28 ms by bot id=1162707887
+2026-07-21T20:14:15.975175778Z [inf]  2026-07-21T20:14:08+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218677 media=text
+2026-07-21T20:14:15.975181046Z [inf]  2026-07-21T20:14:07+0000 | INFO     | http | POST /webhook -> 200 (29.0ms)
+2026-07-21T20:14:15.975185297Z [inf]  2026-07-21T20:14:07+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910233
+2026-07-21T20:14:15.975188943Z [inf]  2026-07-21T20:14:07+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218675 media=text
+2026-07-21T20:14:15.975191947Z [inf]  2026-07-21T20:14:07+0000 | INFO     | aiogram.event | Update id=745910233 is handled. Duration 27 ms by bot id=1162707887
+2026-07-21T20:14:15.975195912Z [inf]  2026-07-21T20:14:07+0000 | INFO     | http | POST /webhook -> 200 (28.9ms)
+2026-07-21T20:14:15.975201634Z [inf]  2026-07-21T20:14:07+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910235
+2026-07-21T20:14:15.975205504Z [inf]  2026-07-21T20:14:07+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218676 media=text
+2026-07-21T20:14:15.975209701Z [inf]  2026-07-21T20:14:07+0000 | INFO     | aiogram.event | Update id=745910235 is handled. Duration 32 ms by bot id=1162707887
+2026-07-21T20:14:15.978182478Z [inf]  2026-07-21T20:14:08+0000 | INFO     | aiogram.event | Update id=745910236 is handled. Duration 27 ms by bot id=1162707887
+2026-07-21T20:14:15.978187105Z [inf]  2026-07-21T20:14:08+0000 | INFO     | http | POST /webhook -> 200 (28.2ms)
+2026-07-21T20:14:15.978190352Z [inf]  2026-07-21T20:14:08+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910237
+2026-07-21T20:14:15.978194540Z [inf]  2026-07-21T20:14:08+0000 | INFO     | app.services.message_service | Stored new business message chat_id=2040216796 message_id=686130 media=text
+2026-07-21T20:14:15.978197452Z [inf]  2026-07-21T20:14:08+0000 | INFO     | aiogram.event | Update id=745910237 is handled. Duration 30 ms by bot id=1162707887
+2026-07-21T20:14:15.978200763Z [inf]  2026-07-21T20:14:08+0000 | INFO     | http | POST /webhook -> 200 (32.6ms)
+2026-07-21T20:14:15.978203495Z [inf]  2026-07-21T20:14:09+0000 | INFO     | http | POST /app/api/admin/db/stats -> 200 (38.2ms)
+2026-07-21T20:14:15.978206614Z [inf]  2026-07-21T20:14:13+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910238
+2026-07-21T20:14:15.978209524Z [inf]  2026-07-21T20:14:13+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218678 media=text
+2026-07-21T20:14:15.978212418Z [inf]  2026-07-21T20:14:13+0000 | INFO     | aiogram.event | Update id=745910238 is handled. Duration 28 ms by bot id=1162707887
+2026-07-21T20:14:15.978215321Z [inf]  2026-07-21T20:14:13+0000 | INFO     | http | POST /webhook -> 200 (29.2ms)
+2026-07-21T20:14:16.079884633Z [inf]  2026-07-21T20:14:16+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910239
+2026-07-21T20:14:16.093238165Z [inf]  2026-07-21T20:14:16+0000 | INFO     | app.services.message_service | Stored new business message chat_id=2040216796 message_id=686131 media=text
+2026-07-21T20:14:16.099758160Z [inf]  2026-07-21T20:14:16+0000 | INFO     | aiogram.event | Update id=745910239 is handled. Duration 32 ms by bot id=1162707887
+2026-07-21T20:14:16.099761817Z [inf]  2026-07-21T20:14:16+0000 | INFO     | http | POST /webhook -> 200 (34.4ms)
+2026-07-21T20:14:23.292081693Z [inf]  2026-07-21T20:14:23+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910240
+2026-07-21T20:14:23.315022885Z [inf]  2026-07-21T20:14:23+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218679 media=text
+2026-07-21T20:14:23.316810700Z [inf]  2026-07-21T20:14:23+0000 | INFO     | aiogram.event | Update id=745910240 is handled. Duration 25 ms by bot id=1162707887
+2026-07-21T20:14:23.316816386Z [inf]  2026-07-21T20:14:23+0000 | INFO     | http | POST /webhook -> 200 (26.2ms)
+2026-07-21T20:14:32.753806162Z [inf]  2026-07-21T20:14:32+0000 | INFO     | aiogram.event | Update id=745910241 is handled. Duration 27 ms by bot id=1162707887
+2026-07-21T20:14:32.753813932Z [inf]  2026-07-21T20:14:32+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910241
+2026-07-21T20:14:32.753814881Z [inf]  2026-07-21T20:14:32+0000 | INFO     | http | POST /webhook -> 200 (29.5ms)
+2026-07-21T20:14:32.753822841Z [inf]  2026-07-21T20:14:32+0000 | INFO     | app.services.message_service | Stored new business message chat_id=2040216796 message_id=686132 media=text
+2026-07-21T20:14:33.846151371Z [inf]  2026-07-21T20:14:33+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910242
+2026-07-21T20:14:33.868081511Z [inf]  2026-07-21T20:14:33+0000 | INFO     | app.services.message_service | Stored new business message chat_id=2040216796 message_id=686133 media=text
+2026-07-21T20:14:33.875017163Z [inf]  2026-07-21T20:14:33+0000 | INFO     | aiogram.event | Update id=745910242 is handled. Duration 27 ms by bot id=1162707887
+2026-07-21T20:14:33.875024176Z [inf]  2026-07-21T20:14:33+0000 | INFO     | http | POST /webhook -> 200 (28.5ms)
+2026-07-21T20:14:35.754982991Z [inf]  2026-07-21T20:14:35+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910243
+2026-07-21T20:14:35.754986548Z [inf]  2026-07-21T20:14:35+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218680 media=text
+2026-07-21T20:14:35.754990406Z [inf]  2026-07-21T20:14:35+0000 | INFO     | aiogram.event | Update id=745910243 is handled. Duration 26 ms by bot id=1162707887
+2026-07-21T20:14:35.754994089Z [inf]  2026-07-21T20:14:35+0000 | INFO     | http | POST /webhook -> 200 (27.6ms)
+2026-07-21T20:14:55.448510702Z [inf]  2026-07-21T20:14:45+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910244
+2026-07-21T20:14:55.448515773Z [inf]  2026-07-21T20:14:45+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218681 media=text
+2026-07-21T20:14:55.448519319Z [inf]  2026-07-21T20:14:45+0000 | INFO     | aiogram.event | Update id=745910244 is handled. Duration 26 ms by bot id=1162707887
+2026-07-21T20:14:55.448523077Z [inf]  2026-07-21T20:14:45+0000 | INFO     | http | POST /webhook -> 200 (27.6ms)
+2026-07-21T20:14:56.054221287Z [inf]  2026-07-21T20:14:56+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910245
+2026-07-21T20:14:56.080135982Z [inf]  2026-07-21T20:14:56+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218682 media=text
+2026-07-21T20:14:56.081753390Z [inf]  2026-07-21T20:14:56+0000 | INFO     | aiogram.event | Update id=745910245 is handled. Duration 27 ms by bot id=1162707887
+2026-07-21T20:14:56.081759568Z [inf]  2026-07-21T20:14:56+0000 | INFO     | http | POST /webhook -> 200 (28.8ms)
+2026-07-21T20:15:05.823543964Z [inf]  2026-07-21T20:15:05+0000 | INFO     | aiogram.event | Update id=745910246 is handled. Duration 29 ms by bot id=1162707887
+2026-07-21T20:15:05.823550498Z [inf]  2026-07-21T20:15:05+0000 | INFO     | http | POST /webhook -> 200 (30.0ms)
+2026-07-21T20:15:05.823579063Z [inf]  2026-07-21T20:15:05+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910246
+2026-07-21T20:15:05.823583828Z [inf]  2026-07-21T20:15:05+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218683 media=text
+2026-07-21T20:15:13.851551180Z [inf]  2026-07-21T20:15:13+0000 | INFO     | http | POST /webhook -> 200 (28.8ms)
+2026-07-21T20:15:13.851557809Z [inf]  2026-07-21T20:15:13+0000 | INFO     | app.business.handlers | dot-save: message 218683 is non-media (type=MediaType.TEXT) — skipping
+2026-07-21T20:15:13.851570133Z [inf]  2026-07-21T20:15:13+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745910247
+2026-07-21T20:15:13.851574541Z [inf]  2026-07-21T20:15:13+0000 | INFO     | app.services.message_service | Stored new business message chat_id=888323651 message_id=218684 media=text
+2026-07-21T20:15:13.851585634Z [inf]  2026-07-21T20:15:13+0000 | INFO     | app.business.handlers | dot-save: triggered owner=1549898350 chat=888323651 reply_to=218683
+2026-07-21T20:15:13.851596679Z [inf]  2026-07-21T20:15:13+0000 | INFO     | aiogram.event | Update id=745910247 is handled. Duration 27 ms by bot id=1162707887

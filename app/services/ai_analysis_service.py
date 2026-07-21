@@ -112,6 +112,15 @@ def _increment_daily_count(owner_id: int) -> None:
         _DAILY_COUNTS[owner_id] = (today, entry[1] + 1)
 
 
+def get_remaining(owner_id: int) -> int:
+    """Return how many fresh AI analyses the user can still run today."""
+    today = _get_utc_date()
+    entry = _DAILY_COUNTS.get(owner_id)
+    if entry is None or entry[0] != today:
+        return DAILY_ANALYSIS_LIMIT
+    return max(0, DAILY_ANALYSIS_LIMIT - entry[1])
+
+
 # ── Message fetching ──────────────────────────────────────────────────────────
 
 async def _fetch_messages(

@@ -3355,7 +3355,9 @@ async def ai_relationship_analysis(
 ) -> dict:
     """Run Gemini AI analysis for a specific chat. VIP-only."""
     from app.models.business_connection import BusinessConnection   # noqa: PLC0415
-    from app.services.ai_analysis_service import analyze # noqa: PLC0415
+    from app.services.ai_analysis_service import (  # noqa: PLC0415
+        analyze, get_remaining, DAILY_ANALYSIS_LIMIT,
+    )
 
     settings = get_settings()
     user = verify_init_data(payload.init_data, settings.telegram_bot_token)
@@ -3405,6 +3407,8 @@ async def ai_relationship_analysis(
         logger.exception("AI analysis failed for user=%s chat=%s: %s", owner_id, payload.chat_id, msg)
         raise HTTPException(status_code=500, detail=f"analysis_failed: {msg}") from exc
 
+    result["analyses_remaining"] = get_remaining(owner_id)
+    result["analyses_limit"] = DAILY_ANALYSIS_LIMIT
     return result
 
 

@@ -2106,6 +2106,10 @@
     background: linear-gradient(135deg, #5856d6, #2481cc);
     color: #fff; touch-action: manipulation; cursor: pointer;
   }
+  .ai-remaining-hint {
+    font-size: 11px; color: var(--hint); text-align: center;
+    padding: 0 14px 12px; margin-top: -4px;
+  }
 
   /* ── Pet section ── */
   /* ── Pet system — redesigned ─────────────────────────────── */
@@ -4690,6 +4694,7 @@
                 `<div class="ai-sec-chip">${t}</div>`).join("")}
             </div>
             <button class="ai-teaser-btn" onclick="openAiAnalysisForChat()">🤖 Открыть AI Анализ</button>
+            ${(()=>{const rem=window._aiAnalysesRemaining,lim=window._aiAnalysesLimit??10;if(rem==null)return"";return rem>0?`<div class="ai-remaining-hint">Осталось ${rem}\u202f/\u202f${lim} анализов сегодня</div>`:`<div class="ai-remaining-hint" style="color:#ff3b30">🚫 Лимит на сегодня исчерпан. Попробуй завтра.</div>`;})()}
           </div>` : "";
 
         // ── VIP upgrade block (shown below active Premium card) ──────────────
@@ -7510,6 +7515,23 @@
       toastMessage("🤖 Нажмите «Анализ» рядом с нужным контактом");
     }
 
+    // Update all .ai-remaining-hint elements in the DOM (called after each
+    // successful analysis when we learn the user's remaining daily count).
+    function _updateAiRemainingHint() {
+      const rem = window._aiAnalysesRemaining;
+      const lim = window._aiAnalysesLimit ?? 10;
+      if (rem == null) return;
+      document.querySelectorAll(".ai-remaining-hint").forEach(el => {
+        if (rem > 0) {
+          el.style.color = "";
+          el.textContent = `Осталось\u00a0${rem}\u202f/\u202f${lim} анализов сегодня`;
+        } else {
+          el.style.color = "#ff3b30";
+          el.textContent = "🚫 Лимит на сегодня исчерпан. Попробуй завтра.";
+        }
+      });
+    }
+
     function openAiAnalysisModal(chatId, name) {
       _aiCurrentChatId   = chatId;
       _aiCurrentChatName = name;
@@ -7574,18 +7596,35 @@
             analysis_failed:  "❌ Ошибка анализа. Попробуй позже.",
             gemini_timeout:   "⏱ Анализ занял слишком долго. Попробуй ещё раз.",
             gemini_quota:     "⏳ AI перегружен — слишком много запросов. Попробуй через минуту.",
+            gemini_rate_limit:"🚫 Лимит анализов на сегодня исчерпан. Попробуй завтра.",
           };
           // Strip internal prefix "analysis_failed: gemini_quota" → "gemini_quota"
           const rawDetail = (err.detail || "").replace(/^analysis_failed:\s*/, "");
           const errText = MSGS[rawDetail] || MSGS[err.detail] || "❌ Ошибка анализа. Попробуй позже.";
           body.innerHTML = `<div class="ai-loading-wrap">
-            <div style="font-size:36px">😔</div>
+            <div style="font-size:36px">${rawDetail === "gemini_rate_limit" ? "🚫" : "😔"}</div>
             <div style="font-size:13px;font-weight:600;color:var(--hint);text-align:center;word-break:break-word;max-width:280px">${errText}</div>
           </div>`;
           return;
         }
         const data = await res.json();
+        // Persist remaining count so the hint near the Analyse button stays fresh.
+        if (data.analyses_remaining != null) {
+          window._aiAnalysesRemaining = data.analyses_remaining;
+          window._aiAnalysesLimit     = data.analyses_limit ?? 10;
+          _updateAiRemainingHint();
+        }
         body.innerHTML = renderAiReport(data, name);
+        // Append remaining-count footer inside the modal body.
+        if (data.analyses_remaining != null) {
+          const footer = document.createElement("div");
+          footer.style.cssText = "text-align:center;font-size:11px;color:var(--hint);padding:8px 0 14px;";
+          const rem = data.analyses_remaining, lim = data.analyses_limit ?? 10;
+          footer.textContent = rem > 0
+            ? `Осталось ${rem}\u202f/\u202f${lim} анализов сегодня`
+            : "Лимит анализов на сегодня исчерпан. Попробуй завтра.";
+          body.appendChild(footer);
+        }
         _drawEmotionChart(data.ai?.emotions);
         _drawInterestArc(Math.round((data.ai?.interest?.probability) || 0),
           (() => { const p = Math.round((data.ai?.interest?.probability)||0); return p>=60?"#34c759":p>=35?"#ff9500":"#ff3b30"; })());

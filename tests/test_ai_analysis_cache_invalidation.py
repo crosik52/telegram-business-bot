@@ -35,7 +35,7 @@ from app.services.ai_analysis_service import (
     invalidate_cache,
     invalidate_cache_for_owner,
 )
-from app.services.ai_analysis_service import _l1_get, _db_get
+from app.services.ai_analysis_service import _l1_get, _db_get, _l1_evict_expired
 
 DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -379,3 +379,66 @@ async def test_db_get_returns_value_for_fresh_row(session_factory):
     assert result == payload, (
         "_db_get must return the cached dict for a row whose analyzed_at is within _CACHE_TTL"
     )
+
+
+# ---------------------------------------------------------------------------
+# Tests: _l1_evict_expired — expired entries must be physically removed
+# ---------------------------------------------------------------------------
+
+def test_l1_evict_expired_removes_stale_entries():
+    """_l1_evict_expired must delete every entry older than _CACHE_TTL from _CACHE."""
+    now = time.time()
+    stale_key   = (7001, 8001)
+    fresh_key   = (7002, 8002)
+
+    _CACHE[stale_key] = (now - _CACHE_TTL - 1, {"score": 5})   # expired
+    _CACHE[fresh_key] = (now - _CACHE_TTL + 60, {"score": 9})  # still valid
+
+    evicted = _l1_evict_expired()
+
+    assert evicted == 1, f"Expected 1 eviction, got {evicted}"
+    assert stale_key not in _CACHE, (
+        "Expired entry must be physically removed from _CACHE by _l1_evict_expired"
+    )
+    assert fresh_key in _CACHE, (
+        "Non-expired entry must remain in _CACHE after _l1_evict_expired"
+    )
+
+
+def test_l1_evict_expired_removes_all_stale_entries():
+    """_l1_evict_expired must remove ALL expired entries in a single call."""
+    now = time.time()
+    stale_keys = [(9001, i) for i in range(5)]
+    for key in stale_keys:
+        _CACHE[key] = (now - _CACHE_TTL - 10, {"score": 3})
+
+    evicted = _l1_evict_expired()
+
+    assert evicted == 5, f"Expected 5 evictions, got {evicted}"
+    for key in stale_keys:
+        assert key not in _CACHE, (
+            f"Stale entry {key} must be physically removed from _CACHE"
+        )
+
+
+def test_l1_evict_expired_is_noop_when_all_fresh():
+    """_l1_evict_expired must leave fresh entries untouched and return 0."""
+    now = time.time()
+    fresh_keys = [(9100, i) for i in range(3)]
+    payloads   = [{"score": i} for i in range(3)]
+    for key, payload in zip(fresh_keys, payloads):
+        _CACHE[key] = (now - 60, payload)  # 1 minute old, well within TTL
+
+    evicted = _l1_evict_expired()
+
+    assert evicted == 0, f"Expected 0 evictions for fresh entries, got {evicted}"
+    for key, payload in zip(fresh_keys, payloads):
+        assert key in _CACHE, f"Fresh entry {key} must remain in _CACHE"
+        assert _CACHE[key][1] == payload
+
+
+def test_l1_evict_expired_on_empty_cache():
+    """_l1_evict_expired must not raise and must return 0 on an empty cache."""
+    assert len(_CACHE) == 0, "Cache should be empty at start of test (autouse fixture)"
+    evicted = _l1_evict_expired()
+    assert evicted == 0

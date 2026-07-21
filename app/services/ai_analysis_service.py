@@ -42,6 +42,27 @@ def _l1_set(owner_id: int, chat_id: int, result: dict) -> None:
     _CACHE[(owner_id, chat_id)] = (time.time(), result)
 
 
+def _l1_evict_expired() -> int:
+    """Remove all expired entries from the L1 in-memory cache.
+
+    Scans the entire ``_CACHE`` dict and deletes every entry whose timestamp
+    is older than ``_CACHE_TTL``.  Safe to call from a background loop because
+    it snapshots the key list before iterating.
+
+    Returns the number of entries evicted (useful for logging / tests).
+    """
+    now = time.time()
+    expired = [
+        key for key, (ts, _) in list(_CACHE.items())
+        if (now - ts) >= _CACHE_TTL
+    ]
+    for key in expired:
+        _CACHE.pop(key, None)
+    if expired:
+        logger.debug("L1 cache eviction: removed %d expired entries", len(expired))
+    return len(expired)
+
+
 async def _db_get(
     session: AsyncSession, owner_id: int, chat_id: int
 ) -> dict | None:

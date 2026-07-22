@@ -645,11 +645,12 @@
 
   /* interest bars */
   .ai-interest-pct { font-size: 46px; font-weight: 900; color: #5856d6; line-height: 1; }
-  .ai-indicator-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-  .ai-indicator-name { font-size: 12px; flex: 1; color: var(--hint); }
-  .ai-indicator-bar-track { width: 80px; height: 5px; background: rgba(120,120,128,.18); border-radius: 3px; overflow: hidden; }
+  .ai-indicator-row { margin-top: 10px; }
+  .ai-indicator-top { display: flex; align-items: center; gap: 8px; }
+  .ai-indicator-name { font-size: 12.5px; font-weight: 600; flex: 1; color: var(--text); }
+  .ai-indicator-bar-track { width: 80px; flex-shrink: 0; height: 5px; background: rgba(120,120,128,.18); border-radius: 3px; overflow: hidden; }
   .ai-indicator-bar-fill  { height: 100%; border-radius: 3px; }
-  .ai-indicator-val { font-size: 11px; font-weight: 700; width: 30px; text-align: right; }
+  .ai-indicator-val { font-size: 11px; color: var(--hint); margin-top: 3px; line-height: 1.45; }
 
   /* tag clouds */
   .ai-tags { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -7813,9 +7814,11 @@
         const bc  = lvl==="high"?"#34c759":lvl==="low"?"#ff3b30":"#ff9500";
         const bp  = lvl==="high"?85:lvl==="low"?25:55;
         return `<div class="ai-indicator-row">
-          <span class="ai-indicator-name">${esc2(ind.name)}</span>
-          <div class="ai-indicator-bar-track"><div class="ai-indicator-bar-fill" style="width:${bp}%;background:${bc}"></div></div>
-          <span class="ai-indicator-val" style="color:${bc}">${esc2(ind.value||"")}</span>
+          <div class="ai-indicator-top">
+            <span class="ai-indicator-name">${esc2(ind.name)}</span>
+            <div class="ai-indicator-bar-track"><div class="ai-indicator-bar-fill" style="width:${bp}%;background:${bc}"></div></div>
+          </div>
+          ${ind.value ? `<div class="ai-indicator-val">${esc2(ind.value)}</div>` : ""}
         </div>`;
       }).join("");
 

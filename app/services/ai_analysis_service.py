@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 # ── Result cache — L1 in-memory + L2 database ────────────────────────────────
 # L1 (in-memory): fast path, avoids repeated JSON parsing within same process.
 # L2 (database):  survives Railway deploys; checked when L1 misses.
+#
+# Bump _PROMPT_VERSION whenever the system prompt or schema changes so that
+# cached results built with the old prompt are automatically discarded.
+_PROMPT_VERSION = "v2"  # bumped: red_flags prompt expanded
 _CACHE: dict[tuple[int, int], tuple[float, dict]] = {}
 _CACHE_TTL = 86400  # 24 hours
 _L1_MAX_SIZE = int(os.environ.get("AI_L1_CACHE_MAX_SIZE", "500"))
@@ -35,7 +39,9 @@ _L1_MAX_SIZE = int(os.environ.get("AI_L1_CACHE_MAX_SIZE", "500"))
 def _l1_get(owner_id: int, chat_id: int) -> dict | None:
     entry = _CACHE.get((owner_id, chat_id))
     if entry and (time.time() - entry[0]) < _CACHE_TTL:
-        return entry[1]
+        result = entry[1]
+        if result.get("prompt_version") == _PROMPT_VERSION:
+            return result
     return None
 
 
@@ -84,7 +90,10 @@ async def _db_get(
     if row is None:
         return None
     try:
-        return json.loads(row.result_json)
+        result = json.loads(row.result_json)
+        if result.get("prompt_version") != _PROMPT_VERSION:
+            return None  # stale — prompt changed, force re-analysis
+        return result
     except Exception:
         return None
 
@@ -478,8 +487,12 @@ _SYSTEM_PROMPT = """Ты — аналитик отношений. Анализи
 - Не делай категоричных заявлений — говори о вероятностях и наблюдениях
 - Будь конкретным, не банальным
 - Анализируй только то, что видно в тексте
-- Красные флаги — только реально заметные паттерны
-- Зелёные флаги — только реально присутствующие позитивные знаки
+- red_flags: ВСЕГДА найди хотя бы 1–2 наблюдения, если в переписке есть что-то настораживающее — даже незначительное. Примеры разного уровня:
+  • лёгкие: односторонность инициативы, сухие короткие ответы, долгое игнорирование
+  • средние: ревность, контроль, пассивная агрессия, резкие перепады тона
+  • серьёзные: оскорбления, манипуляции, угрозы, полное игнорирование
+  Если переписка действительно идеальна без единого тревожного знака — оставь пустым. Но не занижай намеренно.
+- green_flags: реально присутствующие позитивные знаки (взаимность, поддержка, юмор, инициатива с обеих сторон и т.д.)
 
 Шкала оценки (general_score.score) — число от 1 до 10, СТРОГО основанное на анализе:
 - 1–2: серьёзные проблемы (конфликты, агрессия, игнорирование, явная односторонность)
@@ -653,10 +666,11 @@ async def analyze(
             raise ValueError(f"bad_json: {raw[:300]}")
 
     result = {
-        "stats":         stats,
-        "ai":            ai_data,
-        "analyzed_at":   dt.datetime.now(dt.timezone.utc).isoformat(),
-        "message_count": len(msgs),
+        "stats":          stats,
+        "ai":             ai_data,
+        "analyzed_at":    dt.datetime.now(dt.timezone.utc).isoformat(),
+        "message_count":  len(msgs),
+        "prompt_version": _PROMPT_VERSION,
     }
     _l1_set(owner_id, chat_id, result)
     await _db_set(session, owner_id, chat_id, result)

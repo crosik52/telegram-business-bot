@@ -2661,6 +2661,144 @@
   .adopt-species-btn.selected { border-color: var(--green); background: rgba(52,199,89,0.1); }
   .adopt-species-emoji { font-size: 24px; }
   .adopt-species-lbl   { font-size: 10px; color: var(--hint); }
+
+  /* ══════════════════════════════════════════
+     INTERACTIONS TAB — certificate-style cards
+  ══════════════════════════════════════════ */
+  .interact-section-bg {
+    background: #FDE8F0;
+    border-radius: var(--card-radius);
+    padding: 14px 0 6px;
+    margin-bottom: 14px;
+  }
+  .interact-section-title {
+    font-size: 11px; font-weight: 800; color: #c0557a;
+    text-transform: uppercase; letter-spacing: 0.8px;
+    padding: 0 14px 10px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  /* Certificate card */
+  .cert-card {
+    background: #fff;
+    border-radius: 18px;
+    margin: 0 10px 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 14px rgba(224,54,90,0.10), 0 1px 3px rgba(0,0,0,0.06);
+    border: 1px solid rgba(224,54,90,0.09);
+  }
+  .cert-card-header {
+    padding: 12px 16px;
+    text-align: center;
+    border-bottom: 1px solid rgba(224,54,90,0.08);
+    font-size: 9.5px; font-weight: 800; letter-spacing: 1.4px;
+    color: #c0557a; text-transform: uppercase;
+    background: linear-gradient(135deg, rgba(253,232,240,0.9), rgba(255,255,255,0.95));
+  }
+  .cert-avatars {
+    display: flex; align-items: center; justify-content: center;
+    gap: 12px; padding: 16px 16px 8px;
+  }
+  .cert-avatar-wrap { display: flex; flex-direction: column; align-items: center; gap: 5px; flex: 1; }
+  .cert-avatar {
+    width: 68px; height: 68px; border-radius: 50%;
+    border: 2.5px solid #f472a8;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; font-weight: 800; color: #fff;
+    overflow: hidden; flex-shrink: 0;
+    box-shadow: 0 2px 10px rgba(244,114,168,0.28);
+  }
+  .cert-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+  .cert-avatar-name {
+    font-size: 12px; font-weight: 700; color: #3a1a2a;
+    text-align: center; max-width: 88px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .cert-avatar-user { font-size: 10px; color: #c0557a; text-align: center; }
+  .cert-heart-mid {
+    display: flex; flex-direction: column; align-items: center; gap: 3px; flex-shrink: 0;
+    animation: certHeartPulse 1.8s ease-in-out infinite;
+  }
+  @keyframes certHeartPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.18)} }
+  .cert-heart-icon { font-size: 24px; line-height: 1; }
+  .cert-tier-badge-wrap { text-align: center; padding: 0 16px 12px; }
+  .cert-tier-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #f5a0c0, #e0365a);
+    color: #fff; font-size: 11.5px; font-weight: 700;
+    padding: 5px 18px; border-radius: 99px;
+    box-shadow: 0 2px 8px rgba(224,54,90,0.22);
+  }
+  .cert-tier-married { background: linear-gradient(135deg, #c77dff, #9c4cc4); }
+  .cert-tier-friends { background: linear-gradient(135deg, #ffd166, #d4962a); }
+  /* XP section */
+  .cert-xp-section { padding: 0 16px 12px; }
+  .cert-xp-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .cert-xp-track {
+    flex: 1; height: 7px; border-radius: 4px;
+    background: rgba(224,54,90,0.12); overflow: hidden;
+  }
+  .cert-xp-fill {
+    height: 100%; border-radius: 4px;
+    background: linear-gradient(90deg, #f472a8, #e0365a);
+    transition: width 0.65s ease;
+  }
+  .cert-xp-label { font-size: 11px; color: #c0557a; text-align: center; margin-bottom: 4px; }
+  .cert-xp-sub { font-size: 10px; color: #c0557a; text-align: center; opacity: 0.65; }
+  /* Stats footer */
+  .cert-stats-footer {
+    display: flex; border-top: 1px solid rgba(224,54,90,0.08);
+    padding: 10px 0 12px;
+  }
+  .cert-stat-cell {
+    flex: 1; text-align: center; padding: 2px 4px;
+    border-right: 1px solid rgba(224,54,90,0.08);
+  }
+  .cert-stat-cell:last-child { border-right: none; }
+  .cert-stat-val { font-size: 13px; font-weight: 800; color: #3a1a2a; }
+  .cert-stat-lbl { font-size: 9px; color: #c0557a; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; font-weight: 600; }
+  /* Pending actions */
+  .cert-pending-text { text-align: center; font-size: 13px; color: #c0557a; padding: 0 16px 10px; }
+  .cert-actions { display: flex; gap: 8px; padding: 0 16px 14px; }
+  .cert-action-btn {
+    flex: 1; border: none; border-radius: 12px; padding: 10px 0;
+    font-size: 12.5px; font-weight: 700; cursor: pointer;
+    background: rgba(224,54,90,0.10); color: #e0365a;
+    touch-action: manipulation;
+  }
+  .cert-action-btn:active { opacity: 0.72; }
+  .cert-action-btn.accept  { background: rgba(52,199,89,0.14);  color: #34c759; }
+  .cert-action-btn.decline { background: rgba(255,59,48,0.10);  color: #ff453a; }
+  .cert-open-hint { text-align: center; padding-bottom: 12px; font-size: 11px; color: #c0557a; opacity: 0.55; }
+  /* Compact pet cards */
+  .interact-pet-card {
+    background: #fff; border-radius: 16px;
+    margin: 0 10px 10px; padding: 12px 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .interact-pet-emoji { font-size: 30px; flex-shrink: 0; }
+  .interact-pet-body { flex: 1; min-width: 0; }
+  .interact-pet-name-row { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
+  .interact-pet-name { font-size: 13.5px; font-weight: 700; color: #17181a; }
+  .interact-pet-level { font-size: 10px; font-weight: 700; background: rgba(52,199,89,0.14); color: #34c759; border-radius: 6px; padding: 1px 6px; }
+  .interact-pet-bars { display: flex; flex-direction: column; gap: 5px; }
+  .interact-pet-bar-row { display: flex; align-items: center; gap: 6px; }
+  .interact-pet-bar-lbl { font-size: 11px; width: 18px; flex-shrink: 0; text-align: center; }
+  .interact-pet-bar-track { flex: 1; height: 5px; border-radius: 3px; background: rgba(120,120,128,0.13); overflow: hidden; }
+  .interact-pet-bar-fill { height: 100%; border-radius: 3px; transition: width 0.55s ease; }
+  .interact-pet-actions { display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
+  .interact-pet-btn {
+    border: none; border-radius: 10px; padding: 5px 8px;
+    font-size: 11px; font-weight: 600; cursor: pointer;
+    background: rgba(120,120,128,0.10); color: var(--text);
+    white-space: nowrap; touch-action: manipulation;
+    min-width: 72px; text-align: center;
+  }
+  .interact-pet-btn:disabled { opacity: 0.38; cursor: default; }
+  .interact-pet-btn:active:not(:disabled) { opacity: 0.72; }
+  /* Skeleton loader */
+  .interact-skeleton { padding: 16px 0; display: flex; flex-direction: column; gap: 12px; animation: pulse 1.2s ease-in-out infinite; }
+  .interact-skel-card { height: 200px; background: rgba(253,232,240,0.6); border-radius: 20px; margin: 0 0 2px; }
 </style>
 </head>
 <body>
@@ -2690,6 +2828,7 @@
   <div id="donateContent"   style="display:none"></div>
   <div id="questContent"    style="display:none"></div>
   <div id="shopContent"     style="display:none"></div>
+  <div id="interactContent" style="display:none"></div>
 
   <!-- kept for JS compat, hidden via CSS -->
   <button class="refresh-fab" id="refreshFabLegacy" style="display:none"></button>
@@ -2768,6 +2907,10 @@
       <div class="tab-icon-wrap"><svg class="tab-svg-icon" aria-hidden="true"><use href="#ico-bag"></use></svg></div>
       <span class="tab-label">Магазин</span>
     </button>
+    <button class="tab-item tab-interact" data-tab="interact">
+      <div class="tab-icon-wrap"><svg class="tab-svg-icon" aria-hidden="true"><use href="#ico-heart"></use></svg></div>
+      <span class="tab-label">Связи</span>
+    </button>
   </nav>
 
   <script>
@@ -2787,6 +2930,7 @@
     let _userCardSettings = { theme: "default", frame: "none" }; // eagerly loaded; used by openMyCard before shopData is ready
     let casinoLoaded = false;
     let questsLoaded = false;
+    let interactLoaded = false;
     let questData    = null;
     let lbData       = null;
     let petData      = null;
@@ -4285,8 +4429,8 @@
     // ══════════════════════════════════════════════════════════════════
     // MAIN TAB SWITCHING
     // ══════════════════════════════════════════════════════════════════
-    const TAB_HEADER_ICONS  = { stats: _si("ico-chart",18), casino: _si("ico-gamepad",18), quests: _si("ico-trophy",18), donate: _si("ico-gem",18), shop: _si("ico-bag",18) };
-    const TAB_HEADER_TITLES = { stats: "Моя статистика", casino: "Игры", quests: "Задания и рейтинг", donate: "Поддержать", shop: "Монетный магазин" };
+    const TAB_HEADER_ICONS  = { stats: _si("ico-chart",18), casino: _si("ico-gamepad",18), quests: _si("ico-trophy",18), donate: _si("ico-gem",18), shop: _si("ico-bag",18), interact: _si("ico-heart",18) };
+    const TAB_HEADER_TITLES = { stats: "Моя статистика", casino: "Игры", quests: "Задания и рейтинг", donate: "Поддержать", shop: "Монетный магазин", interact: "Взаимодействия" };
     let shopLoaded = false;
     let shopData   = null;
 
@@ -4300,6 +4444,7 @@
       document.getElementById("questContent").style.display    = tab === "quests"   ? "" : "none";
       document.getElementById("donateContent").style.display   = tab === "donate"   ? "" : "none";
       document.getElementById("shopContent").style.display     = tab === "shop"     ? "" : "none";
+      document.getElementById("interactContent").style.display = tab === "interact" ? "" : "none";
       // Header refresh button — only on stats
       const headerActions = document.getElementById("headerActions");
       if (headerActions) headerActions.style.display = tab === "stats" ? "" : "none";
@@ -4323,6 +4468,9 @@
         if (!shopLoaded && currentInitData) loadShop();
         else if (shopLoaded) renderShop();
       }
+      if (tab === "interact") {
+        if (currentInitData) renderInteractTab();
+      }
       if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
       if (window._tabSwitchHook) window._tabSwitchHook(tab);
     }
@@ -4338,7 +4486,7 @@
       /* Single neutral style for all tabs — no per-tab rainbow */
       const NEUTRAL = { bg: "rgba(255,255,255,0.18)", shadow: "rgba(255,255,255,0.18)", rgb: "255,255,255" };
       const SLIDER_STYLES = {
-        stats: NEUTRAL, casino: NEUTRAL, quests: NEUTRAL, donate: NEUTRAL, shop: NEUTRAL,
+        stats: NEUTRAL, casino: NEUTRAL, quests: NEUTRAL, donate: NEUTRAL, shop: NEUTRAL, interact: NEUTRAL,
       };
 
       /* Place slider + limelight under/above a given tab element */
@@ -8133,6 +8281,378 @@
           toastMessage("🔗 Ссылка скопирована!");
         }
       });
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // INTERACTIONS TAB
+    // ══════════════════════════════════════════════════════════════════
+
+    async function renderInteractTab() {
+      const el = document.getElementById("interactContent");
+      if (!el) return;
+      // Skeleton loader while fetching
+      el.innerHTML = `<div class="interact-skeleton">
+        <div class="interact-skel-card"></div>
+        <div class="interact-skel-card" style="height:130px"></div>
+      </div>`;
+
+      const initData = tg ? tg.initData : currentInitData;
+      if (!initData) {
+        el.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Нет данных.<br>Попробуй обновить страницу.</div>`;
+        return;
+      }
+
+      try {
+        const opts = {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initData }),
+        };
+        const [relRes, petRes] = await Promise.all([
+          fetch("/app/api/relationships/list", opts),
+          fetch("/app/api/pet/list", opts),
+        ]);
+
+        const relData  = relRes.ok  ? await relRes.json()  : { relationships: [] };
+        const petLocal = petRes.ok  ? await petRes.json()  : { pets: [], available_chats: [], feed_cost: 20 };
+
+        // Keep global state in sync
+        lastRelationships = {};
+        for (const r of (relData.relationships || [])) lastRelationships[r.partner_id] = r;
+        petData = petLocal;
+
+        const relationships = relData.relationships || [];
+        const alivePets     = (petLocal.pets || []).filter(p => p.is_alive);
+
+        let html = "";
+
+        // ── Relationships sub-section ────────────────────────────────
+        html += `<div class="interact-section-bg">
+          <div class="interact-section-title">💗 Отношения</div>
+          ${relationships.length
+            ? renderRelationshipCards(relationships)
+            : `<div style="text-align:center;padding:20px 16px 16px;color:#c0557a;font-size:13px;opacity:0.75">
+                <div style="font-size:36px;margin-bottom:8px">💌</div>
+                Пока нет отношений.<br>Найди собеседника в топе и предложи дружбу!
+               </div>`}
+        </div>`;
+
+        // ── Pets sub-section ─────────────────────────────────────────
+        if (alivePets.length > 0) {
+          html += `<div class="interact-section-bg">
+            <div class="interact-section-title">🐾 Питомцы</div>
+            ${renderPetMiniCards(petLocal.pets || [])}
+          </div>`;
+        }
+
+        el.innerHTML = html;
+        _attachInteractPetHandlers();
+
+      } catch (err) {
+        console.error("[renderInteractTab]", err);
+        el.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить.<br>Попробуй обновить.</div>`;
+      }
+    }
+
+    function renderRelationshipCards(relationships) {
+      const CERT_HEADER = {
+        friends: "ЛУЧШИЕ ДРУЗЬЯ",
+        dating:  "ВЛЮБЛЁННАЯ ПАРА",
+        married: "СВИДЕТЕЛЬСТВО О БРАКЕ",
+      };
+      const TIER_LABEL = {
+        friends: "Друзья",
+        dating:  "Влюблённые",
+        married: "Женаты 💍",
+      };
+      const TIER_BADGE_CLS = {
+        friends: "cert-tier-friends",
+        married: "cert-tier-married",
+      };
+
+      return relationships.map(r => {
+        const nm       = _esc(r.partner_name || `#${r.partner_id}`);
+        const un       = r.partner_username ? `@${_esc(r.partner_username)}` : "";
+        const bg       = colorFor(r.partner_name || String(r.partner_id));
+        const initials = (r.partner_name || "??")
+          .replace(/[^А-ЯA-ZЁё]/gi, "")
+          .slice(0, 2).toUpperCase()
+          || (r.partner_name || "??").slice(0, 2).toUpperCase();
+
+        const isPending   = r.status === "pending";
+        const isInitiator = r.is_initiator;
+        const headerText  = isPending ? "ЗАПРОС ДРУЖБЫ" : (CERT_HEADER[r.rel_type] || "ОТНОШЕНИЯ");
+
+        // Partner avatar
+        const partnerAvatar = `
+          <div class="cert-avatar" style="background:${bg}">${initials}</div>`;
+
+        // My avatar — use lastStats if available, else a generic pink circle
+        const myName     = lastStats?.display_name || "Я";
+        const myInitials = myName.replace(/[^А-ЯA-ZЁё]/gi, "").slice(0, 2).toUpperCase()
+                           || myName.slice(0, 2).toUpperCase() || "Я";
+        const myBg       = colorFor(myName);
+        const myAvatar   = `
+          <div class="cert-avatar" style="background:${myBg}">${myInitials}</div>`;
+
+        // Tier badge
+        const tierBadgeCls = TIER_BADGE_CLS[r.rel_type] || "";
+        const tierLabel    = TIER_LABEL[r.rel_type] || r.rel_type || "";
+
+        let bodyHtml = "";
+
+        if (isPending) {
+          const pendingText = isInitiator
+            ? "Ждём ответа…"
+            : `${nm} хочет с тобой подружиться 💛`;
+          if (!isInitiator) {
+            bodyHtml = `
+              <div class="cert-pending-text">${pendingText}</div>
+              <div class="cert-actions">
+                <button class="cert-action-btn accept"
+                  onclick="_interactRelAction('/app/api/relationships/respond',${r.partner_id},{accept:true},function(){toastMessage('💛 Вы теперь друзья!')})">✓ Принять</button>
+                <button class="cert-action-btn decline"
+                  onclick="_interactRelAction('/app/api/relationships/respond',${r.partner_id},{accept:false},function(){toastMessage('Запрос отклонён.')})">✗ Отклонить</button>
+              </div>`;
+          } else {
+            bodyHtml = `
+              <div class="cert-pending-text">${pendingText}</div>
+              <div class="cert-actions">
+                <button class="cert-action-btn decline"
+                  onclick="_interactRelAction('/app/api/relationships/cancel',${r.partner_id},{},function(){toastMessage('Запрос отменён, монеты возвращены.')})">✗ Отменить запрос</button>
+              </div>`;
+          }
+        } else {
+          const isMarried = r.rel_type === "married";
+          const xpPct     = r.xp_pct || 0;
+          const xpIn      = r.xp_in_level || 0;
+
+          const xpSection = isMarried ? "" : `
+            <div class="cert-xp-section">
+              <div class="cert-xp-row">
+                <span style="font-size:14px">💗</span>
+                <div class="cert-xp-track"><div class="cert-xp-fill" style="width:${xpPct}%"></div></div>
+              </div>
+              <div class="cert-xp-label">${xpIn} / 200 XP до следующего уровня</div>
+              ${r.streak_days
+                ? `<div class="cert-xp-sub">🔥 Серия: ${r.streak_days} дн · Рекорд: ${r.record_streak || r.streak_days} дн · Действий: ${r.daily_actions || 0}</div>`
+                : ""}
+            </div>`;
+
+          // Days together from accepted_at
+          let daysTogether = "–";
+          let startDateStr = "–";
+          if (r.accepted_at) {
+            const diff = Math.floor((Date.now() - new Date(r.accepted_at).getTime()) / 86400000);
+            daysTogether = diff >= 0 ? diff : 0;
+            startDateStr = new Date(r.accepted_at).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+          }
+
+          bodyHtml = `
+            ${xpSection}
+            <div class="cert-stats-footer">
+              <div class="cert-stat-cell">
+                <div class="cert-stat-val">${startDateStr}</div>
+                <div class="cert-stat-lbl">Начало</div>
+              </div>
+              <div class="cert-stat-cell">
+                <div class="cert-stat-val">${daysTogether}</div>
+                <div class="cert-stat-lbl">Дней вместе</div>
+              </div>
+              <div class="cert-stat-cell">
+                <div class="cert-stat-val">${r.xp || 0}</div>
+                <div class="cert-stat-lbl">Всего XP</div>
+              </div>
+            </div>
+            <div class="cert-open-hint">нажми для управления</div>`;
+        }
+
+        const openDataAttr = !isPending
+          ? `style="cursor:pointer" data-rel-open-id="${r.partner_id}" data-rel-open-name="${_esc(r.partner_name || '#' + r.partner_id)}"`
+          : "";
+
+        return `
+          <div class="cert-card" ${openDataAttr}>
+            <div class="cert-card-header">${headerText}</div>
+            <div class="cert-avatars">
+              <div class="cert-avatar-wrap">
+                ${myAvatar}
+                <div class="cert-avatar-name">${_esc(myName)}</div>
+                ${lastStats?.username ? `<div class="cert-avatar-user">@${_esc(lastStats.username)}</div>` : ""}
+              </div>
+              <div class="cert-heart-mid">
+                <div class="cert-heart-icon">💗</div>
+                ${!isPending ? `<div style="font-size:9px;font-weight:800;color:#c0557a;text-align:center;letter-spacing:0.3px;margin-top:2px">УР. ${r.level || 1}</div>` : ""}
+              </div>
+              <div class="cert-avatar-wrap">
+                ${partnerAvatar}
+                <div class="cert-avatar-name">${nm}</div>
+                ${un ? `<div class="cert-avatar-user">${un}</div>` : ""}
+              </div>
+            </div>
+            ${!isPending ? `
+            <div class="cert-tier-badge-wrap">
+              <span class="cert-tier-badge ${tierBadgeCls}">Уровень ${r.level || 1} · ${tierLabel}</span>
+            </div>` : ""}
+            ${bodyHtml}
+          </div>`;
+      }).join("");
+    }
+
+    function renderPetMiniCards(pets) {
+      const alive = (pets || []).filter(p => p.is_alive);
+      if (!alive.length) return "";
+
+      return alive.map(p => {
+        const hunger = p.hunger || 0;
+        const mood   = p.mood   || 0;
+        const feedCdSecs   = p.feed_cooldown_secs   || 0;
+        const playCdSecs   = p.play_cooldown_secs   || 0;
+        const cuddleCdSecs = p.cuddle_cooldown_secs || 0;
+
+        const feedLbl   = feedCdSecs   > 0 ? `🍖 ${fmtCooldown(feedCdSecs)}`   : "🍖 Кормить";
+        const playLbl   = playCdSecs   > 0 ? `🎮 ${fmtCooldown(playCdSecs)}`   : "🎮 Играть";
+        const cuddleLbl = cuddleCdSecs > 0 ? `🤗 ${fmtCooldown(cuddleCdSecs)}` : "🤗 Обнять";
+
+        const hungerColor = hunger >= 50 ? "#34c759" : hunger >= 25 ? "#ff9f0a" : "#ff453a";
+        const moodColor   = mood   >= 50 ? "#5856d6" : mood   >= 25 ? "#ff9f0a" : "#ff453a";
+
+        return `
+          <div class="interact-pet-card">
+            <div class="interact-pet-emoji">${petEmoji(p)}</div>
+            <div class="interact-pet-body">
+              <div class="interact-pet-name-row">
+                <span class="interact-pet-name">${esc(p.pet_name)}</span>
+                <span class="interact-pet-level">Ур.${p.level}</span>
+              </div>
+              <div class="interact-pet-bars">
+                <div class="interact-pet-bar-row">
+                  <span class="interact-pet-bar-lbl">🍖</span>
+                  <div class="interact-pet-bar-track">
+                    <div class="interact-pet-bar-fill" style="width:${hunger}%;background:${hungerColor}"></div>
+                  </div>
+                  <span style="font-size:10px;color:var(--hint);width:26px;text-align:right;flex-shrink:0">${hunger}%</span>
+                </div>
+                <div class="interact-pet-bar-row">
+                  <span class="interact-pet-bar-lbl">😊</span>
+                  <div class="interact-pet-bar-track">
+                    <div class="interact-pet-bar-fill" style="width:${mood}%;background:${moodColor}"></div>
+                  </div>
+                  <span style="font-size:10px;color:var(--hint);width:26px;text-align:right;flex-shrink:0">${mood}%</span>
+                </div>
+              </div>
+            </div>
+            <div class="interact-pet-actions">
+              <button class="interact-pet-btn" ${feedCdSecs   > 0 ? "disabled" : ""} data-ipt-pet="${p.id}" data-ipt-action="feed">${feedLbl}</button>
+              <button class="interact-pet-btn" ${playCdSecs   > 0 ? "disabled" : ""} data-ipt-pet="${p.id}" data-ipt-action="play">${playLbl}</button>
+              <button class="interact-pet-btn" ${cuddleCdSecs > 0 ? "disabled" : ""} data-ipt-pet="${p.id}" data-ipt-action="cuddle">${cuddleLbl}</button>
+            </div>
+          </div>`;
+      }).join("");
+    }
+
+    // Global helper for pending-relationship actions from the interact tab
+    async function _interactRelAction(url, partnerId, extra, cb) {
+      const initData = tg ? tg.initData : currentInitData;
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initData, partnerId, ...extra }),
+        });
+        const d = await res.json();
+        if (!res.ok) {
+          const MSGS = {
+            insufficient_funds: "Недостаточно монет 🪙",
+            request_pending:    "Запрос уже отправлен",
+            already_related:    "Вы уже связаны",
+            gift_cooldown:      "Подарок уже отправлен сегодня",
+          };
+          toastMessage(MSGS[d.detail] || `Ошибка: ${d.detail}`);
+          return;
+        }
+        cb(d);
+        await renderInteractTab();
+      } catch { toastMessage("Ошибка, попробуй снова"); }
+    }
+
+    function _attachInteractPetHandlers() {
+      // Pet action buttons
+      document.querySelectorAll("[data-ipt-pet]:not([disabled])").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const petId  = Number(btn.dataset.iptPet);
+          const action = btn.dataset.iptAction;
+          if (action === "feed") _doPetFeedInteract(petId, "kibble", btn);
+          else                   _doPetActionInteract(petId, action, btn);
+        });
+      });
+      // Active relationship card tap → open existing modal
+      document.querySelectorAll("[data-rel-open-id]").forEach(card => {
+        card.addEventListener("click", (e) => {
+          // Ignore clicks on cert-action-btn children (pending cards don't use this attr, but guard anyway)
+          if (e.target.closest(".cert-action-btn")) return;
+          const partnerId   = Number(card.dataset.relOpenId);
+          const partnerName = card.dataset.relOpenName || "";
+          openRelModal(partnerId, partnerName);
+        });
+      });
+    }
+
+    async function _doPetFeedInteract(petId, foodType, btn) {
+      const food = FOOD_CATALOG_JS?.[foodType] || { cost: 20, emoji: "🍖" };
+      // Skip client-side balance check if walletData hasn't loaded yet — server will reject if needed
+      if (walletData && (walletData.balance || 0) < food.cost) { toastMessage("Недостаточно монет 🪙"); return; }
+      const origHtml = btn?.innerHTML;
+      if (btn) { btn.disabled = true; btn.textContent = "⏳"; }
+      if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("medium");
+      try {
+        const res = await fetch("/app/api/pet/feed", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initData: tg ? tg.initData : currentInitData, petId, foodType }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          const MSGS = { already_fed: "Питомец уже сыт 😊", insufficient_coins: "Недостаточно монет 🪙", pet_is_dead: "Питомец умер 💀" };
+          toastMessage(MSGS[err.detail] || "Ошибка. Попробуй ещё раз.");
+          if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+          return;
+        }
+        const data = await res.json();
+        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+        updateBalanceDisplay(data.new_balance);
+        toastMessage(`${food.emoji} Накормлен!${data.xp_gained ? " +" + data.xp_gained + " XP" : ""}`);
+        await renderInteractTab();
+      } catch {
+        toastMessage("Ошибка, попробуй снова");
+        if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+      }
+    }
+
+    async function _doPetActionInteract(petId, action, btn) {
+      const origHtml = btn?.innerHTML;
+      if (btn) { btn.disabled = true; btn.textContent = "⏳"; }
+      if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
+      try {
+        const res = await fetch(`/app/api/pet/${action}`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initData: tg ? tg.initData : currentInitData, petId }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          const MSGS = { play_cooldown: "Питомец устал 😴", cuddle_cooldown: "Слишком часто — подожди 🌸", pet_is_dead: "Питомец умер 💀" };
+          toastMessage(MSGS[err.detail] || "Ошибка. Попробуй ещё раз.");
+          if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+          return;
+        }
+        const data = await res.json();
+        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+        const LABELS = { play: "🎮 Поиграли!", cuddle: "🤗 Обнялись!" };
+        toastMessage(`${LABELS[action] || "✅ Готово!"}${data.xp_gained ? " +" + data.xp_gained + " XP" : ""}`);
+        await renderInteractTab();
+      } catch {
+        toastMessage("Ошибка, попробуй снова");
+        if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+      }
     }
 
   </script>

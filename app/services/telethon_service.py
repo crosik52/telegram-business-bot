@@ -148,22 +148,45 @@ def is_available() -> bool:
 
 
 async def _get_messages_with_retry(chat_id: int, message_id: int):
-    """Call get_messages; on entity-cache miss, refresh dialogs and retry once."""
+    """Call get_messages with progressive fallbacks for entity-cache misses.
+
+    Strategy:
+      1. Normal call (uses session entity cache).
+      2. InputPeerUser(id, 0) — bypasses Telethon's client-side cache check;
+         Telegram server accepts access_hash=0 for the account owner's own chats.
+      3. Wait 3 s so the background MTProto update loop can cache the peer,
+         then refresh dialogs and retry.
+    """
+    from telethon.tl.types import InputPeerUser
+
     client = _client
     if client is None:
         return None
+
+    # Attempt 1 — standard (entity in session cache)
     try:
         return await client.get_messages(chat_id, ids=message_id)
     except Exception as exc:
         if not _is_entity_error(exc):
             raise
+        logger.info("Telethon: entity cache miss chat=%s — trying InputPeerUser(id,0)", chat_id)
+
+    # Attempt 2 — bypass client-side entity resolution with access_hash=0
+    try:
+        peer = InputPeerUser(user_id=chat_id, access_hash=0)
+        return await client.get_messages(peer, ids=message_id)
+    except Exception as exc:
+        if not _is_entity_error(exc) and "PEER_ID_INVALID" not in str(exc):
+            raise
         logger.info(
-            "Telethon: entity cache miss for chat=%s — refreshing dialogs and retrying",
+            "Telethon: InputPeerUser(0) rejected chat=%s — waiting 3s for MTProto sync",
             chat_id,
         )
-        await _refresh_entity_cache(client)
-        # Retry after cache refresh
-        return await client.get_messages(chat_id, ids=message_id)
+
+    # Attempt 3 — give the MTProto update loop time, refresh dialogs, final try
+    await asyncio.sleep(3)
+    await _refresh_entity_cache(client)
+    return await client.get_messages(chat_id, ids=message_id)
 
 
 async def is_view_once(chat_id: int, message_id: int) -> bool:

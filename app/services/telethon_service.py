@@ -77,27 +77,61 @@ async def _refresh_entity_cache(client) -> None:
 
 
 async def connect(api_id: int, api_hash: str, session_str: str) -> None:
-    """Connect and authorise the Telethon client.  Called once at startup."""
+    """Connect and authorise the Telethon client.  Called once at startup.
+
+    On AuthKeyDuplicatedError (Railway rolling deploy overlap) we retry up to 3
+    times with increasing delays — the old container's disconnect() usually
+    completes within 10–20 s.
+    """
     global _client, _update_task
     from telethon import TelegramClient
+    from telethon.errors import AuthKeyDuplicatedError
     from telethon.sessions import StringSession
 
     async with _client_lock:
         if _client is not None:
             return
-        client = TelegramClient(StringSession(session_str), api_id, api_hash)
-        try:
-            await client.connect()
-        except Exception as exc:
-            logger.error(
-                "Telethon: connect() failed (%s). "
-                "If AuthKeyDuplicatedError — the same session is already running "
-                "on another server. Use TELETHON_ENABLED=false to disable Telethon "
-                "on this instance.",
-                exc,
-            )
-            await client.disconnect()
-            return
+
+        _retry_delays = [10, 20, 30]  # seconds between retries
+        for attempt, delay in enumerate([0] + _retry_delays):
+            if delay:
+                logger.info(
+                    "Telethon: waiting %ds before retry %d/3 (session conflict)",
+                    delay, attempt,
+                )
+                await asyncio.sleep(delay)
+
+            client = TelegramClient(StringSession(session_str), api_id, api_hash)
+            try:
+                await client.connect()
+                break  # success
+            except AuthKeyDuplicatedError as exc:
+                await client.disconnect()
+                if attempt < len(_retry_delays):
+                    logger.warning(
+                        "Telethon: AuthKeyDuplicatedError on attempt %d — "
+                        "old container still running, will retry",
+                        attempt + 1,
+                    )
+                    continue
+                logger.error(
+                    "Telethon: AuthKeyDuplicatedError — session permanently revoked "
+                    "by Telegram after %d attempts. "
+                    "Regenerate TELETHON_SESSION_STR via /session-gen. "
+                    "To avoid this: set Railway deployment strategy to 'Recreate' "
+                    "(stop old container before starting new one).",
+                    attempt + 1,
+                )
+                return
+            except Exception as exc:
+                await client.disconnect()
+                logger.error(
+                    "Telethon: connect() failed (%s). "
+                    "If AuthKeyDuplicatedError — use TELETHON_ENABLED=false on dev.",
+                    exc,
+                )
+                return
+
         if not await client.is_user_authorized():
             logger.error(
                 "Telethon: session string is present but NOT authorised. "

@@ -626,7 +626,7 @@
     display: flex; align-items: center; gap: 8px;
     padding: 13px 14px 10px; border-bottom: 1px solid rgba(120,120,128,.1);
   }
-  .ai-sec-ico   { font-size: 20px; }
+  .ai-sec-ico   { display:flex; align-items:center; width:20px; height:20px; flex-shrink:0; }
   .ai-sec-label { font-size: 13px; font-weight: 800; }
   .ai-sec-body  { padding: 10px 14px 14px; }
 
@@ -962,14 +962,25 @@
     touch-action: none;
   }
 
+  /* ── Generic SVG icon class ── */
+  .ico {
+    display: inline-block; vertical-align: -3px; flex-shrink: 0;
+    fill: none; stroke: currentColor;
+    stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  }
+
   .tab-icon-wrap {
     width: 46px; height: 34px;
     display: flex; align-items: center; justify-content: center;
     border-radius: 15px;
-    font-size: 22px; line-height: 1;
     position: relative;
     transition: transform 0.3s cubic-bezier(.34,1.56,.64,1);
     will-change: transform;
+  }
+  .tab-svg-icon {
+    width: 22px; height: 22px; display: block;
+    fill: none; stroke: currentColor;
+    stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
   }
 
   .tab-label { line-height: 1; margin-top: 2px; font-size: 9.5px; }
@@ -2655,7 +2666,7 @@
 <body>
   <div class="header" id="appHeader">
     <div class="avatar-ring" id="headerRing">
-      <div class="avatar-inner" id="headerAvatar">📊</div>
+      <div class="avatar-inner" id="headerAvatar"><svg style="width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round" aria-hidden="true"><use href="#ico-chart"></use></svg></div>
     </div>
     <h1 id="greeting">Моя статистика</h1>
     <p id="subtitle">Загружаем данные…</p>
@@ -2668,10 +2679,10 @@
 
   <div id="content">
     <div class="cards skeleton">
-      <div class="card"><span class="icon">💬</span><div class="value">—</div><div class="label">Сообщений</div></div>
-      <div class="card"><span class="icon">👥</span><div class="value">—</div><div class="label">Собеседников</div></div>
-      <div class="card"><span class="icon">✏️</span><div class="value">—</div><div class="label">Правок</div></div>
-      <div class="card"><span class="icon">🗑</span><div class="value">—</div><div class="label">Удалений</div></div>
+      <div class="card"><span class="icon"><svg class="ico" style="width:24px;height:24px" aria-hidden="true"><use href="#ico-msg-circ"></use></svg></span><div class="value">—</div><div class="label">Сообщений</div></div>
+      <div class="card"><span class="icon"><svg class="ico" style="width:24px;height:24px" aria-hidden="true"><use href="#ico-users"></use></svg></span><div class="value">—</div><div class="label">Собеседников</div></div>
+      <div class="card"><span class="icon"><svg class="ico" style="width:24px;height:24px" aria-hidden="true"><use href="#ico-edit"></use></svg></span><div class="value">—</div><div class="label">Правок</div></div>
+      <div class="card"><span class="icon"><svg class="ico" style="width:24px;height:24px" aria-hidden="true"><use href="#ico-trash"></use></svg></span><div class="value">—</div><div class="label">Удалений</div></div>
     </div>
   </div>
 
@@ -2683,7 +2694,7 @@
   <!-- kept for JS compat, hidden via CSS -->
   <button class="refresh-fab" id="refreshFabLegacy" style="display:none"></button>
 
-  <!-- SVG filter for liquid glass lens distortion -->
+  <!-- SVG filter + icon sprite -->
   <svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden;">
     <defs>
       <filter id="liquid-glass-filter" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
@@ -2693,6 +2704,37 @@
         <feGaussianBlur in="distorted" stdDeviation="0.6" result="softDistorted"/>
         <feComposite in="softDistorted" in2="SourceGraphic" operator="atop"/>
       </filter>
+      <!-- Lucide-style icon symbols (stroke="currentColor" fill="none" sw=2 lc=round lj=round) -->
+      <symbol id="ico-chart"    viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></symbol>
+      <symbol id="ico-gamepad"  viewBox="0 0 24 24"><line x1="6" y1="11" x2="10" y2="11"/><line x1="8" y1="9" x2="8" y2="13"/><line x1="15" y1="12" x2="15.01" y2="12"/><line x1="17" y1="10" x2="17.01" y2="10"/><rect x="2" y="6" width="20" height="12" rx="2"/></symbol>
+      <symbol id="ico-trophy"   viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></symbol>
+      <symbol id="ico-gem"      viewBox="0 0 24 24"><path d="M6 3h12l4 6-10 13L2 9Z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></symbol>
+      <symbol id="ico-bag"      viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></symbol>
+      <symbol id="ico-brain"    viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></symbol>
+      <symbol id="ico-scale"    viewBox="0 0 24 24"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></symbol>
+      <symbol id="ico-heart"    viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></symbol>
+      <symbol id="ico-msg"      viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+      <symbol id="ico-layers"   viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></symbol>
+      <symbol id="ico-trending" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></symbol>
+      <symbol id="ico-smile"    viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 13s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></symbol>
+      <symbol id="ico-flag"     viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></symbol>
+      <symbol id="ico-check"    viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></symbol>
+      <symbol id="ico-bot"      viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></symbol>
+      <symbol id="ico-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></symbol>
+      <symbol id="ico-award"    viewBox="0 0 24 24"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></symbol>
+      <symbol id="ico-mail"     viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+      <symbol id="ico-paw"      viewBox="0 0 24 24"><circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="20" cy="16" r="2"/><path d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z"/><circle cx="4" cy="8" r="2"/></symbol>
+      <symbol id="ico-target"   viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+      <symbol id="ico-coin"     viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></symbol>
+      <symbol id="ico-star"     viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></symbol>
+      <symbol id="ico-zap"      viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+      <symbol id="ico-palette"  viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></symbol>
+      <symbol id="ico-frame"    viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></symbol>
+      <symbol id="ico-gift"     viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></symbol>
+      <symbol id="ico-users"    viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+      <symbol id="ico-edit"     viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></symbol>
+      <symbol id="ico-trash"    viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></symbol>
+      <symbol id="ico-msg-circ" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></symbol>
     </defs>
   </svg>
 
@@ -2707,28 +2749,31 @@
     </div>
 
     <button class="tab-item active" data-tab="stats">
-      <div class="tab-icon-wrap">📊</div>
+      <div class="tab-icon-wrap"><svg class="tab-svg-icon" aria-hidden="true"><use href="#ico-chart"></use></svg></div>
       <span class="tab-label">Стата</span>
     </button>
     <button class="tab-item tab-casino" data-tab="casino">
-      <div class="tab-icon-wrap">🎰</div>
+      <div class="tab-icon-wrap"><svg class="tab-svg-icon" aria-hidden="true"><use href="#ico-gamepad"></use></svg></div>
       <span class="tab-label">Игры</span>
     </button>
     <button class="tab-item tab-quests" data-tab="quests">
-      <div class="tab-icon-wrap">🏆</div>
+      <div class="tab-icon-wrap"><svg class="tab-svg-icon" aria-hidden="true"><use href="#ico-trophy"></use></svg></div>
       <span class="tab-label">Рейтинг</span>
     </button>
     <button class="tab-item tab-donate" data-tab="donate">
-      <div class="tab-icon-wrap">💎</div>
+      <div class="tab-icon-wrap"><svg class="tab-svg-icon" aria-hidden="true"><use href="#ico-gem"></use></svg></div>
       <span class="tab-label">Поддержать</span>
     </button>
     <button class="tab-item tab-shop" data-tab="shop">
-      <div class="tab-icon-wrap">🛒</div>
+      <div class="tab-icon-wrap"><svg class="tab-svg-icon" aria-hidden="true"><use href="#ico-bag"></use></svg></div>
       <span class="tab-label">Магазин</span>
     </button>
   </nav>
 
   <script>
+    /** SVG icon helper — renders a symbol from the sprite sheet */
+    const _si = (id, sz = 16) => `<svg class="ico" aria-hidden="true" style="width:${sz}px;height:${sz}px"><use href="#${id}"></use></svg>`;
+
     const tg = window.Telegram && window.Telegram.WebApp;
     if (tg) { tg.ready(); tg.expand(); }
 
@@ -2998,7 +3043,7 @@
 
       if (!statsPremium) {
         return kpi + `
-          <div class="section-title">📊 Здоровье переписки</div>
+          <div class="section-title">${_si("ico-chart")} Здоровье переписки</div>
           <div class="premium-gate-mini">
             <div>
               <div class="premium-gate-mini-title">🔒 Анализ переписки</div>
@@ -3008,7 +3053,7 @@
           </div>`;
       }
       return kpi + `
-        <div class="section-title">📊 Здоровье переписки</div>
+        <div class="section-title">${_si("ico-chart")} Здоровье переписки</div>
         <div class="health-card">${rowsHtml}${splitHtml}</div>
       `;
     }
@@ -3059,7 +3104,7 @@
           `<div class="heat-cell level-${levelFor(c.count)}"></div>`
         ).join("");
         return `
-          <div class="section-title">🗓 Активность за 90 дней</div>
+          <div class="section-title">${_si("ico-calendar")} Активность за 90 дней</div>
           <div class="premium-gate-wrapper">
             <div class="heatmap-card premium-gate-blur" aria-hidden="true">
               <div class="heatmap-grid">${blurCells}</div>
@@ -3074,7 +3119,7 @@
       }
 
       return `
-        <div class="section-title">🗓 Активность за 90 дней</div>
+        <div class="section-title">${_si("ico-calendar")} Активность за 90 дней</div>
         ${fullHeatmap}
       `;
     }
@@ -3092,7 +3137,7 @@
         </div>
       `).join("");
       return `
-        <div class="section-title">🏅 Достижения <span class="sub">${achieved} из ${badges.length}</span></div>
+        <div class="section-title">${_si("ico-award")} Достижения <span class="sub">${achieved} из ${badges.length}</span></div>
         <div class="badges-grid">${items}</div>
       `;
     }
@@ -3101,7 +3146,7 @@
     function renderDigest(data) {
       if (!statsPremium) {
         return `
-          <div class="section-title">🤖 Дайджест дня</div>
+          <div class="section-title">${_si("ico-bot")} Дайджест дня</div>
           <div class="premium-gate-mini">
             <div>
               <div class="premium-gate-mini-title">🔒 Дайджест дня</div>
@@ -3112,7 +3157,7 @@
       }
       if (!data || data.locked || data.total_today === 0) {
         return `
-          <div class="section-title">🤖 Дайджест дня</div>
+          <div class="section-title">${_si("ico-bot")} Дайджест дня</div>
           <div class="health-card" style="text-align:center;color:var(--hint);font-size:13px;padding:20px 16px">
             Сегодня сообщений пока не было
           </div>`;
@@ -3134,7 +3179,7 @@
              <span class="digest-val">всё отвечено</span>
            </div>`;
       return `
-        <div class="section-title">🤖 Дайджест дня</div>
+        <div class="section-title">${_si("ico-bot")} Дайджест дня</div>
         <div class="digest-card">
           <div class="digest-row">
             <span class="digest-label">Всего сообщений</span>
@@ -3160,7 +3205,7 @@
     function renderWordsCloud(data) {
       if (!statsPremium) {
         return `
-          <div class="section-title">💬 Слова и эмодзи</div>
+          <div class="section-title">${_si("ico-msg")} Слова и эмодзи</div>
           <div class="premium-gate-mini">
             <div>
               <div class="premium-gate-mini-title">🔒 Анализ слов</div>
@@ -3171,7 +3216,7 @@
       }
       if (!data || data.locked || (!data.top_words?.length && !data.top_emojis?.length)) {
         return `
-          <div class="section-title">💬 Слова и эмодзи</div>
+          <div class="section-title">${_si("ico-msg")} Слова и эмодзи</div>
           <div class="health-card" style="text-align:center;color:var(--hint);font-size:13px;padding:20px 16px">
             Пока недостаточно текстовых сообщений
           </div>`;
@@ -3185,7 +3230,7 @@
         `<div class="emoji-chip"><span class="ej">${emoji}</span><span class="ec">${count}</span></div>`
       ).join("");
       return `
-        <div class="section-title">💬 Слова и эмодзи <span class="sub">90 дней</span></div>
+        <div class="section-title">${_si("ico-msg")} Слова и эмодзи <span class="sub">90 дней</span></div>
         <div class="words-card">
           <div class="words-cloud">${wordsHtml}</div>
           ${emojisHtml ? `<div class="emoji-row">${emojisHtml}</div>` : ""}
@@ -3265,7 +3310,7 @@
             <button class="rel-decline-btn" data-rel-respond="${r.partner_id}" data-accept="false">✗</button>
           </div>`;
       }).join("");
-      return `<div class="rel-pending-block"><div class="section-title">💌 Запросы дружбы</div>${rows}</div>`;
+      return `<div class="rel-pending-block"><div class="section-title">${_si("ico-mail")} Запросы дружбы</div>${rows}</div>`;
     }
 
     function openRelModal(chatId, partnerName) {
@@ -3502,7 +3547,7 @@
       return `
         ${controls}
         ${renderPendingRelRequests()}
-        <div class="section-title">🏆 Топ собеседников <span class="sub">${totalShown}${!statsPremium && hiddenCount > 0 ? " из " + totalAll : " из " + totalAll}</span></div>
+        <div class="section-title">${_si("ico-trophy")} Топ собеседников <span class="sub">${totalShown}${!statsPremium && hiddenCount > 0 ? " из " + totalAll : " из " + totalAll}</span></div>
         <div class="list">${rows}</div>
         ${premiumMoreHtml}
         <button class="share-btn" id="shareBtn">📋 Скопировать сводку</button>
@@ -4240,7 +4285,7 @@
     // ══════════════════════════════════════════════════════════════════
     // MAIN TAB SWITCHING
     // ══════════════════════════════════════════════════════════════════
-    const TAB_HEADER_ICONS  = { stats: "📊", casino: "🎰", quests: "🏆", donate: "💎", shop: "🛒" };
+    const TAB_HEADER_ICONS  = { stats: _si("ico-chart",18), casino: _si("ico-gamepad",18), quests: _si("ico-trophy",18), donate: _si("ico-gem",18), shop: _si("ico-bag",18) };
     const TAB_HEADER_TITLES = { stats: "Моя статистика", casino: "Игры", quests: "Задания и рейтинг", donate: "Поддержать", shop: "Монетный магазин" };
     let shopLoaded = false;
     let shopData   = null;
@@ -6542,7 +6587,7 @@
 
       if (pets.length === 0) {
         return `<div class="pet-section">
-          <div class="section-title">🐾 Питомцы ${adoptBtn}</div>
+          <div class="section-title">${_si("ico-paw")} Питомцы ${adoptBtn}</div>
           <div class="card pet-empty">
             <div class="pet-empty-emoji">🥚</div>
             <div class="pet-empty-title">Нет питомцев</div>
@@ -6615,7 +6660,7 @@
         </div>`).join("");
 
       return `<div class="pet-section">
-        <div class="section-title">🐾 Питомцы ${adoptBtn}</div>
+        <div class="section-title">${_si("ico-paw")} Питомцы ${adoptBtn}</div>
         ${aliveCards}${deadCards}
       </div>`;
     }
@@ -6961,7 +7006,7 @@
       }).join("");
 
       return `
-        <div class="section-title">🎯 Задания дня
+        <div class="section-title">${_si("ico-target")} Задания дня
           <span class="sub">${earned}/${total} 🪙</span>
         </div>
         ${cards}`;
@@ -6992,7 +7037,7 @@
         ? `<div class="lb-my-rank-note">Твоё место: #${myRank}</div>` : "";
 
       return `
-        <div class="section-title" style="margin-top:8px">🏆 Рейтинг монет</div>
+        <div class="section-title" style="margin-top:8px">${_si("ico-coin")} Рейтинг монет</div>
         ${rows || `<div class="empty" style="padding:20px 0"><span class="big-emoji">🪙</span>Пока никто не зарабатывал монеты.</div>`}
         ${myNote}`;
     }
@@ -7161,7 +7206,7 @@
         ${boostBanner}
 
         <!-- ── Купить монеты за Stars ── -->
-        <div class="shop-section-title">⭐ Купить монеты · Telegram Stars</div>
+        <div class="shop-section-title">${_si("ico-star")} Купить монеты · Telegram Stars</div>
         <div class="coin-pkg-grid">
           ${COIN_PKGS.map((pkg, i) => `
             <div class="coin-pkg-card ${pkg.cls}" style="animation-delay:${0.04 + i * 0.04}s">
@@ -7176,7 +7221,7 @@
         </div>
 
         <!-- ── Бусты ── -->
-        <div class="shop-section-title">⚡ Бусты</div>
+        <div class="shop-section-title">${_si("ico-zap")} Бусты</div>
         <div class="shop-items-grid">
           <div class="shop-item" style="animation-delay:0.18s">
             <span class="shop-item-icon">⚡</span>
@@ -7201,7 +7246,7 @@
         </div>
 
         <!-- ── Темы ── -->
-        <div class="shop-section-title">🎨 Темы оформления</div>
+        <div class="shop-section-title">${_si("ico-palette")} Темы оформления</div>
         <div class="theme-card-grid">
           ${THEMES.map(t => {
             const owned    = (settings.owned_themes || ["default"]).includes(t.id) || t.free;
@@ -7231,7 +7276,7 @@
         </div>
 
         <!-- ── Рамки ── -->
-        <div class="shop-section-title" style="margin-top:16px">🖼 Рамка профиля · ${prices.frame ?? 150} 🪙</div>
+        <div class="shop-section-title" style="margin-top:16px">${_si("ico-frame")} Рамка профиля · ${prices.frame ?? 150} 🪙</div>
         <div class="frame-picker">
           ${FRAMES.map(f => `
             <button class="frame-btn ${settings.frame === f.id ? "active" : ""}" data-frame="${f.id}"
@@ -7242,7 +7287,7 @@
         </div>
 
         <!-- ── Подарки ── -->
-        <div class="shop-section-title">🎁 Подарки</div>
+        <div class="shop-section-title">${_si("ico-gift")} Подарки</div>
         <div class="shop-items-grid shop-item-wide">
           <div class="shop-item">
             <span class="shop-item-icon">🎁</span>
@@ -7825,7 +7870,7 @@
       return `
         <!-- 1. Score gauge -->
         <div class="ai-sec">
-          <div class="ai-sec-head"><span class="ai-sec-ico">🧠</span><span class="ai-sec-label">Общая оценка общения</span></div>
+          <div class="ai-sec-head"><span class="ai-sec-ico">${_si("ico-brain",20)}</span><span class="ai-sec-label">Общая оценка общения</span></div>
           <div class="ai-sec-body">
             <div class="ai-score-gauge-wrap">
               <svg width="140" height="72" viewBox="0 0 140 72" overflow="visible" style="display:block">
@@ -7851,7 +7896,7 @@
 
         <!-- 2. Balance с диаграммами -->
         <div class="ai-sec">
-          <div class="ai-sec-head"><span class="ai-sec-ico">⚖️</span><span class="ai-sec-label">Баланс отношений</span></div>
+          <div class="ai-sec-head"><span class="ai-sec-ico">${_si("ico-scale",20)}</span><span class="ai-sec-label">Баланс отношений</span></div>
           <div class="ai-sec-body">
             <div class="ai-ratio-section-lbl">Сообщений</div>
             ${_ratioBar(um, cm, "Вы "+um, esc2(name)+" "+cm, "#5856d6", "#34c759")}
@@ -7870,7 +7915,7 @@
 
         <!-- 3. Interest с кольцом -->
         <div class="ai-sec">
-          <div class="ai-sec-head"><span class="ai-sec-ico">❤️</span><span class="ai-sec-label">Заинтересованность ${esc2(name)}</span></div>
+          <div class="ai-sec-head"><span class="ai-sec-ico">${_si("ico-heart",20)}</span><span class="ai-sec-label">Заинтересованность ${esc2(name)}</span></div>
           <div class="ai-sec-body">
             <div class="ai-interest-wrap">
               <canvas id="aiIntCanvas" width="84" height="84" style="flex-shrink:0"></canvas>
@@ -7885,7 +7930,7 @@
 
         <!-- 4. Style -->
         <div class="ai-sec">
-          <div class="ai-sec-head"><span class="ai-sec-ico">💬</span><span class="ai-sec-label">Стиль общения</span></div>
+          <div class="ai-sec-head"><span class="ai-sec-ico">${_si("ico-msg",20)}</span><span class="ai-sec-label">Стиль общения</span></div>
           <div class="ai-sec-body">
             <div class="ai-tag-lbl">Вы</div>
             <div class="ai-tags">${tagCloud(style.user_tags)||'<span style="color:var(--hint);font-size:12px">нет данных</span>'}</div>
@@ -7896,7 +7941,7 @@
 
         <!-- 5. Personality -->
         <div class="ai-sec">
-          <div class="ai-sec-head"><span class="ai-sec-ico">🧩</span><span class="ai-sec-label">Особенности личности</span></div>
+          <div class="ai-sec-head"><span class="ai-sec-ico">${_si("ico-layers",20)}</span><span class="ai-sec-label">Особенности личности</span></div>
           <div class="ai-sec-body">
             <div class="ai-tag-lbl">Вы</div>
             <div class="ai-tags">${tagCloud(pers.user_traits)||'<span style="color:var(--hint);font-size:12px">нет данных</span>'}</div>
@@ -7907,7 +7952,7 @@
 
         <!-- 6. Dynamics -->
         <div class="ai-sec">
-          <div class="ai-sec-head"><span class="ai-sec-ico">📈</span><span class="ai-sec-label">Динамика отношений</span></div>
+          <div class="ai-sec-head"><span class="ai-sec-ico">${_si("ico-trending",20)}</span><span class="ai-sec-label">Динамика отношений</span></div>
           <div class="ai-sec-body">
             ${(()=>{const dyn=ai.dynamics||{};
               const ico = dyn.trend==="growing"?"📈":dyn.trend==="declining"?"📉":"➡️";
@@ -7931,7 +7976,7 @@
 
         <!-- 7. Emotions (donut) -->
         <div class="ai-sec">
-          <div class="ai-sec-head"><span class="ai-sec-ico">😊</span><span class="ai-sec-label">Анализ эмоций</span></div>
+          <div class="ai-sec-head"><span class="ai-sec-ico">${_si("ico-smile",20)}</span><span class="ai-sec-label">Анализ эмоций</span></div>
           <div class="ai-sec-body">
             <div class="ai-pie-wrap">
               <canvas id="aiEmoPie" width="130" height="130"></canvas>
@@ -7942,19 +7987,19 @@
 
         <!-- 8. Red flags -->
         <div class="ai-sec">
-          <div class="ai-sec-head"><span class="ai-sec-ico">🚩</span><span class="ai-sec-label">Красные флаги</span></div>
+          <div class="ai-sec-head"><span class="ai-sec-ico">${_si("ico-flag",20)}</span><span class="ai-sec-label">Красные флаги</span></div>
           <div class="ai-sec-body">${flagsHtml(redFlags,"🚩","var(--danger)")}</div>
         </div>
 
         <!-- 9. Green flags -->
         <div class="ai-sec">
-          <div class="ai-sec-head"><span class="ai-sec-ico">💚</span><span class="ai-sec-label">Зелёные флаги</span></div>
+          <div class="ai-sec-head"><span class="ai-sec-ico">${_si("ico-check",20)}</span><span class="ai-sec-label">Зелёные флаги</span></div>
           <div class="ai-sec-body">${flagsHtml(greenFlags,"✅","#34c759")}</div>
         </div>
 
         <!-- 10. Stats -->
         <div class="ai-sec">
-          <div class="ai-sec-head"><span class="ai-sec-ico">📊</span><span class="ai-sec-label">Статистика переписки</span></div>
+          <div class="ai-sec-head"><span class="ai-sec-ico">${_si("ico-chart",20)}</span><span class="ai-sec-label">Статистика переписки</span></div>
           <div class="ai-sec-body">
             <div class="ai-stats-grid">
               <div class="ai-stat-cell"><div class="ai-stat-cell-val">${stats.total_messages||0}</div><div class="ai-stat-cell-lbl">Сообщений</div></div>
@@ -7970,7 +8015,7 @@
 
         <!-- 11. Summary -->
         <div class="ai-sec" style="margin-bottom:24px">
-          <div class="ai-sec-head"><span class="ai-sec-ico">🤖</span><span class="ai-sec-label">AI Резюме</span></div>
+          <div class="ai-sec-head"><span class="ai-sec-ico">${_si("ico-bot",20)}</span><span class="ai-sec-label">AI Резюме</span></div>
           <div class="ai-sec-body">
             <div class="ai-summary-text">${esc2(ai.summary||"Резюме недоступно")}</div>
             <div style="font-size:10.5px;color:var(--hint);margin-top:10px;line-height:1.5">⚠️ Анализ основан только на тексте переписки и не является психологическим заключением. Выводы — вероятностные наблюдения, а не факты.</div>

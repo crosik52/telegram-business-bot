@@ -33,36 +33,9 @@ async def telegram_webhook(
             )
 
     payload = await request.json()
-    update_id = payload.get("update_id")
-    update_type = next(
-        (k for k in payload if k not in ("update_id",)), "unknown"
+    logger.info(
+        "Received Telegram update update_id=%s", payload.get("update_id")
     )
-    logger.info("Received Telegram update update_id=%s type=%s", update_id, update_type)
-
-    # ── Raw logging for media messages (helps diagnose view-once delivery) ──
-    _bm = payload.get("business_message") or payload.get("edited_business_message")
-    if _bm:
-        _has_photo = bool(_bm.get("photo"))
-        _has_video = bool(_bm.get("video"))
-        _has_doc   = bool(_bm.get("document"))
-        _has_voice = bool(_bm.get("voice"))
-        _has_vn    = bool(_bm.get("video_note"))
-        _text      = bool(_bm.get("text"))
-        _spoiler   = _bm.get("has_media_spoiler")
-        _ttl       = (
-            (_bm.get("photo") or [{}])[-1].get("file_id", "")
-            if _has_photo else ""
-        )
-        _keys = list(_bm.keys())
-        logger.info(
-            "RAW business_message chat=%s msg=%s | photo=%s video=%s doc=%s "
-            "voice=%s vn=%s text=%s spoiler=%s | keys=%s",
-            _bm.get("chat", {}).get("id"),
-            _bm.get("message_id"),
-            _has_photo, _has_video, _has_doc,
-            _has_voice, _has_vn, _text, _spoiler,
-            _keys,
-        )
 
     bot = get_bot(settings)
     dispatcher = get_dispatcher()
@@ -71,7 +44,7 @@ async def telegram_webhook(
         update = Update.model_validate(payload, context={"bot": bot})
         await dispatcher.feed_update(bot, update)
     except Exception:
-        logger.exception("Error while processing Telegram update payload=%s", payload)
+        logger.exception("Error while processing Telegram update")
         # Always return 200 to Telegram so it doesn't endlessly retry a
         # payload we can't process, but the error is fully logged above.
         return {"ok": False}

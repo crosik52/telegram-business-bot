@@ -36,7 +36,6 @@ from __future__ import annotations
 import asyncio
 import io
 import logging
-from collections import OrderedDict
 
 logger = logging.getLogger(__name__)
 
@@ -47,88 +46,6 @@ _update_task: asyncio.Task | None = None
 
 # Errors that mean "entity not in cache yet" — trigger a dialog refresh + retry
 _ENTITY_ERRORS = ("Could not find the input entity", "PeerUser", "PeerChat", "PeerChannel")
-
-# ── View-once proactive cache ─────────────────────────────────────────────────
-# Keyed by (chat_id, message_id) → (media_type_str, bytes).
-# Populated by the NewMessage event handler BEFORE the user opens the media.
-# Consumed (popped) by dot-save in handlers.py.
-_view_once_cache: OrderedDict[tuple[int, int], tuple[str, bytes]] = OrderedDict()
-_VIEW_ONCE_CACHE_MAX = 200  # keep at most 200 entries in memory
-
-
-def _media_type_from_msg(msg) -> str:
-    """Detect media type string from a Telethon message object."""
-    try:
-        from telethon.tl.types import MessageMediaPhoto, MessageMediaDocument
-        media = msg.media
-        if isinstance(media, MessageMediaPhoto):
-            return "photo"
-        if isinstance(media, MessageMediaDocument):
-            doc = media.document
-            attr_names = {type(a).__name__ for a in doc.attributes}
-            attr_map = {type(a).__name__: a for a in doc.attributes}
-            if "DocumentAttributeVideo" in attr_names:
-                if getattr(attr_map["DocumentAttributeVideo"], "round_message", False):
-                    return "video_note"
-                return "video"
-            if "DocumentAttributeVoice" in attr_names:
-                return "voice"
-            if "DocumentAttributeAudio" in attr_names:
-                return "audio"
-    except Exception:
-        pass
-    return "document"
-
-
-async def _view_once_event_handler(event) -> None:
-    """Telethon NewMessage handler — proactively captures view-once media.
-
-    Fires for every incoming message on the owner's account via MTProto.
-    If the message has ttl_seconds > 0 (view-once / self-destructing), we
-    download the bytes immediately — before the user opens it — and stash
-    them in _view_once_cache keyed by (chat_id, message_id).
-
-    dot-save in handlers.py calls pop_view_once_bytes() to retrieve them.
-    """
-    global _view_once_cache
-    msg = event.message
-    if not msg or not msg.media:
-        return
-    if not getattr(msg.media, "ttl_seconds", 0):
-        return  # not view-once
-
-    chat_id = event.chat_id
-    message_id = msg.id
-    media_type = _media_type_from_msg(msg)
-
-    try:
-        buf = io.BytesIO()
-        result = await event.client.download_media(msg, file=buf)
-        if result is None:
-            logger.warning(
-                "Telethon view-once listener: download returned None "
-                "chat=%s msg=%s", chat_id, message_id,
-            )
-            return
-        data = buf.getvalue()
-        _view_once_cache[(chat_id, message_id)] = (media_type, data)
-        # Evict oldest entry if cache is full
-        while len(_view_once_cache) > _VIEW_ONCE_CACHE_MAX:
-            _view_once_cache.popitem(last=False)
-        logger.info(
-            "Telethon: ✓ captured view-once %s %d B (chat=%s msg=%s)",
-            media_type, len(data), chat_id, message_id,
-        )
-    except Exception as exc:
-        logger.warning(
-            "Telethon: view-once capture failed chat=%s msg=%s: %s",
-            chat_id, message_id, exc,
-        )
-
-
-def pop_view_once_bytes(chat_id: int, message_id: int) -> tuple[str, bytes] | None:
-    """Return and remove cached view-once bytes, or None if not found."""
-    return _view_once_cache.pop((chat_id, message_id), None)
 
 
 def _is_entity_error(exc: Exception) -> bool:
@@ -231,15 +148,6 @@ async def connect(api_id: int, api_hash: str, session_str: str) -> None:
             getattr(me, "id", "?"),
         )
 
-        # Register proactive view-once capture handler BEFORE run_until_disconnected
-        # so it fires for every incoming message with ttl_seconds > 0.
-        from telethon import events
-        client.add_event_handler(
-            _view_once_event_handler,
-            events.NewMessage(incoming=True),
-        )
-        logger.info("Telethon: view-once listener registered")
-
         # Warm up entity cache with recent dialogs so known contacts resolve immediately
         await _refresh_entity_cache(client)
 
@@ -313,53 +221,6 @@ async def _get_messages_with_retry(chat_id: int, message_id: int):
     await asyncio.sleep(3)
     await _refresh_entity_cache(client)
     return await client.get_messages(chat_id, ids=message_id)
-
-
-async def is_view_once(chat_id: int, message_id: int) -> bool:
-    """Return True if the message contains view-once (ttl_seconds > 0) media."""
-    if _client is None:
-        return False
-    try:
-        msg = await _get_messages_with_retry(chat_id, message_id)
-        if msg is None or not msg.media:
-            return False
-        return bool(getattr(msg.media, "ttl_seconds", 0))
-    except Exception:
-        return False
-
-
-async def download_view_once_only(chat_id: int, message_id: int) -> bytes | None:
-    """Download media bytes ONLY if the message is view-once (ttl_seconds > 0).
-
-    Returns None for regular media so the caller doesn't waste DB space.
-    """
-    if _client is None:
-        return None
-    try:
-        msg = await _get_messages_with_retry(chat_id, message_id)
-        if msg is None or not msg.media:
-            return None
-        if not getattr(msg.media, "ttl_seconds", 0):
-            logger.debug(
-                "Telethon: skipping non-view-once media chat=%s msg=%s", chat_id, message_id
-            )
-            return None
-        buf = io.BytesIO()
-        result = await _client.download_media(msg, file=buf)
-        if result is None:
-            return None
-        data = buf.getvalue()
-        logger.info(
-            "Telethon: downloaded view-once %d B from chat=%s msg=%s",
-            len(data), chat_id, message_id,
-        )
-        return data
-    except Exception as exc:
-        logger.warning(
-            "Telethon: failed to download view-once chat=%s msg=%s: %s",
-            chat_id, message_id, exc,
-        )
-        return None
 
 
 async def download_message_media(chat_id: int, message_id: int) -> bytes | None:

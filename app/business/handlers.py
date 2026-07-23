@@ -187,50 +187,6 @@ async def _handle_dot_save(
             ref = result.scalar_one_or_none()
 
             if ref is None:
-                # Message not in DB — Bot API never delivers view-once messages
-                # via webhook, so check the Telethon proactive cache first.
-                from app.services import telethon_service as _tls
-                _vo = _tls.pop_view_once_bytes(chat_id, reply_to_message_id)
-                if _vo:
-                    _vo_type, _vo_raw = _vo
-                    logger.info(
-                        "dot-save: ✓ view-once found in Telethon cache "
-                        "chat=%s msg=%s type=%s size=%d B",
-                        chat_id, reply_to_message_id, _vo_type, len(_vo_raw),
-                    )
-                    from aiogram.types import BufferedInputFile as _BIFVO
-                    _ext = {"photo": "jpg", "video": "mp4", "voice": "ogg",
-                            "video_note": "mp4", "audio": "mp3"}.get(_vo_type, "bin")
-                    _fbuf = _BIFVO(_vo_raw, filename=f"media.{_ext}")
-                    _kw_vo: dict = {
-                        "chat_id": owner_id,
-                        "caption": "📥 Одноразовое медиа (перехвачено)",
-                    }
-                    try:
-                        match _vo_type:
-                            case "photo":
-                                await bot.send_photo(photo=_fbuf, **_kw_vo)
-                            case "video":
-                                await bot.send_video(video=_fbuf, **_kw_vo)
-                            case "voice":
-                                await bot.send_voice(voice=_fbuf, **_kw_vo)
-                            case "video_note":
-                                await bot.send_video_note(
-                                    video_note=_fbuf, chat_id=owner_id)
-                            case _:
-                                await bot.send_document(document=_fbuf, **_kw_vo)
-                        logger.info(
-                            "dot-save: ✓ view-once sent to owner=%s", owner_id)
-                    except Exception as _ve:
-                        logger.warning("dot-save: view-once send failed: %s", _ve)
-                        await bot.send_document(
-                            document=_BIFVO(_vo_raw, filename=f"media.{_ext}"),
-                            chat_id=owner_id,
-                        )
-                    return
-
-                # Not view-once cache either — could be a bot-sent message,
-                # owner's own message, or received while bot was offline.
                 logger.info(
                     "dot-save: reply_to=%s not in DB (chat=%s) — skipping silently "
                     "(bot-sent video or message received while offline)",
@@ -896,30 +852,6 @@ async def on_business_message(message: Message, bot: Bot) -> None:
         # Regular media file_ids stored in the `messages` table never expire,
         # so there is no need to download their bytes — the file_id is enough
         # to resend the media when a delete notification arrives.
-        #
-        # View-once / self-destructing media (ttl_seconds > 0) is different:
-        # its content expires the moment the recipient opens it.  We capture
-        # the bytes via Telethon immediately on arrival and store them so the
-        # delete handler can forward them to the owner.
-        _file_id, _file_uq_id, _media_type_str = _get_file_info(message)
-        if _file_uq_id and _media_type_str:
-            from app.services import telethon_service as _tls
-            if _tls.is_available():
-                # download_view_once_only checks ttl_seconds and returns None
-                # for regular media, so we never cache regular file bytes.
-                _raw = await _tls.download_view_once_only(
-                    message.chat.id, message.message_id
-                )
-                if _raw:
-                    await media_cache_service.store_bytes(
-                        session, _file_uq_id, _file_id or "", _media_type_str, _raw
-                    )
-                    logger.info(
-                        "media cached via telethon (view-once): %s (%d B)",
-                        _file_uq_id, len(_raw),
-                    )
-
-        # --- view-once save: owner replies to any message to trigger capture ---
         # Any reply from the owner fires the handler; _handle_dot_save itself
         # decides whether the target is self-destructing (Bot API can't download
         # it) and only forwards in that case, so normal-media replies are

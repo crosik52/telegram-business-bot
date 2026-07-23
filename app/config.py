@@ -55,11 +55,16 @@ class Settings(BaseSettings):
     telegram_api_id: int | None = Field(default=None, alias="TELEGRAM_API_ID")
     telegram_api_hash: str | None = Field(default=None, alias="TELEGRAM_API_HASH")
     telethon_session_str: str | None = Field(default=None, alias="TELETHON_SESSION_STR")
+    # Set TELETHON_ENABLED=false to disable Telethon on a specific instance
+    # (e.g. Replit dev) while keeping it active on Railway production.
+    # The same session cannot run on two servers simultaneously.
+    telethon_enabled_flag: bool = Field(default=True, alias="TELETHON_ENABLED")
 
     @property
     def telethon_enabled(self) -> bool:
         return bool(
-            self.telegram_api_id
+            self.telethon_enabled_flag
+            and self.telegram_api_id
             and self.telegram_api_hash
             and self.telethon_session_str
         )

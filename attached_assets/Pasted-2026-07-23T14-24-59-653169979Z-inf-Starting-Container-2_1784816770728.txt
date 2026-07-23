@@ -1,0 +1,70 @@
+2026-07-23T14:24:59.653169979Z [inf]  Starting Container
+2026-07-23T14:25:00.483047132Z [err]  INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+2026-07-23T14:25:00.483054899Z [err]  INFO  [alembic.runtime.migration] Will assume transactional DDL.
+2026-07-23T14:25:03.020816960Z [err]  INFO:     Started server process [5]
+2026-07-23T14:25:03.020819794Z [err]  INFO:     Waiting for application startup.
+2026-07-23T14:25:03.020822830Z [inf]  2026-07-23T14:25:03+0000 | INFO     | app.main | Starting Telegram Business Bot (environment=production)
+2026-07-23T14:25:03.020825864Z [inf]  2026-07-23T14:25:03+0000 | INFO     | app.main | Database dialect: postgresql (persistent)
+2026-07-23T14:25:03.802995324Z [inf]  2026-07-23T14:25:03+0000 | INFO     | app.main | Telegram webhook set to https://telegram-business-bot-production.up.railway.app/webhook
+2026-07-23T14:25:03.951361712Z [inf]  2026-07-23T14:25:03+0000 | INFO     | app.main | Telegram chat menu button set to open mini app
+2026-07-23T14:25:04.557052935Z [inf]  2026-07-23T14:25:04+0000 | INFO     | telethon.crypto.aes | libssl detected, it will be used for encryption
+2026-07-23T14:25:04.557055998Z [inf]  2026-07-23T14:25:04+0000 | INFO     | telethon.network.mtprotosender | Connecting to 149.154.167.51:443/TcpFull...
+2026-07-23T14:25:04.557058775Z [inf]  2026-07-23T14:25:04+0000 | INFO     | telethon.network.mtprotosender | Connection to 149.154.167.51:443/TcpFull complete!
+2026-07-23T14:25:05.542816885Z [inf]  2026-07-23T14:25:05+0000 | INFO     | app.services.telethon_service | Telethon user-client connected as амаль (id=6881815417)
+2026-07-23T14:25:05.542819940Z [err]  INFO:     Application startup complete.
+2026-07-23T14:25:05.542822886Z [err]  INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+2026-07-23T14:25:10.590608572Z [inf]  2026-07-23T14:25:10+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745923924
+2026-07-23T14:25:10.590620381Z [inf]  2026-07-23T14:25:10+0000 | INFO     | app.services.message_service | Stored new business message chat_id=864974709 message_id=784569 media=text
+2026-07-23T14:25:10.590626133Z [inf]  2026-07-23T14:25:10+0000 | INFO     | aiogram.event | Update id=745923924 is handled. Duration 67 ms by bot id=1162707887
+2026-07-23T14:25:10.590630771Z [inf]  2026-07-23T14:25:10+0000 | INFO     | http | POST /webhook -> 200 (70.0ms)
+2026-07-23T14:25:11.797216735Z [inf]  2026-07-23T14:25:11+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745923925
+2026-07-23T14:25:11.817368248Z [inf]  2026-07-23T14:25:11+0000 | INFO     | app.services.message_service | Stored new business message chat_id=5656034973 message_id=1022294 media=text
+2026-07-23T14:25:11.824011028Z [inf]  2026-07-23T14:25:11+0000 | INFO     | aiogram.event | Update id=745923925 is handled. Duration 27 ms by bot id=1162707887
+2026-07-23T14:25:11.824015838Z [inf]  2026-07-23T14:25:11+0000 | INFO     | http | POST /webhook -> 200 (27.6ms)
+2026-07-23T14:25:31.483125291Z [inf]  2026-07-23T14:25:23+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745923927
+2026-07-23T14:25:31.483129617Z [inf]  2026-07-23T14:25:23+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745923926
+2026-07-23T14:25:31.483134585Z [inf]  2026-07-23T14:25:23+0000 | INFO     | app.services.message_service | Stored new business message chat_id=6881815417 message_id=566179 media=text
+2026-07-23T14:25:31.483139156Z [inf]  2026-07-23T14:25:23+0000 | INFO     | app.business.handlers | dot-save: triggered owner=1335699132 chat=6881815417 reply_to=566178
+2026-07-23T14:25:31.483143034Z [inf]  2026-07-23T14:25:23+0000 | INFO     | aiogram.event | Update id=745923927 is handled. Duration 24 ms by bot id=1162707887
+2026-07-23T14:25:31.483147585Z [inf]  2026-07-23T14:25:23+0000 | INFO     | http | POST /webhook -> 200 (27.7ms)
+2026-07-23T14:25:31.483152549Z [inf]  2026-07-23T14:25:23+0000 | INFO     | app.services.message_service | Stored new business message chat_id=1335699132 message_id=47682 media=text
+2026-07-23T14:25:31.483156823Z [inf]  2026-07-23T14:25:23+0000 | INFO     | aiogram.event | Update id=745923926 is handled. Duration 33 ms by bot id=1162707887
+2026-07-23T14:25:31.483162659Z [inf]  2026-07-23T14:25:23+0000 | INFO     | http | POST /webhook -> 200 (36.9ms)
+2026-07-23T14:25:31.483167154Z [inf]  2026-07-23T14:25:23+0000 | INFO     | app.business.handlers | dot-save: reply_to=566178 not in DB (chat=6881815417) — skipping silently (bot-sent video or message received while offline)
+2026-07-23T14:25:31.483173051Z [inf]  2026-07-23T14:25:24+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745923928
+2026-07-23T14:25:31.483176992Z [inf]  2026-07-23T14:25:24+0000 | INFO     | app.services.message_service | Stored new business message chat_id=5656034973 message_id=1022295 media=voice
+2026-07-23T14:25:31.483180601Z [inf]  2026-07-23T14:25:24+0000 | WARNING  | app.services.telethon_service | Telethon: failed to download view-once chat=5656034973 msg=1022295: Could not find the input entity for PeerUser(user_id=5656034973) (PeerUser). Please read https://docs.telethon.dev/en/stable/concepts/entities.html to find out more details.
+2026-07-23T14:25:31.484540532Z [inf]  2026-07-23T14:25:24+0000 | INFO     | app.business.handlers | dot-save: triggered owner=6731288454 chat=5656034973 reply_to=1022291
+2026-07-23T14:25:31.484545307Z [inf]  2026-07-23T14:25:24+0000 | INFO     | aiogram.event | Update id=745923928 is handled. Duration 182 ms by bot id=1162707887
+2026-07-23T14:25:31.484548491Z [inf]  2026-07-23T14:25:24+0000 | INFO     | http | POST /webhook -> 200 (183.4ms)
+2026-07-23T14:25:31.484551759Z [inf]  2026-07-23T14:25:24+0000 | INFO     | app.business.handlers | dot-save: found video file_id=BAACAgIAAxkBAAEPmVNq…
+2026-07-23T14:25:31.484554843Z [inf]  2026-07-23T14:25:26+0000 | INFO     | app.services.media_cache_service | media_cache: skipping AgADQ5oAAo3eSUg — size 14627136 B exceeds 10485760 B limit
+2026-07-23T14:25:31.484558092Z [inf]  2026-07-23T14:25:26+0000 | INFO     | app.business.handlers | dot-save: bot_api blocked video — self-destructing, attempting recovery
+2026-07-23T14:25:31.484561032Z [inf]  2026-07-23T14:25:26+0000 | INFO     | app.business.handlers | dot-save: bot_api failed for video — trying Telethon (chat=5656034973 msg=1022291)
+2026-07-23T14:25:31.484565135Z [inf]  2026-07-23T14:25:26+0000 | WARNING  | app.services.telethon_service | Telethon: failed to download chat=5656034973 msg=1022291: Could not find the input entity for PeerUser(user_id=5656034973) (PeerUser). Please read https://docs.telethon.dev/en/stable/concepts/entities.html to find out more details.
+2026-07-23T14:25:31.484567986Z [inf]  2026-07-23T14:25:26+0000 | WARNING  | app.business.handlers | dot-save: ✗ all methods failed for video owner=6731288454 (chat=5656034973 msg=1022291)
+2026-07-23T14:25:31.484570547Z [inf]  2026-07-23T14:25:27+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745923929
+2026-07-23T14:25:31.484573271Z [inf]  2026-07-23T14:25:27+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745923930
+2026-07-23T14:25:31.484576114Z [inf]  2026-07-23T14:25:27+0000 | INFO     | app.services.message_service | Stored new business message chat_id=6881815417 message_id=566180 media=text
+2026-07-23T14:25:31.486792897Z [inf]  2026-07-23T14:25:27+0000 | INFO     | app.business.handlers | dot-save: triggered owner=1335699132 chat=6881815417 reply_to=566178
+2026-07-23T14:25:31.486800658Z [inf]  2026-07-23T14:25:27+0000 | INFO     | aiogram.event | Update id=745923930 is handled. Duration 27 ms by bot id=1162707887
+2026-07-23T14:25:31.486805866Z [inf]  2026-07-23T14:25:27+0000 | INFO     | http | POST /webhook -> 200 (27.7ms)
+2026-07-23T14:25:31.486810208Z [inf]  2026-07-23T14:25:27+0000 | INFO     | app.services.message_service | Stored new business message chat_id=1335699132 message_id=47683 media=text
+2026-07-23T14:25:31.486817116Z [inf]  2026-07-23T14:25:27+0000 | INFO     | app.business.handlers | dot-save: reply_to=566178 not in DB (chat=6881815417) — skipping silently (bot-sent video or message received while offline)
+2026-07-23T14:25:31.486821259Z [inf]  2026-07-23T14:25:27+0000 | INFO     | aiogram.event | Update id=745923929 is handled. Duration 41 ms by bot id=1162707887
+2026-07-23T14:25:31.486824684Z [inf]  2026-07-23T14:25:27+0000 | INFO     | http | POST /webhook -> 200 (42.8ms)
+2026-07-23T14:25:39.451984139Z [inf]  2026-07-23T14:25:39+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745923931
+2026-07-23T14:25:39.477484774Z [inf]  2026-07-23T14:25:39+0000 | INFO     | app.services.message_service | Stored new business message chat_id=5656034973 message_id=1022297 media=voice
+2026-07-23T14:25:39.627261321Z [inf]  2026-07-23T14:25:39+0000 | WARNING  | app.services.telethon_service | Telethon: failed to download view-once chat=5656034973 msg=1022297: Could not find the input entity for PeerUser(user_id=5656034973) (PeerUser). Please read https://docs.telethon.dev/en/stable/concepts/entities.html to find out more details.
+2026-07-23T14:25:39.627270637Z [inf]  2026-07-23T14:25:39+0000 | INFO     | aiogram.event | Update id=745923931 is handled. Duration 178 ms by bot id=1162707887
+2026-07-23T14:25:39.629117347Z [inf]  2026-07-23T14:25:39+0000 | INFO     | http | POST /webhook -> 200 (180.5ms)
+2026-07-23T14:25:42.600416628Z [inf]  2026-07-23T14:25:42+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745923932
+2026-07-23T14:25:42.615210260Z [inf]  2026-07-23T14:25:42+0000 | INFO     | app.services.message_service | Stored new business message chat_id=5656034973 message_id=1022298 media=text
+2026-07-23T14:25:42.615214741Z [inf]  2026-07-23T14:25:42+0000 | INFO     | app.business.handlers | dot-save: triggered owner=6731288454 chat=5656034973 reply_to=1022292
+2026-07-23T14:25:42.615219532Z [inf]  2026-07-23T14:25:42+0000 | INFO     | aiogram.event | Update id=745923932 is handled. Duration 20 ms by bot id=1162707887
+2026-07-23T14:25:42.615222464Z [inf]  2026-07-23T14:25:42+0000 | INFO     | http | POST /webhook -> 200 (22.0ms)
+2026-07-23T14:25:42.628819350Z [inf]  2026-07-23T14:25:42+0000 | INFO     | app.business.handlers | dot-save: found voice file_id=AwACAgIAAxkBAAEPmVRq…
+2026-07-23T14:25:44.689811450Z [inf]  2026-07-23T14:25:44+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745923933
+2026-07-23T14:25:44.717021751Z [inf]  2026-07-23T14:25:44+0000 | INFO     | app.services.message_service | Stored new business message chat_id=5656034973 message_id=1022299 media=text
+2026-07-23T14:25:44.721258754Z [inf]  2026-07-23T14:25:44+0000 | INFO     | aiogram.event | Update id=745923933 is handled. Duration 32 ms by bot id=1162707887
+2026-07-23T14:25:44.721263329Z [inf]  2026-07-23T14:25:44+0000 | INFO     | http | POST /webhook -> 200 (34.4ms)

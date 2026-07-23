@@ -13,6 +13,7 @@ ENVIRONMENT = "production"
 HOST = "0.0.0.0"
 LOG_LEVEL = "INFO"
 PORT = "5000"
+TELETHON_ENABLED = "false"
 
 [workflows]
 runButton = "Project"

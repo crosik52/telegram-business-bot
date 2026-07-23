@@ -16,6 +16,19 @@ Setup
        TELETHON_SESSION_STR = 1Abc...  (long base64-like string)
 
 The service starts lazily: if those vars are absent the module is a no-op.
+
+Entity cache
+------------
+Telethon resolves peers (user_id → access_hash) from its session cache.
+A fresh session has an empty cache, causing "Could not find the input entity"
+errors for users the account has never interacted with via MTProto.
+
+We fix this in two complementary ways:
+  1. At startup: call get_dialogs() to pre-populate the cache with recent contacts.
+  2. Background task: run_until_disconnected() so Telethon processes live MTProto
+     updates and caches every new peer it sees in real-time.
+  3. Fallback: if a download still fails with an entity error, refresh dialogs
+     and retry once before giving up.
 """
 
 from __future__ import annotations
@@ -29,11 +42,43 @@ logger = logging.getLogger(__name__)
 # Populated by connect() / closed by disconnect()
 _client = None
 _client_lock = asyncio.Lock()
+_update_task: asyncio.Task | None = None
+
+# Errors that mean "entity not in cache yet" — trigger a dialog refresh + retry
+_ENTITY_ERRORS = ("Could not find the input entity", "PeerUser", "PeerChat", "PeerChannel")
+
+
+def _is_entity_error(exc: Exception) -> bool:
+    msg = str(exc)
+    return any(tag in msg for tag in _ENTITY_ERRORS)
+
+
+async def _run_updates(client) -> None:
+    """Background task: keep Telethon processing MTProto updates.
+
+    This is what populates the entity cache automatically as new users
+    send messages to the account owner.
+    """
+    try:
+        await client.run_until_disconnected()
+    except Exception as exc:
+        logger.warning("Telethon update loop exited: %s", exc)
+
+
+async def _refresh_entity_cache(client) -> None:
+    """Fetch recent dialogs to populate the entity cache."""
+    try:
+        count = 0
+        async for _ in client.iter_dialogs(limit=500):
+            count += 1
+        logger.info("Telethon: entity cache warmed up (%d dialogs)", count)
+    except Exception as exc:
+        logger.warning("Telethon: dialog prefetch failed: %s", exc)
 
 
 async def connect(api_id: int, api_hash: str, session_str: str) -> None:
     """Connect and authorise the Telethon client.  Called once at startup."""
-    global _client
+    global _client, _update_task
     from telethon import TelegramClient
     from telethon.sessions import StringSession
 
@@ -41,7 +86,18 @@ async def connect(api_id: int, api_hash: str, session_str: str) -> None:
         if _client is not None:
             return
         client = TelegramClient(StringSession(session_str), api_id, api_hash)
-        await client.connect()
+        try:
+            await client.connect()
+        except Exception as exc:
+            logger.error(
+                "Telethon: connect() failed (%s). "
+                "If AuthKeyDuplicatedError — the same session is already running "
+                "on another server. Use TELETHON_ENABLED=false to disable Telethon "
+                "on this instance.",
+                exc,
+            )
+            await client.disconnect()
+            return
         if not await client.is_user_authorized():
             logger.error(
                 "Telethon: session string is present but NOT authorised. "
@@ -58,11 +114,28 @@ async def connect(api_id: int, api_hash: str, session_str: str) -> None:
             getattr(me, "id", "?"),
         )
 
+        # Warm up entity cache with recent dialogs so known contacts resolve immediately
+        await _refresh_entity_cache(client)
+
+        # Keep processing MTProto updates in the background so new peers are
+        # cached as soon as they appear (no entity errors for first-time senders)
+        _update_task = asyncio.create_task(_run_updates(client))
+        _update_task.add_done_callback(
+            lambda t: logger.info("Telethon update task finished")
+        )
+
 
 async def disconnect() -> None:
     """Disconnect the Telethon client.  Called at shutdown."""
-    global _client
+    global _client, _update_task
     async with _client_lock:
+        if _update_task is not None:
+            _update_task.cancel()
+            try:
+                await _update_task
+            except asyncio.CancelledError:
+                pass
+            _update_task = None
         if _client is not None:
             await _client.disconnect()
             _client = None
@@ -74,12 +147,31 @@ def is_available() -> bool:
     return _client is not None
 
 
+async def _get_messages_with_retry(chat_id: int, message_id: int):
+    """Call get_messages; on entity-cache miss, refresh dialogs and retry once."""
+    client = _client
+    if client is None:
+        return None
+    try:
+        return await client.get_messages(chat_id, ids=message_id)
+    except Exception as exc:
+        if not _is_entity_error(exc):
+            raise
+        logger.info(
+            "Telethon: entity cache miss for chat=%s — refreshing dialogs and retrying",
+            chat_id,
+        )
+        await _refresh_entity_cache(client)
+        # Retry after cache refresh
+        return await client.get_messages(chat_id, ids=message_id)
+
+
 async def is_view_once(chat_id: int, message_id: int) -> bool:
     """Return True if the message contains view-once (ttl_seconds > 0) media."""
     if _client is None:
         return False
     try:
-        msg = await _client.get_messages(chat_id, ids=message_id)
+        msg = await _get_messages_with_retry(chat_id, message_id)
         if msg is None or not msg.media:
             return False
         return bool(getattr(msg.media, "ttl_seconds", 0))
@@ -95,7 +187,7 @@ async def download_view_once_only(chat_id: int, message_id: int) -> bytes | None
     if _client is None:
         return None
     try:
-        msg = await _client.get_messages(chat_id, ids=message_id)
+        msg = await _get_messages_with_retry(chat_id, message_id)
         if msg is None or not msg.media:
             return None
         if not getattr(msg.media, "ttl_seconds", 0):
@@ -132,8 +224,7 @@ async def download_message_media(chat_id: int, message_id: int) -> bytes | None:
     if _client is None:
         return None
     try:
-        # get_messages returns a single Message or None
-        msg = await _client.get_messages(chat_id, ids=message_id)
+        msg = await _get_messages_with_retry(chat_id, message_id)
         if msg is None or not msg.media:
             logger.debug(
                 "Telethon: no media found for chat=%s msg=%s", chat_id, message_id

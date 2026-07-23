@@ -1,0 +1,29 @@
+2026-07-23T15:25:03.099370059Z [inf]  Starting Container
+2026-07-23T15:25:04.391215790Z [err]  INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+2026-07-23T15:25:04.391220049Z [err]  INFO  [alembic.runtime.migration] Will assume transactional DDL.
+2026-07-23T15:25:07.178149825Z [err]  INFO:     Started server process [5]
+2026-07-23T15:25:07.178160074Z [err]  INFO:     Waiting for application startup.
+2026-07-23T15:25:07.178166134Z [inf]  2026-07-23T15:25:07+0000 | INFO     | app.main | Starting Telegram Business Bot (environment=production)
+2026-07-23T15:25:07.178170214Z [inf]  2026-07-23T15:25:07+0000 | INFO     | app.main | Database dialect: postgresql (persistent)
+2026-07-23T15:25:07.724898528Z [inf]  2026-07-23T15:25:07+0000 | INFO     | app.main | Telegram webhook set to https://telegram-business-bot-production.up.railway.app/webhook
+2026-07-23T15:25:07.898265443Z [inf]  2026-07-23T15:25:07+0000 | INFO     | app.main | Telegram chat menu button set to open mini app
+2026-07-23T15:25:08.146903380Z [inf]  2026-07-23T15:25:08+0000 | INFO     | telethon.crypto.aes | libssl detected, it will be used for encryption
+2026-07-23T15:25:08.174295382Z [inf]  2026-07-23T15:25:08+0000 | INFO     | telethon.network.mtprotosender | Connecting to 149.154.167.51:443/TcpFull...
+2026-07-23T15:25:08.472502468Z [inf]  2026-07-23T15:25:08+0000 | INFO     | telethon.network.mtprotosender | Connection to 149.154.167.51:443/TcpFull complete!
+2026-07-23T15:25:09.488791835Z [inf]  2026-07-23T15:25:09+0000 | INFO     | app.services.telethon_service | Telethon user-client connected as амаль (id=6881815417)
+2026-07-23T15:25:09.488796435Z [inf]  2026-07-23T15:25:09+0000 | INFO     | app.services.telethon_service | Telethon: view-once listener registered
+2026-07-23T15:25:11.579202297Z [inf]  2026-07-23T15:25:11+0000 | INFO     | app.services.telethon_service | Telethon: entity cache warmed up (283 dialogs)
+2026-07-23T15:25:11.579214067Z [err]  INFO:     Application startup complete.
+2026-07-23T15:25:11.579221527Z [err]  INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+2026-07-23T15:25:31.387281694Z [inf]  2026-07-23T15:25:30+0000 | INFO     | app.routers.webhook | RAW business_message chat=6881815417 msg=566240 | photo=False video=False doc=False voice=False vn=False text=True spoiler=None | keys=['business_connection_id', 'message_id', 'from', 'chat', 'date', 'reply_to_message', 'text']
+2026-07-23T15:25:31.387288304Z [inf]  2026-07-23T15:25:30+0000 | INFO     | app.services.message_service | Stored new business message chat_id=1335699132 message_id=47713 media=text
+2026-07-23T15:25:31.387291934Z [inf]  2026-07-23T15:25:30+0000 | INFO     | aiogram.event | Update id=745924611 is handled. Duration 60 ms by bot id=1162707887
+2026-07-23T15:25:31.387294924Z [inf]  2026-07-23T15:25:30+0000 | INFO     | http | POST /webhook -> 200 (63.5ms)
+2026-07-23T15:25:31.387297914Z [inf]  2026-07-23T15:25:30+0000 | INFO     | app.services.message_service | Stored new business message chat_id=6881815417 message_id=566240 media=text
+2026-07-23T15:25:31.387301104Z [inf]  2026-07-23T15:25:30+0000 | INFO     | app.business.handlers | dot-save: triggered owner=1335699132 chat=6881815417 reply_to=566239
+2026-07-23T15:25:31.387303824Z [inf]  2026-07-23T15:25:30+0000 | INFO     | aiogram.event | Update id=745924612 is handled. Duration 83 ms by bot id=1162707887
+2026-07-23T15:25:31.387306624Z [inf]  2026-07-23T15:25:30+0000 | INFO     | http | POST /webhook -> 200 (89.8ms)
+2026-07-23T15:25:31.387352823Z [inf]  2026-07-23T15:25:30+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745924611 type=business_message
+2026-07-23T15:25:31.387355433Z [inf]  2026-07-23T15:25:30+0000 | INFO     | app.routers.webhook | RAW business_message chat=1335699132 msg=47713 | photo=False video=False doc=False voice=False vn=False text=True spoiler=None | keys=['business_connection_id', 'message_id', 'from', 'chat', 'date', 'reply_to_message', 'text']
+2026-07-23T15:25:31.387357993Z [inf]  2026-07-23T15:25:30+0000 | INFO     | app.routers.webhook | Received Telegram update update_id=745924612 type=business_message
+2026-07-23T15:25:31.389384821Z [inf]  2026-07-23T15:25:30+0000 | INFO     | app.business.handlers | dot-save: reply_to=566239 not in DB (chat=6881815417) — skipping silently (bot-sent video or message received while offline)

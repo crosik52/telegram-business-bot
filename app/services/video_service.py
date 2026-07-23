@@ -274,42 +274,37 @@ def _apply_instagram_opts(ydl_opts: dict, url: str, out_dir: str) -> None:
 
 
 def _apply_youtube_opts(ydl_opts: dict, out_dir: str) -> None:
-    """Apply YouTube-specific yt-dlp options to bypass bot-detection.
+    """Apply YouTube-specific yt-dlp options.
 
-    Strategy:
-    1. Always set Node.js for n-challenge + tv/mweb/web player clients.
-    2. If YOUTUBE_COOKIES is set, also inject cookies (cookiefile preferred).
-       Cookies + player clients together give the best success rate.
+    Strategy: use tv_embedded player client — it exposes full DASH format list
+    without requiring auth and works reliably from server IPs. Cookies are
+    applied on top if available, but are NOT required for tv_embedded to work.
     """
     # YouTube serves DASH streams (bestvideo+bestaudio separately) — ffmpeg must
     # merge them into mp4. Not set globally to avoid forcing DASH on Instagram/TikTok.
     ydl_opts["merge_output_format"] = "mp4"
 
+    # tv_embedded: works without cookies, exposes full DASH format list,
+    # returns H.264 AVC — safe for all Telegram clients.
+    ydl_opts["extractor_args"] = {
+        "youtube": {"player_client": ["tv_embedded"]}
+    }
+
     raw = os.environ.get("YOUTUBE_COOKIES", "").strip()
     if not raw:
-        # ios client: works without auth, exposes DASH (so bestvideo+bestaudio works),
-        # returns H.264 AVC — safe for all platforms. tv/mweb don't expose DASH and
-        # cause "Requested format is not available" errors with bestvideo+bestaudio.
-        logger.info("YouTube: no YOUTUBE_COOKIES set, using ios player_client")
-        ydl_opts["extractor_args"] = {
-            "youtube": {"player_client": ["ios", "mweb"]}
-        }
+        logger.info("YouTube: no YOUTUBE_COOKIES — using tv_embedded (no auth)")
         return
-
-    # Cookies present: use web client (full format list including DASH).
-    ydl_opts["extractor_args"] = {
-        "youtube": {"player_client": ["web"]}
-    }
 
     # ── Normalise newlines ────────────────────────────────────────────────────
     if "\n" not in raw and "\\n" in raw:
         raw = raw.replace("\\n", "\n")
 
-    # Replit secrets sometimes collapse real newlines to spaces; reconstruct.
+    # Secrets can collapse real newlines to spaces; reconstruct from tabs.
     if "\n" not in raw and "\t" in raw:
         import re as _re
         raw = _re.sub(r" +(?=\.?[A-Za-z0-9_-]+\.[A-Za-z]+\t)", "\n", raw)
-        logger.info("YouTube: reconstructed %d lines from space-collapsed cookies", len(raw.splitlines()))
+        logger.info("YouTube: reconstructed %d lines from space-collapsed cookies",
+                    len(raw.splitlines()))
 
     # ── Detect format and write cookiefile ───────────────────────────────────
     data_lines = [l for l in raw.splitlines() if l.strip() and not l.strip().startswith("#")]
@@ -334,17 +329,15 @@ def _apply_youtube_opts(ydl_opts: dict, out_dir: str) -> None:
             return
         logger.warning("YouTube: YOUTUBE_COOKIES looks like JSON but parse failed")
 
-    # Last resort: raw Cookie header (weaker than cookiefile but better than nothing)
+    # Last resort: raw Cookie header
     if "=" in raw:
-        # Use only the first line in case reconstruction produced multiple
         first_line = raw.splitlines()[0].strip()
         ydl_opts.setdefault("http_headers", {})
         ydl_opts["http_headers"]["Cookie"] = first_line
-        logger.warning("YouTube: falling back to raw Cookie header (%d chars) — "
-                       "may still fail bot check; provide Netscape cookie file", len(first_line))
+        logger.warning("YouTube: falling back to raw Cookie header (%d chars)", len(first_line))
     else:
-        logger.warning("YouTube: YOUTUBE_COOKIES set but format unrecognised (len=%d, "
-                       "preview=%.80r) — proceeding without cookies", len(raw), raw)
+        logger.warning("YouTube: YOUTUBE_COOKIES set but format unrecognised (len=%d) "
+                       "— proceeding without cookies", len(raw))
 
 
 def _apply_tiktok_ua(ydl_opts: dict) -> None:
@@ -468,10 +461,10 @@ def _download_sync(
         if "cookiefile" in opts_video and is_auth_error:
             logger.warning("Video: auth error with cookies (%s), retrying without auth", exc)
             opts_no_cookie = {k: v for k, v in opts_video.items() if k != "cookiefile"}
-            # Switch from "web" (requires cookies) to ios/mweb (no auth, has DASH)
+            # Switch from cookies to tv_embedded (no auth needed, has DASH)
             if is_youtube:
                 opts_no_cookie["extractor_args"] = {
-                    "youtube": {"player_client": ["ios", "mweb"]}
+                    "youtube": {"player_client": ["tv_embedded"]}
                 }
             try:
                 _run(opts_no_cookie)
@@ -528,14 +521,11 @@ def _download_sync(
     if is_instagram:
         _apply_instagram_opts(opts_photo, url, out_dir)
     if is_youtube:
-        # Photo fallback uses bypass clients (tv/mweb/web) instead of web-only.
-        # web-only client (used in attempt 1) requires DASH and fails for many videos;
-        # bypass clients expose non-DASH formats and succeed more often.
-        # merge_output_format="mp4" (in base opts) ensures mp4 output.
+        # tv_embedded exposes full DASH format list without auth.
         opts_photo["extractor_args"] = {
-            # ios client: no auth required, exposes DASH, returns H.264.
-            "youtube": {"player_client": ["ios", "mweb"]}
+            "youtube": {"player_client": ["tv_embedded"]}
         }
+        opts_photo["merge_output_format"] = "mp4"
         # Re-use cookie file if the video attempt already wrote it.
         _yt_cookies = os.path.join(out_dir, "_yt_cookies.txt")
         if os.path.exists(_yt_cookies):

@@ -203,59 +203,14 @@ async def _handle_dot_save(
                 return
 
             if not ref.file_id:
-                # Message was recorded as media but file_id is missing —
-                # typical for view-once / «Истекшая фотография» that Telegram
-                # delivers without accessible file data.  Try Telethon.
-                logger.info(
-                    "dot-save: %s has no file_id (view-once?) — trying Telethon "
-                    "chat=%s msg=%s", ref.media_type.value, chat_id, reply_to_message_id,
+                await bot.send_message(
+                    chat_id=owner_id,
+                    text=(
+                        f"{E.WARNING} <b>Истекшее медиа</b> — "
+                        "файл уже удалён с серверов Telegram и недоступен."
+                    ),
+                    parse_mode="HTML",
                 )
-                from app.services import telethon_service as _tls
-                _raw = await _tls.download_message_media(chat_id, reply_to_message_id) \
-                    if _tls.is_available() else None
-                if _raw:
-                    from aiogram.types import BufferedInputFile as _BIF3
-                    ext = {"photo": "jpg", "video": "mp4", "voice": "ogg",
-                           "video_note": "mp4", "audio": "mp3"}.get(
-                               ref.media_type.value, "bin")
-                    kw2: dict = {"chat_id": owner_id,
-                                 "caption": "📥 Самоудаляющееся медиа (перехвачено через Telethon)"}
-                    _f = _BIF3(_raw, filename=f"media.{ext}")
-                    try:
-                        match ref.media_type:
-                            case MediaType.PHOTO:
-                                await bot.send_photo(photo=_f, **kw2)
-                            case MediaType.VIDEO:
-                                await bot.send_video(video=_f, **kw2)
-                            case MediaType.VOICE:
-                                await bot.send_voice(voice=_f, **kw2)
-                            case MediaType.VIDEO_NOTE:
-                                await bot.send_video_note(
-                                    video_note=_f, chat_id=owner_id)
-                            case _:
-                                await bot.send_document(document=_f, **kw2)
-                    except Exception as _se:
-                        logger.warning("dot-save no-file_id send failed: %s", _se)
-                        await bot.send_document(
-                            document=_BIF3(_raw, filename=f"media.{ext}"),
-                            chat_id=owner_id,
-                        )
-                else:
-                    _hint2 = (
-                        "\n\n<i>Совет: настройте TELETHON_SESSION_STR — тогда бот "
-                        "сможет перехватывать view-once медиа.</i>"
-                        if not _tls.is_available() else ""
-                    )
-                    await bot.send_message(
-                        chat_id=owner_id,
-                        text=(
-                            f"{E.WARNING} <b>Истекшее / view-once медиа</b> — "
-                            "файл уже удалён с серверов Telegram и недоступен "
-                            "ни через Bot API, ни через Telethon."
-                            f"{_hint2}"
-                        ),
-                        parse_mode="HTML",
-                    )
                 return
 
             logger.info(
@@ -310,71 +265,16 @@ async def _handle_dot_save(
                 )
                 return
 
-            # Sub-tier B: Telethon user-client via MTProto.
-            logger.info(
-                "dot-save: bot_api failed for %s — trying Telethon (chat=%s msg=%s)",
-                ref.media_type.value, ref.chat_id, ref.message_id,
-            )
-            from app.services import telethon_service as _tls
-            tg_bytes: bytes | None = None
-            if _tls.is_available():
-                tg_bytes = await _tls.download_message_media(
-                    ref.chat_id, ref.message_id
-                )
-
-            if tg_bytes:
-                from aiogram.types import BufferedInputFile as _BIF
-                ext = {
-                    "photo": "jpg", "video": "mp4", "voice": "ogg",
-                    "video_note": "mp4", "audio": "mp3", "document": "bin",
-                }.get(ref.media_type.value, "bin")
-                buf_file = _BIF(tg_bytes, filename=f"media.{ext}")
-                kw: dict = {"chat_id": owner_id}
-                if caption:
-                    kw["caption"] = caption
-                try:
-                    match ref.media_type:
-                        case MediaType.PHOTO:
-                            await bot.send_photo(photo=buf_file, **kw)
-                        case MediaType.VIDEO:
-                            await bot.send_video(video=buf_file, **kw)
-                        case MediaType.VOICE:
-                            await bot.send_voice(voice=buf_file, **kw)
-                        case MediaType.VIDEO_NOTE:
-                            await bot.send_video_note(
-                                video_note=buf_file, chat_id=owner_id
-                            )
-                        case MediaType.AUDIO:
-                            await bot.send_audio(audio=buf_file, **kw)
-                        case _:
-                            await bot.send_document(document=buf_file, **kw)
-                    logger.info(
-                        "dot-save: ✓ sent %s via telethon to owner=%s",
-                        ref.media_type.value, owner_id,
-                    )
-                    return
-                except Exception as _send_exc:
-                    logger.warning(
-                        "dot-save: telethon bytes obtained but send failed: %s",
-                        _send_exc,
-                    )
-
             # ── All tiers failed ──────────────────────────────────────────────
             logger.warning(
                 "dot-save: ✗ all methods failed for %s owner=%s (chat=%s msg=%s)",
                 ref.media_type.value, owner_id, ref.chat_id, ref.message_id,
-            )
-            _telethon_hint = (
-                "\n\n<i>Совет: настройте Telethon (TELETHON_SESSION_STR) для "
-                "надёжного скачивания самоудаляющихся медиа.</i>"
-                if not _tls.is_available() else ""
             )
             await bot.send_message(
                 chat_id=owner_id,
                 text=(
                     f"{E.WARNING} Не удалось сохранить медиа — "
                     "файл уже недоступен (самоудалился или защищён)."
-                    f"{_telethon_hint}"
                 ),
                 parse_mode="HTML",
             )
@@ -582,43 +482,6 @@ async def _send_single_delete_notification(
             if sent:
                 return
 
-            # ── Tier 2: Telethon — file may still be accessible right now ─────
-            # (self-destructing messages are deleted by Telegram immediately
-            # after viewing; Telethon can sometimes still fetch within ms)
-            from app.services import telethon_service as _tls
-            if not _tls.is_available() or not removed.chat_id or not removed.message_id:
-                return
-
-            _raw = await _tls.download_message_media(removed.chat_id, removed.message_id)
-            if not _raw:
-                return
-
-            from aiogram.types import BufferedInputFile as _BIF
-            _ext = {"photo": "jpg", "video": "mp4", "voice": "ogg",
-                    "video_note": "mp4", "audio": "mp3"}.get(
-                        removed.media_type.value, "bin")
-            _f = _BIF(_raw, filename=f"media.{_ext}")
-            _kw = {"chat_id": owner_id}
-            if text_part:
-                _kw["caption"] = text_part
-            try:
-                match removed.media_type:
-                    case MediaType.PHOTO:
-                        await bot.send_photo(photo=_f, **_kw)
-                    case MediaType.VIDEO:
-                        await bot.send_video(video=_f, **_kw)
-                    case MediaType.VOICE:
-                        await bot.send_voice(voice=_f, **_kw)
-                    case MediaType.VIDEO_NOTE:
-                        await bot.send_video_note(video_note=_f, chat_id=owner_id)
-                    case _:
-                        await bot.send_document(document=_f, **_kw)
-                logger.info(
-                    "delete-notify: forwarded %s via telethon to owner=%s",
-                    removed.media_type.value, owner_id,
-                )
-            except Exception as _se:
-                logger.warning("delete-notify: telethon send failed: %s", _se)
 
     except Exception:
         logger.exception(

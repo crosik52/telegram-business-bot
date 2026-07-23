@@ -187,12 +187,50 @@ async def _handle_dot_save(
             ref = result.scalar_one_or_none()
 
             if ref is None:
-                # Message not in DB — could be a bot-sent message (e.g. a
-                # downloaded social-media video), the owner's own message, or
-                # a message received while the bot was offline.
-                # Silently skip: we cannot distinguish these cases from a genuine
-                # view-once intercept attempt, so notifying the owner would be
-                # noisy and confusing.
+                # Message not in DB — Bot API never delivers view-once messages
+                # via webhook, so check the Telethon proactive cache first.
+                from app.services import telethon_service as _tls
+                _vo = _tls.pop_view_once_bytes(chat_id, reply_to_message_id)
+                if _vo:
+                    _vo_type, _vo_raw = _vo
+                    logger.info(
+                        "dot-save: ✓ view-once found in Telethon cache "
+                        "chat=%s msg=%s type=%s size=%d B",
+                        chat_id, reply_to_message_id, _vo_type, len(_vo_raw),
+                    )
+                    from aiogram.types import BufferedInputFile as _BIFVO
+                    _ext = {"photo": "jpg", "video": "mp4", "voice": "ogg",
+                            "video_note": "mp4", "audio": "mp3"}.get(_vo_type, "bin")
+                    _fbuf = _BIFVO(_vo_raw, filename=f"media.{_ext}")
+                    _kw_vo: dict = {
+                        "chat_id": owner_id,
+                        "caption": "📥 Одноразовое медиа (перехвачено)",
+                    }
+                    try:
+                        match _vo_type:
+                            case "photo":
+                                await bot.send_photo(photo=_fbuf, **_kw_vo)
+                            case "video":
+                                await bot.send_video(video=_fbuf, **_kw_vo)
+                            case "voice":
+                                await bot.send_voice(voice=_fbuf, **_kw_vo)
+                            case "video_note":
+                                await bot.send_video_note(
+                                    video_note=_fbuf, chat_id=owner_id)
+                            case _:
+                                await bot.send_document(document=_fbuf, **_kw_vo)
+                        logger.info(
+                            "dot-save: ✓ view-once sent to owner=%s", owner_id)
+                    except Exception as _ve:
+                        logger.warning("dot-save: view-once send failed: %s", _ve)
+                        await bot.send_document(
+                            document=_BIFVO(_vo_raw, filename=f"media.{_ext}"),
+                            chat_id=owner_id,
+                        )
+                    return
+
+                # Not view-once cache either — could be a bot-sent message,
+                # owner's own message, or received while bot was offline.
                 logger.info(
                     "dot-save: reply_to=%s not in DB (chat=%s) — skipping silently "
                     "(bot-sent video or message received while offline)",

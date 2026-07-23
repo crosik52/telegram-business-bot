@@ -2769,6 +2769,17 @@
   .cert-action-btn.accept  { background: rgba(52,199,89,0.14);  color: #34c759; }
   .cert-action-btn.decline { background: rgba(255,59,48,0.10);  color: #ff453a; }
   .cert-open-hint { text-align: center; padding-bottom: 12px; font-size: 11px; color: #c0557a; opacity: 0.55; }
+  /* Quick-action buttons on active relationship cards */
+  .cert-quick-actions { display: flex; gap: 8px; padding: 10px 16px 14px; }
+  .cert-quick-btn {
+    flex: 1; border: none; border-radius: 12px; padding: 10px 0;
+    font-size: 12.5px; font-weight: 700; cursor: pointer;
+    touch-action: manipulation; transition: opacity 0.15s;
+  }
+  .cert-quick-btn:active { opacity: 0.72; }
+  .cert-quick-btn:disabled { opacity: 0.38; cursor: default; }
+  .cert-quick-btn.gift { background: rgba(245,166,35,0.14); color: #d4962a; }
+  .cert-quick-btn.more { background: rgba(224,54,90,0.08); color: #c0557a; }
   /* Compact pet cards */
   .interact-pet-card {
     background: #fff; border-radius: 16px;
@@ -8464,7 +8475,11 @@
                 <div class="cert-stat-lbl">Всего XP</div>
               </div>
             </div>
-            <div class="cert-open-hint">нажми для управления</div>`;
+            <div class="cert-quick-actions">
+              <button class="cert-quick-btn gift" ${r.gift_ready ? "" : "disabled"}
+                onclick="event.stopPropagation();_interactRelAction('/app/api/relationships/gift',${r.partner_id},{},function(){toastMessage('🎁 Подарок отправлен! +100 XP обоим.')})">🎁 Подарить</button>
+              <button class="cert-quick-btn more">⋯ Подробнее</button>
+            </div>`;
         }
 
         const openDataAttr = !isPending
@@ -8589,8 +8604,8 @@
       // Active relationship card tap → open existing modal
       document.querySelectorAll("[data-rel-open-id]").forEach(card => {
         card.addEventListener("click", (e) => {
-          // Ignore clicks on cert-action-btn children (pending cards don't use this attr, but guard anyway)
-          if (e.target.closest(".cert-action-btn")) return;
+          // Ignore clicks on action buttons; gift handles itself, more bubbles up to open modal
+          if (e.target.closest(".cert-action-btn") || e.target.closest(".cert-quick-btn.gift")) return;
           const partnerId   = Number(card.dataset.relOpenId);
           const partnerName = card.dataset.relOpenName || "";
           openRelModal(partnerId, partnerName);

@@ -2690,20 +2690,20 @@
   }
   /* Certificate card */
   .cert-card {
-    background: #fff;
+    background: var(--secondary-bg);
     border-radius: 18px;
     margin: 0 10px 10px;
     overflow: hidden;
-    box-shadow: 0 2px 14px rgba(224,54,90,0.10), 0 1px 3px rgba(0,0,0,0.06);
-    border: 1px solid rgba(224,54,90,0.09);
+    box-shadow: 0 2px 14px rgba(224,54,90,0.12), 0 1px 3px rgba(0,0,0,0.10);
+    border: 1px solid rgba(224,54,90,0.14);
   }
   .cert-card-header {
     padding: 12px 16px;
     text-align: center;
-    border-bottom: 1px solid rgba(224,54,90,0.08);
+    border-bottom: 1px solid rgba(224,54,90,0.12);
     font-size: 9.5px; font-weight: 800; letter-spacing: 1.4px;
-    color: #c0557a; text-transform: uppercase;
-    background: linear-gradient(135deg, rgba(253,232,240,0.9), rgba(255,255,255,0.95));
+    color: #e06090; text-transform: uppercase;
+    background: rgba(224,54,90,0.07);
   }
   .cert-avatars {
     display: flex; align-items: center; justify-content: center;
@@ -2720,11 +2720,11 @@
   }
   .cert-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
   .cert-avatar-name {
-    font-size: 12px; font-weight: 700; color: #3a1a2a;
+    font-size: 12px; font-weight: 700; color: var(--text);
     text-align: center; max-width: 88px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .cert-avatar-user { font-size: 10px; color: #c0557a; text-align: center; }
+  .cert-avatar-user { font-size: 10px; color: #e06090; text-align: center; }
   .cert-heart-mid {
     display: flex; flex-direction: column; align-items: center; gap: 3px; flex-shrink: 0;
     animation: certHeartPulse 1.8s ease-in-out infinite;
@@ -2753,8 +2753,8 @@
     background: linear-gradient(90deg, #f472a8, #e0365a);
     transition: width 0.65s ease;
   }
-  .cert-xp-label { font-size: 11px; color: #c0557a; text-align: center; margin-bottom: 4px; }
-  .cert-xp-sub { font-size: 10px; color: #c0557a; text-align: center; opacity: 0.65; }
+  .cert-xp-label { font-size: 11px; color: #e06090; text-align: center; margin-bottom: 4px; }
+  .cert-xp-sub { font-size: 10px; color: #e06090; text-align: center; opacity: 0.65; }
   /* Stats footer */
   .cert-stats-footer {
     display: flex; border-top: 1px solid rgba(224,54,90,0.08);
@@ -2765,10 +2765,10 @@
     border-right: 1px solid rgba(224,54,90,0.08);
   }
   .cert-stat-cell:last-child { border-right: none; }
-  .cert-stat-val { font-size: 13px; font-weight: 800; color: #3a1a2a; }
-  .cert-stat-lbl { font-size: 9px; color: #c0557a; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; font-weight: 600; }
+  .cert-stat-val { font-size: 13px; font-weight: 800; color: var(--text); }
+  .cert-stat-lbl { font-size: 9px; color: #e06090; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; font-weight: 600; }
   /* Pending actions */
-  .cert-pending-text { text-align: center; font-size: 13px; color: #c0557a; padding: 0 16px 10px; }
+  .cert-pending-text { text-align: center; font-size: 13px; color: #e06090; padding: 0 16px 10px; }
   .cert-actions { display: flex; gap: 8px; padding: 0 16px 14px; }
   .cert-action-btn {
     flex: 1; border: none; border-radius: 12px; padding: 10px 0;
@@ -2779,7 +2779,7 @@
   .cert-action-btn:active { opacity: 0.72; }
   .cert-action-btn.accept  { background: rgba(52,199,89,0.14);  color: #34c759; }
   .cert-action-btn.decline { background: rgba(255,59,48,0.10);  color: #ff453a; }
-  .cert-open-hint { text-align: center; padding-bottom: 12px; font-size: 11px; color: #c0557a; opacity: 0.55; }
+  .cert-open-hint { text-align: center; padding-bottom: 12px; font-size: 11px; color: #e06090; opacity: 0.65; }
   /* Quick-action buttons on active relationship cards */
   .cert-quick-actions { display: flex; gap: 8px; padding: 10px 16px 14px; }
   .cert-quick-btn {
@@ -2790,18 +2790,18 @@
   .cert-quick-btn:active { opacity: 0.72; }
   .cert-quick-btn:disabled { opacity: 0.38; cursor: default; }
   .cert-quick-btn.gift { background: rgba(245,166,35,0.14); color: #d4962a; }
-  .cert-quick-btn.more { background: rgba(224,54,90,0.08); color: #c0557a; }
+  .cert-quick-btn.more { background: rgba(224,54,90,0.10); color: #e06090; }
   /* Compact pet cards */
   .interact-pet-card {
-    background: #fff; border-radius: 16px;
+    background: var(--secondary-bg); border-radius: 16px;
     margin: 0 10px 10px; padding: 12px 14px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.10);
     display: flex; align-items: center; gap: 12px;
   }
   .interact-pet-emoji { font-size: 30px; flex-shrink: 0; }
   .interact-pet-body { flex: 1; min-width: 0; }
   .interact-pet-name-row { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
-  .interact-pet-name { font-size: 13.5px; font-weight: 700; color: #17181a; }
+  .interact-pet-name { font-size: 13.5px; font-weight: 700; color: var(--text); }
   .interact-pet-level { font-size: 10px; font-weight: 700; background: rgba(52,199,89,0.14); color: #34c759; border-radius: 6px; padding: 1px 6px; }
   .interact-pet-bars { display: flex; flex-direction: column; gap: 5px; }
   .interact-pet-bar-row { display: flex; align-items: center; gap: 6px; }
@@ -2820,7 +2820,7 @@
   .interact-pet-btn:active:not(:disabled) { opacity: 0.72; }
   /* Skeleton loader */
   .interact-skeleton { padding: 16px 0; display: flex; flex-direction: column; gap: 12px; animation: pulse 1.2s ease-in-out infinite; }
-  .interact-skel-card { height: 200px; background: rgba(253,232,240,0.6); border-radius: 20px; margin: 0 0 2px; }
+  .interact-skel-card { height: 200px; background: rgba(224,54,90,0.07); border-radius: 20px; margin: 0 0 2px; }
 </style>
 </head>
 <body>

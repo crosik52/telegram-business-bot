@@ -2956,6 +2956,7 @@
     let minesRevealedCount = 0;
     let crashGameActive   = false;
     let lastRelationships = {};   // partner_id → rel dict from /api/relationships/list
+    let _interactCache = { ts: 0, relData: null, petData: null }; // 45-second client cache
     let crashMultiplier   = 1.0;
     let crashPointAt      = Infinity;  // server-side crash point received on start
     let crashAnimFrame    = null;
@@ -8298,9 +8299,21 @@
     // INTERACTIONS TAB
     // ══════════════════════════════════════════════════════════════════
 
-    async function renderInteractTab() {
+    async function renderInteractTab(forceRefresh) {
       const el = document.getElementById("interactContent");
       if (!el) return;
+
+      const CACHE_TTL = 45_000; // 45 seconds
+      const now = Date.now();
+      const cacheHit = !forceRefresh && _interactCache.ts && (now - _interactCache.ts < CACHE_TTL)
+                       && _interactCache.relData && _interactCache.petData;
+
+      if (cacheHit) {
+        // Render immediately from cache — no skeleton, no network round-trip
+        _renderInteractContent(el, _interactCache.relData, _interactCache.petData);
+        return;
+      }
+
       // Skeleton loader while fetching
       el.innerHTML = `<div class="interact-skeleton">
         <div class="interact-skel-card"></div>
@@ -8327,42 +8340,53 @@
         const relData  = relRes.ok  ? await relRes.json()  : { relationships: [] };
         const petLocal = petRes.ok  ? await petRes.json()  : { pets: [], available_chats: [], feed_cost: 20 };
 
-        // Keep global state in sync
-        lastRelationships = {};
-        for (const r of (relData.relationships || [])) lastRelationships[r.partner_id] = r;
-        petData = petLocal;
+        // Store in cache
+        _interactCache = { ts: Date.now(), relData, petData: petLocal };
 
-        const relationships = relData.relationships || [];
-        const alivePets     = (petLocal.pets || []).filter(p => p.is_alive);
-
-        let html = "";
-
-        // ── Relationships sub-section ────────────────────────────────
-        html += `<div class="interact-section-bg">
-          <div class="interact-section-title">💗 Отношения</div>
-          ${relationships.length
-            ? renderRelationshipCards(relationships)
-            : `<div style="text-align:center;padding:20px 16px 16px;color:#c0557a;font-size:13px;opacity:0.75">
-                <div style="font-size:36px;margin-bottom:8px">💌</div>
-                Пока нет отношений.<br>Найди собеседника в топе и предложи дружбу!
-               </div>`}
-        </div>`;
-
-        // ── Pets sub-section ─────────────────────────────────────────
-        if (alivePets.length > 0) {
-          html += `<div class="interact-section-bg">
-            <div class="interact-section-title">🐾 Питомцы</div>
-            ${renderPetMiniCards(petLocal.pets || [])}
-          </div>`;
-        }
-
-        el.innerHTML = html;
-        _attachInteractPetHandlers();
+        _renderInteractContent(el, relData, petLocal);
 
       } catch (err) {
         console.error("[renderInteractTab]", err);
         el.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить.<br>Попробуй обновить.</div>`;
       }
+    }
+
+    function _renderInteractContent(el, relData, petLocal) {
+      // Keep global state in sync
+      lastRelationships = {};
+      for (const r of (relData.relationships || [])) lastRelationships[r.partner_id] = r;
+      petData = petLocal;
+
+      const relationships = relData.relationships || [];
+      const alivePets     = (petLocal.pets || []).filter(p => p.is_alive);
+
+      let html = `<div style="display:flex;justify-content:flex-end;margin-bottom:6px">
+        <button onclick="renderInteractTab(true)" style="border:none;background:rgba(120,120,128,0.1);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--hint);display:flex;align-items:center;gap:4px;cursor:pointer">
+          <span>🔄</span> Обновить
+        </button>
+      </div>`;
+
+      // ── Relationships sub-section ────────────────────────────────
+      html += `<div class="interact-section-bg">
+        <div class="interact-section-title">💗 Отношения</div>
+        ${relationships.length
+          ? renderRelationshipCards(relationships)
+          : `<div style="text-align:center;padding:20px 16px 16px;color:#c0557a;font-size:13px;opacity:0.75">
+              <div style="font-size:36px;margin-bottom:8px">💌</div>
+              Пока нет отношений.<br>Найди собеседника в топе и предложи дружбу!
+             </div>`}
+      </div>`;
+
+      // ── Pets sub-section ─────────────────────────────────────────
+      if (alivePets.length > 0) {
+        html += `<div class="interact-section-bg">
+          <div class="interact-section-title">🐾 Питомцы</div>
+          ${renderPetMiniCards(petLocal.pets || [])}
+        </div>`;
+      }
+
+      el.innerHTML = html;
+      _attachInteractPetHandlers();
     }
 
     function renderRelationshipCards(relationships) {
@@ -8587,6 +8611,7 @@
           return;
         }
         cb(d);
+        _interactCache.ts = 0; // invalidate cache
         await renderInteractTab();
       } catch { toastMessage("Ошибка, попробуй снова"); }
     }
@@ -8636,6 +8661,7 @@
         if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
         updateBalanceDisplay(data.new_balance);
         toastMessage(`${food.emoji} Накормлен!${data.xp_gained ? " +" + data.xp_gained + " XP" : ""}`);
+        _interactCache.ts = 0; // invalidate cache
         await renderInteractTab();
       } catch {
         toastMessage("Ошибка, попробуй снова");
@@ -8663,6 +8689,7 @@
         if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
         const LABELS = { play: "🎮 Поиграли!", cuddle: "🤗 Обнялись!" };
         toastMessage(`${LABELS[action] || "✅ Готово!"}${data.xp_gained ? " +" + data.xp_gained + " XP" : ""}`);
+        _interactCache.ts = 0; // invalidate cache
         await renderInteractTab();
       } catch {
         toastMessage("Ошибка, попробуй снова");

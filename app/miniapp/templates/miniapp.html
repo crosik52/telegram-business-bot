@@ -2957,6 +2957,7 @@
     let crashGameActive   = false;
     let lastRelationships = {};   // partner_id → rel dict from /api/relationships/list
     let _interactCache = { ts: 0, relData: null, petData: null }; // 45-second client cache
+    let _petCache      = { ts: 0, data: null };                  // 45-second client cache for pet/list
     let crashMultiplier   = 1.0;
     let crashPointAt      = Infinity;  // server-side crash point received on start
     let crashAnimFrame    = null;
@@ -4656,14 +4657,14 @@
       try {
         const opts = { method: "POST", headers: {"Content-Type":"application/json"},
                        body: JSON.stringify({initData: currentInitData}) };
-        const [wRes, pRes, rRes] = await Promise.all([
+        const [wRes, freshPet, rRes] = await Promise.all([
           fetch("/app/api/wallet/info",    opts),
-          fetch("/app/api/pet/list",       opts),
+          _fetchPetListCached(),
           fetch("/app/api/referral/info",  opts),
         ]);
         if (!wRes.ok) throw new Error();
         walletData   = await wRes.json();
-        petData      = pRes.ok ? await pRes.json() : { pets: [], available_chats: [], feed_cost: 20 };
+        petData      = freshPet;
         referralData = rRes.ok ? await rRes.json() : null;
         referralLoaded = true;
         casinoLoaded   = true;
@@ -4679,13 +4680,13 @@
       try {
         const opts = { method: "POST", headers: {"Content-Type":"application/json"},
                        body: JSON.stringify({initData: currentInitData}) };
-        const [wRes, pRes] = await Promise.all([
+        const [wRes, freshPet] = await Promise.all([
           fetch("/app/api/wallet/info", opts),
-          fetch("/app/api/pet/list",    opts),
+          _fetchPetListCached(),
         ]);
         if (!wRes.ok) throw new Error();
         walletData = await wRes.json();
-        petData    = pRes.ok ? await pRes.json() : { pets: [], available_chats: [], feed_cost: 20 };
+        petData    = freshPet;
         casinoLoaded = true;
         renderCasino();
       } catch {
@@ -6746,8 +6747,9 @@
       const adoptBtn = hasAdopt ? `<button class="pet-add-more" id="openAdoptBtn">+ Питомец</button>` : "";
 
       if (pets.length === 0) {
+        const refreshBtnEmpty = `<button onclick="refreshPetSection()" style="border:none;background:rgba(120,120,128,0.1);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--hint);display:inline-flex;align-items:center;gap:4px;cursor:pointer;vertical-align:middle">🔄 Обновить</button>`;
         return `<div class="pet-section">
-          <div class="section-title">${_si("ico-paw")} Питомцы ${adoptBtn}</div>
+          <div class="section-title">${_si("ico-paw")} Питомцы <span style="display:flex;align-items:center;gap:6px">${adoptBtn}${refreshBtnEmpty}</span></div>
           <div class="card pet-empty">
             <div class="pet-empty-emoji">🥚</div>
             <div class="pet-empty-title">Нет питомцев</div>
@@ -6819,8 +6821,9 @@
           </div>
         </div>`).join("");
 
+      const refreshBtn = `<button onclick="refreshPetSection()" style="border:none;background:rgba(120,120,128,0.1);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--hint);display:inline-flex;align-items:center;gap:4px;cursor:pointer;vertical-align:middle">🔄 Обновить</button>`;
       return `<div class="pet-section">
-        <div class="section-title">${_si("ico-paw")} Питомцы ${adoptBtn}</div>
+        <div class="section-title">${_si("ico-paw")} Питомцы <span style="display:flex;align-items:center;gap:6px">${adoptBtn}${refreshBtn}</span></div>
         ${aliveCards}${deadCards}
       </div>`;
     }
@@ -6991,13 +6994,41 @@
       });
     }
 
+    // ── Pet-list cache helpers ────────────────────────────────────────────────
+    const _PET_CACHE_TTL = 45_000; // 45 seconds
+
+    async function _fetchPetListCached() {
+      const now = Date.now();
+      if (_petCache.ts && (now - _petCache.ts < _PET_CACHE_TTL) && _petCache.data) {
+        return _petCache.data;
+      }
+      const res = await fetch("/app/api/pet/list", {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ initData: currentInitData }),
+      });
+      const data = res.ok ? await res.json() : { pets: [], available_chats: [], feed_cost: 20 };
+      _petCache = { ts: Date.now(), data };
+      return data;
+    }
+
+    async function refreshPetSection() {
+      _petCache.ts = 0; // invalidate
+      petData = await _fetchPetListCached().catch(() => petData);
+      renderCasino();
+    }
+
     async function _refreshPets() {
       try {
+        _petCache.ts = 0; // invalidate cache before re-fetching
         const res = await fetch("/app/api/pet/list", {
           method: "POST", headers: {"Content-Type":"application/json"},
           body: JSON.stringify({initData: currentInitData}),
         });
-        if (res.ok) petData = await res.json();
+        if (res.ok) {
+          const freshData = await res.json();
+          _petCache = { ts: Date.now(), data: freshData };
+          petData = freshData;
+        }
         renderCasino();
       } catch {}
     }
@@ -7306,16 +7337,16 @@
       try {
         const opts = { method: "POST", headers: { "Content-Type": "application/json" },
                        body: JSON.stringify({ initData: currentInitData }) };
-        const [wRes, sRes, pRes] = await Promise.all([
+        const [wRes, sRes, freshPet] = await Promise.all([
           fetch("/app/api/wallet/info", opts),
           fetch("/app/api/shop/status", opts),
-          fetch("/app/api/pet/list",    opts),
+          _fetchPetListCached(),
         ]);
         if (!wRes.ok) throw new Error();
         walletData = await wRes.json();
         shopData   = sRes.ok ? await sRes.json() : { active_boosts: [], settings: {}, prices: {} };
         if (shopData.settings) _userCardSettings = { theme: shopData.settings.theme || "default", frame: shopData.settings.frame || "none" };
-        petData    = pRes.ok ? await pRes.json() : { pets: [], available_chats: [] };
+        petData    = freshPet;
         shopLoaded = true;
         renderShop();
       } catch {
@@ -8661,7 +8692,8 @@
         if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
         updateBalanceDisplay(data.new_balance);
         toastMessage(`${food.emoji} Накормлен!${data.xp_gained ? " +" + data.xp_gained + " XP" : ""}`);
-        _interactCache.ts = 0; // invalidate cache
+        _interactCache.ts = 0; // invalidate interact cache
+        _petCache.ts = 0;      // invalidate pet cache
         await renderInteractTab();
       } catch {
         toastMessage("Ошибка, попробуй снова");
@@ -8689,7 +8721,8 @@
         if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
         const LABELS = { play: "🎮 Поиграли!", cuddle: "🤗 Обнялись!" };
         toastMessage(`${LABELS[action] || "✅ Готово!"}${data.xp_gained ? " +" + data.xp_gained + " XP" : ""}`);
-        _interactCache.ts = 0; // invalidate cache
+        _interactCache.ts = 0; // invalidate interact cache
+        _petCache.ts = 0;      // invalidate pet cache
         await renderInteractTab();
       } catch {
         toastMessage("Ошибка, попробуй снова");

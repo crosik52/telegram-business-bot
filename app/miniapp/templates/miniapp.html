@@ -2971,7 +2971,7 @@
     let _interactAgeTicker = null; // interval id for "updated X ago" label
     let _petCache      = { ts: 0, data: null };                  // 45-second client cache for pet/list
     let _petAgeTicker  = null;                                   // interval id for "updated X ago" label
-    let _shopCache     = { ts: 0, walletData: null, shopData: null }; // 45-second client cache for shop/wallet
+    let _shopCache     = { ts: 0, walletData: null, shopData: null, pricesVersion: null }; // 45-second client cache for shop/wallet
     let _shopCacheAgeTicker = null;                              // interval id for shop "updated X ago" label
     let crashMultiplier   = 1.0;
     let crashPointAt      = Infinity;  // server-side crash point received on start
@@ -7444,6 +7444,10 @@
         walletData = _shopCache.walletData;
         shopData   = _shopCache.shopData;
         renderShop();
+        // Background version check: if prices changed on the server, bust cache
+        // and silently re-render so users never see stale prices for more than
+        // one network round-trip (~100–500 ms) even within the 45 s TTL.
+        _shopCheckPricesVersion();
         return;
       }
 
@@ -7465,11 +7469,34 @@
         shopData   = sRes.ok ? await sRes.json() : { active_boosts: [], settings: {}, prices: {} };
         if (shopData.settings) _userCardSettings = { theme: shopData.settings.theme || "default", frame: shopData.settings.frame || "none" };
         petData    = freshPet;
-        _shopCache = { ts: Date.now(), walletData, shopData };
+        _shopCache = { ts: Date.now(), walletData, shopData, pricesVersion: shopData.prices_version || null };
         shopLoaded = true;
         renderShop();
       } catch {
         el.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить.<br>Попробуй обновить.</div>`;
+      }
+    }
+
+    /** Fetch only the prices_version hash and, if it differs from the cached
+     *  value, invalidate the shop cache and trigger a silent full re-fetch.
+     *  Called in the background after every cache-hit render. */
+    async function _shopCheckPricesVersion() {
+      if (!_shopCache.pricesVersion) return; // no version stored yet — skip
+      try {
+        const res = await fetch("/app/api/shop/prices-version", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initData: currentInitData }),
+        });
+        if (!res.ok) return;
+        const { prices_version } = await res.json();
+        if (prices_version && prices_version !== _shopCache.pricesVersion) {
+          // Prices changed on the server — bust the cache and reload silently.
+          _shopInvalidateCache();
+          await loadShop(true);
+        }
+      } catch {
+        // Network hiccup — ignore; the next manual tab-switch will refresh.
       }
     }
 

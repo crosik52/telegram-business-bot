@@ -2983,11 +2983,26 @@ def _shop_auth(init_data: str, settings) -> int:
 async def shop_status(
     payload: ShopStatusRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
-    """Return active boosts + settings + price list for the shop tab."""
+    """Return active boosts + settings + price list for the shop tab.
+    Includes `prices_version` — a short hash of the price config — so clients
+    can detect admin-side price changes without a full re-fetch."""
     settings = get_settings()
     owner_id = _shop_auth(payload.resolved_init, settings)
     repo = ShopRepository(session)
     return await repo.get_shop_status(owner_id)
+
+
+@router.post("/app/api/shop/prices-version")
+async def shop_prices_version(
+    payload: ShopStatusRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Lightweight endpoint: returns only the current prices_version hash.
+    Clients use this to validate their cached shop data without fetching the
+    full payload — O(1) DB read, no per-user joins."""
+    settings = get_settings()
+    _shop_auth(payload.resolved_init, settings)
+    repo = ShopRepository(session)
+    return {"prices_version": await repo.get_prices_version()}
 
 
 @router.post("/app/api/shop/boost")

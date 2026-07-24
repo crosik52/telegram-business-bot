@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import copy
 import datetime as dt
+import hashlib
+import json
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -140,6 +142,15 @@ class ShopRepository:
             "owned_themes": owned,
         }
 
+    async def get_prices_version(self) -> str:
+        """Return a short hash of the price-relevant shop config.
+        Changes whenever an admin updates prices, so clients can detect staleness cheaply."""
+        cfg = await self._get_shop_cfg()
+        price_keys = ("double_xp", "pin_chat", "theme", "frame", "gift")
+        price_slice = {k: cfg.get(k) for k in price_keys}
+        raw = json.dumps(price_slice, sort_keys=True, default=str)
+        return hashlib.sha256(raw.encode()).hexdigest()[:12]
+
     async def get_shop_status(self, owner_id: int) -> dict:
         cfg = await self._get_shop_cfg()
         boosts   = await self.get_active_boosts(owner_id)
@@ -157,6 +168,13 @@ class ShopRepository:
         # Always free for default
         theme_prices["default"] = 0
 
+        # Version hash so clients can detect price changes without a full re-fetch.
+        price_keys = ("double_xp", "pin_chat", "theme", "frame", "gift")
+        price_slice = {k: cfg.get(k) for k in price_keys}
+        prices_version = hashlib.sha256(
+            json.dumps(price_slice, sort_keys=True, default=str).encode()
+        ).hexdigest()[:12]
+
         return {
             "active_boosts": boosts,
             "settings": settings,
@@ -173,6 +191,7 @@ class ShopRepository:
                 "themes": cfg.get("theme", {}).get("options", list(VALID_THEMES)),
                 "frames": cfg.get("frame", {}).get("options", list(VALID_FRAMES)),
             },
+            "prices_version": prices_version,
         }
 
     # ── Purchases ─────────────────────────────────────────────────────────────

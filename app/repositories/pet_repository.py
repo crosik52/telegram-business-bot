@@ -33,7 +33,7 @@ import json
 import math
 import random
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -366,6 +366,7 @@ class PetRepository:
                 ).all()
             }
 
+            newly_dead: list[ChatPet] = []
             for pet in alive_pets:
                 hunger = _compute_hunger(pet, now)
                 if hunger == 0:
@@ -373,6 +374,7 @@ class PetRepository:
                     pet.death_cause = "starvation"
                     pet.died_at = now
                     changed = True
+                    newly_dead.append(pet)
                 elif pet.chat_id not in recent_chats and pet.personality != "brave":
                     age_hours = (now - _tz_aware(pet.born_at)).total_seconds() / 3600
                     if age_hours > STREAK_GRACE_HOURS:
@@ -380,8 +382,26 @@ class PetRepository:
                         pet.death_cause = "streak_broken"
                         pet.died_at = now
                         changed = True
+                        newly_dead.append(pet)
 
         if changed:
+            await self._session.flush()
+            # Kill mirror pets for all newly-dead pets so both users see the
+            # death at the same time regardless of who opens the tab first.
+            for dead_pet in newly_dead:
+                await self._session.execute(
+                    update(ChatPet)
+                    .where(
+                        ChatPet.is_alive.is_(True),
+                        ChatPet.owner_telegram_id == dead_pet.chat_id,
+                        ChatPet.chat_id == dead_pet.owner_telegram_id,
+                    )
+                    .values(
+                        is_alive=False,
+                        death_cause=dead_pet.death_cause,
+                        died_at=now,
+                    )
+                )
             await self._session.flush()
 
         alive_out = [p for p in pets if p.is_alive]

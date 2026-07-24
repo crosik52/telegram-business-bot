@@ -1846,6 +1846,17 @@
   .quest-claim-btn:active { transform: scale(0.93); }
   .quest-claim-btn:disabled { opacity: 0.35; background: rgba(120,120,128,0.18); color: var(--hint); }
   .quest-done-badge { font-size: 20px; }
+  .quest-claim-all-btn {
+    display: block; width: 100%; margin-bottom: 10px;
+    border: none; border-radius: 14px; padding: 11px 16px;
+    font-size: 14px; font-weight: 700;
+    background: linear-gradient(135deg, var(--green), #30d158);
+    color: #fff; cursor: pointer;
+    transition: transform 0.1s, opacity 0.2s;
+    touch-action: manipulation; box-shadow: 0 2px 8px rgba(52,199,89,0.35);
+  }
+  .quest-claim-all-btn:active { transform: scale(0.97); }
+  .quest-claim-all-btn:disabled { opacity: 0.45; box-shadow: none; }
 
   /* ── Leaderboard ── */
   .lb-entry {
@@ -7163,11 +7174,13 @@
       if (!questData || !lbData) return;
       el.innerHTML = renderQuestsSection() + renderLeaderboardSection();
       attachQuestHandlers();
+      attachClaimAllHandler();
     }
 
     function renderQuestsSection() {
-      const earned = questData.quests.filter(q => q.claimed).reduce((s, q) => s + q.reward, 0);
-      const total  = questData.quests.reduce((s, q) => s + q.reward, 0);
+      const earned    = questData.quests.filter(q => q.claimed).reduce((s, q) => s + q.reward, 0);
+      const total     = questData.quests.reduce((s, q) => s + q.reward, 0);
+      const claimable = questData.quests.filter(q => !q.claimed && q.progress >= q.target);
 
       const cards = questData.quests.map((q, i) => {
         const pct      = q.target > 0 ? Math.round(q.progress / q.target * 100) : 0;
@@ -7197,10 +7210,15 @@
           </div>`;
       }).join("");
 
+      const claimAllBtn = claimable.length > 1
+        ? `<button class="quest-claim-all-btn" id="questClaimAllBtn">Забрать всё (+${claimable.reduce((s,q)=>s+q.reward,0)} 🪙)</button>`
+        : "";
+
       return `
         <div class="section-title">${_si("ico-target")} Задания дня
           <span class="sub">${earned}/${total} 🪙</span>
         </div>
+        ${claimAllBtn}
         ${cards}`;
     }
 
@@ -7234,11 +7252,41 @@
         ${myNote}`;
     }
 
+    // Quietly refresh quests+lb in background (no skeleton flash)
+    async function refreshQuestsQuiet() {
+      try {
+        const opts = { method: "POST", headers: {"Content-Type":"application/json"},
+                       body: JSON.stringify({initData: currentInitData}) };
+        const [qRes, lbRes] = await Promise.all([
+          fetch("/app/api/quests",      opts),
+          fetch("/app/api/leaderboard", opts),
+        ]);
+        if (!qRes.ok || !lbRes.ok) return;
+        questData = await qRes.json();
+        lbData    = await lbRes.json();
+        renderQuestsTab();
+      } catch { /* silent */ }
+    }
+
+    // Mark a quest as claimed in local state and re-render without skeleton
+    function _applyClaimedLocally(questId, newBalance) {
+      const q = questData?.quests?.find(q => String(q.id) === String(questId));
+      if (q) q.claimed = true;
+      if (newBalance !== undefined) updateBalanceDisplay(newBalance);
+      // Re-render only the quests section (leaderboard stays intact)
+      const el = document.getElementById("questContent");
+      if (el) {
+        el.innerHTML = renderQuestsSection() + renderLeaderboardSection();
+        attachQuestHandlers();
+        attachClaimAllHandler();
+      }
+    }
+
     function attachQuestHandlers() {
       document.querySelectorAll(".quest-claim-btn:not([disabled])").forEach(btn => {
         btn.addEventListener("click", async () => {
           const questId = btn.dataset.questId;
-          btn.disabled  = true;
+          btn.disabled    = true;
           btn.textContent = "⏳";
           try {
             if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("medium");
@@ -7250,23 +7298,55 @@
               const err = await res.json().catch(() => ({}));
               if (err.detail === "already_claimed") {
                 toastMessage("Задание уже выполнено ✅");
-                await loadQuestsLeaderboard();
+                _applyClaimedLocally(questId);
+                refreshQuestsQuiet();
                 return;
               }
               throw new Error(err.detail || "error");
             }
             const data = await res.json();
             if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
-            updateBalanceDisplay(data.new_balance);
             toastMessage(`🎉 +${data.reward} монет получено!`);
-            // Refresh quests & lb to show claimed state
-            await loadQuestsLeaderboard();
+            _applyClaimedLocally(questId, data.new_balance);
+            refreshQuestsQuiet(); // sync server state quietly in background
           } catch {
             btn.disabled    = false;
             btn.textContent = "Забрать";
             toastMessage("Ошибка. Попробуй позже.");
           }
         });
+      });
+    }
+
+    function attachClaimAllHandler() {
+      const btn = document.getElementById("questClaimAllBtn");
+      if (!btn) return;
+      btn.addEventListener("click", async () => {
+        const claimable = questData?.quests?.filter(q => !q.claimed && q.progress >= q.target) || [];
+        if (!claimable.length) return;
+        btn.disabled    = true;
+        btn.textContent = "⏳ Забираем…";
+        if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("medium");
+        let totalEarned = 0;
+        let lastBalance;
+        for (const q of claimable) {
+          try {
+            const res = await fetch("/app/api/quests/claim", {
+              method: "POST", headers: {"Content-Type":"application/json"},
+              body: JSON.stringify({initData: currentInitData, questId: q.id}),
+            });
+            if (res.ok) {
+              const data = await res.json();
+              totalEarned += data.reward ?? 0;
+              lastBalance  = data.new_balance;
+              q.claimed    = true;
+            }
+          } catch { /* skip one, continue */ }
+        }
+        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+        if (totalEarned) toastMessage(`🎉 +${totalEarned} монет получено!`);
+        _applyClaimedLocally(null, lastBalance);
+        refreshQuestsQuiet();
       });
     }
 

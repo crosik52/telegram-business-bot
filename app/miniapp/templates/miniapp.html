@@ -2971,6 +2971,8 @@
     let _interactAgeTicker = null; // interval id for "updated X ago" label
     let _petCache      = { ts: 0, data: null };                  // 45-second client cache for pet/list
     let _petAgeTicker  = null;                                   // interval id for "updated X ago" label
+    let _shopCache     = { ts: 0, walletData: null, shopData: null }; // 45-second client cache for shop/wallet
+    let _shopCacheAgeTicker = null;                              // interval id for shop "updated X ago" label
     let crashMultiplier   = 1.0;
     let crashPointAt      = Infinity;  // server-side crash point received on start
     let crashAnimFrame    = null;
@@ -4494,8 +4496,7 @@
         else renderDonate();
       }
       if (tab === "shop") {
-        if (!shopLoaded && currentInitData) loadShop();
-        else if (shopLoaded) renderShop();
+        if (currentInitData) loadShop();
       }
       if (tab === "interact") {
         if (currentInitData) renderInteractTab();
@@ -7012,7 +7013,8 @@
     }
 
     // ── Pet-list cache helpers ────────────────────────────────────────────────
-    const _PET_CACHE_TTL = 45_000; // 45 seconds
+    const _PET_CACHE_TTL  = 45_000; // 45 seconds
+    const _SHOP_CACHE_TTL = 45_000; // 45 seconds
 
     async function _fetchPetListCached() {
       const now = Date.now();
@@ -7417,9 +7419,23 @@
       { id: "neon",    emoji: "💡", label: "Неон"   },
     ];
 
-    async function loadShop() {
+    async function loadShop(forceRefresh = false) {
+      const now = Date.now();
+      const cacheHit = !forceRefresh
+        && _shopCache.ts && (now - _shopCache.ts < _SHOP_CACHE_TTL)
+        && _shopCache.walletData;
+      if (cacheHit) {
+        walletData = _shopCache.walletData;
+        shopData   = _shopCache.shopData;
+        renderShop();
+        return;
+      }
+
       const el = document.getElementById("shopContent");
-      el.innerHTML = `<div class="empty skeleton"><span class="big-emoji">🛒</span>Загружаем…</div>`;
+      if (!_shopCache.ts) {
+        // First load — show skeleton
+        el.innerHTML = `<div class="empty skeleton"><span class="big-emoji">🛒</span>Загружаем…</div>`;
+      }
       try {
         const opts = { method: "POST", headers: { "Content-Type": "application/json" },
                        body: JSON.stringify({ initData: currentInitData }) };
@@ -7433,11 +7449,19 @@
         shopData   = sRes.ok ? await sRes.json() : { active_boosts: [], settings: {}, prices: {} };
         if (shopData.settings) _userCardSettings = { theme: shopData.settings.theme || "default", frame: shopData.settings.frame || "none" };
         petData    = freshPet;
+        _shopCache = { ts: Date.now(), walletData, shopData };
         shopLoaded = true;
         renderShop();
       } catch {
         el.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить.<br>Попробуй обновить.</div>`;
       }
+    }
+
+    function _shopInvalidateCache() { _shopCache.ts = 0; }
+
+    async function refreshShopSection() {
+      _shopInvalidateCache();
+      await loadShop(true);
     }
 
     // ── Coin packages config (mirrors backend COIN_PACKAGES) ──────────────
@@ -7477,6 +7501,10 @@
             <span class="shop-earn-chip">📅 Ежедневный бонус</span>
             <span class="shop-earn-chip">📋 Квесты</span>
             <span class="shop-earn-chip">💬 Активность</span>
+          </div>
+          <div style="margin-top:8px;display:flex;align-items:center;justify-content:center;gap:8px">
+            <span id="shopCacheAge" style="font-size:11px;color:var(--hint);opacity:0.75"></span>
+            <button onclick="refreshShopSection()" style="border:none;background:rgba(120,120,128,0.1);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--hint);display:inline-flex;align-items:center;gap:4px;cursor:pointer;vertical-align:middle">🔄 Обновить</button>
           </div>
         </div>
 
@@ -7582,6 +7610,7 @@
       `;
 
       attachShopHandlers(prices, settings, chats, bal);
+      _startShopAgeTicker();
     }
 
     async function buyCoinPackage(pkgId, btn) {
@@ -7607,18 +7636,11 @@
           if (status === "paid") {
             if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
             toastMessage(`🪙 ${data.coins.toLocaleString("ru-RU")} монет зачислено!`);
-            // Reload wallet data after a moment for the DB to commit
+            // Reload shop after a moment for the DB to commit
             setTimeout(async () => {
               try {
-                const wRes = await fetch("/app/api/wallet/info", {
-                  method: "POST", headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ initData: currentInitData }),
-                });
-                if (wRes.ok) {
-                  walletData = await wRes.json();
-                  updateBalanceDisplay(walletData.balance);
-                  renderShop();
-                }
+                _shopInvalidateCache();
+                await loadShop(true);
               } catch {}
             }, 1500);
           } else if (status === "failed") {
@@ -7655,7 +7677,8 @@
           if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
           updateBalanceDisplay(data.new_balance);
           toastMessage("⚡ Двойной XP активирован на 24 часа!");
-          await loadShop();
+          _shopInvalidateCache();
+          await loadShop(true);
         } catch (e) { btn.disabled = false; btn.textContent = "Купить"; toastMessage(e.message); }
       });
 
@@ -7675,7 +7698,8 @@
             const data = await res.json();
             if (data.new_balance != null) updateBalanceDisplay(data.new_balance);
             toastMessage(`📌 Чат с ${chatName} закреплён!`);
-            await loadShop();
+            _shopInvalidateCache();
+            await loadShop(true);
           } catch (e) { toastMessage(e.message); }
         });
       });
@@ -7704,7 +7728,8 @@
             if (shopData?.settings) shopData.settings.theme = theme;
             const label = THEMES.find(t => t.id === theme)?.label ?? theme;
             toastMessage(isOwned ? `🎨 Тема «${label}» применена на карточку!` : `🎨 Тема «${label}» куплена и применена на карточку!`);
-            await loadShop();
+            _shopInvalidateCache();
+            await loadShop(true);
           } catch (e) {
             btn.disabled = false;
             btn.textContent = isOwned ? "Применить" : btn.textContent;
@@ -7731,7 +7756,8 @@
             if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
             updateBalanceDisplay(data.new_balance);
             toastMessage(`🖼 Рамка «${FRAMES.find(f => f.id === frame)?.label}» применена!`);
-            await loadShop();
+            _shopInvalidateCache();
+            await loadShop(true);
           } catch (e) { btn.disabled = false; toastMessage(e.message); }
         });
       });
@@ -7753,7 +7779,8 @@
             if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
             updateBalanceDisplay(data.new_balance);
             toastMessage(`🎁 Подарок отправлен в чат с ${chatName}! Получит ${prices.gift_amount ?? 50} 🪙`);
-            await loadShop();
+            _shopInvalidateCache();
+            await loadShop(true);
           } catch (e) { toastMessage(e.message); }
         });
       });
@@ -8528,6 +8555,26 @@
       };
       update();
       _interactAgeTicker = setInterval(update, 5000);
+    }
+
+    function _shopAgeLabel(ts) {
+      if (!ts) return "";
+      const sec = Math.floor((Date.now() - ts) / 1000);
+      if (sec < 10) return "только что";
+      if (sec < 60) return `${sec} с назад`;
+      const min = Math.floor(sec / 60);
+      return `${min} мин. назад`;
+    }
+
+    function _startShopAgeTicker() {
+      if (_shopCacheAgeTicker) clearInterval(_shopCacheAgeTicker);
+      const update = () => {
+        const lbl = document.getElementById("shopCacheAge");
+        if (!lbl) { clearInterval(_shopCacheAgeTicker); _shopCacheAgeTicker = null; return; }
+        lbl.textContent = _shopCache.ts ? `обновлено ${_shopAgeLabel(_shopCache.ts)}` : "";
+      };
+      update();
+      _shopCacheAgeTicker = setInterval(update, 5000);
     }
 
     function _petAgeLabel(ts) {

@@ -8597,7 +8597,7 @@
         lbl.textContent = _petCache.ts ? `обновлено ${_petAgeLabel(_petCache.ts)}` : "";
       };
       update();
-      _petAgeTicker = setInterval(update, 5000);
+      _petAgeTicker = setInterval(update, 1000);
     }
 
     function renderRelationshipCards(relationships) {

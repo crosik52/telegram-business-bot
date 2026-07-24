@@ -4482,6 +4482,9 @@
       if (tab !== "casino") {
         if (_petAgeTicker) { clearInterval(_petAgeTicker); _petAgeTicker = null; }
       }
+      if (tab !== "interact") {
+        if (_interactAgeTicker) { clearInterval(_interactAgeTicker); _interactAgeTicker = null; }
+      }
       if (tab === "casino") {
         if (!casinoLoaded && currentInitData) loadWallet();
         else if (casinoLoaded) renderCasino();

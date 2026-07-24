@@ -8634,7 +8634,11 @@
 
     function _startPetAgeTicker() {
       if (_petAgeTicker) clearInterval(_petAgeTicker);
+      // Don't start if the user is no longer on the casino/pet tab
+      if (currentTab !== "casino") return;
       const update = () => {
+        // Stop if the user has navigated away since the ticker was started
+        if (currentTab !== "casino") { clearInterval(_petAgeTicker); _petAgeTicker = null; return; }
         const lbl = document.getElementById("petCacheAge");
         if (!lbl) { clearInterval(_petAgeTicker); _petAgeTicker = null; return; }
         lbl.textContent = _petCache.ts ? `обновлено ${_petAgeLabel(_petCache.ts)}` : "";

@@ -2957,6 +2957,7 @@
     let crashGameActive   = false;
     let lastRelationships = {};   // partner_id → rel dict from /api/relationships/list
     let _interactCache = { ts: 0, relData: null, petData: null }; // 45-second client cache
+    let _interactAgeTicker = null; // interval id for "updated X ago" label
     let _petCache      = { ts: 0, data: null };                  // 45-second client cache for pet/list
     let crashMultiplier   = 1.0;
     let crashPointAt      = Infinity;  // server-side crash point received on start
@@ -8345,7 +8346,8 @@
         return;
       }
 
-      // Skeleton loader while fetching
+      // Skeleton loader while fetching — stop age ticker during load
+      if (_interactAgeTicker) { clearInterval(_interactAgeTicker); _interactAgeTicker = null; }
       el.innerHTML = `<div class="interact-skeleton">
         <div class="interact-skel-card"></div>
         <div class="interact-skel-card" style="height:130px"></div>
@@ -8391,7 +8393,8 @@
       const relationships = relData.relationships || [];
       const alivePets     = (petLocal.pets || []).filter(p => p.is_alive);
 
-      let html = `<div style="display:flex;justify-content:flex-end;margin-bottom:6px">
+      let html = `<div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:6px">
+        <span id="interactCacheAge" style="font-size:11px;color:var(--hint);opacity:0.75"></span>
         <button onclick="renderInteractTab(true)" style="border:none;background:rgba(120,120,128,0.1);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--hint);display:flex;align-items:center;gap:4px;cursor:pointer">
           <span>🔄</span> Обновить
         </button>
@@ -8418,6 +8421,28 @@
 
       el.innerHTML = html;
       _attachInteractPetHandlers();
+      _startInteractAgeTicker();
+    }
+
+    function _interactAgeLabel(ts) {
+      if (!ts) return "";
+      const sec = Math.floor((Date.now() - ts) / 1000);
+      if (sec < 10) return "только что";
+      if (sec < 60) return `${sec} сек. назад`;
+      const min = Math.floor(sec / 60);
+      return `${min} мин. назад`;
+    }
+
+    function _startInteractAgeTicker() {
+      if (_interactAgeTicker) clearInterval(_interactAgeTicker);
+      // Set immediately, then update every 5 s
+      const update = () => {
+        const lbl = document.getElementById("interactCacheAge");
+        if (!lbl) { clearInterval(_interactAgeTicker); _interactAgeTicker = null; return; }
+        lbl.textContent = _interactCache.ts ? `Обновлено ${_interactAgeLabel(_interactCache.ts)}` : "";
+      };
+      update();
+      _interactAgeTicker = setInterval(update, 5000);
     }
 
     function renderRelationshipCards(relationships) {

@@ -6,8 +6,8 @@ export const modules: ModuleMap = {
   "./components/mockups/design-variants/Ember.tsx": () => import("../components/mockups/design-variants/Ember.tsx"),
   "./components/mockups/design-variants/Frost.tsx": () => import("../components/mockups/design-variants/Frost.tsx"),
   "./components/mockups/design-variants/VioletDream.tsx": () => import("../components/mockups/design-variants/VioletDream.tsx"),
-  "./components/mockups/pet-system/CoinShop.tsx": () => import("../components/mockups/pet-system/CoinShop.tsx"),
-  "./components/mockups/pet-system/PetScreen.tsx": () => import("../components/mockups/pet-system/PetScreen.tsx"),
   "./components/mockups/statistics/Compact.tsx": () => import("../components/mockups/statistics/Compact.tsx"),
-  "./components/mockups/statistics/Insights.tsx": () => import("../components/mockups/statistics/Insights.tsx")
+  "./components/mockups/statistics/Insights.tsx": () => import("../components/mockups/statistics/Insights.tsx"),
+  "./components/mockups/pet-system/CoinShop.tsx": () => import("../components/mockups/pet-system/CoinShop.tsx"),
+  "./components/mockups/pet-system/PetScreen.tsx": () => import("../components/mockups/pet-system/PetScreen.tsx")
 };

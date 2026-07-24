@@ -4684,6 +4684,7 @@
         ]);
         if (!wRes.ok) throw new Error();
         walletData   = await wRes.json();
+        _shopInvalidateCache(); // fresh wallet fetch from another tab must bust the shop cache
         petData      = freshPet;
         referralData = rRes.ok ? await rRes.json() : null;
         referralLoaded = true;
@@ -4706,6 +4707,7 @@
         ]);
         if (!wRes.ok) throw new Error();
         walletData = await wRes.json();
+        _shopInvalidateCache(); // fresh wallet fetch from another tab must bust the shop cache
         petData    = freshPet;
         casinoLoaded = true;
         renderCasino();
@@ -5727,6 +5729,7 @@
 
     function updateBalanceDisplay(newBalance) {
       walletData.balance = newBalance;
+      _shopInvalidateCache(); // any server-confirmed balance change must bust the shop cache
       const el = document.getElementById("walletBalanceEl");
       if (el) {
         el.textContent = newBalance.toLocaleString("ru-RU");

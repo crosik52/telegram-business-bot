@@ -2970,6 +2970,7 @@
     let _interactCache = { ts: 0, relData: null, petData: null }; // 45-second client cache
     let _interactAgeTicker = null; // interval id for "updated X ago" label
     let _petCache      = { ts: 0, data: null };                  // 45-second client cache for pet/list
+    let _petAgeTicker  = null;                                   // interval id for "updated X ago" label
     let crashMultiplier   = 1.0;
     let crashPointAt      = Infinity;  // server-side crash point received on start
     let crashAnimFrame    = null;
@@ -4476,6 +4477,9 @@
 
       // Avatar is set once by applyUserAvatar() — never reset on tab switch
 
+      if (tab !== "casino") {
+        if (_petAgeTicker) { clearInterval(_petAgeTicker); _petAgeTicker = null; }
+      }
       if (tab === "casino") {
         if (!casinoLoaded && currentInitData) loadWallet();
         else if (casinoLoaded) renderCasino();
@@ -4720,6 +4724,7 @@
                      + renderCasinoGamePicker() + renderActiveGameCard();
         attachCasinoHandlers();
         attachPetHandlers();
+        _startPetAgeTicker();
       } catch (err) {
         console.error("[renderCasino] error:", err);
         el.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Ошибка рендера: ${err.message}<br><small>Открой консоль для деталей.</small></div>`;
@@ -6759,7 +6764,7 @@
       const adoptBtn = hasAdopt ? `<button class="pet-add-more" id="openAdoptBtn">+ Питомец</button>` : "";
 
       if (pets.length === 0) {
-        const refreshBtnEmpty = `<button onclick="refreshPetSection()" style="border:none;background:rgba(120,120,128,0.1);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--hint);display:inline-flex;align-items:center;gap:4px;cursor:pointer;vertical-align:middle">🔄 Обновить</button>`;
+        const refreshBtnEmpty = `<span id="petCacheAge" style="font-size:11px;color:var(--hint);opacity:0.75"></span><button onclick="refreshPetSection()" style="border:none;background:rgba(120,120,128,0.1);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--hint);display:inline-flex;align-items:center;gap:4px;cursor:pointer;vertical-align:middle">🔄 Обновить</button>`;
         return `<div class="pet-section">
           <div class="section-title">${_si("ico-paw")} Питомцы <span style="display:flex;align-items:center;gap:6px">${adoptBtn}${refreshBtnEmpty}</span></div>
           <div class="card pet-empty">
@@ -6833,7 +6838,7 @@
           </div>
         </div>`).join("");
 
-      const refreshBtn = `<button onclick="refreshPetSection()" style="border:none;background:rgba(120,120,128,0.1);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--hint);display:inline-flex;align-items:center;gap:4px;cursor:pointer;vertical-align:middle">🔄 Обновить</button>`;
+      const refreshBtn = `<span id="petCacheAge" style="font-size:11px;color:var(--hint);opacity:0.75"></span><button onclick="refreshPetSection()" style="border:none;background:rgba(120,120,128,0.1);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--hint);display:inline-flex;align-items:center;gap:4px;cursor:pointer;vertical-align:middle">🔄 Обновить</button>`;
       return `<div class="pet-section">
         <div class="section-title">${_si("ico-paw")} Питомцы <span style="display:flex;align-items:center;gap:6px">${adoptBtn}${refreshBtn}</span></div>
         ${aliveCards}${deadCards}
@@ -8523,6 +8528,26 @@
       };
       update();
       _interactAgeTicker = setInterval(update, 5000);
+    }
+
+    function _petAgeLabel(ts) {
+      if (!ts) return "";
+      const sec = Math.floor((Date.now() - ts) / 1000);
+      if (sec < 10) return "только что";
+      if (sec < 60) return `${sec} с назад`;
+      const min = Math.floor(sec / 60);
+      return `${min} мин. назад`;
+    }
+
+    function _startPetAgeTicker() {
+      if (_petAgeTicker) clearInterval(_petAgeTicker);
+      const update = () => {
+        const lbl = document.getElementById("petCacheAge");
+        if (!lbl) { clearInterval(_petAgeTicker); _petAgeTicker = null; return; }
+        lbl.textContent = _petCache.ts ? `обновлено ${_petAgeLabel(_petCache.ts)}` : "";
+      };
+      update();
+      _petAgeTicker = setInterval(update, 5000);
     }
 
     function renderRelationshipCards(relationships) {

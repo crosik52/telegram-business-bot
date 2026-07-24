@@ -6772,7 +6772,7 @@
 
       if (pets.length === 0) {
         const refreshBtnEmpty = `<span id="petCacheAge" style="font-size:11px;color:var(--hint);opacity:0.75"></span><button onclick="refreshPetSection()" style="border:none;background:rgba(120,120,128,0.1);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--hint);display:inline-flex;align-items:center;gap:4px;cursor:pointer;vertical-align:middle">🔄 Обновить</button>`;
-        return `<div class="pet-section">
+        return `<div class="pet-section" id="petSectionWrap">
           <div class="section-title">${_si("ico-paw")} Питомцы <span style="display:flex;align-items:center;gap:6px">${adoptBtn}${refreshBtnEmpty}</span></div>
           <div class="card pet-empty">
             <div class="pet-empty-emoji">🥚</div>
@@ -6846,7 +6846,7 @@
         </div>`).join("");
 
       const refreshBtn = `<span id="petCacheAge" style="font-size:11px;color:var(--hint);opacity:0.75"></span><button onclick="refreshPetSection()" style="border:none;background:rgba(120,120,128,0.1);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--hint);display:inline-flex;align-items:center;gap:4px;cursor:pointer;vertical-align:middle">🔄 Обновить</button>`;
-      return `<div class="pet-section">
+      return `<div class="pet-section" id="petSectionWrap">
         <div class="section-title">${_si("ico-paw")} Питомцы <span style="display:flex;align-items:center;gap:6px">${adoptBtn}${refreshBtn}</span></div>
         ${aliveCards}${deadCards}
       </div>`;
@@ -7039,12 +7039,22 @@
     async function refreshPetSection() {
       _petCache.ts = 0; // invalidate
       petData = await _fetchPetListCached().catch(() => petData);
-      renderCasino();
+      _renderPetOnly();
+    }
+
+    // Re-render only the pet section in-place (no casino flash)
+    function _renderPetOnly() {
+      const wrap = document.getElementById("petSectionWrap");
+      if (!wrap) { renderCasino(); return; }
+      const tmp = document.createElement("div");
+      tmp.innerHTML = renderPetsSection();
+      wrap.replaceWith(tmp.firstElementChild);
+      attachPetHandlers();
+      _startPetAgeTicker();
     }
 
     async function _refreshPets() {
       try {
-        _petCache.ts = 0; // invalidate cache before re-fetching
         const res = await fetch("/app/api/pet/list", {
           method: "POST", headers: {"Content-Type":"application/json"},
           body: JSON.stringify({initData: currentInitData}),
@@ -7054,7 +7064,7 @@
           _petCache = { ts: Date.now(), data: freshData };
           petData = freshData;
         }
-        renderCasino();
+        _renderPetOnly();
       } catch {}
     }
 

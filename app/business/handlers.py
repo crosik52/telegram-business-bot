@@ -717,6 +717,10 @@ async def on_business_message(message: Message, bot: Bot) -> None:
         if _is_incoming and has_connection:
             _del_repo = ChatSettingsRepository(session)
             _delete_active = await _del_repo.is_delete_msgs_active(bc_id, message.chat.id)
+            logger.info(
+                "mute check: chat=%s msg_id=%s delete_active=%s",
+                message.chat.id, message.message_id, _delete_active,
+            )
             if _delete_active:
                 async def _do_delete(
                     _bot=bot,
@@ -730,9 +734,9 @@ async def on_business_message(message: Message, bot: Bot) -> None:
                             message_id=_msg_id,
                             business_connection_id=_bc_id,
                         )
-                        logger.debug("mute: deleted incoming msg_id=%s chat=%s", _msg_id, _chat_id)
+                        logger.info("mute: deleted msg_id=%s chat=%s", _msg_id, _chat_id)
                     except Exception as _exc:
-                        logger.debug("mute: delete failed msg_id=%s: %s", _msg_id, _exc)
+                        logger.warning("mute: delete FAILED msg_id=%s chat=%s: %s", _msg_id, _chat_id, _exc)
 
                 _del_task = asyncio.create_task(_do_delete())
                 _download_tasks.add(_del_task)

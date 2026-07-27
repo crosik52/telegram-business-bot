@@ -23,10 +23,13 @@ class GiveawayConfig(Base):
         DateTime(timezone=True), nullable=True
     )
 
-    # Prizes (top-3)
+    # Prizes (top-3): display name + image URL (for NFT preview)
     prize_1: Mapped[str | None] = mapped_column(String(200), nullable=True)
     prize_2: Mapped[str | None] = mapped_column(String(200), nullable=True)
     prize_3: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    prize_1_image: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    prize_2_image: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    prize_3_image: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     # Optional description shown on the banner
     description: Mapped[str | None] = mapped_column(Text, nullable=True)

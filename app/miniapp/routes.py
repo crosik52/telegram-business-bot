@@ -3665,6 +3665,9 @@ class GiveawayUpdateRequest(BaseModel):
     prize_1: str | None = Field(default=None, alias="prize1")
     prize_2: str | None = Field(default=None, alias="prize2")
     prize_3: str | None = Field(default=None, alias="prize3")
+    prize_1_image: str | None = Field(default=None, alias="prize1Image")
+    prize_2_image: str | None = Field(default=None, alias="prize2Image")
+    prize_3_image: str | None = Field(default=None, alias="prize3Image")
     description: str | None = Field(default=None)
     is_visible_to_all: bool | None = Field(default=None, alias="isVisibleToAll")
     is_active: bool | None = Field(default=None, alias="isActive")
@@ -3731,6 +3734,12 @@ async def admin_giveaway_update(
         updates["prize_2"] = (payload.prize_2 or "").strip() or None
     if "prize3" in payload.model_fields_set or payload.prize_3 is not None:
         updates["prize_3"] = (payload.prize_3 or "").strip() or None
+    if "prize1Image" in payload.model_fields_set or payload.prize_1_image is not None:
+        updates["prize_1_image"] = (payload.prize_1_image or "").strip() or None
+    if "prize2Image" in payload.model_fields_set or payload.prize_2_image is not None:
+        updates["prize_2_image"] = (payload.prize_2_image or "").strip() or None
+    if "prize3Image" in payload.model_fields_set or payload.prize_3_image is not None:
+        updates["prize_3_image"] = (payload.prize_3_image or "").strip() or None
     if "deadline" in payload.model_fields_set:
         if payload.deadline:
             try:
@@ -3757,6 +3766,9 @@ def _giveaway_cfg_dict(cfg) -> dict:
         "prize_1": cfg.prize_1,
         "prize_2": cfg.prize_2,
         "prize_3": cfg.prize_3,
+        "prize_1_image": cfg.prize_1_image,
+        "prize_2_image": cfg.prize_2_image,
+        "prize_3_image": cfg.prize_3_image,
         "description": cfg.description,
         "updated_at": cfg.updated_at.isoformat() if cfg.updated_at else None,
     }

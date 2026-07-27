@@ -2883,6 +2883,23 @@
   .giveaway-prize-tag.g1 { background: rgba(255,215,0,0.15); color: #d4a017; }
   .giveaway-prize-tag.g2 { background: rgba(192,192,192,0.18); color: #9ca3af; }
   .giveaway-prize-tag.g3 { background: rgba(205,127,50,0.15); color: #b45309; }
+  /* NFT image prize */
+  .giveaway-prize-nft {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    flex-shrink: 0;
+  }
+  .giveaway-nft-img {
+    width: 62px; height: 62px; border-radius: 14px; object-fit: cover;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+  }
+  .giveaway-podium-card.rank-1 .giveaway-nft-img { box-shadow: 0 0 0 2px rgba(255,215,0,0.5), 0 3px 12px rgba(0,0,0,0.25); }
+  .giveaway-podium-card.rank-2 .giveaway-nft-img { box-shadow: 0 0 0 2px rgba(192,192,192,0.45), 0 3px 12px rgba(0,0,0,0.25); }
+  .giveaway-podium-card.rank-3 .giveaway-nft-img { box-shadow: 0 0 0 2px rgba(205,127,50,0.45), 0 3px 12px rgba(0,0,0,0.25); }
+  .giveaway-nft-label {
+    font-size: 9px; font-weight: 700; color: var(--hint);
+    text-align: center; max-width: 66px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   .giveaway-empty { text-align: center; padding: 28px 16px; color: var(--hint); font-size: 13px; }
   .giveaway-invite-btn {
     margin: 0 12px; display: block; border: none; border-radius: 16px;
@@ -9111,6 +9128,18 @@
       const prizes = [d.prize_1, d.prize_2, d.prize_3];
       const desc = d.description || "Пригласи больше друзей и займи место в топе — победители получат NFT-подарки в Telegram!";
 
+      const prizeImages = [d.prize_1_image, d.prize_2_image, d.prize_3_image];
+
+      function _prizeHtml(prizeText, prizeImg, cls) {
+        if (!prizeText && !prizeImg) return "";
+        if (prizeImg) return `
+          <div class="giveaway-prize-nft ${cls}">
+            <img src="${_esc(prizeImg)}" class="giveaway-nft-img" alt="${_esc(prizeText||"NFT")}" onerror="this.parentNode.innerHTML='<span class=\\'giveaway-prize-tag ${cls}\\'>🎁 ${_esc(prizeText||"NFT")}</span>'">
+            ${prizeText ? `<div class="giveaway-nft-label">${_esc(prizeText)}</div>` : ""}
+          </div>`;
+        return `<div class="giveaway-prize-tag ${cls}">🎁 ${_esc(prizeText)}</div>`;
+      }
+
       const topCards = (d.top || []).map((r, i) => `
         <div class="giveaway-podium-card rank-${r.rank}">
           <div class="giveaway-rank-badge">${MEDALS[i] || "#"+r.rank}</div>
@@ -9119,7 +9148,7 @@
             <div class="giveaway-podium-name">${_esc(r.display_name)}</div>
             <div class="giveaway-podium-count">${r.referral_count} ${r.referral_count===1?"реферал":r.referral_count<5?"реферала":"рефералов"}</div>
           </div>
-          ${prizes[i] ? `<div class="giveaway-prize-tag ${PRIZE_CLS[i]}">🎁 ${_esc(prizes[i])}</div>` : ""}
+          ${_prizeHtml(prizes[i], prizeImages[i], PRIZE_CLS[i])}
         </div>`).join("");
 
       const emptySlots = [1,2,3].slice((d.top||[]).length).map((_,i) => {
@@ -9132,7 +9161,7 @@
               <div class="giveaway-podium-name" style="color:var(--hint)">Свободно</div>
               <div class="giveaway-podium-count">Пригласи друзей</div>
             </div>
-            ${prizes[rank-1] ? `<div class="giveaway-prize-tag ${PRIZE_CLS[rank-1]}">🎁 ${_esc(prizes[rank-1])}</div>` : ""}
+            ${_prizeHtml(prizes[rank-1], prizeImages[rank-1], PRIZE_CLS[rank-1])}
           </div>`;
       }).join("");
 

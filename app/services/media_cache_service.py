@@ -150,20 +150,20 @@ async def get_cached_bytes(
 async def purge_old_messages(
     session: AsyncSession,
     max_age_days: int = 90,
-    deleted_max_age_days: int = 7,
+    deleted_max_age_days: int = 90,
 ) -> int:
     """Delete Message rows (+ their edit history via CASCADE).
 
     Two passes:
     - Already-deleted messages (is_deleted=True): removed after *deleted_max_age_days*.
-      The owner already received the notification, so there's nothing to keep.
+      Kept as long as regular messages so owners can still recover media/notifications.
     - All other messages: removed after *max_age_days*.
     """
     from app.models.message import Message as DBMessage
 
     now = dt.datetime.now(dt.UTC)
 
-    # Pass 1: deleted messages — purge aggressively (default 7 days)
+    # Pass 1: deleted messages
     deleted_cutoff = now - dt.timedelta(days=deleted_max_age_days)
     r1 = await session.execute(
         delete(DBMessage).where(

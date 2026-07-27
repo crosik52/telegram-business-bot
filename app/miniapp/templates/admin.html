@@ -881,6 +881,7 @@
       <button class="action-btn" style="text-align:left;padding:13px 16px;font-size:14px;border-radius:14px" onclick="switchTab('shop');closeMoreMenu()">🛒 Магазин</button>
       <button class="action-btn" style="text-align:left;padding:13px 16px;font-size:14px;border-radius:14px" onclick="switchTab('referral');closeMoreMenu()">🔗 Рефералы</button>
       <button class="action-btn" id="btnInfographic2" style="text-align:left;padding:13px 16px;font-size:14px;border-radius:14px" onclick="downloadInfographic(this);closeMoreMenu()">📊 Инфографика</button>
+      <button class="action-btn" style="text-align:left;padding:13px 16px;font-size:14px;border-radius:14px" onclick="switchTab('giveaway');closeMoreMenu()">🎁 Розыгрыш</button>
       <button class="action-btn" style="text-align:left;padding:13px 16px;font-size:14px;border-radius:14px" onclick="switchTab('db');closeMoreMenu()">🗄️ База данных</button>
     </div>
   </div>
@@ -1135,6 +1136,7 @@
       else if (tab === "subscription") loadSubscriptionTab();
       else if (tab === "shop")         loadShopAdminTab();
       else if (tab === "referral")     loadReferralAdminTab();
+      else if (tab === "giveaway")     loadGiveawayAdminTab();
       else if (tab === "db")           loadDbTab();
     }
 
@@ -3078,6 +3080,163 @@
       } catch(e) {
         if (res) res.innerHTML = `<span style="color:var(--danger)">❌ Ошибка: ${esc(String(e))}</span>`;
         btn.disabled = false; btn.textContent = "🧹 Запустить чистку";
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // GIVEAWAY ADMIN TAB
+    // ══════════════════════════════════════════════════════════════════════
+    let _giveawayCfg = null;
+
+    async function loadGiveawayAdminTab() {
+      const content = document.getElementById("content");
+      const subtitle = document.getElementById("subtitle");
+      subtitle.textContent = "Управление розыгрышем NFT";
+      content.innerHTML = `<div class="empty skeleton" style="padding:40px 0;text-align:center"><span style="font-size:36px">🎁</span><br>Загружаем…</div>`;
+      try {
+        const res = await fetch("/app/api/admin/giveaway/config", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData}),
+        });
+        if (!res.ok) throw new Error("api");
+        _giveawayCfg = await res.json();
+        renderGiveawayAdminTab();
+      } catch(e) {
+        content.innerHTML = `<div class="error" style="padding:24px;text-align:center">❌ Ошибка загрузки: ${esc(String(e))}</div>`;
+      }
+    }
+
+    function renderGiveawayAdminTab() {
+      const content = document.getElementById("content");
+      if (!_giveawayCfg) return;
+      const d = _giveawayCfg;
+
+      // Format deadline for datetime-local input (UTC → local input value)
+      let deadlineVal = "";
+      if (d.deadline) {
+        try {
+          const dt = new Date(d.deadline);
+          deadlineVal = new Date(dt.getTime() - dt.getTimezoneOffset()*60000)
+            .toISOString().slice(0,16);
+        } catch {}
+      }
+
+      const MEDALS = ["🥇","🥈","🥉"];
+      const topRows = (d.top || []).map((r, i) => `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--card-bg,#f2f2f7);border-radius:12px;margin-bottom:6px">
+          <span style="font-size:22px">${MEDALS[i]||"#"+r.rank}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.display_name)}</div>
+            <div style="font-size:12px;opacity:0.6">${r.referral_count} рефералов${r.username ? " · @"+esc(r.username) : ""}</div>
+          </div>
+        </div>`).join("") || `<div style="padding:12px;color:var(--hint);font-size:13px">Нет рефералов пока.</div>`;
+
+      content.innerHTML = `
+        <div style="padding:12px;display:flex;flex-direction:column;gap:14px;max-width:480px;margin:0 auto">
+
+          <!-- Status cards -->
+          <div class="cards" style="margin:0">
+            <div class="card c-active">
+              <span class="c-icon">${d.is_active ? "✅" : "⏸️"}</span>
+              <div class="c-val">${d.is_active ? "Активен" : "Пауза"}</div>
+              <div class="c-lbl">Статус</div>
+            </div>
+            <div class="card c-msgs">
+              <span class="c-icon">${d.is_visible_to_all ? "👁️" : "🔒"}</span>
+              <div class="c-val">${d.is_visible_to_all ? "Открыт" : "Скрыт"}</div>
+              <div class="c-lbl">Видимость</div>
+            </div>
+            <div class="card c-users">
+              <span class="c-icon">🏆</span>
+              <div class="c-val">${(d.top||[]).length}</div>
+              <div class="c-lbl">В топе</div>
+            </div>
+          </div>
+
+          <!-- Settings form -->
+          <div style="background:var(--card-bg,#fff);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px;box-shadow:0 1px 4px rgba(0,0,0,0.07)">
+            <div style="font-weight:800;font-size:15px">⚙️ Настройки</div>
+
+            <label style="display:flex;flex-direction:column;gap:4px">
+              <span style="font-size:12px;font-weight:600;opacity:0.6">ДЕДЛАЙН (UTC)</span>
+              <input type="datetime-local" id="gvDeadline" value="${deadlineVal}"
+                style="border:1.5px solid rgba(120,120,128,0.2);border-radius:10px;padding:9px 12px;font-size:14px;background:var(--bg,#f2f2f7);color:inherit;outline:none">
+            </label>
+
+            <label style="display:flex;flex-direction:column;gap:4px">
+              <span style="font-size:12px;font-weight:600;opacity:0.6">ОПИСАНИЕ (необязательно)</span>
+              <textarea id="gvDesc" rows="2"
+                style="border:1.5px solid rgba(120,120,128,0.2);border-radius:10px;padding:9px 12px;font-size:14px;background:var(--bg,#f2f2f7);color:inherit;outline:none;resize:none">${esc(d.description||"")}</textarea>
+            </label>
+
+            <div style="font-weight:700;font-size:13px;margin-top:4px">🎁 Призы</div>
+            ${["prize_1","prize_2","prize_3"].map((key, i) => `
+            <label style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:20px;width:28px;text-align:center">${MEDALS[i]}</span>
+              <input type="text" id="gv_${key}" placeholder="Приз за ${i+1} место"
+                value="${esc(d[key]||"")}"
+                style="flex:1;border:1.5px solid rgba(120,120,128,0.2);border-radius:10px;padding:9px 12px;font-size:14px;background:var(--bg,#f2f2f7);color:inherit;outline:none">
+            </label>`).join("")}
+
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600">
+                <input type="checkbox" id="gvActive" ${d.is_active?"checked":""} style="width:16px;height:16px;cursor:pointer">
+                Активен
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600">
+                <input type="checkbox" id="gvVisible" ${d.is_visible_to_all?"checked":""} style="width:16px;height:16px;cursor:pointer">
+                Видим всем пользователям
+              </label>
+            </div>
+
+            <button onclick="saveGiveawayCfg(this)"
+              style="border:none;border-radius:12px;padding:12px;font-size:14px;font-weight:700;background:linear-gradient(135deg,#6d28d9,#9333ea);color:#fff;cursor:pointer">
+              💾 Сохранить
+            </button>
+            <div id="gvSaveResult" style="font-size:13px;text-align:center;min-height:18px"></div>
+          </div>
+
+          <!-- Current top-3 -->
+          <div style="background:var(--card-bg,#fff);border-radius:18px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,0.07)">
+            <div style="font-weight:800;font-size:15px;margin-bottom:10px">🏆 Текущий топ</div>
+            ${topRows}
+          </div>
+
+        </div>`;
+    }
+
+    async function saveGiveawayCfg(btn) {
+      const result = document.getElementById("gvSaveResult");
+      btn.disabled = true; btn.textContent = "⏳ Сохраняем…";
+      result.textContent = "";
+      try {
+        const deadlineRaw = document.getElementById("gvDeadline").value;
+        let deadlineISO = null;
+        if (deadlineRaw) {
+          // datetime-local is local time → convert to UTC ISO
+          deadlineISO = new Date(deadlineRaw).toISOString();
+        }
+        const body = {
+          initData,
+          deadline: deadlineISO,
+          prize1: document.getElementById("gv_prize_1").value.trim() || null,
+          prize2: document.getElementById("gv_prize_2").value.trim() || null,
+          prize3: document.getElementById("gv_prize_3").value.trim() || null,
+          description: document.getElementById("gvDesc").value.trim() || null,
+          isActive: document.getElementById("gvActive").checked,
+          isVisibleToAll: document.getElementById("gvVisible").checked,
+        };
+        const res = await fetch("/app/api/admin/giveaway/update", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error((await res.json().catch(()=>({}))).detail || "error");
+        _giveawayCfg = await res.json();
+        result.innerHTML = `<span style="color:var(--success,#34c759)">✅ Сохранено</span>`;
+        renderGiveawayAdminTab();
+      } catch(e) {
+        result.innerHTML = `<span style="color:var(--danger,#ff453a)">❌ ${esc(String(e))}</span>`;
+        btn.disabled = false; btn.textContent = "💾 Сохранить";
       }
     }
 

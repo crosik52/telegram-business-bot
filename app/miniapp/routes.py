@@ -32,6 +32,7 @@ from app.repositories.shop_repository import (
     VALID_THEMES, VALID_FRAMES, COIN_PACKAGES,
 )
 from app.repositories.quest_repository import QUESTS, QuestRepository
+from app.repositories.giveaway_repository import GiveawayRepository
 from app.repositories.referral_repository import ReferralRepository
 from app.repositories.relationship_repository import RelationshipRepository
 from app.repositories.subscription_repository import SubscriptionRepository
@@ -3646,6 +3647,119 @@ async def admin_wipe_media_cache(
     await vacuum_tables(["media_cache"], full=True)
     logger.info("Admin @%s wiped ALL media_cache: %d rows deleted", admin_user.get("username"), deleted)
     return {"ok": True, "deleted_cache": deleted}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# GIVEAWAY
+# ══════════════════════════════════════════════════════════════════════════════
+
+class GiveawayRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    init_data: str = Field(alias="initData")
+
+
+class GiveawayUpdateRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    init_data: str = Field(alias="initData")
+    deadline: str | None = Field(default=None)          # ISO-8601 or None to clear
+    prize_1: str | None = Field(default=None, alias="prize1")
+    prize_2: str | None = Field(default=None, alias="prize2")
+    prize_3: str | None = Field(default=None, alias="prize3")
+    description: str | None = Field(default=None)
+    is_visible_to_all: bool | None = Field(default=None, alias="isVisibleToAll")
+    is_active: bool | None = Field(default=None, alias="isActive")
+
+
+@router.post("/app/api/giveaway")
+async def giveaway_info(
+    payload: GiveawayRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Return giveaway config + top-3 referrers.
+
+    Non-admins only see data when is_visible_to_all=True.
+    Admin always sees data regardless of visibility flag.
+    """
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid init data")
+
+    username = (user.get("username") or "").lower().lstrip("@")
+    is_admin = username == settings.miniapp_admin_username.lower()
+
+    repo = GiveawayRepository(session)
+    cfg  = await repo.get_config()
+
+    if not is_admin and not cfg.is_visible_to_all:
+        return {"locked": True}
+
+    top = await repo.get_top_referrers(limit=3)
+    return {
+        "locked": False,
+        "is_admin": is_admin,
+        **_giveaway_cfg_dict(cfg),
+        "top": top,
+    }
+
+
+@router.post("/app/api/admin/giveaway/config")
+async def admin_giveaway_config(
+    payload: GiveawayRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    _require_admin(payload.init_data)
+    repo = GiveawayRepository(session)
+    cfg  = await repo.get_config()
+    top  = await repo.get_top_referrers(limit=3)
+    return {**_giveaway_cfg_dict(cfg), "top": top}
+
+
+@router.post("/app/api/admin/giveaway/update")
+async def admin_giveaway_update(
+    payload: GiveawayUpdateRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    _require_admin(payload.init_data)
+    updates: dict = {}
+    if payload.is_active is not None:
+        updates["is_active"] = payload.is_active
+    if payload.is_visible_to_all is not None:
+        updates["is_visible_to_all"] = payload.is_visible_to_all
+    if payload.description is not None:
+        updates["description"] = payload.description.strip() or None
+    if "prize1" in payload.model_fields_set or payload.prize_1 is not None:
+        updates["prize_1"] = (payload.prize_1 or "").strip() or None
+    if "prize2" in payload.model_fields_set or payload.prize_2 is not None:
+        updates["prize_2"] = (payload.prize_2 or "").strip() or None
+    if "prize3" in payload.model_fields_set or payload.prize_3 is not None:
+        updates["prize_3"] = (payload.prize_3 or "").strip() or None
+    if "deadline" in payload.model_fields_set:
+        if payload.deadline:
+            try:
+                updates["deadline"] = dt.datetime.fromisoformat(payload.deadline).replace(
+                    tzinfo=dt.timezone.utc
+                )
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid deadline format")
+        else:
+            updates["deadline"] = None
+
+    repo = GiveawayRepository(session)
+    cfg  = await repo.update_config(**updates)
+    await session.commit()
+    top  = await repo.get_top_referrers(limit=3)
+    return {"ok": True, **_giveaway_cfg_dict(cfg), "top": top}
+
+
+def _giveaway_cfg_dict(cfg) -> dict:
+    return {
+        "is_active": cfg.is_active,
+        "is_visible_to_all": cfg.is_visible_to_all,
+        "deadline": cfg.deadline.isoformat() if cfg.deadline else None,
+        "prize_1": cfg.prize_1,
+        "prize_2": cfg.prize_2,
+        "prize_3": cfg.prize_3,
+        "description": cfg.description,
+        "updated_at": cfg.updated_at.isoformat() if cfg.updated_at else None,
+    }
 
 
 @router.post("/app/api/ai/ping")

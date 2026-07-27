@@ -270,6 +270,7 @@ async def lifespan(app: FastAPI):
     import app.models.note_reminder      # noqa: F401, PLC0415
     import app.models.required_channel  # noqa: F401, PLC0415
     import app.models.subscription       # noqa: F401, PLC0415  — registers VipSubscriptionConfig
+    import app.models.giveaway           # noqa: F401, PLC0415  — registers GiveawayConfig
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

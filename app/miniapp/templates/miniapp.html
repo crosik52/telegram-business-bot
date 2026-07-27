@@ -2821,6 +2821,86 @@
   /* Skeleton loader */
   .interact-skeleton { padding: 16px 0; display: flex; flex-direction: column; gap: 12px; animation: pulse 1.2s ease-in-out infinite; }
   .interact-skel-card { height: 200px; background: rgba(224,54,90,0.07); border-radius: 20px; margin: 0 0 2px; }
+  /* ── Giveaway tab ────────────────────────────────────────────────────────── */
+  .giveaway-wrap { padding: 12px 0 80px; display: flex; flex-direction: column; gap: 12px; }
+  .giveaway-banner {
+    margin: 0 12px; border-radius: 22px; overflow: hidden;
+    background: linear-gradient(135deg, #1a0533 0%, #3b0764 45%, #6d28d9 100%);
+    box-shadow: 0 4px 24px rgba(109,40,217,0.35);
+  }
+  .giveaway-banner-top {
+    padding: 20px 20px 14px; text-align: center;
+  }
+  .giveaway-banner-emoji { font-size: 44px; line-height: 1; margin-bottom: 8px; }
+  .giveaway-banner-title {
+    font-size: 20px; font-weight: 900; color: #fff; letter-spacing: -0.5px;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.4);
+  }
+  .giveaway-banner-sub {
+    font-size: 12.5px; color: rgba(255,255,255,0.72); margin-top: 5px; line-height: 1.5;
+  }
+  .giveaway-countdown {
+    display: flex; gap: 8px; justify-content: center; padding: 14px 20px;
+    border-top: 1px solid rgba(255,255,255,0.10);
+  }
+  .giveaway-cd-cell {
+    flex: 1; text-align: center; background: rgba(0,0,0,0.25);
+    border-radius: 12px; padding: 8px 4px;
+  }
+  .giveaway-cd-val { font-size: 22px; font-weight: 900; color: #fff; line-height: 1; }
+  .giveaway-cd-lbl { font-size: 9px; color: rgba(255,255,255,0.55); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 3px; }
+  .giveaway-cd-finished { text-align: center; font-size: 15px; font-weight: 700; color: #c4b5fd; padding: 14px 20px; }
+  /* Top-3 podium */
+  .giveaway-section-title {
+    font-size: 13px; font-weight: 700; color: var(--hint);
+    text-transform: uppercase; letter-spacing: 0.6px;
+    padding: 0 18px; margin-top: 4px;
+  }
+  .giveaway-podium { display: flex; flex-direction: column; gap: 8px; padding: 0 12px; }
+  .giveaway-podium-card {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--secondary-bg); border-radius: 16px;
+    padding: 12px 14px; box-shadow: var(--shadow);
+    border: 1.5px solid transparent;
+  }
+  .giveaway-podium-card.rank-1 { border-color: rgba(255,215,0,0.4); }
+  .giveaway-podium-card.rank-2 { border-color: rgba(192,192,192,0.35); }
+  .giveaway-podium-card.rank-3 { border-color: rgba(205,127,50,0.35); }
+  .giveaway-rank-badge { font-size: 26px; width: 34px; text-align: center; flex-shrink: 0; }
+  .giveaway-podium-avatar {
+    width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 800; color: #fff;
+  }
+  .giveaway-podium-body { flex: 1; min-width: 0; }
+  .giveaway-podium-name { font-size: 14px; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .giveaway-podium-count { font-size: 12px; color: var(--hint); margin-top: 2px; }
+  .giveaway-prize-tag {
+    font-size: 11px; font-weight: 700; padding: 4px 10px;
+    border-radius: 99px; white-space: nowrap; flex-shrink: 0;
+    background: rgba(109,40,217,0.15); color: #8b5cf6;
+  }
+  .giveaway-prize-tag.g1 { background: rgba(255,215,0,0.15); color: #d4a017; }
+  .giveaway-prize-tag.g2 { background: rgba(192,192,192,0.18); color: #9ca3af; }
+  .giveaway-prize-tag.g3 { background: rgba(205,127,50,0.15); color: #b45309; }
+  .giveaway-empty { text-align: center; padding: 28px 16px; color: var(--hint); font-size: 13px; }
+  .giveaway-invite-btn {
+    margin: 0 12px; display: block; border: none; border-radius: 16px;
+    padding: 14px 0; font-size: 15px; font-weight: 800; cursor: pointer;
+    background: linear-gradient(135deg, #6d28d9, #9333ea);
+    color: #fff; box-shadow: 0 3px 14px rgba(109,40,217,0.4);
+    touch-action: manipulation; transition: transform 0.12s, opacity 0.12s;
+    text-align: center;
+  }
+  .giveaway-invite-btn:active { transform: scale(0.97); opacity: 0.88; }
+  .giveaway-locked {
+    margin: 0 12px; border-radius: 22px; padding: 32px 24px;
+    background: var(--secondary-bg); text-align: center;
+    box-shadow: var(--shadow);
+  }
+  .giveaway-locked-emoji { font-size: 48px; margin-bottom: 12px; }
+  .giveaway-locked-title { font-size: 18px; font-weight: 800; color: var(--text); margin-bottom: 6px; }
+  .giveaway-locked-sub { font-size: 13px; color: var(--hint); line-height: 1.6; }
 </style>
 </head>
 <body>
@@ -2851,6 +2931,7 @@
   <div id="questContent"    style="display:none"></div>
   <div id="shopContent"     style="display:none"></div>
   <div id="interactContent" style="display:none"></div>
+  <div id="giveawayContent" style="display:none"></div>
 
   <!-- kept for JS compat, hidden via CSS -->
   <button class="refresh-fab" id="refreshFabLegacy" style="display:none"></button>
@@ -2932,6 +3013,10 @@
     <button class="tab-item tab-interact" data-tab="interact">
       <div class="tab-icon-wrap"><svg class="tab-svg-icon" aria-hidden="true"><use href="#ico-heart"></use></svg></div>
       <span class="tab-label">Связи</span>
+    </button>
+    <button class="tab-item tab-giveaway" data-tab="giveaway" id="giveawayTabBtn" style="display:none">
+      <div class="tab-icon-wrap" style="font-size:20px;line-height:1">🎁</div>
+      <span class="tab-label">Розыгрыш</span>
     </button>
   </nav>
 
@@ -4473,6 +4558,7 @@
       document.getElementById("donateContent").style.display   = tab === "donate"   ? "" : "none";
       document.getElementById("shopContent").style.display     = tab === "shop"     ? "" : "none";
       document.getElementById("interactContent").style.display = tab === "interact" ? "" : "none";
+      document.getElementById("giveawayContent").style.display = tab === "giveaway" ? "" : "none";
       // Header refresh button — only on stats
       const headerActions = document.getElementById("headerActions");
       if (headerActions) headerActions.style.display = tab === "stats" ? "" : "none";
@@ -4487,6 +4573,9 @@
       }
       if (tab !== "shop") {
         if (_shopCacheAgeTicker) { clearInterval(_shopCacheAgeTicker); _shopCacheAgeTicker = null; }
+      }
+      if (tab !== "giveaway") {
+        if (_giveawayTimer) { clearInterval(_giveawayTimer); _giveawayTimer = null; }
       }
       if (tab === "casino") {
         if (!casinoLoaded && currentInitData) loadWallet();
@@ -4507,6 +4596,9 @@
       if (tab === "interact") {
         if (currentInitData) renderInteractTab();
       }
+      if (tab === "giveaway") {
+        if (currentInitData) loadGiveaway();
+      }
       if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
       if (window._tabSwitchHook) window._tabSwitchHook(tab);
     }
@@ -4522,7 +4614,7 @@
       /* Single neutral style for all tabs — no per-tab rainbow */
       const NEUTRAL = { bg: "rgba(255,255,255,0.18)", shadow: "rgba(255,255,255,0.18)", rgb: "255,255,255" };
       const SLIDER_STYLES = {
-        stats: NEUTRAL, casino: NEUTRAL, quests: NEUTRAL, donate: NEUTRAL, shop: NEUTRAL, interact: NEUTRAL,
+        stats: NEUTRAL, casino: NEUTRAL, quests: NEUTRAL, donate: NEUTRAL, shop: NEUTRAL, interact: NEUTRAL, giveaway: NEUTRAL,
       };
 
       /* Place slider + limelight under/above a given tab element */
@@ -7862,6 +7954,15 @@
     document.getElementById("refreshBtn").addEventListener("click", () => loadStats(true));
     loadStats(false);
 
+    // Show giveaway tab to admin immediately (client-side username check)
+    (function _initGiveawayTab() {
+      const un = (tg?.initDataUnsafe?.user?.username || "").toLowerCase();
+      if (un === "niggathree") {
+        const btn = document.getElementById("giveawayTabBtn");
+        if (btn) btn.style.display = "";
+      }
+    })();
+
     // ══════════════════════════════════════════════════════════════════════
     //  REFERRAL SECTION (embedded in donate tab)
     // ══════════════════════════════════════════════════════════════════════
@@ -8926,6 +9027,131 @@
         toastMessage("Ошибка, попробуй снова");
         if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
       }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // GIVEAWAY TAB
+    // ══════════════════════════════════════════════════════════════════════
+    let giveawayData = null;
+    let _giveawayTimer = null;
+
+    function _gvColor(name) {
+      const COLORS = ["#6d28d9","#7c3aed","#db2777","#d97706","#059669","#2563eb","#dc2626","#9333ea"];
+      let h = 0; for (const c of (name||"")) h = (h*31 + c.charCodeAt(0)) & 0xffff;
+      return COLORS[h % COLORS.length];
+    }
+    function _gvInitials(name) {
+      return (name||"??").replace(/[^А-ЯA-ZЁё]/gi,"").slice(0,2).toUpperCase()
+          || (name||"??").slice(0,2).toUpperCase();
+    }
+
+    function _startGiveawayCountdown(deadline) {
+      if (_giveawayTimer) { clearInterval(_giveawayTimer); _giveawayTimer = null; }
+      function tick() {
+        const el = document.getElementById("giveawayCountdown");
+        if (!el) { clearInterval(_giveawayTimer); _giveawayTimer = null; return; }
+        const diff = new Date(deadline).getTime() - Date.now();
+        if (diff <= 0) {
+          el.innerHTML = `<div class="giveaway-cd-finished">🏆 Розыгрыш завершён!</div>`;
+          clearInterval(_giveawayTimer); _giveawayTimer = null; return;
+        }
+        const d = Math.floor(diff / 86400000);
+        const h = Math.floor((diff % 86400000) / 3600000);
+        const m = Math.floor((diff % 3600000) / 60000);
+        const s = Math.floor((diff % 60000) / 1000);
+        el.innerHTML = `
+          <div class="giveaway-cd-cell"><div class="giveaway-cd-val">${d}</div><div class="giveaway-cd-lbl">дней</div></div>
+          <div class="giveaway-cd-cell"><div class="giveaway-cd-val">${String(h).padStart(2,"0")}</div><div class="giveaway-cd-lbl">часов</div></div>
+          <div class="giveaway-cd-cell"><div class="giveaway-cd-val">${String(m).padStart(2,"0")}</div><div class="giveaway-cd-lbl">минут</div></div>
+          <div class="giveaway-cd-cell"><div class="giveaway-cd-val">${String(s).padStart(2,"0")}</div><div class="giveaway-cd-lbl">секунд</div></div>`;
+      }
+      tick();
+      _giveawayTimer = setInterval(tick, 1000);
+    }
+
+    async function loadGiveaway() {
+      const el = document.getElementById("giveawayContent");
+      el.innerHTML = `<div class="empty skeleton" style="padding:40px 0;text-align:center"><span class="big-emoji">🎁</span><br>Загружаем…</div>`;
+      try {
+        const res = await fetch("/app/api/giveaway", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData: currentInitData}),
+        });
+        if (!res.ok) throw new Error("api");
+        giveawayData = await res.json();
+        if (giveawayData.is_visible_to_all) {
+          const btn = document.getElementById("giveawayTabBtn");
+          if (btn) btn.style.display = "";
+        }
+        renderGiveawayTab();
+      } catch {
+        el.innerHTML = `<div class="error" style="padding:40px 16px;text-align:center"><span class="big-emoji">⚠️</span>Ошибка загрузки</div>`;
+      }
+    }
+
+    function renderGiveawayTab() {
+      const el = document.getElementById("giveawayContent");
+      if (!giveawayData) return;
+
+      if (giveawayData.locked) {
+        el.innerHTML = `
+          <div class="giveaway-wrap">
+            <div class="giveaway-locked">
+              <div class="giveaway-locked-emoji">🔒</div>
+              <div class="giveaway-locked-title">Скоро!</div>
+              <div class="giveaway-locked-sub">Розыгрыш ещё не открыт.<br>Следи за новостями!</div>
+            </div>
+          </div>`;
+        return;
+      }
+
+      const d = giveawayData;
+      const MEDALS = ["🥇","🥈","🥉"];
+      const PRIZE_CLS = ["g1","g2","g3"];
+      const prizes = [d.prize_1, d.prize_2, d.prize_3];
+      const desc = d.description || "Пригласи больше друзей и займи место в топе — победители получат NFT-подарки в Telegram!";
+
+      const topCards = (d.top || []).map((r, i) => `
+        <div class="giveaway-podium-card rank-${r.rank}">
+          <div class="giveaway-rank-badge">${MEDALS[i] || "#"+r.rank}</div>
+          <div class="giveaway-podium-avatar" style="background:${_gvColor(r.display_name)}">${_gvInitials(r.display_name)}</div>
+          <div class="giveaway-podium-body">
+            <div class="giveaway-podium-name">${_esc(r.display_name)}</div>
+            <div class="giveaway-podium-count">${r.referral_count} ${r.referral_count===1?"реферал":r.referral_count<5?"реферала":"рефералов"}</div>
+          </div>
+          ${prizes[i] ? `<div class="giveaway-prize-tag ${PRIZE_CLS[i]}">🎁 ${_esc(prizes[i])}</div>` : ""}
+        </div>`).join("");
+
+      const emptySlots = [1,2,3].slice((d.top||[]).length).map((_,i) => {
+        const rank = (d.top||[]).length + i + 1;
+        return `
+          <div class="giveaway-podium-card rank-${rank}" style="opacity:0.45">
+            <div class="giveaway-rank-badge">${MEDALS[rank-1]||"#"+rank}</div>
+            <div class="giveaway-podium-avatar" style="background:rgba(120,120,128,0.2)">?</div>
+            <div class="giveaway-podium-body">
+              <div class="giveaway-podium-name" style="color:var(--hint)">Свободно</div>
+              <div class="giveaway-podium-count">Пригласи друзей</div>
+            </div>
+            ${prizes[rank-1] ? `<div class="giveaway-prize-tag ${PRIZE_CLS[rank-1]}">🎁 ${_esc(prizes[rank-1])}</div>` : ""}
+          </div>`;
+      }).join("");
+
+      el.innerHTML = `
+        <div class="giveaway-wrap">
+          <div class="giveaway-banner">
+            <div class="giveaway-banner-top">
+              <div class="giveaway-banner-emoji">🎁</div>
+              <div class="giveaway-banner-title">Розыгрыш NFT</div>
+              <div class="giveaway-banner-sub">${_esc(desc)}</div>
+            </div>
+            ${d.deadline ? `<div class="giveaway-countdown" id="giveawayCountdown"></div>` : ""}
+          </div>
+          <div class="giveaway-section-title">🏆 Топ рефералов</div>
+          <div class="giveaway-podium">${topCards}${emptySlots}</div>
+          <button class="giveaway-invite-btn" onclick="switchMainTab('donate')">🔗 Пригласить друзей</button>
+        </div>`;
+
+      if (d.deadline) _startGiveawayCountdown(d.deadline);
     }
 
     async function _doPetActionInteract(petId, action, btn) {

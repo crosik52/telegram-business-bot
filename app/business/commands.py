@@ -103,9 +103,8 @@ _HELP_TEXT = (
     f"<code>!info</code> · <code>!инфо</code> — статистика по собеседнику\n"
     f"<code>!note текст</code> · <code>!заметка текст</code> — сохранить заметку\n"
     f"<code>!notes</code> · <code>!заметки</code> — показать все заметки\n"
-    f"<code>!mute 30m</code> · <code>!мут 30m</code> / <code>2h</code> / <code>1d</code> — "
-    f"отключить уведомления из этого чата\n"
-    f"<code>!unmute</code> · <code>!размут</code> — включить уведомления обратно\n"
+    f"<code>!mute</code> · <code>!мут</code> — удалять все сообщения собеседника 3 минуты\n"
+    f"<code>!unmute</code> · <code>!размут</code> — остановить удаление\n"
     f"<code>!mp3 название</code> · <code>!мп3 название</code> — найти и скачать музыку\n"
     f"<code>!card</code> · <code>!открытка</code> — отправить открытку партнёру по отношениям\n"
     f"<code>!card текст</code> · <code>!открытка текст</code> — открытка с личным текстом\n"
@@ -414,25 +413,17 @@ async def _cmd_mute(
     chat_id: int,
     business_connection_id: str,
     session: AsyncSession,
-    args: str | None,
     **_: object,
 ) -> None:
-    if not args or not args.strip():
-        await _reply(
-            bot, owner_id,
-            f"{E.CROSS} Укажите длительность: <code>!mute 30m</code> / <code>2h</code> / <code>1d</code>",
-        )
-        return
-    delta = _parse_duration(args.strip())
-    if delta is None:
-        await _reply(bot, owner_id, f"{E.CROSS} Неверный формат. Примеры: <code>30m</code>, <code>2h</code>, <code>1d</code>")
-        return
-    until = dt.datetime.now(dt.UTC) + delta
+    """Enable auto-delete mode: delete every incoming counterpart message for 3 minutes."""
+    until = dt.datetime.now(dt.UTC) + dt.timedelta(minutes=3)
     repo = ChatSettingsRepository(session)
-    await repo.set_muted_until(business_connection_id, chat_id, until)
+    await repo.set_delete_msgs_until(business_connection_id, chat_id, until)
     await _reply(
         bot, owner_id,
-        f"🔕 <b>Уведомления отключены</b> до {until.strftime('%d.%m.%Y %H:%M UTC')}",
+        f"🔇 <b>Режим удаления включён</b>\n"
+        f"Все сообщения собеседника будут удаляться 3 минуты.\n"
+        f"Чтобы остановить раньше — <code>!unmute</code>",
     )
 
 
@@ -446,8 +437,8 @@ async def _cmd_unmute(
     **_: object,
 ) -> None:
     repo = ChatSettingsRepository(session)
-    await repo.set_muted_until(business_connection_id, chat_id, None)
-    await _reply(bot, owner_id, f"{E.BELL} <b>Уведомления включены</b>")
+    await repo.set_delete_msgs_until(business_connection_id, chat_id, None)
+    await _reply(bot, owner_id, f"🔔 <b>Режим удаления выключен</b>")
 
 
 async def _cmd_mp3(

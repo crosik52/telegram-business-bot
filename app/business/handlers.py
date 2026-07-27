@@ -711,6 +711,34 @@ async def on_business_message(message: Message, bot: Bot) -> None:
             _download_tasks.add(_streak_task)
             _streak_task.add_done_callback(_download_tasks.discard)
 
+        # ── Auto-delete mode (!mute) ──────────────────────────────────────────
+        # When the owner runs !mute, every incoming counterpart message is
+        # silently deleted for 3 minutes (or until !unmute).
+        if _is_incoming and has_connection:
+            _del_repo = ChatSettingsRepository(session)
+            _delete_active = await _del_repo.is_delete_msgs_active(bc_id, message.chat.id)
+            if _delete_active:
+                async def _do_delete(
+                    _bot=bot,
+                    _chat_id=message.chat.id,
+                    _msg_id=message.message_id,
+                    _bc_id=bc_id,
+                ) -> None:
+                    try:
+                        await _bot.delete_message(
+                            chat_id=_chat_id,
+                            message_id=_msg_id,
+                            business_connection_id=_bc_id,
+                        )
+                        logger.debug("mute: deleted incoming msg_id=%s chat=%s", _msg_id, _chat_id)
+                    except Exception as _exc:
+                        logger.debug("mute: delete failed msg_id=%s: %s", _msg_id, _exc)
+
+                _del_task = asyncio.create_task(_do_delete())
+                _download_tasks.add(_del_task)
+                _del_task.add_done_callback(_download_tasks.discard)
+                return  # skip all further processing for this message
+
         # ── Media download / cache (view-once only) ───────────────────────────
         # Regular media file_ids stored in the `messages` table never expire,
         # so there is no need to download their bytes — the file_id is enough

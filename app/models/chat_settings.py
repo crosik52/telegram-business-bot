@@ -34,6 +34,12 @@ class ChatSettings(Base):
         DateTime(timezone=True), nullable=True
     )
 
+    # When set and in the future, auto-delete every incoming counterpart
+    # message.  Set by !mute for a fixed 3-minute window; cleared by !unmute.
+    delete_msgs_until: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     updated_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: dt.datetime.now(dt.UTC),

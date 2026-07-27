@@ -52,3 +52,24 @@ class ChatSettingsRepository:
         if settings is None or settings.muted_until is None:
             return False
         return settings.muted_until > dt.datetime.now(dt.UTC)
+
+    async def set_delete_msgs_until(
+        self,
+        business_connection_id: str,
+        chat_id: int,
+        until: dt.datetime | None,
+    ) -> ChatSettings:
+        """Set or clear the auto-delete window for incoming counterpart messages."""
+        settings = await self.get_or_create(business_connection_id, chat_id)
+        settings.delete_msgs_until = until
+        await self._session.flush()
+        return settings
+
+    async def is_delete_msgs_active(
+        self, business_connection_id: str, chat_id: int
+    ) -> bool:
+        """Return True if auto-delete mode is currently active for this chat."""
+        settings = await self.get(business_connection_id, chat_id)
+        if settings is None or settings.delete_msgs_until is None:
+            return False
+        return settings.delete_msgs_until > dt.datetime.now(dt.UTC)

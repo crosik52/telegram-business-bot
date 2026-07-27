@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>Админ-панель</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
 <style>
   :root {
     --bg: #0f0f14;
@@ -3101,6 +3102,11 @@
         if (!res.ok) throw new Error("api");
         _giveawayCfg = await res.json();
         renderGiveawayAdminTab();
+        // Initialize gift pickers for prizes that already have images stored
+        [1,2,3].forEach(i => {
+          const url = _giveawayCfg[`prize_${i}_image`];
+          if (url) _gvInitPicker(i, url);
+        });
       } catch(e) {
         content.innerHTML = `<div class="error" style="padding:24px;text-align:center">❌ Ошибка загрузки: ${esc(String(e))}</div>`;
       }
@@ -3169,23 +3175,30 @@
                 style="border:1.5px solid rgba(120,120,128,0.2);border-radius:10px;padding:9px 12px;font-size:14px;background:var(--bg,#f2f2f7);color:inherit;outline:none;resize:none">${esc(d.description||"")}</textarea>
             </label>
 
-            <div style="font-weight:700;font-size:13px;margin-top:4px">🎁 Призы</div>
+            <div style="font-weight:700;font-size:13px;margin-top:4px">🎁 Призы (NFT-подарки)</div>
+            <datalist id="gvGiftDatalist">${_GV_GIFTS.map(g=>`<option value="${esc(g)}">`).join("")}</datalist>
             ${["prize_1","prize_2","prize_3"].map((key, i) => `
             <div style="background:rgba(120,120,128,0.06);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:8px">
               <div style="display:flex;align-items:center;gap:8px">
                 <span style="font-size:20px;width:28px;text-align:center">${MEDALS[i]}</span>
                 <span style="font-size:12px;font-weight:700;opacity:0.55">${i+1} МЕСТО</span>
               </div>
-              <input type="text" id="gv_${key}" placeholder="Название приза (напр. Sakura Dragon)"
+              <input type="text" id="gv_${key}" placeholder="Отображаемое название (напр. Diamond Ring)"
                 value="${esc(d[key]||"")}"
                 style="border:1.5px solid rgba(120,120,128,0.2);border-radius:10px;padding:9px 12px;font-size:14px;background:var(--bg,#f2f2f7);color:inherit;outline:none;width:100%;box-sizing:border-box">
-              <div style="display:flex;align-items:center;gap:8px">
-                ${d[key+"_image"] ? `<img src="${esc(d[key+"_image"])}" style="width:48px;height:48px;border-radius:10px;object-fit:cover;flex-shrink:0" onerror="this.style.display='none'">` : ""}
-                <input type="url" id="gv_${key}_image" placeholder="URL изображения NFT"
-                  value="${esc(d[key+"_image"]||"")}"
-                  style="flex:1;border:1.5px solid rgba(120,120,128,0.2);border-radius:10px;padding:9px 12px;font-size:13px;background:var(--bg,#f2f2f7);color:inherit;outline:none"
-                  oninput="_previewPrizeImg(this)">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div id="gvAdminPreview_${i+1}" style="width:60px;height:60px;border-radius:12px;overflow:hidden;background:rgba(120,120,128,0.1);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:28px">🎁</div>
+                <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+                  <input list="gvGiftDatalist" id="gvGiftName_${i+1}" type="text" placeholder="Название подарка из Telegram…"
+                    oninput="_gvOnGiftInput(${i+1},this.value)"
+                    style="border:1.5px solid rgba(120,120,128,0.2);border-radius:10px;padding:8px 12px;font-size:13px;background:var(--bg,#f2f2f7);color:inherit;outline:none;width:100%;box-sizing:border-box">
+                  <select id="gvVariantSel_${i+1}" onchange="_gvOnVariantChange(${i+1})"
+                    style="border:1.5px solid rgba(120,120,128,0.2);border-radius:10px;padding:8px 10px;font-size:12px;background:var(--bg,#f2f2f7);color:inherit;outline:none;width:100%">
+                    <option value="">— сначала выбери подарок —</option>
+                  </select>
+                </div>
               </div>
+              <input type="hidden" id="gv_${key}_image" value="${esc(d[key+"_image"]||"")}">
             </div>`).join("")}
 
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
@@ -3215,19 +3228,103 @@
         </div>`;
     }
 
-    function _previewPrizeImg(input) {
-      const prev = input.previousElementSibling;
-      const url = input.value.trim();
-      if (!url) { if (prev && prev.tagName === "IMG") prev.style.display = "none"; return; }
-      if (prev && prev.tagName === "IMG") {
-        prev.src = url; prev.style.display = "";
-      } else {
-        const img = document.createElement("img");
-        img.style.cssText = "width:48px;height:48px;border-radius:10px;object-fit:cover;flex-shrink:0";
-        img.onerror = () => img.style.display = "none";
-        img.src = url;
-        input.parentNode.insertBefore(img, input);
+    // ── Gift picker constants ────────────────────────────────────────────────
+    const _GV_GIFTS = ["Artisan Brick","Astral Shard","B-Day Candle","Berry Box","Big Year","Bling Binky","Bonded Ring","Bow Tie","Bunny Muffin","Candy Cane","Chill Flame","Clover Pin","Cookie Heart","Crystal Ball","Cupid Charm","Desk Calendar","Diamond Ring","Durov's Cap","Durov's Glasses","Easter Egg","Electric Skull","Eternal Candle","Eternal Rose","Evil Eye","Faith Amulet","Flying Broom","Fresh Socks","Gem Signet","Genie Lamp","Ginger Cookie","Hanging Star","Happy Brownie","Heart Locket","Heroic Helmet","Hex Pot","Holiday Drink","Homemade Cake","Hypno Lollipop","Ice Cream","Input Key","Instant Ramen","Ion Gem","Ionic Dryer","Jack-in-the-Box","Jelly Bunny","Jester Hat","Jingle Bells","Jolly Chimp","Joyful Bundle","Khabib's Papakha","Kissed Frog","Liberty Figure","Light Sword","Lol Pop","Loot Bag","Love Candle","Love Potion","Low Rider","Lunar Snake","Lush Bouquet","Mad Pumpkin","Magic Potion","Mighty Arm","Mini Oscar","Money Pot","Mood Pack","Moon Pendant","Mousse Cake","Nail Bracelet","Neko Helmet","Party Sparkler","Perfume Bottle","Pet Snake","Plush Pepe","Pool Float","Precious Peach","Pretty Posy","Rare Bird","Record Player","Restless Jar","Sakura Flower","Santa Hat","Scared Cat","Sharp Tongue","Signet Ring","Skull Flower","Sky Stilettos","Sleigh Bell","Snake Box","Snoop Cigar","Snoop Dogg","Snow Globe","Snow Mittens","Spiced Wine","Spring Basket","Spy Agaric","Star Notepad","Stellar Rocket","Surge Board","Swag Bag","Swiss Watch","Tama Gadget","Timeless Book","Top Hat","Toy Bear","Trapped Heart","UFC Strike","Valentine Box","Vice Cream","Victory Medal","Vintage Cigar","Voodoo Doll","Westside Sign","Whip Cupcake","Winter Wreath","Witch Hat","Xmas Stocking"];
+
+    // ── Gift picker helpers ──────────────────────────────────────────────────
+    const _gvAdminLottie = {};
+
+    function _gvDestroyAdminLottie(idx) {
+      if (_gvAdminLottie[idx]) { try { _gvAdminLottie[idx].destroy(); } catch {} delete _gvAdminLottie[idx]; }
+    }
+
+    async function _gvRenderAdminPreview(idx, tgsUrl) {
+      _gvDestroyAdminLottie(idx);
+      const el = document.getElementById(`gvAdminPreview_${idx}`);
+      if (!el) return;
+      if (!tgsUrl) { el.innerHTML = `<span style="font-size:28px">🎁</span>`; return; }
+      el.innerHTML = `<span style="font-size:20px;opacity:0.5">⏳</span>`;
+      try {
+        const res = await fetch(tgsUrl);
+        if (!res.ok) throw new Error("fetch");
+        const ds = new DecompressionStream("gzip");
+        const reader = res.body.pipeThrough(ds).getReader();
+        const chunks = [];
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+        }
+        const buf = new Uint8Array(chunks.reduce((s, c) => s + c.length, 0));
+        let off = 0;
+        for (const c of chunks) { buf.set(c, off); off += c.length; }
+        const animData = JSON.parse(new TextDecoder().decode(buf));
+        el.innerHTML = "";
+        _gvAdminLottie[idx] = lottie.loadAnimation({
+          container: el, renderer: "svg", loop: true, autoplay: true, animationData: animData,
+        });
+      } catch {
+        el.innerHTML = `<span style="font-size:28px">🎁</span>`;
       }
+    }
+
+    async function _gvOnGiftInput(idx, val) {
+      const trimmed = val.trim();
+      const sel = document.getElementById(`gvVariantSel_${idx}`);
+      if (!trimmed || !_GV_GIFTS.includes(trimmed)) {
+        sel.innerHTML = `<option value="">— сначала выбери подарок —</option>`;
+        document.getElementById(`gv_prize_${idx}_image`).value = "";
+        _gvDestroyAdminLottie(idx);
+        const el = document.getElementById(`gvAdminPreview_${idx}`);
+        if (el) el.innerHTML = `<span style="font-size:28px">🎁</span>`;
+        return;
+      }
+      sel.innerHTML = `<option>Загружаем варианты…</option>`;
+      try {
+        const enc = encodeURIComponent(trimmed);
+        const res = await fetch(`https://cdn.changes.tg/gifts/models/${enc}/sorted.json`);
+        const variants = await res.json();
+        const prevUrl = document.getElementById(`gv_prize_${idx}_image`).value;
+        let prevVariant = "";
+        if (prevUrl && prevUrl.includes(enc)) {
+          const parts = prevUrl.split("/");
+          prevVariant = decodeURIComponent(parts[parts.length - 1]).replace(".tgs", "");
+        }
+        sel.innerHTML = variants.map(v =>
+          `<option value="${esc(v.name)}"${v.name === prevVariant ? " selected" : ""}>${esc(v.name)}` +
+          `<span style="opacity:0.5"> · ${(v.rarityPermille / 10).toFixed(1)}%</span></option>`
+        ).join("");
+        if (!prevVariant) sel.value = "Original";
+        _gvOnVariantChange(idx);
+      } catch {
+        sel.innerHTML = `<option value="Original">Original</option>`;
+        _gvOnVariantChange(idx);
+      }
+    }
+
+    function _gvOnVariantChange(idx) {
+      const giftName = document.getElementById(`gvGiftName_${idx}`).value.trim();
+      const variant  = document.getElementById(`gvVariantSel_${idx}`).value;
+      if (!giftName || !variant) return;
+      const url = `https://cdn.changes.tg/gifts/models/${encodeURIComponent(giftName)}/${encodeURIComponent(variant)}.tgs`;
+      document.getElementById(`gv_prize_${idx}_image`).value = url;
+      _gvRenderAdminPreview(idx, url);
+    }
+
+    async function _gvInitPicker(idx, storedUrl) {
+      if (!storedUrl || !storedUrl.includes("cdn.changes.tg/gifts/models/")) return;
+      try {
+        const path   = storedUrl.replace("https://cdn.changes.tg/gifts/models/", "");
+        const parts  = path.split("/");
+        const giftName   = decodeURIComponent(parts[0]);
+        const variantName = decodeURIComponent(parts[1]).replace(".tgs", "");
+        const nameInput = document.getElementById(`gvGiftName_${idx}`);
+        if (nameInput) nameInput.value = giftName;
+        await _gvOnGiftInput(idx, giftName);
+        const sel = document.getElementById(`gvVariantSel_${idx}`);
+        if (sel && [...sel.options].some(o => o.value === variantName)) sel.value = variantName;
+        _gvOnVariantChange(idx);
+      } catch {}
     }
 
     async function saveGiveawayCfg(btn) {

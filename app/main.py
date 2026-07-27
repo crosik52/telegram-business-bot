@@ -292,6 +292,15 @@ async def lifespan(app: FastAPI):
             await conn.execute(text(
                 "ALTER TABLE user_subscriptions ADD COLUMN IF NOT EXISTS sub_type VARCHAR(20) DEFAULT 'premium'"
             ))
+            await conn.execute(text(
+                "ALTER TABLE giveaway_config ADD COLUMN IF NOT EXISTS prize_1_image VARCHAR(512)"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE giveaway_config ADD COLUMN IF NOT EXISTS prize_2_image VARCHAR(512)"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE giveaway_config ADD COLUMN IF NOT EXISTS prize_3_image VARCHAR(512)"
+            ))
 
     if settings.webhook_base_url:
         from aiogram.types import MenuButtonWebApp, WebAppInfo

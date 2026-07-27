@@ -24,11 +24,18 @@ async def stream_audio(key: str) -> Response:
     if cached is None:
         raise HTTPException(status_code=404, detail="Track not found or session expired")
 
-    try:
-        audio_bytes, filename = await audio_service.stream_to_bytes(cached.url)
-    except Exception as exc:
-        logger.warning("audio endpoint: stream failed key=%s: %s", key, exc)
-        raise HTTPException(status_code=502, detail="Failed to fetch audio") from exc
+    # Check if background pre-download already finished (fast path for inline mode)
+    preloaded = audio_service.get_predownloaded(key)
+    if preloaded is not None:
+        audio_bytes, filename = preloaded
+        logger.info("audio endpoint: served from predownload cache key=%s size=%dKB",
+                    key, len(audio_bytes) // 1024)
+    else:
+        try:
+            audio_bytes, filename = await audio_service.stream_to_bytes(cached.url)
+        except Exception as exc:
+            logger.warning("audio endpoint: stream failed key=%s: %s", key, exc)
+            raise HTTPException(status_code=502, detail="Failed to fetch audio") from exc
 
     ext = filename.rsplit(".", 1)[-1].lower()
     content_type = "audio/mpeg" if ext == "mp3" else "audio/mp4"

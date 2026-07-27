@@ -125,6 +125,60 @@ SEARCH_N   = 15   # total results fetched from YouTube
 _file_id_cache: dict[str, str] = {}   # url → telegram file_id
 
 
+# ── Pre-download cache for inline mode ───────────────────────────────────────
+# When inline search results are shown, we immediately start downloading all
+# tracks in the background.  By the time the user taps a result (5-15 sec),
+# the audio is usually ready — so Telegram can fetch /audio/{key} in under 1 s.
+
+_predownload_cache: dict[str, tuple[bytes, str, float]] = {}  # key → (bytes, filename, ts)
+_predownload_tasks: set[asyncio.Task] = set()  # prevent GC
+
+
+def get_predownloaded(key: str) -> tuple[bytes, str] | None:
+    """Return (audio_bytes, filename) if pre-download finished, else None."""
+    entry = _predownload_cache.get(key)
+    if entry is None:
+        return None
+    data, filename, ts = entry
+    # Expire entries older than 15 minutes
+    if time.monotonic() - ts > 900:
+        del _predownload_cache[key]
+        return None
+    return data, filename
+
+
+def _store_predownloaded(key: str, data: bytes, filename: str) -> None:
+    # Evict expired entries to keep memory bounded
+    cutoff = time.monotonic() - 900
+    stale = [k for k, v in _predownload_cache.items() if v[2] < cutoff]
+    for k in stale:
+        del _predownload_cache[k]
+    _predownload_cache[key] = (data, filename, time.monotonic())
+
+
+def start_predownload(key: str, url: str) -> None:
+    """Fire-and-forget: download *url* to RAM in the background.
+
+    Safe to call from an async context.  The result is retrievable via
+    ``get_predownloaded(key)`` once the task completes.
+    """
+    async def _run() -> None:
+        try:
+            data, filename = await stream_to_bytes(url)
+            _store_predownloaded(key, data, filename)
+            logger.debug("predownload done: key=%s size=%dKB", key, len(data) // 1024)
+        except Exception as exc:
+            logger.debug("predownload failed: key=%s: %s", key, exc)
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return  # not in async context — skip
+    task = loop.create_task(_run())
+    _predownload_tasks.add(task)
+    task.add_done_callback(_predownload_tasks.discard)
+
+
 def get_cached_file_id(url: str) -> str | None:
     return _file_id_cache.get(url)
 
@@ -327,30 +381,38 @@ async def stream_to_bytes(url: str) -> tuple[bytes, str]:
     elif "http_headers" in _cookie_opts and "Cookie" in _cookie_opts["http_headers"]:
         _cookies_arg = ["--add-header", f"Cookie:{_cookie_opts['http_headers']['Cookie']}"]
 
-    ytdlp_args = [
-        "yt-dlp",
-        "--no-playlist",
-        "--extractor-args", "youtube:player_client=android",
-        "--max-filesize", "48m",
-        "--no-part",
-        "--no-warnings",
-        "-f", "bestaudio[ext=m4a]/bestaudio/best",
-        *_cookies_arg,
-        "-o", "-",
-        url,
-    ]
+    # Try multiple player clients in order — Android is fastest but often blocked
+    # on datacenter IPs; tv_embedded skips po_token requirement; web is a fallback.
+    _player_clients = ["android", "tv_embedded", "web"]
+    raw_bytes: bytes = b""
+    last_err = ""
 
-    # Step 1: yt-dlp → raw audio bytes in RAM
-    ytdlp_proc = await asyncio.create_subprocess_exec(
-        *ytdlp_args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    raw_bytes, ytdlp_stderr = await ytdlp_proc.communicate()
+    for _client in _player_clients:
+        ytdlp_args = [
+            "yt-dlp",
+            "--no-playlist",
+            "--extractor-args", f"youtube:player_client={_client}",
+            "--max-filesize", "48m",
+            "--no-part",
+            "--no-warnings",
+            "-f", "bestaudio[ext=m4a]/bestaudio/best",
+            *_cookies_arg,
+            "-o", "-",
+            url,
+        ]
+        ytdlp_proc = await asyncio.create_subprocess_exec(
+            *ytdlp_args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        raw_bytes, ytdlp_stderr = await ytdlp_proc.communicate()
+        if raw_bytes:
+            break
+        last_err = ytdlp_stderr.decode(errors="replace").strip()
+        logger.debug("stream_to_bytes: client=%s failed, trying next. err=%s", _client, last_err[:200])
 
     if not raw_bytes:
-        err = ytdlp_stderr.decode(errors="replace").strip()
-        raise RuntimeError(f"yt-dlp produced no output: {err}")
+        raise RuntimeError(f"yt-dlp produced no output: {last_err}")
 
     if has_ffmpeg:
         # Step 2: raw bytes → ffmpeg stdin → mp3 bytes
@@ -420,20 +482,31 @@ def _download_sync(
             }]
         return o
 
-    # ── 1. Try YouTube ────────────────────────────────────────────────────────
-    yt_opts = _base_opts(out_dir)
-    yt_opts["extractor_args"] = {"youtube": {"player_client": ["android"]}}
-    _apply_youtube_cookies(yt_opts, out_dir)
+    # ── 1. Try YouTube with multiple player clients ───────────────────────────
+    # Android is fastest but often blocked on datacenter IPs.
+    # tv_embedded skips po_token; web is a last-resort YouTube attempt.
+    _yt_clients = ["android", "tv_embedded", "web"]
 
     yt_error: Exception | None = None
-    try:
-        with yt_dlp.YoutubeDL(yt_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-    except Exception as exc:
-        yt_error = exc
-        logger.warning("mp3: YouTube download failed (%s), trying SoundCloud fallback", exc)
+    info: dict | None = None
+    for _client in _yt_clients:
+        yt_opts = _base_opts(out_dir)
+        yt_opts["extractor_args"] = {"youtube": {"player_client": [_client]}}
+        _apply_youtube_cookies(yt_opts, out_dir)
+        try:
+            with yt_dlp.YoutubeDL(yt_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+            yt_error = None
+            logger.debug("mp3: YouTube download succeeded with client=%s", _client)
+            break
+        except Exception as exc:
+            yt_error = exc
+            logger.debug("mp3: client=%s failed: %s", _client, exc)
 
-    if yt_error is None:
+    if yt_error is not None:
+        logger.warning("mp3: all YouTube clients failed, trying SoundCloud fallback. last=%s", yt_error)
+
+    if yt_error is None and info is not None:
         # YouTube succeeded — collect file below
         title    = info.get("title")    or "Unknown"
         uploader = info.get("uploader") or info.get("channel") or ""

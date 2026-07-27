@@ -1329,6 +1329,7 @@ async def on_inline_query(query: InlineQuery, bot: Bot) -> None:
                     audio_file_id=fid,
                 ))
             else:
+                audio_service.start_predownload(key, cached.url)
                 history_results.append(InlineQueryResultAudio(
                     id=key,
                     audio_url=f"{base_url}/audio/{key}",
@@ -1366,8 +1367,9 @@ async def on_inline_query(query: InlineQuery, bot: Bot) -> None:
                 audio_file_id=cached_fid,
             ))
         else:
-            # Stream on demand: Telegram downloads from our /audio/{key} endpoint
-            # and places the audio directly in the chat — no DM, no placeholder swap
+            # Pre-download in background so /audio/{key} responds fast when
+            # Telegram fetches it (avoids WEBPAGE_CURL_FAILED timeout).
+            audio_service.start_predownload(key, r["url"])
             articles.append(InlineQueryResultAudio(
                 id=key,
                 audio_url=f"{base_url}/audio/{key}",

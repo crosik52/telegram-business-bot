@@ -736,12 +736,11 @@ async def on_business_message(message: Message, bot: Bot) -> None:
                     _bc_id=bc_id,
                 ) -> None:
                     try:
-                        from aiogram.methods import DeleteMessage as _DeleteMessage
-                        await _bot(_DeleteMessage(
+                        await _bot.delete_message(
                             chat_id=_chat_id,
                             message_id=_msg_id,
                             business_connection_id=_bc_id,
-                        ))
+                        )
                         logger.info("mute: deleted msg_id=%s chat=%s", _msg_id, _chat_id)
                     except Exception as _exc:
                         logger.warning("mute: delete FAILED msg_id=%s chat=%s: %s", _msg_id, _chat_id, _exc)
@@ -891,12 +890,11 @@ async def on_business_message(message: Message, bot: Bot) -> None:
                                     _qm = _p.get("quality_msg_id")
                                     if _qm:
                                         try:
-                                            from aiogram.methods import DeleteMessage as _DM
-                                            await _bot(_DM(
+                                            await _bot.delete_message(
                                                 chat_id=_cid,
                                                 message_id=_qm,
                                                 business_connection_id=_bid,
-                                            ))
+                                            )
                                         except Exception:
                                             pass
 

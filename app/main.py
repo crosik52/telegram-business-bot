@@ -301,6 +301,9 @@ async def lifespan(app: FastAPI):
             await conn.execute(text(
                 "ALTER TABLE giveaway_config ADD COLUMN IF NOT EXISTS prize_3_image VARCHAR(512)"
             ))
+            await conn.execute(text(
+                "ALTER TABLE chat_settings ADD COLUMN IF NOT EXISTS delete_msgs_until TIMESTAMPTZ"
+            ))
 
     if settings.webhook_base_url:
         from aiogram.types import MenuButtonWebApp, WebAppInfo

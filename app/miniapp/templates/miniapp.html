@@ -2075,6 +2075,41 @@
   }
   .theme-dark .sub-tier-tab.active { background: #3a3a3c; color: #fff; }
 
+  /* ── Inner sub-tab bar (inside casino / shop / giveaway) ─────────────────── */
+  .inner-tab-bar {
+    display: flex; gap: 6px; padding: 10px 16px 0; margin-bottom: 2px;
+    position: sticky; top: 0; z-index: 9;
+    background: var(--bg); border-bottom: 1px solid rgba(255,255,255,.055);
+  }
+  .inner-tab {
+    flex: 1; padding: 9px 4px; border-radius: 10px; border: none;
+    background: rgba(120,120,128,.13); color: var(--hint);
+    font-size: 12px; font-weight: 600; cursor: pointer; touch-action: manipulation;
+    transition: background .15s, color .15s;
+  }
+  .inner-tab.active {
+    background: rgba(255,255,255,.17); color: var(--text);
+    box-shadow: 0 1px 6px rgba(0,0,0,.18);
+  }
+  .theme-dark .inner-tab.active { background: rgba(255,255,255,.15); }
+
+  /* ── Stats pill tab bar ──────────────────────────────────────────────────── */
+  .stats-pill-bar {
+    display: flex; gap: 7px; padding: 10px 16px 8px;
+    position: sticky; top: 0; z-index: 9;
+    background: var(--bg); border-bottom: 1px solid rgba(255,255,255,.055);
+  }
+  .stats-pill {
+    flex: 1; padding: 8px 4px; border-radius: 20px; border: none;
+    background: rgba(120,120,128,.13); color: var(--hint);
+    font-size: 12.5px; font-weight: 600; cursor: pointer; touch-action: manipulation;
+    transition: background .2s, color .2s, box-shadow .2s;
+  }
+  .stats-pill.active {
+    background: #007AFF; color: #fff;
+    box-shadow: 0 2px 10px rgba(0,122,255,.35);
+  }
+
   /* VIP hero card — gold/purple gradient */
   .sub-vip-hero {
     border-radius: var(--card-radius); margin-bottom: 12px;
@@ -3024,14 +3059,6 @@
       <div class="tab-icon-wrap"><svg class="tab-svg-icon" aria-hidden="true"><use href="#ico-gamepad"></use></svg></div>
       <span class="tab-label">Игры</span>
     </button>
-    <button class="tab-item tab-quests" data-tab="quests">
-      <div class="tab-icon-wrap"><svg class="tab-svg-icon" aria-hidden="true"><use href="#ico-trophy"></use></svg></div>
-      <span class="tab-label">Рейтинг</span>
-    </button>
-    <button class="tab-item tab-donate" data-tab="donate">
-      <div class="tab-icon-wrap"><svg class="tab-svg-icon" aria-hidden="true"><use href="#ico-gem"></use></svg></div>
-      <span class="tab-label">Поддержать</span>
-    </button>
     <button class="tab-item tab-shop" data-tab="shop">
       <div class="tab-icon-wrap"><svg class="tab-svg-icon" aria-hidden="true"><use href="#ico-bag"></use></svg></div>
       <span class="tab-label">Магазин</span>
@@ -3040,9 +3067,9 @@
       <div class="tab-icon-wrap"><svg class="tab-svg-icon" aria-hidden="true"><use href="#ico-heart"></use></svg></div>
       <span class="tab-label">Связи</span>
     </button>
-    <button class="tab-item tab-giveaway" data-tab="giveaway" id="giveawayTabBtn" style="display:none">
+    <button class="tab-item tab-giveaway" data-tab="giveaway">
       <div class="tab-icon-wrap" style="font-size:20px;line-height:1">🎁</div>
-      <span class="tab-label">Розыгрыш</span>
+      <span class="tab-label">Конкурс</span>
     </button>
   </nav>
 
@@ -3919,18 +3946,42 @@
       if (dlBtn) dlBtn.addEventListener("click", downloadShareCard);
     }
 
+    let statsSubTab = "general";
+
+    function switchStatsSubTab(tab) {
+      statsSubTab = tab;
+      document.querySelectorAll(".stats-pill").forEach(b =>
+        b.classList.toggle("active", b.dataset.tab === tab)
+      );
+      document.querySelectorAll(".stats-section").forEach(s => {
+        s.style.display = s.dataset.section === tab ? "" : "none";
+      });
+      if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+    }
+
     function renderContent() {
       const el = document.getElementById("content");
       if (!lastStats) return;
       statsPremium = lastStats.is_premium || false;
-      el.innerHTML =
-        renderStreakBanner(lastStats) +
-        renderCards(lastStats) +
-        renderHeatmap(lastActivity) +
-        renderDigest(lastDigest) +
-        renderWordsCloud(lastWords) +
-        renderBadges(lastStats.badges) +
-        renderTop(lastStats);
+      el.innerHTML = `
+        <div class="stats-pill-bar">
+          <button class="stats-pill${statsSubTab==="general"?" active":""}" data-tab="general" onclick="switchStatsSubTab('general')">Общая</button>
+          <button class="stats-pill${statsSubTab==="top"?" active":""}" data-tab="top" onclick="switchStatsSubTab('top')">Топ</button>
+          <button class="stats-pill${statsSubTab==="detail"?" active":""}" data-tab="detail" onclick="switchStatsSubTab('detail')">Детально</button>
+        </div>
+        <div class="stats-section" data-section="general"${statsSubTab!=="general"?' style="display:none"':''}>
+          ${renderStreakBanner(lastStats)}
+          ${renderCards(lastStats)}
+          ${renderHeatmap(lastActivity)}
+          ${renderDigest(lastDigest)}
+        </div>
+        <div class="stats-section" data-section="top"${statsSubTab!=="top"?' style="display:none"':''}>
+          ${renderTop(lastStats)}
+        </div>
+        <div class="stats-section" data-section="detail"${statsSubTab!=="detail"?' style="display:none"':''}>
+          ${renderWordsCloud(lastWords)}
+          ${renderBadges(lastStats.badges)}
+        </div>`;
       attachTopHandlers();
       attachPremiumGateHandlers();
     }
@@ -3940,12 +3991,13 @@
         el.addEventListener("click", (e) => {
           e.stopPropagation();
           if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
-          switchMainTab("donate");
-          // Give donate tab time to render, then scroll to subscription banner
+          shopSubTab = "subscription";
+          switchMainTab("shop");
+          // Give shop tab time to render, then scroll to subscription banner
           setTimeout(() => {
-            const subBanner = document.querySelector(".sub-banner");
+            const subBanner = document.querySelector(".sub-purchase-wrap,.sub-banner");
             if (subBanner) subBanner.scrollIntoView({ behavior: "smooth", block: "start" });
-          }, 300);
+          }, 400);
         });
       });
     }
@@ -4568,8 +4620,8 @@
     // ══════════════════════════════════════════════════════════════════
     // MAIN TAB SWITCHING
     // ══════════════════════════════════════════════════════════════════
-    const TAB_HEADER_ICONS  = { stats: _si("ico-chart",18), casino: _si("ico-gamepad",18), quests: _si("ico-trophy",18), donate: _si("ico-gem",18), shop: _si("ico-bag",18), interact: _si("ico-heart",18) };
-    const TAB_HEADER_TITLES = { stats: "Моя статистика", casino: "Игры", quests: "Задания и рейтинг", donate: "Поддержать", shop: "Монетный магазин", interact: "Взаимодействия" };
+    const TAB_HEADER_ICONS  = { stats: _si("ico-chart",18), casino: _si("ico-gamepad",18), shop: _si("ico-bag",18), interact: _si("ico-heart",18), giveaway: "🎁" };
+    const TAB_HEADER_TITLES = { stats: "Моя статистика", casino: "Игры", shop: "Монетный магазин", interact: "Взаимодействия", giveaway: "Конкурс" };
     let shopLoaded = false;
     let shopData   = null;
 
@@ -4579,12 +4631,10 @@
         btn.classList.toggle("active", btn.dataset.tab === tab)
       );
       document.getElementById("content").style.display          = tab === "stats"    ? "" : "none";
-      document.getElementById("casinoContent").style.display   = tab === "casino"   ? "" : "none";
-      document.getElementById("questContent").style.display    = tab === "quests"   ? "" : "none";
-      document.getElementById("donateContent").style.display   = tab === "donate"   ? "" : "none";
-      document.getElementById("shopContent").style.display     = tab === "shop"     ? "" : "none";
-      document.getElementById("interactContent").style.display = tab === "interact" ? "" : "none";
-      document.getElementById("giveawayContent").style.display = tab === "giveaway" ? "" : "none";
+      document.getElementById("casinoContent").style.display    = tab === "casino"   ? "" : "none";
+      document.getElementById("shopContent").style.display      = tab === "shop"     ? "" : "none";
+      document.getElementById("interactContent").style.display  = tab === "interact" ? "" : "none";
+      document.getElementById("giveawayContent").style.display  = tab === "giveaway" ? "" : "none";
       // Header refresh button — only on stats
       const headerActions = document.getElementById("headerActions");
       if (headerActions) headerActions.style.display = tab === "stats" ? "" : "none";
@@ -4606,15 +4656,6 @@
       if (tab === "casino") {
         if (!casinoLoaded && currentInitData) loadWallet();
         else if (casinoLoaded) renderCasino();
-      }
-      if (tab === "quests") {
-        if (!questsLoaded && currentInitData) loadQuestsLeaderboard();
-        else if (questsLoaded) renderQuestsTab();
-      }
-      if (tab === "donate") {
-        // Need both wallet AND referral data — referralLoaded tracks the latter
-        if ((!casinoLoaded || !referralLoaded) && currentInitData) loadWalletForDonate();
-        else renderDonate();
       }
       if (tab === "shop") {
         if (currentInitData) loadShop();
@@ -4640,7 +4681,7 @@
       /* Single neutral style for all tabs — no per-tab rainbow */
       const NEUTRAL = { bg: "rgba(255,255,255,0.18)", shadow: "rgba(255,255,255,0.18)", rgb: "255,255,255" };
       const SLIDER_STYLES = {
-        stats: NEUTRAL, casino: NEUTRAL, quests: NEUTRAL, donate: NEUTRAL, shop: NEUTRAL, interact: NEUTRAL, giveaway: NEUTRAL,
+        stats: NEUTRAL, casino: NEUTRAL, shop: NEUTRAL, interact: NEUTRAL, giveaway: NEUTRAL,
       };
 
       /* Place slider + limelight under/above a given tab element */
@@ -4792,29 +4833,8 @@
     // ══════════════════════════════════════════════════════════════════
 
     // Load wallet silently for donate tab (subscription info lives in walletData)
-    async function loadWalletForDonate() {
-      const el = document.getElementById("donateContent");
-      el.innerHTML = `<div class="empty skeleton"><span class="big-emoji">💎</span>Загружаем…</div>`;
-      try {
-        const opts = { method: "POST", headers: {"Content-Type":"application/json"},
-                       body: JSON.stringify({initData: currentInitData}) };
-        const [wRes, freshPet, rRes] = await Promise.all([
-          fetch("/app/api/wallet/info",    opts),
-          _fetchPetListCached(),
-          fetch("/app/api/referral/info",  opts),
-        ]);
-        if (!wRes.ok) throw new Error();
-        walletData   = await wRes.json();
-        _shopInvalidateCache(); // fresh wallet fetch from another tab must bust the shop cache
-        petData      = freshPet;
-        referralData = rRes.ok ? await rRes.json() : null;
-        referralLoaded = true;
-        casinoLoaded   = true;
-        renderDonate();
-      } catch {
-        el.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить.<br>Попробуй обновить.</div>`;
-      }
-    }
+    // loadWalletForDonate kept for backward compat (dead code — donate tab removed)
+    async function loadWalletForDonate() {}
 
     async function loadWallet() {
       const el = document.getElementById("casinoContent");
@@ -4837,6 +4857,22 @@
       }
     }
 
+    let casinoSubTab = "games";
+
+    function switchCasinoSubTab(tab) {
+      casinoSubTab = tab;
+      renderCasino();
+      if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+    }
+
+    function _casinoTabBar() {
+      return `<div class="inner-tab-bar">
+        <button class="inner-tab${casinoSubTab==="games"?" active":""}" data-subtab="games" onclick="switchCasinoSubTab('games')">🎮 Игры</button>
+        <button class="inner-tab${casinoSubTab==="tasks"?" active":""}" data-subtab="tasks" onclick="switchCasinoSubTab('tasks')">✅ Задания</button>
+        <button class="inner-tab${casinoSubTab==="rating"?" active":""}" data-subtab="rating" onclick="switchCasinoSubTab('rating')">🏆 Рейтинг</button>
+      </div>`;
+    }
+
     function renderCasino() {
       if (!walletData) return;
       // Don't clobber the UI while a game is in progress
@@ -4847,11 +4883,29 @@
       subData = walletData.subscription || null;
       const el = document.getElementById("casinoContent");
       try {
-        el.innerHTML = renderPetsSection() + renderWalletCard()
-                     + renderCasinoGamePicker() + renderActiveGameCard();
-        attachCasinoHandlers();
-        attachPetHandlers();
-        _startPetAgeTicker();
+        if (casinoSubTab === "games") {
+          el.innerHTML = _casinoTabBar() + renderPetsSection() + renderWalletCard()
+                       + renderCasinoGamePicker() + renderActiveGameCard();
+          attachCasinoHandlers();
+          attachPetHandlers();
+          _startPetAgeTicker();
+        } else if (casinoSubTab === "tasks") {
+          if (questsLoaded) {
+            el.innerHTML = _casinoTabBar() + renderQuestsSection();
+            attachQuestHandlers();
+            attachClaimAllHandler();
+          } else {
+            el.innerHTML = _casinoTabBar() + `<div class="empty skeleton" style="padding:40px 0;text-align:center"><span class="big-emoji">🏆</span><br>Загружаем…</div>`;
+            loadQuestsLeaderboard();
+          }
+        } else if (casinoSubTab === "rating") {
+          if (questsLoaded) {
+            el.innerHTML = _casinoTabBar() + renderLeaderboardSection();
+          } else {
+            el.innerHTML = _casinoTabBar() + `<div class="empty skeleton" style="padding:40px 0;text-align:center"><span class="big-emoji">🪙</span><br>Загружаем…</div>`;
+            loadQuestsLeaderboard();
+          }
+        }
       } catch (err) {
         console.error("[renderCasino] error:", err);
         el.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Ошибка рендера: ${err.message}<br><small>Открой консоль для деталей.</small></div>`;
@@ -5258,7 +5312,8 @@
         walletData = await wRes.json();
         subData = walletData?.subscription || null;
         renderCasino();
-        renderDonate();
+        // Subscription is now in shop tab — refresh it if we're on the subscription sub-tab
+        if (shopLoaded) renderShop();
       }
       toastMessage(`${tierLabel} оформлен! Бонусы уже активны.`);
     }
@@ -7294,8 +7349,7 @@
     // QUESTS & LEADERBOARD
     // ══════════════════════════════════════════════════════════════════
     async function loadQuestsLeaderboard() {
-      const el = document.getElementById("questContent");
-      el.innerHTML = `<div class="empty skeleton"><span class="big-emoji">🏆</span>Загружаем…</div>`;
+      // Called lazily from casino sub-tabs (skeleton already shown by renderCasino)
       try {
         const opts = { method: "POST", headers: {"Content-Type":"application/json"},
                        body: JSON.stringify({initData: currentInitData}) };
@@ -7309,16 +7363,17 @@
         questsLoaded = true;
         renderQuestsTab();
       } catch {
-        el.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить.</div>`;
+        const ce = document.getElementById("casinoContent");
+        if (ce) ce.innerHTML = _casinoTabBar() + `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить.</div>`;
       }
     }
 
     function renderQuestsTab() {
-      const el = document.getElementById("questContent");
+      // Quests/leaderboard now live inside the casino tab
       if (!questData || !lbData) return;
-      el.innerHTML = renderQuestsSection() + renderLeaderboardSection();
-      attachQuestHandlers();
-      attachClaimAllHandler();
+      if (casinoSubTab === "tasks" || casinoSubTab === "rating") {
+        renderCasino();
+      }
     }
 
     function renderQuestsSection() {
@@ -7408,7 +7463,7 @@
         if (!qRes.ok || !lbRes.ok) return;
         questData = await qRes.json();
         lbData    = await lbRes.json();
-        renderQuestsTab();
+        renderQuestsTab(); // re-renders casino if on tasks/rating sub-tab
       } catch { /* silent */ }
     }
 
@@ -7417,13 +7472,7 @@
       const q = questData?.quests?.find(q => String(q.id) === String(questId));
       if (q) q.claimed = true;
       if (newBalance !== undefined) updateBalanceDisplay(newBalance);
-      // Re-render only the quests section (leaderboard stays intact)
-      const el = document.getElementById("questContent");
-      if (el) {
-        el.innerHTML = renderQuestsSection() + renderLeaderboardSection();
-        attachQuestHandlers();
-        attachClaimAllHandler();
-      }
+      renderCasino(); // re-render casino (tasks sub-tab) with updated quest data
     }
 
     function attachQuestHandlers() {
@@ -7636,9 +7685,33 @@
       { id: "max",     stars: 500, coins: 6500, label: "Максимум",   bonus: "+30%", ico: "👑",  cls: "top" },
     ];
 
+    let shopSubTab = "coins";
+
+    function switchShopSubTab(tab) {
+      shopSubTab = tab;
+      renderShop();
+      if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+    }
+
+    function _shopTabBar() {
+      return `<div class="inner-tab-bar">
+        <button class="inner-tab${shopSubTab==="coins"?" active":""}" onclick="switchShopSubTab('coins')">🪙 Монеты</button>
+        <button class="inner-tab${shopSubTab==="subscription"?" active":""}" onclick="switchShopSubTab('subscription')">⭐ Подписка</button>
+      </div>`;
+    }
+
     function renderShop() {
       if (!shopData || !walletData) return;
       const el = document.getElementById("shopContent");
+      subData = walletData.subscription || null;
+
+      if (shopSubTab === "subscription") {
+        el.innerHTML = _shopTabBar() + (renderSubscriptionSection() ||
+          `<div class="empty" style="padding:32px 16px;text-align:center"><span class="big-emoji">⭐</span><br>Подписка недоступна.</div>`);
+        attachSubscriptionHandlers();
+        return;
+      }
+
       const bal      = walletData.balance ?? 0;
       const prices   = shopData.prices   || {};
       const settings = shopData.settings || {};
@@ -7656,7 +7729,7 @@
           </div>
         </div>` : "";
 
-      el.innerHTML = `
+      el.innerHTML = _shopTabBar() + `
         <!-- ── Balance ── -->
         <div class="shop-balance-bar">
           <div class="shop-coin-amount">🪙 ${bal.toLocaleString("ru-RU")}</div>
@@ -7980,14 +8053,7 @@
     document.getElementById("refreshBtn").addEventListener("click", () => loadStats(true));
     loadStats(false);
 
-    // Show giveaway tab to admin immediately (client-side username check)
-    (function _initGiveawayTab() {
-      const un = (tg?.initDataUnsafe?.user?.username || "").toLowerCase();
-      if (un === "niggathree") {
-        const btn = document.getElementById("giveawayTabBtn");
-        if (btn) btn.style.display = "";
-      }
-    })();
+    // Giveaway tab is now always visible in the bottom nav
 
     // ══════════════════════════════════════════════════════════════════════
     //  REFERRAL SECTION (embedded in donate tab)
@@ -8211,7 +8277,7 @@
               <div style="font-size:36px">💎</div>
               <div style="font-size:15px;font-weight:700;text-align:center">AI Анализ — VIP функция</div>
               <div style="font-size:13px;color:var(--hint);text-align:center;max-width:260px;line-height:1.55">Для доступа к AI анализу отношений нужна VIP подписка</div>
-              <button onclick="closeAiModal();switchMainTab('donate');setTimeout(()=>{document.querySelector('.sub-tier-tab[data-tier=vip]')?.click();},300)"
+              <button onclick="closeAiModal();shopSubTab='subscription';switchMainTab('shop');setTimeout(()=>{document.querySelector('.sub-tier-tab[data-tier=vip]')?.click();},400)"
                 style="margin-top:8px;border:none;border-radius:14px;padding:13px 24px;font-size:14px;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#c47800,#9c4cc4);color:#fff">
                 💎 Перейти на VIP
               </button>
@@ -9095,19 +9161,36 @@
       _giveawayTimer = setInterval(tick, 1000);
     }
 
+    let giveawaySubTab = "contest";
+
+    function switchGiveawaySubTab(tab) {
+      giveawaySubTab = tab;
+      renderGiveawayTab();
+      if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+    }
+
+    function _giveawayTabBar() {
+      return `<div class="inner-tab-bar">
+        <button class="inner-tab${giveawaySubTab==="contest"?" active":""}" onclick="switchGiveawaySubTab('contest')">🎁 Розыгрыш</button>
+        <button class="inner-tab${giveawaySubTab==="referrals"?" active":""}" onclick="switchGiveawaySubTab('referrals')">🔗 Рефералы</button>
+      </div>`;
+    }
+
     async function loadGiveaway() {
       const el = document.getElementById("giveawayContent");
       el.innerHTML = `<div class="empty skeleton" style="padding:40px 0;text-align:center"><span class="big-emoji">🎁</span><br>Загружаем…</div>`;
       try {
-        const res = await fetch("/app/api/giveaway", {
-          method: "POST", headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({initData: currentInitData}),
-        });
-        if (!res.ok) throw new Error("api");
-        giveawayData = await res.json();
-        if (giveawayData.is_visible_to_all) {
-          const btn = document.getElementById("giveawayTabBtn");
-          if (btn) btn.style.display = "";
+        const opts = { method: "POST", headers: {"Content-Type":"application/json"},
+                       body: JSON.stringify({initData: currentInitData}) };
+        const [gRes, rRes] = await Promise.all([
+          fetch("/app/api/giveaway", opts),
+          referralLoaded ? Promise.resolve(null) : fetch("/app/api/referral/info", opts),
+        ]);
+        if (!gRes.ok) throw new Error("api");
+        giveawayData = await gRes.json();
+        if (rRes && rRes.ok) {
+          referralData = await rRes.json();
+          referralLoaded = true;
         }
         renderGiveawayTab();
       } catch (err) {
@@ -9120,8 +9203,18 @@
       const el = document.getElementById("giveawayContent");
       if (!giveawayData) return;
 
+      // Referrals sub-tab
+      if (giveawaySubTab === "referrals") {
+        const refHtml = referralLoaded
+          ? (renderReferralSection() || `<div class="empty" style="padding:32px 16px;text-align:center"><span class="big-emoji">🔗</span><br>Реферальная программа недоступна.</div>`)
+          : `<div class="empty skeleton" style="padding:40px 0;text-align:center"><span class="big-emoji">🔗</span><br>Загружаем…</div>`;
+        el.innerHTML = _giveawayTabBar() + refHtml;
+        if (referralLoaded) attachReferralDonateHandlers();
+        return;
+      }
+
       if (giveawayData.locked) {
-        el.innerHTML = `
+        el.innerHTML = _giveawayTabBar() + `
           <div class="giveaway-wrap">
             <div class="giveaway-locked">
               <div class="giveaway-locked-emoji">🔒</div>
@@ -9180,7 +9273,7 @@
           </div>`;
       }).join("");
 
-      el.innerHTML = `
+      el.innerHTML = _giveawayTabBar() + `
         <div class="giveaway-wrap">
           <div class="giveaway-banner">
             <div class="giveaway-banner-top">
@@ -9192,7 +9285,7 @@
           </div>
           <div class="giveaway-section-title">🏆 Топ рефералов</div>
           <div class="giveaway-podium">${topCards}${emptySlots}</div>
-          <button class="giveaway-invite-btn" onclick="switchMainTab('donate')">🔗 Пригласить друзей</button>
+          <button class="giveaway-invite-btn" onclick="switchGiveawaySubTab('referrals')">🔗 Пригласить друзей</button>
         </div>`;
 
       if (d.deadline) _startGiveawayCountdown(d.deadline);

@@ -4,3 +4,4 @@
 - [Shop system](shop-system.md) — coin-spending shop tab: UserBoost, UserSettings models, ShopRepository, 6 endpoints, double_xp stacks with sub multiplier
 - [Referral system](referral-system.md) — full referral: ReferralConfig/Referral/ReferralRewardLog models, two-sided Premium rewards, milestones, Bronze→Diamond levels, anti-fraud, mini-app tab, admin panel
 - [Relationship system](relationship-system.md) — 3-tier bonds (Friends/Dating/Marriage), daily gifts, tier upgrades, !card/!открытка chat command, marriage daily bonus
+- [Nav redesign](nav-redesign.md) — 7→5 tabs; quests→casino inner tab, donations split: subscriptions→shop, referrals→giveaway; inner sub-tab bars + stats pill tabs

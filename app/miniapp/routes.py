@@ -87,6 +87,14 @@ class AdminMessagesRequest(BaseModel):
     owner_telegram_id: int = Field(alias="ownerTelegramId")
     chat_id: int = Field(alias="chatId")
     page: int = Field(default=1)
+    text_query: str | None = Field(alias="textQuery", default=None)
+
+
+class AdminSearchChatsRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    init_data: str = Field(alias="initData")
+    query: str
 
 
 class AdminBroadcastRequest(BaseModel):
@@ -2724,7 +2732,11 @@ async def admin_messages(
     page_size = 30
     try:
         repo = MessageRepository(session)
-        filters = MessageFilters(chat_id=payload.chat_id, connection_ids=connection_ids)
+        filters = MessageFilters(
+            chat_id=payload.chat_id,
+            connection_ids=connection_ids,
+            text_query=payload.text_query or None,
+        )
         items, total = await repo.search(filters, page=payload.page, page_size=page_size)
 
         return {
@@ -2757,6 +2769,85 @@ async def admin_messages(
             payload.chat_id,
         )
         raise HTTPException(status_code=500, detail="Failed to load messages") from None
+
+
+@router.post("/app/api/admin/search_chats")
+async def admin_search_chats(
+    payload: AdminSearchChatsRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    _require_admin(payload.init_data)
+
+    query = payload.query.strip()
+    if len(query) < 2:
+        raise HTTPException(status_code=400, detail="Query too short")
+
+    from sqlalchemy import text as _text  # noqa: PLC0415
+
+    sql = _text("""
+        WITH matches AS (
+            SELECT m.id, m.chat_id, m.business_connection_id,
+                   m.text, m.caption, m.media_type,
+                   m.sender_first_name, m.sender_last_name, m.sender_username,
+                   m.sent_at
+            FROM   messages m
+            WHERE  m.text ILIKE :like OR m.caption ILIKE :like
+        ),
+        chat_stats AS (
+            SELECT chat_id, business_connection_id,
+                   COUNT(*)     AS match_count,
+                   MAX(sent_at) AS last_match_at
+            FROM   matches
+            GROUP  BY chat_id, business_connection_id
+        ),
+        latest_msg AS (
+            SELECT DISTINCT ON (chat_id, business_connection_id)
+                   id, chat_id, business_connection_id,
+                   text, caption, media_type,
+                   sender_first_name, sender_last_name, sender_username
+            FROM   matches
+            ORDER  BY chat_id, business_connection_id, sent_at DESC
+        )
+        SELECT cs.chat_id,
+               cs.match_count,
+               cs.last_match_at,
+               lm.text              AS latest_text,
+               lm.caption           AS latest_caption,
+               lm.sender_first_name,
+               lm.sender_last_name,
+               lm.sender_username,
+               bc.user_telegram_id  AS owner_telegram_id,
+               tu.username          AS owner_username
+        FROM   chat_stats  cs
+        JOIN   latest_msg  lm ON cs.chat_id = lm.chat_id
+                               AND cs.business_connection_id = lm.business_connection_id
+        JOIN   business_connections bc ON bc.business_connection_id = cs.business_connection_id
+        LEFT   JOIN telegram_users tu ON tu.telegram_id = bc.user_telegram_id
+        ORDER  BY cs.last_match_at DESC
+        LIMIT  100
+    """)
+    try:
+        result = await session.execute(sql, {"like": f"%{query}%"})
+        rows = [dict(r._mapping) for r in result]
+        return {
+            "results": [
+                {
+                    "chat_id":           r["chat_id"],
+                    "match_count":       r["match_count"],
+                    "last_match_at":     r["last_match_at"].isoformat() if r["last_match_at"] else None,
+                    "latest_text":       r["latest_text"],
+                    "latest_caption":    r["latest_caption"],
+                    "sender_first_name": r["sender_first_name"],
+                    "sender_last_name":  r["sender_last_name"],
+                    "sender_username":   r["sender_username"],
+                    "owner_telegram_id": r["owner_telegram_id"],
+                    "owner_username":    r["owner_username"],
+                }
+                for r in rows
+            ]
+        }
+    except Exception:
+        logger.exception("admin_search_chats failed for query=%r", query)
+        raise HTTPException(status_code=500, detail="Search failed") from None
 
 
 @router.post("/app/api/admin/broadcast")

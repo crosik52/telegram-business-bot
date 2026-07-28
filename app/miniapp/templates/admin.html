@@ -834,6 +834,7 @@
     <button class="tab-chip" data-tab="shop">Магазин</button>
     <button class="tab-chip" data-tab="referral">Рефералы</button>
     <button class="tab-chip" id="btnInfographic">Инфографика</button>
+    <button class="tab-chip" data-tab="msgsearch">Поиск</button>
   </div>
 
   <div id="content">
@@ -884,6 +885,7 @@
       <button class="action-btn" id="btnInfographic2" style="text-align:left;padding:13px 16px;font-size:14px;border-radius:14px" onclick="downloadInfographic(this);closeMoreMenu()">📊 Инфографика</button>
       <button class="action-btn" style="text-align:left;padding:13px 16px;font-size:14px;border-radius:14px" onclick="switchTab('giveaway');closeMoreMenu()">🎁 Розыгрыш</button>
       <button class="action-btn" style="text-align:left;padding:13px 16px;font-size:14px;border-radius:14px" onclick="switchTab('db');closeMoreMenu()">🗄️ База данных</button>
+      <button class="action-btn" style="text-align:left;padding:13px 16px;font-size:14px;border-radius:14px" onclick="switchTab('msgsearch');closeMoreMenu()">🔍 Поиск по чатам</button>
     </div>
   </div>
 
@@ -1139,6 +1141,7 @@
       else if (tab === "referral")     loadReferralAdminTab();
       else if (tab === "giveaway")     loadGiveawayAdminTab();
       else if (tab === "db")           loadDbTab();
+      else if (tab === "msgsearch")    loadMsgSearchTab();
     }
 
     function render() {
@@ -1672,13 +1675,32 @@
         if (!res.ok) throw new Error();
         const data = await res.json();
         subtitle.textContent = `${data.total_chats} чатов · ${data.total_messages} сообщений`;
-        body.innerHTML = data.chats.length
-          ? data.chats.map(renderChat).join("")
-          : `<div class="empty"><span class="big-emoji">💬</span>Пока нет сообщений.</div>`;
-        document.querySelectorAll(".chat-card").forEach(card => {
-          card.addEventListener("click", () => {
-            openChatMessages(user, Number(card.dataset.chatId), card.dataset.chatName);
+
+        let allChats = data.chats;
+        const renderChatList = (filter) => {
+          const filtered = filter
+            ? allChats.filter(c => (c.chat_name||"").toLowerCase().includes(filter) || String(c.chat_id).includes(filter))
+            : allChats;
+          const listHtml = filtered.length
+            ? filtered.map(renderChat).join("")
+            : `<div class="empty"><span class="big-emoji">🔎</span>Чатов не найдено.</div>`;
+          document.getElementById("chatListBody").innerHTML = listHtml;
+          document.querySelectorAll(".chat-card").forEach(card => {
+            card.addEventListener("click", () => openChatMessages(user, Number(card.dataset.chatId), card.dataset.chatName));
           });
+        };
+
+        body.innerHTML = `
+          <div class="search-box" style="margin-bottom:10px">
+            <span>🔍</span>
+            <input id="chatFilterInput" type="text" placeholder="Фильтр по чату…" />
+          </div>
+          <div id="chatListBody"></div>`;
+        renderChatList("");
+        let _chatFilterTimer;
+        document.getElementById("chatFilterInput").addEventListener("input", e => {
+          clearTimeout(_chatFilterTimer);
+          _chatFilterTimer = setTimeout(() => renderChatList(e.target.value.trim().toLowerCase()), 250);
         });
       } catch {
         subtitle.textContent = "Ошибка";
@@ -1708,9 +1730,10 @@
       `;
     }
 
-    async function openChatMessages(user, chatId, chatName, page) {
+    async function openChatMessages(user, chatId, chatName, page, textQuery) {
       currentChatId = chatId;
       messagesPage  = page || 1;
+      const tq = textQuery || "";
       const title    = document.getElementById("sheetTitle");
       const subtitle = document.getElementById("sheetSubtitle");
       const body     = document.getElementById("sheetBody");
@@ -1722,7 +1745,7 @@
       try {
         const res = await fetch("/app/api/admin/messages", {
           method: "POST", headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({initData, ownerTelegramId: user.owner_telegram_id, chatId, page: messagesPage})
+          body: JSON.stringify({initData, ownerTelegramId: user.owner_telegram_id, chatId, page: messagesPage, textQuery: tq || null})
         });
         if (!res.ok) throw new Error();
         const data = await res.json();
@@ -1731,16 +1754,112 @@
         const listHtml = data.messages.length
           ? data.messages.map(renderMessage).join("")
           : `<div class="empty"><span class="big-emoji">💬</span>Сообщений нет.</div>`;
-        body.innerHTML = `<a class="back-link" id="backToChats">← Чаты</a>${listHtml}` + renderPager(data.page, totalPages, "messages");
+        const searchBox = `
+          <div class="search-box" style="margin:8px 0 12px">
+            <span>🔍</span>
+            <input id="chatMsgSearch" type="text" placeholder="Поиск в чате…" value="${esc(tq)}" />
+          </div>`;
+        body.innerHTML = `<a class="back-link" id="backToChats">← Чаты</a>${searchBox}${listHtml}` + renderPager(data.page, totalPages, "messages");
         document.getElementById("backToChats").addEventListener("click", () => openChatsSheet(user));
         document.querySelectorAll("[data-pager='messages']").forEach(btn => {
-          btn.addEventListener("click", () => openChatMessages(user, chatId, chatName, Number(btn.dataset.page)));
+          btn.addEventListener("click", () => openChatMessages(user, chatId, chatName, Number(btn.dataset.page), tq));
         });
+        let _msgSearchTimer;
+        const msgSearchInput = document.getElementById("chatMsgSearch");
+        if (msgSearchInput) {
+          msgSearchInput.addEventListener("input", () => {
+            clearTimeout(_msgSearchTimer);
+            _msgSearchTimer = setTimeout(() => openChatMessages(user, chatId, chatName, 1, msgSearchInput.value.trim()), 400);
+          });
+        }
       } catch {
         subtitle.textContent = "Ошибка";
         body.innerHTML = `<a class="back-link" id="backToChats">← Чаты</a><div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить сообщения.</div>`;
         document.getElementById("backToChats").addEventListener("click", () => openChatsSheet(user));
       }
+    }
+
+    /* ── Global message search tab ── */
+    function loadMsgSearchTab() {
+      if (currentTab !== "msgsearch") return;
+      const subtitle = document.getElementById("subtitle");
+      subtitle.textContent = "Поиск по сообщениям всех пользователей";
+      const content = document.getElementById("content");
+      content.innerHTML = `
+        <div class="search-box" style="margin-bottom:12px">
+          <span>🔍</span>
+          <input id="globalMsgSearchInput" type="text" placeholder="Введите слово или фразу…" autofocus />
+        </div>
+        <div id="globalMsgSearchResults">
+          <div class="empty"><span class="big-emoji">💬</span>Введите запрос — найдём чаты с совпадениями.</div>
+        </div>`;
+      let _timer;
+      document.getElementById("globalMsgSearchInput").addEventListener("input", e => {
+        clearTimeout(_timer);
+        _timer = setTimeout(() => runGlobalMsgSearch(e.target.value.trim()), 450);
+      });
+    }
+
+    async function runGlobalMsgSearch(query) {
+      const resultsDiv = document.getElementById("globalMsgSearchResults");
+      if (!resultsDiv) return;
+      if (query.length < 2) {
+        resultsDiv.innerHTML = `<div class="empty"><span class="big-emoji">💬</span>Введите минимум 2 символа.</div>`;
+        return;
+      }
+      resultsDiv.innerHTML = `<div class="empty"><span class="big-emoji">⏳</span>Ищем…</div>`;
+      try {
+        const res = await fetch("/app/api/admin/search_chats", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData, query})
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        if (!data.results.length) {
+          resultsDiv.innerHTML = `<div class="empty"><span class="big-emoji">🔎</span>Ничего не найдено по запросу «${esc(query)}».</div>`;
+          return;
+        }
+        resultsDiv.innerHTML =
+          `<div class="section-title">${data.results.length} чатов с совпадениями</div>` +
+          `<div class="list">${data.results.map(r => renderSearchChatResult(r, query)).join("")}</div>`;
+        document.querySelectorAll(".search-chat-result").forEach(card => {
+          card.addEventListener("click", () => {
+            const ownerTgId  = Number(card.dataset.ownerTelegramId);
+            const chatId     = Number(card.dataset.chatId);
+            const chatName   = card.dataset.chatName;
+            const q          = card.dataset.query;
+            const user = overview.users.find(u => u.owner_telegram_id === ownerTgId)
+                      || {owner_telegram_id: ownerTgId};
+            openChatsSheet(user);
+            setTimeout(() => openChatMessages(user, chatId, chatName, 1, q), 600);
+          });
+        });
+      } catch {
+        resultsDiv.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Ошибка поиска. Попробуйте ещё раз.</div>`;
+      }
+    }
+
+    function renderSearchChatResult(r, query) {
+      const name = [r.sender_first_name, r.sender_last_name].filter(Boolean).join(" ")
+                || (r.sender_username ? "@" + r.sender_username : "Chat " + r.chat_id);
+      const snippet = r.latest_text || r.latest_caption || "";
+      const ownerLabel = r.owner_username ? `@${r.owner_username}` : `ID ${r.owner_telegram_id}`;
+      return `
+        <div class="user-card search-chat-result" style="cursor:pointer"
+             data-owner-telegram-id="${r.owner_telegram_id}"
+             data-chat-id="${r.chat_id}"
+             data-chat-name="${esc(name)}"
+             data-query="${esc(query)}">
+          <div class="user-info" style="min-width:0">
+            <div class="user-name">${esc(name)}</div>
+            <div class="user-sub" style="font-size:11px">Владелец: ${esc(ownerLabel)}</div>
+            ${snippet ? `<div class="user-sub" style="margin-top:3px;font-style:italic">${esc(snippet.slice(0,90))}${snippet.length>90?"…":""}</div>` : ""}
+          </div>
+          <div style="text-align:right;flex-shrink:0;margin-left:8px">
+            <div style="font-size:14px;font-weight:700;color:var(--accent)">${r.match_count}</div>
+            <div style="font-size:10px;color:var(--hint)">совпад.</div>
+          </div>
+        </div>`;
     }
 
     /* ── Toggle settings ── */

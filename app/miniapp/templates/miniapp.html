@@ -3111,6 +3111,8 @@
     let _petAgeTicker  = null;                                   // interval id for "updated X ago" label
     let _shopCache     = { ts: 0, walletData: null, shopData: null, pricesVersion: null, walletVersion: null }; // 45-second client cache for shop/wallet
     let _shopCacheAgeTicker = null;                              // interval id for shop "updated X ago" label
+    let _questAgeTicker  = null;                                 // interval id for quests "updated X ago" label
+    let _questsFetchTs   = 0;                                    // timestamp of last quests+lb fetch
     let crashMultiplier   = 1.0;
     let crashPointAt      = Infinity;  // server-side crash point received on start
     let crashAnimFrame    = null;
@@ -4642,7 +4644,8 @@
       // Avatar is set once by applyUserAvatar() — never reset on tab switch
 
       if (tab !== "casino") {
-        if (_petAgeTicker) { clearInterval(_petAgeTicker); _petAgeTicker = null; }
+        if (_petAgeTicker)   { clearInterval(_petAgeTicker);   _petAgeTicker   = null; }
+        if (_questAgeTicker) { clearInterval(_questAgeTicker); _questAgeTicker = null; }
       }
       if (tab !== "interact") {
         if (_interactAgeTicker) { clearInterval(_interactAgeTicker); _interactAgeTicker = null; }
@@ -4894,6 +4897,7 @@
             el.innerHTML = _casinoTabBar() + renderQuestsSection();
             attachQuestHandlers();
             attachClaimAllHandler();
+            _startQuestAgeTicker();
           } else {
             el.innerHTML = _casinoTabBar() + `<div class="empty skeleton" style="padding:40px 0;text-align:center"><span class="big-emoji">🏆</span><br>Загружаем…</div>`;
             loadQuestsLeaderboard();
@@ -4901,6 +4905,7 @@
         } else if (casinoSubTab === "rating") {
           if (questsLoaded) {
             el.innerHTML = _casinoTabBar() + renderLeaderboardSection();
+            _startQuestAgeTicker();
           } else {
             el.innerHTML = _casinoTabBar() + `<div class="empty skeleton" style="padding:40px 0;text-align:center"><span class="big-emoji">🪙</span><br>Загружаем…</div>`;
             loadQuestsLeaderboard();
@@ -7358,9 +7363,10 @@
           fetch("/app/api/leaderboard", opts),
         ]);
         if (!qRes.ok || !lbRes.ok) throw new Error("api");
-        questData    = await qRes.json();
-        lbData       = await lbRes.json();
-        questsLoaded = true;
+        questData      = await qRes.json();
+        lbData         = await lbRes.json();
+        questsLoaded   = true;
+        _questsFetchTs = Date.now();
         renderQuestsTab();
       } catch {
         const ce = document.getElementById("casinoContent");
@@ -7414,6 +7420,9 @@
         : "";
 
       return `
+        <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:4px">
+          <span id="questCacheAge" style="font-size:11px;color:var(--hint);opacity:0.75"></span>
+        </div>
         <div class="section-title">${_si("ico-target")} Задания дня
           <span class="sub">${earned}/${total} 🪙</span>
         </div>
@@ -7461,8 +7470,9 @@
           fetch("/app/api/leaderboard", opts),
         ]);
         if (!qRes.ok || !lbRes.ok) return;
-        questData = await qRes.json();
-        lbData    = await lbRes.json();
+        questData      = await qRes.json();
+        lbData         = await lbRes.json();
+        _questsFetchTs = Date.now();
         renderQuestsTab(); // re-renders casino if on tasks/rating sub-tab
       } catch { /* silent */ }
     }
@@ -8857,6 +8867,29 @@
       };
       update();
       _petAgeTicker = setInterval(update, 1000);
+    }
+
+    function _questAgeLabel(ts) {
+      if (!ts) return "";
+      const sec = Math.floor((Date.now() - ts) / 1000);
+      if (sec < 10) return "только что";
+      if (sec < 60) return `${sec} с назад`;
+      const min = Math.floor(sec / 60);
+      return `${min} мин. назад`;
+    }
+
+    function _startQuestAgeTicker() {
+      if (_questAgeTicker) clearInterval(_questAgeTicker);
+      // Don't start if the user has already navigated away
+      if (currentTab !== "casino") return;
+      const update = () => {
+        if (currentTab !== "casino") { clearInterval(_questAgeTicker); _questAgeTicker = null; return; }
+        const lbl = document.getElementById("questCacheAge");
+        if (!lbl) { clearInterval(_questAgeTicker); _questAgeTicker = null; return; }
+        lbl.textContent = _questsFetchTs ? `Обновлено ${_questAgeLabel(_questsFetchTs)}` : "";
+      };
+      update();
+      _questAgeTicker = setInterval(update, 5000);
     }
 
     function renderRelationshipCards(relationships) {

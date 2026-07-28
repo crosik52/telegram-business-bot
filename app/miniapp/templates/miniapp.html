@@ -8814,9 +8814,11 @@
     }
 
     function _startInteractAgeTicker() {
+      if (currentTab !== "interact") return;
       if (_interactAgeTicker) clearInterval(_interactAgeTicker);
       // Set immediately, then update every 5 s
       const update = () => {
+        if (currentTab !== "interact") { clearInterval(_interactAgeTicker); _interactAgeTicker = null; return; }
         const lbl = document.getElementById("interactCacheAge");
         if (!lbl) { clearInterval(_interactAgeTicker); _interactAgeTicker = null; return; }
         lbl.textContent = _interactCache.ts ? `Обновлено ${_interactAgeLabel(_interactCache.ts)}` : "";

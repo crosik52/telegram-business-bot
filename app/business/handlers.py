@@ -668,13 +668,6 @@ async def on_business_message(message: Message, bot: Bot) -> None:
             and _sender is not None
             and _sender.id != owner_telegram_id
         )
-        logger.info(
-            "msg direction: chat=%s msg_id=%s sender=%s owner=%s incoming=%s",
-            message.chat.id, message.message_id,
-            _sender.id if _sender else None,
-            owner_telegram_id,
-            _is_incoming,
-        )
         if _is_incoming:
             _chat_id = message.chat.id
 
@@ -724,7 +717,7 @@ async def on_business_message(message: Message, bot: Bot) -> None:
         if _is_incoming and has_connection:
             _del_repo = ChatSettingsRepository(session)
             _delete_active = await _del_repo.is_delete_msgs_active(bc_id, message.chat.id)
-            logger.info(
+            logger.debug(
                 "mute check: chat=%s msg_id=%s delete_active=%s",
                 message.chat.id, message.message_id, _delete_active,
             )

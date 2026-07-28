@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import collections as _collections
 import datetime as dt
+import hashlib
 import re as _re
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -915,6 +916,10 @@ async def wallet_info(
     config     = await sub_repo.get_config()
     vip_config = await sub_repo.get_vip_config()
     sub        = await sub_repo.get_active_subscription(owner_id)
+    # Short version token derived from balance + last-mutation timestamp.
+    # Changes any time a server-side grant or deduction touches the wallet row.
+    _wallet_ver_raw = f"{wallet.balance}:{wallet.updated_at.isoformat() if wallet.updated_at else ''}"
+    wallet_version = hashlib.sha256(_wallet_ver_raw.encode()).hexdigest()[:12]
     return {
         "balance": wallet.balance,
         "total_earned": wallet.total_earned,
@@ -922,7 +927,27 @@ async def wallet_info(
         "can_claim_daily": can_claim,
         "seconds_until_next_claim": secs,
         "subscription": _sub_status_dict(sub, config, vip_config),
+        "wallet_version": wallet_version,
     }
+
+
+@router.post("/app/api/wallet/version")
+async def wallet_version_check(
+    payload: WalletRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Lightweight endpoint: returns a short hash of the wallet's current
+    balance and last-mutation timestamp.  Clients use this to detect
+    server-side coin grants or deductions without fetching the full wallet."""
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid init data")
+    owner_id = int(user["id"])
+    repo = WalletRepository(session)
+    wallet = await repo.get_or_create(owner_id)
+    raw = f"{wallet.balance}:{wallet.updated_at.isoformat() if wallet.updated_at else ''}"
+    version = hashlib.sha256(raw.encode()).hexdigest()[:12]
+    return {"wallet_version": version}
 
 
 @router.post("/app/api/wallet/claim_daily")

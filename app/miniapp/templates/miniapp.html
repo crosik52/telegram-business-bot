@@ -3109,7 +3109,7 @@
     let _interactAgeTicker = null; // interval id for "updated X ago" label
     let _petCache      = { ts: 0, data: null };                  // 45-second client cache for pet/list
     let _petAgeTicker  = null;                                   // interval id for "updated X ago" label
-    let _shopCache     = { ts: 0, walletData: null, shopData: null, pricesVersion: null }; // 45-second client cache for shop/wallet
+    let _shopCache     = { ts: 0, walletData: null, shopData: null, pricesVersion: null, walletVersion: null }; // 45-second client cache for shop/wallet
     let _shopCacheAgeTicker = null;                              // interval id for shop "updated X ago" label
     let crashMultiplier   = 1.0;
     let crashPointAt      = Infinity;  // server-side crash point received on start
@@ -7648,7 +7648,7 @@
         shopData   = sRes.ok ? await sRes.json() : { active_boosts: [], settings: {}, prices: {} };
         if (shopData.settings) _userCardSettings = { theme: shopData.settings.theme || "default", frame: shopData.settings.frame || "none" };
         petData    = freshPet;
-        _shopCache = { ts: Date.now(), walletData, shopData, pricesVersion: shopData.prices_version || null };
+        _shopCache = { ts: Date.now(), walletData, shopData, pricesVersion: shopData.prices_version || null, walletVersion: walletData.wallet_version || null };
         shopLoaded = true;
         renderShop();
       } catch {
@@ -7656,21 +7656,31 @@
       }
     }
 
-    /** Fetch only the prices_version hash and, if it differs from the cached
-     *  value, invalidate the shop cache and trigger a silent full re-fetch.
-     *  Called in the background after every cache-hit render. */
+    /** Fetch the prices_version and wallet_version hashes in parallel and, if
+     *  either differs from the cached value, bust the shop cache and trigger a
+     *  silent full re-fetch.  Called in the background after every cache-hit
+     *  render so users see fresh data within one network round-trip even inside
+     *  the 45 s TTL. */
     async function _shopCheckPricesVersion() {
-      if (!_shopCache.pricesVersion) return; // no version stored yet — skip
+      if (!_shopCache.pricesVersion && !_shopCache.walletVersion) return; // nothing to compare yet
       try {
-        const res = await fetch("/app/api/shop/prices-version", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ initData: currentInitData }),
-        });
-        if (!res.ok) return;
-        const { prices_version } = await res.json();
-        if (prices_version && prices_version !== _shopCache.pricesVersion) {
-          // Prices changed on the server — bust the cache and reload silently.
+        const opts = { method: "POST", headers: { "Content-Type": "application/json" },
+                       body: JSON.stringify({ initData: currentInitData }) };
+        const [pricesRes, walletVerRes] = await Promise.all([
+          fetch("/app/api/shop/prices-version", opts),
+          fetch("/app/api/wallet/version", opts),
+        ]);
+        let stale = false;
+        if (pricesRes.ok) {
+          const { prices_version } = await pricesRes.json();
+          if (prices_version && prices_version !== _shopCache.pricesVersion) stale = true;
+        }
+        if (!stale && walletVerRes.ok) {
+          const { wallet_version } = await walletVerRes.json();
+          if (wallet_version && wallet_version !== _shopCache.walletVersion) stale = true;
+        }
+        if (stale) {
+          // Something changed on the server — bust the cache and reload silently.
           _shopInvalidateCache();
           await loadShop(true);
         }

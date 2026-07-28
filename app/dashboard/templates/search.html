@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Поиск по чатам — Business Inbox{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-6 flex-wrap gap-3">
+  <h1 class="text-2xl font-semibold">Поиск по чатам</h1>
+  {% if results %}
+  <span class="text-sm text-slate-500 dark:text-slate-400">
+    Найдено совпадений: <span class="font-semibold text-slate-700 dark:text-slate-200">{{ results | length }}</span> чат(ов)
+  </span>
+  {% endif %}
+</div>
+
+<form method="get" action="/search"
+      class="flex gap-3 mb-6">
+  <input
+    type="text"
+    name="q"
+    value="{{ query }}"
+    placeholder="Введите слово или фразу…"
+    autofocus
+    class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700
+           bg-white dark:bg-slate-900 px-4 py-2.5 text-sm
+           focus:outline-none focus:ring-2 focus:ring-brand-500"
+  />
+  <button type="submit"
+    class="px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors">
+    🔍 Найти
+  </button>
+  {% if query %}
+  <a href="/search"
+     class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700
+            hover:bg-slate-100 dark:hover:bg-slate-800 text-sm transition-colors">
+    Сбросить
+  </a>
+  {% endif %}
+</form>
+
+{% if error %}
+<div class="rounded-xl bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800
+            px-4 py-3 text-sm text-red-700 dark:text-red-300 mb-4">
+  ⚠️ {{ error }}
+</div>
+{% endif %}
+
+{% if query and not error %}
+  {% if results %}
+  <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800
+              divide-y divide-slate-100 dark:divide-slate-800">
+    {% for row in results %}
+    {% set name = row.sender_first_name or row.sender_username or ('Chat ' ~ row.chat_id) %}
+    {% set snippet = row.latest_text or row.latest_caption or '' %}
+    <div class="px-5 py-4 flex items-start justify-between gap-4">
+      <div class="min-w-0 flex-1">
+        <!-- Contact name + username -->
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="font-medium text-sm">{{ name }}</span>
+          {% if row.sender_username %}
+          <span class="text-slate-400 text-xs">@{{ row.sender_username }}</span>
+          {% endif %}
+          <span class="ml-1 text-xs rounded-full bg-brand-100 text-brand-700
+                       dark:bg-brand-900/40 dark:text-brand-300 px-2 py-0.5 font-medium">
+            {{ row.match_count }} совпад.
+          </span>
+        </div>
+        <!-- Snippet -->
+        {% if snippet %}
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400 line-clamp-2">
+          {%- set q_lower = query | lower -%}
+          {%- set s_lower = snippet | lower -%}
+          {%- set pos = s_lower.find(q_lower) -%}
+          {%- if pos >= 0 -%}
+            {%- set start = [pos - 40, 0] | max -%}
+            {%- set excerpt = snippet[start : pos + query | length + 80] -%}
+            {%- if start > 0 %}…{% endif -%}
+            {{- excerpt -}}
+            {%- if (start + excerpt | length) < snippet | length %}…{% endif -%}
+          {%- else -%}
+            {{ snippet[:120] }}{% if snippet | length > 120 %}…{% endif %}
+          {%- endif -%}
+        </p>
+        {% elif row.latest_media_type and row.latest_media_type != 'none' %}
+        <p class="mt-1 text-sm text-slate-400 dark:text-slate-500">
+          📎 {{ row.latest_media_type }}
+        </p>
+        {% endif %}
+        <!-- Last match time -->
+        {% if row.last_match_at %}
+        <p class="mt-1 text-xs text-slate-400">
+          Последнее совпадение: {{ row.last_match_at.strftime('%d.%m.%Y %H:%M') }}
+        </p>
+        {% endif %}
+      </div>
+      <!-- Actions -->
+      <div class="flex flex-col gap-1.5 shrink-0 items-end">
+        <a href="/messages?q={{ query | urlencode }}&chat_id={{ row.chat_id }}"
+           class="text-xs px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700
+                  text-white font-medium transition-colors whitespace-nowrap">
+          Все {{ row.match_count }} →
+        </a>
+        <a href="/messages?chat_id={{ row.chat_id }}"
+           class="text-xs px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700
+                  hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors whitespace-nowrap">
+          Весь чат
+        </a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% else %}
+  <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800
+              px-5 py-14 text-center">
+    <p class="text-4xl mb-3">🔍</p>
+    <p class="text-slate-500 dark:text-slate-400 text-sm">
+      По запросу <span class="font-medium text-slate-700 dark:text-slate-200">«{{ query }}»</span> ничего не найдено.
+    </p>
+    <p class="text-slate-400 text-xs mt-1">Попробуйте другое слово или часть слова.</p>
+  </div>
+  {% endif %}
+
+{% elif not query %}
+<div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800
+            px-5 py-14 text-center">
+  <p class="text-4xl mb-3">💬</p>
+  <p class="text-slate-500 dark:text-slate-400 text-sm">
+    Введите слово или фразу, чтобы найти все чаты, где оно встречается.
+  </p>
+</div>
+{% endif %}
+
+{% endblock %}

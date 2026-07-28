@@ -20,6 +20,7 @@ from app.dashboard.routes import channels as dashboard_channels
 from app.dashboard.routes import export as dashboard_export
 from app.dashboard.routes import home as dashboard_home
 from app.dashboard.routes import messages as dashboard_messages
+from app.dashboard.routes import search as dashboard_search
 from app.dashboard.routes import stats as dashboard_stats
 from app.dashboard.routes import subscriptions as dashboard_subscriptions
 from app.database.base import Base
@@ -406,6 +407,7 @@ app.include_router(webhook.router)
 app.include_router(dashboard_auth.router)
 app.include_router(dashboard_home.router)
 app.include_router(dashboard_messages.router)
+app.include_router(dashboard_search.router)
 app.include_router(dashboard_stats.router)
 app.include_router(dashboard_export.router)
 app.include_router(dashboard_channels.router)

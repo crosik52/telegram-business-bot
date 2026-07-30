@@ -8936,7 +8936,11 @@
 
     function _startShopAgeTicker() {
       if (_shopCacheAgeTicker) clearInterval(_shopCacheAgeTicker);
+      // Don't start if the user is no longer on the shop tab
+      if (currentTab !== "shop") return;
       const update = () => {
+        // Stop if the user has navigated away since the ticker was started
+        if (currentTab !== "shop") { clearInterval(_shopCacheAgeTicker); _shopCacheAgeTicker = null; return; }
         const lbl = document.getElementById("shopCacheAge");
         if (!lbl) { clearInterval(_shopCacheAgeTicker); _shopCacheAgeTicker = null; return; }
         lbl.textContent = _shopCache.ts ? `обновлено ${_shopAgeLabel(_shopCache.ts)}` : "";

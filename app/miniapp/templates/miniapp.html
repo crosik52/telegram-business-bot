@@ -412,6 +412,15 @@
   .premium-more-hint { font-size: 11px; color: var(--hint); margin-top: 2px; }
   .sort-locked { opacity: 0.45; }
 
+  /* ── Leaderboard age label ── */
+  .lb-cache-age {
+    text-align: center;
+    font-size: 11px;
+    color: var(--hint);
+    margin: -4px 0 10px;
+    min-height: 16px;
+  }
+
   /* ── Heatmap ── */
   .heatmap-card {
     background: var(--secondary-bg);
@@ -3321,6 +3330,8 @@
     let _shopCacheAgeTicker = null;                              // interval id for shop "updated X ago" label
     let _questAgeTicker  = null;                                 // interval id for quests "updated X ago" label
     let _questsFetchTs   = 0;                                    // timestamp of last quests+lb fetch
+    let _lbAgeTicker     = null;                                 // interval id for leaderboard "updated X ago" label
+    let _lbFetchTs       = 0;                                    // timestamp of last leaderboard fetch
     let crashMultiplier   = 1.0;
     let crashPointAt      = Infinity;  // server-side crash point received on start
     let crashAnimFrame    = null;
@@ -4863,7 +4874,7 @@
       }
       if (tab !== "giveaway") {
         if (_giveawayTimer) { clearInterval(_giveawayTimer); _giveawayTimer = null; }
-        _stopGiveawayLeaderboardRefresh();
+        _stopGiveawayLeaderboardRefresh();  // also clears _lbAgeTicker
       }
       if (tab === "casino") {
         if (!casinoLoaded && currentInitData) loadWallet();
@@ -9336,6 +9347,30 @@
       _questAgeTicker = setInterval(update, 5000);
     }
 
+    function _lbAgeLabel(ts) {
+      if (!ts) return "";
+      const sec = Math.floor((Date.now() - ts) / 1000);
+      if (sec < 10) return "только что";
+      if (sec < 60) return `${sec} с назад`;
+      const min = Math.floor(sec / 60);
+      return `${min} мин. назад`;
+    }
+
+    function _startLbAgeTicker() {
+      if (_lbAgeTicker) clearInterval(_lbAgeTicker);
+      if (currentTab !== "giveaway" || giveawaySubTab !== "contest") return;
+      const update = () => {
+        if (currentTab !== "giveaway" || giveawaySubTab !== "contest") {
+          clearInterval(_lbAgeTicker); _lbAgeTicker = null; return;
+        }
+        const lbl = document.getElementById("lbCacheAge");
+        if (!lbl) { clearInterval(_lbAgeTicker); _lbAgeTicker = null; return; }
+        lbl.textContent = _lbFetchTs ? `Обновлено ${_lbAgeLabel(_lbFetchTs)}` : "";
+      };
+      update();
+      _lbAgeTicker = setInterval(update, 1000);
+    }
+
     function renderRelationshipCards(relationships) {
       const CERT_HEADER = {
         friends: "ЛУЧШИЕ ДРУЗЬЯ",
@@ -9669,6 +9704,7 @@
         clearInterval(_giveawayLeaderboardInterval);
         _giveawayLeaderboardInterval = null;
       }
+      if (_lbAgeTicker) { clearInterval(_lbAgeTicker); _lbAgeTicker = null; }
     }
 
     async function _silentRefreshGiveawayLeaderboard() {
@@ -9686,6 +9722,8 @@
         giveawayData = fresh;
         // Update only the leaderboard portions in-place (no full re-render)
         _updateGiveawayLeaderboardInPlace();
+        _lbFetchTs = Date.now();
+        _startLbAgeTicker();
       } catch (e) {
         // Silent — do not show error on background refresh
       }
@@ -9956,6 +9994,7 @@
           </div>
           ${prizesHtml}
           <div class="giveaway-divider">🏆 Таблица лидеров</div>
+          <div id="lbCacheAge" class="lb-cache-age"></div>
           ${podiumHtml}
           <div id="giveawayMeCard">${meHtml}</div>
           <button class="giveaway-invite-btn" onclick="switchGiveawaySubTab('referrals')">🔗 Пригласить друзей</button>
@@ -9965,6 +10004,9 @@
 
       // Start live leaderboard auto-refresh every 60 s
       _startGiveawayLeaderboardRefresh();
+      // Stamp initial fetch time and start the age ticker
+      _lbFetchTs = Date.now();
+      _startLbAgeTicker();
 
       // Load TGS/Lottie prize animations
       _destroyGvLottie();

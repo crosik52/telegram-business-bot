@@ -2925,6 +2925,30 @@
   /* Skeleton loader */
   .interact-skeleton { padding: 16px 0; display: flex; flex-direction: column; gap: 12px; animation: pulse 1.2s ease-in-out infinite; }
   .interact-skel-card { height: 200px; background: rgba(224,54,90,0.07); border-radius: 20px; margin: 0 0 2px; }
+
+  /* ── Interact leaderboard (Топ) sub-tab ── */
+  .interact-lb-section-title {
+    font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.7px;
+    color: var(--hint); margin: 16px 0 8px; display: flex; align-items: center; gap: 6px;
+  }
+  .interact-lb-section-title::after {
+    content: ""; flex: 1; height: 0.5px;
+    background: linear-gradient(90deg, rgba(120,120,128,0.22), transparent);
+  }
+  .rel-lb-row {
+    display: flex; align-items: center; gap: 9px;
+    padding: 9px 12px; border-radius: 12px; background: var(--secondary-bg);
+    margin-bottom: 5px;
+  }
+  .rel-lb-rank   { font-size: 14px; width: 26px; flex-shrink: 0; text-align: center; font-weight: 900; color: var(--hint); }
+  .rel-lb-emoji  { font-size: 20px; flex-shrink: 0; }
+  .rel-lb-body   { flex: 1; min-width: 0; }
+  .rel-lb-names  { font-size: 12.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rel-lb-meta   { font-size: 10px; color: var(--hint); margin-top: 1px; }
+  .rel-lb-right  { text-align: right; flex-shrink: 0; }
+  .rel-lb-level  { font-size: 15px; font-weight: 900; color: #c0557a; }
+  .rel-lb-xp     { font-size: 10px; color: var(--hint); margin-top: 1px; }
+
   /* ── Giveaway tab ────────────────────────────────────────────────────────── */
   .giveaway-wrap { padding: 0 0 24px; display: flex; flex-direction: column; }
 
@@ -3287,6 +3311,8 @@
     let crashGameActive   = false;
     let lastRelationships = {};   // partner_id → rel dict from /api/relationships/list
     let _interactCache = { ts: 0, relData: null, petData: null }; // 45-second client cache
+    let interactSubTab = "bonds";   // "bonds" | "top"
+    let interactLbCache = null;     // { ts, relLb, petLb }
     let _interactAgeTicker = null; // interval id for "updated X ago" label
     let _petCache      = { ts: 0, data: null };                  // 45-second client cache for pet/list
     let _petAgeTicker  = null;                                   // interval id for "updated X ago" label
@@ -6987,7 +7013,10 @@
             <div class="pet-lb-name">${esc(e.pet_name)} ${esc(e.personality_emoji)}</div>
             <div class="pet-lb-meta">${esc(e.species_label)} · ${daysLabel(e.days_alive)}</div>
           </div>
-          <div class="pet-lb-level">Ур.${e.level}</div>
+          <div style="text-align:right;flex-shrink:0">
+            <div class="pet-lb-level">Ур.${e.level}</div>
+            <div style="font-size:10px;color:var(--hint);margin-top:1px">${e.xp} XP</div>
+          </div>
         </div>`).join("");
       return `<div class="pet-top-intro">🏆 Самые прокачанные питомцы</div><div class="pet-lb-list">${rows}</div>`;
     }
@@ -9073,35 +9102,138 @@
       const relationships = relData.relationships || [];
       const alivePets     = (petLocal.pets || []).filter(p => p.is_alive);
 
-      let html = `<div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:6px">
-        <span id="interactCacheAge" style="font-size:11px;color:var(--hint);opacity:0.75"></span>
-        <button onclick="renderInteractTab(true)" style="border:none;background:rgba(120,120,128,0.1);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--hint);display:flex;align-items:center;gap:4px;cursor:pointer">
-          <span>🔄</span> Обновить
-        </button>
+      // ── Sub-tab bar ──────────────────────────────────────────────
+      let html = `<div class="inner-tab-bar" style="margin-bottom:10px">
+        <button class="inner-tab${interactSubTab==="bonds"?" active":""}" onclick="switchInteractSubTab('bonds')">💗 Связи</button>
+        <button class="inner-tab${interactSubTab==="top"?" active":""}" onclick="switchInteractSubTab('top')">🏆 Топ</button>
       </div>`;
 
-      // ── Relationships sub-section ────────────────────────────────
-      html += `<div class="interact-section-bg">
-        <div class="interact-section-title">💗 Отношения</div>
-        ${relationships.length
-          ? renderRelationshipCards(relationships)
-          : `<div style="text-align:center;padding:20px 16px 16px;color:#c0557a;font-size:13px;opacity:0.75">
-              <div style="font-size:36px;margin-bottom:8px">💌</div>
-              Пока нет отношений.<br>Найди собеседника в топе и предложи дружбу!
-             </div>`}
-      </div>`;
+      if (interactSubTab === "bonds") {
+        // ── Age / refresh bar ──────────────────────────────────────
+        html += `<div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:6px">
+          <span id="interactCacheAge" style="font-size:11px;color:var(--hint);opacity:0.75"></span>
+          <button onclick="renderInteractTab(true)" style="border:none;background:rgba(120,120,128,0.1);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--hint);display:flex;align-items:center;gap:4px;cursor:pointer">
+            <span>🔄</span> Обновить
+          </button>
+        </div>`;
 
-      // ── Pets sub-section ─────────────────────────────────────────
-      if (alivePets.length > 0) {
+        // ── Relationships ──────────────────────────────────────────
         html += `<div class="interact-section-bg">
-          <div class="interact-section-title">🐾 Питомцы</div>
-          ${renderPetMiniCards(petLocal.pets || [])}
+          <div class="interact-section-title">💗 Отношения</div>
+          ${relationships.length
+            ? renderRelationshipCards(relationships)
+            : `<div style="text-align:center;padding:20px 16px 16px;color:#c0557a;font-size:13px;opacity:0.75">
+                <div style="font-size:36px;margin-bottom:8px">💌</div>
+                Пока нет отношений.<br>Найди собеседника в топе и предложи дружбу!
+               </div>`}
+        </div>`;
+
+        // ── Pets ───────────────────────────────────────────────────
+        if (alivePets.length > 0) {
+          html += `<div class="interact-section-bg">
+            <div class="interact-section-title">🐾 Питомцы</div>
+            ${renderPetMiniCards(petLocal.pets || [])}
+          </div>`;
+        }
+      } else {
+        // ── "Топ" sub-tab — leaderboards ─────────────────────────
+        html += `<div id="interactLbPane">
+          <div style="text-align:center;padding:28px 0;color:var(--hint);font-size:13px">⏳ Загрузка…</div>
         </div>`;
       }
 
       el.innerHTML = html;
       _attachInteractPetHandlers();
       _startInteractAgeTicker();
+
+      if (interactSubTab === "top") loadInteractLeaderboard();
+    }
+
+    function switchInteractSubTab(tab) {
+      if (interactSubTab === tab) return;
+      interactSubTab = tab;
+      // Re-render with cached data (no network round-trip for bonds tab)
+      if (_interactCache.relData && _interactCache.petData) {
+        _renderInteractContent(
+          document.getElementById("interactContent"),
+          _interactCache.relData,
+          _interactCache.petData
+        );
+      }
+      if (tg?.HapticFeedback?.selectionChanged) tg.HapticFeedback.selectionChanged();
+    }
+
+    async function loadInteractLeaderboard() {
+      const pane = document.getElementById("interactLbPane");
+      if (!pane) return;
+
+      const LB_TTL = 60_000;
+      if (interactLbCache && (Date.now() - interactLbCache.ts < LB_TTL)) {
+        pane.innerHTML = _renderInteractLbHTML(interactLbCache.relLb, interactLbCache.petLb);
+        return;
+      }
+
+      try {
+        const opts = { method:"POST", headers:{"Content-Type":"application/json"},
+                       body: JSON.stringify({initData: currentInitData}) };
+        const [relRes, petRes] = await Promise.all([
+          fetch("/app/api/relationships/leaderboard", opts),
+          fetch("/app/api/pet/leaderboard", opts),
+        ]);
+        const relLb = relRes.ok ? (await relRes.json()).leaderboard : [];
+        const petLb = petRes.ok ? (await petRes.json()).leaderboard : [];
+        interactLbCache = { ts: Date.now(), relLb, petLb };
+        if (pane) pane.innerHTML = _renderInteractLbHTML(relLb, petLb);
+      } catch {
+        if (pane) pane.innerHTML = `<div style="text-align:center;padding:28px 0;color:var(--hint);font-size:13px">Не удалось загрузить 😅</div>`;
+      }
+    }
+
+    function _renderInteractLbHTML(relLb, petLb) {
+      const medal = r => r===1?'🥇':r===2?'🥈':r===3?'🥉':r;
+      let h = `<div class="interact-lb-section-title">💗 Топ отношений</div>`;
+      if (!relLb?.length) {
+        h += `<div style="text-align:center;padding:16px 0;color:var(--hint);font-size:13px;opacity:0.7">Пока нет данных</div>`;
+      } else {
+        const tierLabel = { friends:"Друзья", dating:"Встречаются", married:"Женаты" };
+        h += relLb.map(e => `
+          <div class="rel-lb-row">
+            <div class="rel-lb-rank">${medal(e.rank)}</div>
+            <div class="rel-lb-emoji">${esc(e.tier_emoji)}</div>
+            <div class="rel-lb-body">
+              <div class="rel-lb-names">${esc(e.user_a_name)} &amp; ${esc(e.user_b_name)}</div>
+              <div class="rel-lb-meta">${tierLabel[e.rel_type]||e.rel_type}</div>
+            </div>
+            <div class="rel-lb-right">
+              <div class="rel-lb-level">Ур.${e.level}</div>
+              <div class="rel-lb-xp">${e.xp} XP</div>
+            </div>
+          </div>`).join("");
+      }
+
+      h += `<div class="interact-lb-section-title" style="margin-top:20px">🐾 Топ питомцев</div>`;
+      if (!petLb?.length) {
+        h += `<div style="text-align:center;padding:16px 0;color:var(--hint);font-size:13px;opacity:0.7">Пока нет данных</div>`;
+      } else {
+        h += `<div class="pet-lb-list">${petLb.map(e => `
+          <div class="pet-lb-row">
+            <div class="pet-lb-rank">${medal(e.rank)}</div>
+            <div class="pet-lb-emoji">${esc(e.species_emoji)}</div>
+            <div class="pet-lb-body">
+              <div class="pet-lb-name">${esc(e.pet_name)} ${esc(e.personality_emoji)}</div>
+              <div class="pet-lb-meta">${esc(e.species_label)} · ${daysLabel(e.days_alive)}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div class="pet-lb-level">Ур.${e.level}</div>
+              <div style="font-size:10px;color:var(--hint);margin-top:1px">${e.xp} XP</div>
+            </div>
+          </div>`).join("")}</div>`;
+      }
+
+      h += `<div style="text-align:center;font-size:10px;color:var(--hint);opacity:0.55;margin-top:12px;padding-bottom:8px">
+        Обновляется каждые 60 сек.
+      </div>`;
+      return h;
     }
 
     function _interactAgeLabel(ts) {

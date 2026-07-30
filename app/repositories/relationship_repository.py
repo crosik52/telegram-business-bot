@@ -357,6 +357,59 @@ class RelationshipRepository:
         await self._session.flush()
         return rel
 
+    async def get_leaderboard(self, limit: int = 20) -> list[dict]:
+        """Top *limit* active relationships ordered by XP descending."""
+        from app.models.user import TelegramUser  # local import to avoid circulars
+
+        rows = list(
+            (
+                await self._session.execute(
+                    select(Relationship)
+                    .where(Relationship.status == "active")
+                    .order_by(Relationship.xp.desc())
+                    .limit(limit)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if not rows:
+            return []
+
+        user_ids: set[int] = set()
+        for r in rows:
+            user_ids.add(r.user_a_id)
+            user_ids.add(r.user_b_id)
+
+        name_map: dict[int, str] = {}
+        for u in (
+            await self._session.execute(
+                select(TelegramUser).where(
+                    TelegramUser.telegram_user_id.in_(user_ids)
+                )
+            )
+        ).scalars():
+            parts = [p for p in (u.first_name, u.last_name) if p]
+            name_map[u.telegram_user_id] = (
+                " ".join(parts) or u.username or f"#{u.telegram_user_id}"
+            )
+
+        tier_emoji = {"friends": "🤝", "dating": "💕", "married": "💍"}
+        result = []
+        for i, r in enumerate(rows, 1):
+            result.append(
+                {
+                    "rank":        i,
+                    "user_a_name": name_map.get(r.user_a_id, f"#{r.user_a_id}"),
+                    "user_b_name": name_map.get(r.user_b_id, f"#{r.user_b_id}"),
+                    "rel_type":    r.rel_type,
+                    "tier_emoji":  tier_emoji.get(r.rel_type, "💫"),
+                    "level":       r.level,
+                    "xp":          r.xp,
+                }
+            )
+        return result
+
     # ── Wallet helper ─────────────────────────────────────────────────────────
 
     async def _get_wallet(self, user_id: int, *, lock: bool = False) -> UserWallet:

@@ -1767,6 +1767,18 @@ async def rel_list(
     return {"relationships": result}
 
 
+@router.post("/app/api/relationships/leaderboard")
+async def rel_leaderboard(
+    payload: StatsRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Return top 20 relationships by XP."""
+    settings = get_settings()
+    _verify_rel_init(payload.init_data, settings)
+    repo = RelationshipRepository(session)
+    leaderboard = await repo.get_leaderboard(limit=20)
+    return {"leaderboard": leaderboard}
+
+
 @router.post("/app/api/relationships/request")
 async def rel_request(
     payload: RelPartnerRequest, session: AsyncSession = Depends(get_db_session)

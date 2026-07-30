@@ -2816,12 +2816,11 @@ async def admin_search_chats(
                lm.sender_last_name,
                lm.sender_username,
                bc.user_telegram_id  AS owner_telegram_id,
-               tu.username          AS owner_username
+               bc.user_username     AS owner_username
         FROM   chat_stats  cs
         JOIN   latest_msg  lm ON cs.chat_id = lm.chat_id
                                AND cs.business_connection_id = lm.business_connection_id
         JOIN   business_connections bc ON bc.business_connection_id = cs.business_connection_id
-        LEFT   JOIN telegram_users tu ON tu.telegram_id = bc.user_telegram_id
         ORDER  BY cs.last_match_at DESC
         LIMIT  100
     """)

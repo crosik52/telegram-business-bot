@@ -3025,6 +3025,8 @@
   .giveaway-prize-card.p2 .giveaway-prize-name { color: #9ca3af; }
   .giveaway-prize-card.p3 .giveaway-prize-name { color: #a05a20; }
   .giveaway-prize-empty { font-size: 26px; margin: 10px 0 6px; display: block; opacity: 0.28; }
+ .giveaway-prize-card.prize-tba { opacity: 0.45; filter: grayscale(0.5); }
+ .giveaway-prize-card.prize-tba .giveaway-prize-name { color: var(--hint) !important; font-style: italic; }
 
   /* ── Section divider ── */
   .giveaway-divider {
@@ -9604,28 +9606,31 @@
       for (const r of (d.top || [])) topByRank[r.rank] = r;
 
       // ── Prize showcase ─────────────────────────────────────────────────
+      const anyPrizeConfigured = prizes.some(Boolean) || prizeImgs.some(Boolean);
+
       function _prizeCard(rank) {
         const i   = rank - 1;
         const txt = prizes[i];
         const img = prizeImgs[i];
+        const configured = !!(txt || img);
         let mediaHtml = "";
         if (img && img.endsWith(".tgs")) {
           mediaHtml = `<div id="gvPrizeLottie_${rank}" class="giveaway-prize-lottie"></div>`;
         } else if (img) {
           mediaHtml = `<img src="${_esc(img)}" class="giveaway-prize-img" alt="" onerror="this.style.display='none'">`;
         } else {
-          mediaHtml = `<span class="giveaway-prize-empty">${txt ? "🎁" : "❓"}</span>`;
+          mediaHtml = `<span class="giveaway-prize-empty">${txt ? "🎁" : "🔜"}</span>`;
         }
-        return `<div class="giveaway-prize-card ${PCLS[i]}">
+        return `<div class="giveaway-prize-card ${PCLS[i]}${configured ? "" : " prize-tba"}">
           <span class="giveaway-prize-medal">${MEDALS[i]}</span>
           ${mediaHtml}
-          <div class="giveaway-prize-name">${txt ? _esc(txt) : "—"}</div>
+          <div class="giveaway-prize-name">${txt ? _esc(txt) : "TBA"}</div>
           <div class="giveaway-prize-place">${PLACES[i]}</div>
         </div>`;
       }
-      const prizesHtml = `<div class="giveaway-prizes">
+      const prizesHtml = anyPrizeConfigured ? `<div class="giveaway-prizes">
         ${_prizeCard(1)}${_prizeCard(2)}${_prizeCard(3)}
-      </div>`;
+      </div>` : "";
 
       // ── Visual podium (order: 2nd | 1st | 3rd) ────────────────────────
       function _podiumSlot(rank) {

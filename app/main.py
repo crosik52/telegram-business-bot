@@ -271,6 +271,18 @@ async def lifespan(app: FastAPI):
         # Safe column additions for tables that already exist in production
         if not settings.is_sqlite:
             from sqlalchemy import text
+            # Enable pg_trgm for fast ILIKE trigram search on messages.
+            # A real nested transaction (SAVEPOINT) isolates any privilege
+            # error so it cannot abort the outer schema-migration transaction.
+            try:
+                async with conn.begin_nested():
+                    await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+            except Exception:
+                logger.warning(
+                    "Could not create pg_trgm extension (missing privilege?). "
+                    "Message search will still work but may be slower without "
+                    "trigram indexes."
+                )
             await conn.execute(text(
                 "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS owned_themes JSONB"
             ))

@@ -2212,6 +2212,35 @@
   }
 
   .pet-section { margin-bottom: 16px; }
+  .pet-section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 4px 2px 10px; gap: 8px;
+  }
+  .pet-section-left { display: flex; flex-direction: column; gap: 2px; }
+  .pet-section-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.7px; color: var(--hint);
+    display: flex; align-items: center; gap: 5px;
+  }
+  .pet-section-age {
+    font-size: 10.5px; color: var(--hint); opacity: 0.65; min-height: 14px;
+  }
+  .pet-refresh-btn {
+    border: none; background: rgba(120,120,128,0.12); border-radius: 50%;
+    width: 32px; height: 32px; font-size: 15px; cursor: pointer; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s, transform 0.15s;
+  }
+  .pet-refresh-btn:active { transform: rotate(180deg) scale(0.9); background: rgba(120,120,128,0.22); }
+  .pet-adopt-card {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; border: 1.5px dashed rgba(52,199,89,0.35);
+    background: rgba(52,199,89,0.06); border-radius: 16px;
+    padding: 13px 16px; margin-bottom: 10px; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    flex-direction: row; text-align: left;
+  }
+  .pet-adopt-card:active { background: rgba(52,199,89,0.12); border-color: rgba(52,199,89,0.55); }
   .pet-card {
     background: var(--secondary-bg); border-radius: var(--card-radius);
     padding: 16px 14px 14px; margin-bottom: 10px; box-shadow: var(--shadow);
@@ -6981,9 +7010,14 @@
       const adoptBtn = hasAdopt ? `<button class="pet-add-more" id="openAdoptBtn">+ Питомец</button>` : "";
 
       if (pets.length === 0) {
-        const refreshBtnEmpty = `<span id="petCacheAge" style="font-size:11px;color:var(--hint);opacity:0.75"></span><button onclick="refreshPetSection()" style="border:none;background:rgba(120,120,128,0.1);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--hint);display:inline-flex;align-items:center;gap:4px;cursor:pointer;vertical-align:middle">🔄 Обновить</button>`;
         return `<div class="pet-section" id="petSectionWrap">
-          <div class="section-title">${_si("ico-paw")} Питомцы <span style="display:flex;align-items:center;gap:6px">${adoptBtn}${refreshBtnEmpty}</span></div>
+          <div class="pet-section-header">
+            <div class="pet-section-left">
+              <span class="pet-section-title">${_si("ico-paw")} Питомцы</span>
+              <span class="pet-section-age" id="petCacheAge"></span>
+            </div>
+            <button onclick="refreshPetSection()" class="pet-refresh-btn" title="Обновить">🔄</button>
+          </div>
           <div class="card pet-empty">
             <div class="pet-empty-emoji">🥚</div>
             <div class="pet-empty-title">Нет питомцев</div>
@@ -7055,10 +7089,22 @@
           </div>
         </div>`).join("");
 
-      const refreshBtn = `<span id="petCacheAge" style="font-size:11px;color:var(--hint);opacity:0.75"></span><button onclick="refreshPetSection()" style="border:none;background:rgba(120,120,128,0.1);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--hint);display:inline-flex;align-items:center;gap:4px;cursor:pointer;vertical-align:middle">🔄 Обновить</button>`;
+      const adoptCard = hasAdopt
+        ? `<button class="pet-adopt-card" id="openAdoptBtn">
+            <span style="font-size:20px">🥚</span>
+            <span style="font-size:13px;font-weight:700">+ Питомец</span>
+            <span style="font-size:11px;color:var(--hint)">завести нового</span>
+           </button>`
+        : "";
       return `<div class="pet-section" id="petSectionWrap">
-        <div class="section-title">${_si("ico-paw")} Питомцы <span style="display:flex;align-items:center;gap:6px">${adoptBtn}${refreshBtn}</span></div>
-        ${aliveCards}${deadCards}
+        <div class="pet-section-header">
+          <div class="pet-section-left">
+            <span class="pet-section-title">${_si("ico-paw")} Питомцы</span>
+            <span class="pet-section-age" id="petCacheAge"></span>
+          </div>
+          <button onclick="refreshPetSection()" class="pet-refresh-btn" title="Обновить">🔄</button>
+        </div>
+        ${adoptCard}${aliveCards}${deadCards}
       </div>`;
     }
 

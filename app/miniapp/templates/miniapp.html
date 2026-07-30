@@ -3110,6 +3110,7 @@
     let _petCache      = { ts: 0, data: null };                  // 45-second client cache for pet/list
     let _petAgeTicker  = null;                                   // interval id for "updated X ago" label
     let _shopCache     = { ts: 0, walletData: null, shopData: null, pricesVersion: null, walletVersion: null }; // 45-second client cache for shop/wallet
+    let _casinoWalletVersion = null; // wallet_version hash stored after last loadWallet() fill
     let _shopCacheAgeTicker = null;                              // interval id for shop "updated X ago" label
     let _questAgeTicker  = null;                                 // interval id for quests "updated X ago" label
     let _questsFetchTs   = 0;                                    // timestamp of last quests+lb fetch
@@ -4658,7 +4659,11 @@
       }
       if (tab === "casino") {
         if (!casinoLoaded && currentInitData) loadWallet();
-        else if (casinoLoaded) renderCasino();
+        else if (casinoLoaded) {
+          renderCasino();
+          // Background version check: re-fetch if server balance changed since last load
+          _casinoCheckWalletVersion();
+        }
       }
       if (tab === "shop") {
         if (currentInitData) loadShop();
@@ -4851,12 +4856,36 @@
         ]);
         if (!wRes.ok) throw new Error();
         walletData = await wRes.json();
+        _casinoWalletVersion = walletData.wallet_version || null; // store for background version checks
         _shopInvalidateCache(); // fresh wallet fetch from another tab must bust the shop cache
         petData    = freshPet;
         casinoLoaded = true;
         renderCasino();
       } catch {
         el.innerHTML = `<div class="error"><span class="big-emoji">⚠️</span>Не удалось загрузить.<br>Попробуй обновить.</div>`;
+      }
+    }
+
+    /** Background wallet-version check for the casino tab.  Called after every
+     *  cache-hit render (casinoLoaded already true).  Hits the lightweight
+     *  /api/wallet/version endpoint and, if the hash differs from the one stored
+     *  during the last loadWallet() fill, silently re-fetches the full wallet so
+     *  server-side coin grants/adjustments are reflected within one round-trip. */
+    async function _casinoCheckWalletVersion() {
+      if (!_casinoWalletVersion) return; // nothing to compare against yet
+      try {
+        const opts = { method: "POST", headers: { "Content-Type": "application/json" },
+                       body: JSON.stringify({ initData: currentInitData }) };
+        const res = await fetch("/app/api/wallet/version", opts);
+        if (!res.ok) return;
+        const { wallet_version } = await res.json();
+        if (wallet_version && wallet_version !== _casinoWalletVersion) {
+          // Balance changed on the server — bust shop cache and reload wallet
+          _shopInvalidateCache();
+          await loadWallet();
+        }
+      } catch {
+        // Network hiccup — ignore; next tab-switch will refresh.
       }
     }
 

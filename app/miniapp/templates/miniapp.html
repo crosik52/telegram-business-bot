@@ -4837,6 +4837,7 @@
       }
       if (tab !== "giveaway") {
         if (_giveawayTimer) { clearInterval(_giveawayTimer); _giveawayTimer = null; }
+        _stopGiveawayLeaderboardRefresh();
       }
       if (tab === "casino") {
         if (!casinoLoaded && currentInitData) loadWallet();
@@ -9489,6 +9490,7 @@
     // ══════════════════════════════════════════════════════════════════════
     let giveawayData = null;
     let _giveawayTimer = null;
+    let _giveawayLeaderboardInterval = null;
 
     function _gvColor(name) {
       const COLORS = ["#6d28d9","#7c3aed","#db2777","#d97706","#059669","#2563eb","#dc2626","#9333ea"];
@@ -9530,8 +9532,117 @@
 
     let giveawaySubTab = "contest";
 
+    function _stopGiveawayLeaderboardRefresh() {
+      if (_giveawayLeaderboardInterval) {
+        clearInterval(_giveawayLeaderboardInterval);
+        _giveawayLeaderboardInterval = null;
+      }
+    }
+
+    async function _silentRefreshGiveawayLeaderboard() {
+      // Only refresh when the contest sub-tab is still visible
+      if (giveawaySubTab !== "contest" || !currentInitData) return;
+      try {
+        const res = await fetch("/app/api/giveaway", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({initData: currentInitData}),
+        });
+        if (!res.ok) return;
+        const fresh = await res.json();
+        if (!fresh || fresh.locked) return;
+        giveawayData = fresh;
+        // Update only the leaderboard portions in-place (no full re-render)
+        _updateGiveawayLeaderboardInPlace();
+      } catch (e) {
+        // Silent — do not show error on background refresh
+      }
+    }
+
+    function _updateGiveawayLeaderboardInPlace() {
+      if (!giveawayData || giveawayData.locked) return;
+      const d = giveawayData;
+      const topByRank = {};
+      for (const r of (d.top || [])) topByRank[r.rank] = r;
+
+      // Re-render podium
+      const podiumEl = document.getElementById("giveawayPodium");
+      if (podiumEl) {
+        function _podiumSlotFresh(rank) {
+          const u       = topByRank[rank];
+          const isEmpty = !u;
+          const avatarBg = isEmpty ? "" : `style="background:${_gvColor(u.display_name)}"`;
+          const avatarTxt = isEmpty ? "?" : _gvInitials(u.display_name);
+          const crownHtml = rank === 1 ? `<span class="giveaway-ps-crown">👑</span>` : "";
+          const name  = isEmpty ? "Свободно"        : _esc(u.display_name);
+          const count = isEmpty ? "Пригласи друзей" : `${u.referral_count} ${_gvRefWord(u.referral_count)}`;
+          const baseNum = rank === 1 ? "1" : rank === 2 ? "2" : "3";
+          return `<div class="giveaway-ps-slot rank-${rank}${isEmpty?" empty":""}">
+            <div class="giveaway-ps-avatar" ${avatarBg}>${crownHtml}${avatarTxt}</div>
+            <div class="giveaway-ps-name">${name}</div>
+            <div class="giveaway-ps-count">${count}</div>
+            <div class="giveaway-ps-base">${baseNum}</div>
+          </div>`;
+        }
+        podiumEl.innerHTML = _podiumSlotFresh(2) + _podiumSlotFresh(1) + _podiumSlotFresh(3);
+      }
+
+      // Re-render my-rank card
+      const meEl = document.getElementById("giveawayMeCard");
+      if (meEl) {
+        const me = d.me || {};
+        let meInner = "";
+        if (me.referral_count > 0 && me.rank) {
+          const inTop3 = me.rank <= 3;
+          if (inTop3) {
+            const lbl = me.rank===1 ? "🥇 Ты лидер!" : me.rank===2 ? "🥈 2-е место" : "🥉 3-е место";
+            meInner = `<div class="giveaway-me-card">
+              <div class="giveaway-me-rank-bubble">${me.rank}</div>
+              <div class="giveaway-me-body">
+                <div class="giveaway-me-title">${lbl} Ты в призах!</div>
+                <div class="giveaway-me-hint">${me.referral_count} ${_gvRefWord(me.referral_count)} · держи позицию</div>
+              </div>
+            </div>`;
+          } else {
+            const gap = me.next_threshold != null ? (me.next_threshold - me.referral_count + 1) : null;
+            const gapText = gap != null
+              ? `Ещё ${gap} ${_gvRefWord(gap)} до места выше`
+              : `${me.total_participants ? me.total_participants + " участников" : ""}`;
+            const t3 = topByRank[3]?.referral_count ?? topByRank[2]?.referral_count ?? topByRank[1]?.referral_count ?? 0;
+            const pct = t3 ? Math.min(100, Math.round(me.referral_count / t3 * 100)) : 0;
+            meInner = `<div class="giveaway-me-card">
+              <div class="giveaway-me-rank-bubble">${me.rank}</div>
+              <div class="giveaway-me-body">
+                <div class="giveaway-me-title">${me.rank}-е место</div>
+                <div class="giveaway-me-hint">${gapText}</div>
+                ${t3 ? `<div class="giveaway-me-prog-wrap">
+                  <div class="giveaway-me-prog-track"><div class="giveaway-me-prog-fill" style="width:${pct}%"></div></div>
+                  <div class="giveaway-me-prog-label"><span>${me.referral_count} рефер.</span><span>${t3} до топ-3</span></div>
+                </div>` : ""}
+              </div>
+            </div>`;
+          }
+        } else if (me.referral_count === 0) {
+          meInner = `<div class="giveaway-me-card">
+            <div class="giveaway-me-rank-bubble" style="font-size:20px">🚀</div>
+            <div class="giveaway-me-body">
+              <div class="giveaway-me-title">Вы ещё не участвуете</div>
+              <div class="giveaway-me-hint">Пригласите первого друга и попадите в таблицу</div>
+            </div>
+          </div>`;
+        }
+        meEl.innerHTML = meInner;
+      }
+    }
+
+    function _startGiveawayLeaderboardRefresh() {
+      _stopGiveawayLeaderboardRefresh();
+      _giveawayLeaderboardInterval = setInterval(_silentRefreshGiveawayLeaderboard, 60_000);
+    }
+
     function switchGiveawaySubTab(tab) {
       giveawaySubTab = tab;
+      if (tab !== "contest") _stopGiveawayLeaderboardRefresh();
       renderGiveawayTab();
       if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
     }
@@ -9649,7 +9760,7 @@
           <div class="giveaway-ps-base">${baseNum}</div>
         </div>`;
       }
-      const podiumHtml = `<div class="giveaway-podium-stage">
+      const podiumHtml = `<div id="giveawayPodium" class="giveaway-podium-stage">
         ${_podiumSlot(2)}${_podiumSlot(1)}${_podiumSlot(3)}
       </div>`;
 
@@ -9714,11 +9825,14 @@
           ${prizesHtml}
           <div class="giveaway-divider">🏆 Таблица лидеров</div>
           ${podiumHtml}
-          ${meHtml}
+          <div id="giveawayMeCard">${meHtml}</div>
           <button class="giveaway-invite-btn" onclick="switchGiveawaySubTab('referrals')">🔗 Пригласить друзей</button>
         </div>`;
 
       if (d.deadline) _startGiveawayCountdown(d.deadline);
+
+      // Start live leaderboard auto-refresh every 60 s
+      _startGiveawayLeaderboardRefresh();
 
       // Load TGS/Lottie prize animations
       _destroyGvLottie();

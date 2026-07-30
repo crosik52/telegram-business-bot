@@ -1,6 +1,6 @@
 """FastAPI application entrypoint.
 
-Wires together the Telegram webhook, health check, and admin dashboard into
+Wires together the Telegram webhook, health check, and mini-app into
 a single ASGI app. Runs entirely in webhook mode — polling is never used.
 """
 
@@ -11,18 +11,8 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
-from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import get_settings
-from app.dashboard.routes import auth as dashboard_auth
-from app.dashboard.routes import channels as dashboard_channels
-from app.dashboard.routes import export as dashboard_export
-from app.dashboard.routes import home as dashboard_home
-from app.dashboard.routes import messages as dashboard_messages
-from app.dashboard.routes import search as dashboard_search
-from app.dashboard.routes import stats as dashboard_stats
-from app.dashboard.routes import subscriptions as dashboard_subscriptions
 from app.database.base import Base
 from app.database.session import dispose_engine, get_engine
 from app.logging_config import configure_logging, get_logger
@@ -388,28 +378,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Telegram Business Bot", lifespan=lifespan)
 
-app.add_middleware(
-    SessionMiddleware,
-    secret_key=settings.session_secret,
-    max_age=settings.session_max_age_seconds,
-    same_site="lax",
-)
 app.add_middleware(RequestLoggingMiddleware)
-
-app.mount(
-    "/static", StaticFiles(directory="app/dashboard/static"), name="static"
-)
 
 app.include_router(health.router)
 app.include_router(mockup_proxy.router)
 app.include_router(audio_router.router)
 app.include_router(webhook.router)
-app.include_router(dashboard_auth.router)
-app.include_router(dashboard_home.router)
-app.include_router(dashboard_messages.router)
-app.include_router(dashboard_search.router)
-app.include_router(dashboard_stats.router)
-app.include_router(dashboard_export.router)
-app.include_router(dashboard_channels.router)
-app.include_router(dashboard_subscriptions.router)
 app.include_router(miniapp_routes.router)

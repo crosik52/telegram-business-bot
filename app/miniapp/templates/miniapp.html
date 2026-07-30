@@ -7958,7 +7958,16 @@
       // Double XP boost
       document.getElementById("buyDxpBtn")?.addEventListener("click", async () => {
         const btn = document.getElementById("buyDxpBtn");
+        const cost = prices.double_xp ?? 200;
         btn.disabled = true; btn.textContent = "⏳";
+        // Optimistic deduction: track the actual deducted amount (may be < cost at low
+        // balance due to clamping) so the revert is exactly symmetric.
+        const _balBefore = walletData.balance ?? 0;
+        const _actualDelta = Math.min(cost, _balBefore); // what was truly subtracted
+        walletData.balance = _balBefore - _actualDelta;
+        updateBalanceDisplay(walletData.balance);
+        let _settled = false;
+        const _revert = () => { if (!_settled) { _settled = true; walletData.balance += _actualDelta; updateBalanceDisplay(walletData.balance); } };
         try {
           const res = await fetch("/app/api/shop/boost", {
             method: "POST", headers: { "Content-Type": "application/json" },
@@ -7966,21 +7975,32 @@
           });
           if (!res.ok) {
             const e = await res.json().catch(() => ({}));
+            _revert();
             throw new Error({ insufficient_coins: "Недостаточно монет 🪙" }[e.detail] || "Ошибка");
           }
           const data = await res.json();
           if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+          _settled = true; // success — reconcile with server truth, don't revert
           updateBalanceDisplay(data.new_balance);
           toastMessage("⚡ Двойной XP активирован на 24 часа!");
           _shopInvalidateCache();
           await loadShop(true);
-        } catch (e) { btn.disabled = false; btn.textContent = "Купить"; toastMessage(e.message); }
+        } catch (e) { _revert(); btn.disabled = false; btn.textContent = "Купить"; toastMessage(e.message); }
       });
 
       // Pin chat
       document.getElementById("pinChatBtn")?.addEventListener("click", () => {
         if (!chats.length) return;
         openChatPickerModal("📌 Закрепить чат", chats, async (chatId, chatName) => {
+          const cost = prices.pin_chat ?? 75;
+          // Optimistic deduction: track the actual deducted amount (may be < cost at low
+          // balance due to clamping) so the revert is exactly symmetric.
+          const _balBefore = walletData.balance ?? 0;
+          const _actualDelta = Math.min(cost, _balBefore);
+          walletData.balance = _balBefore - _actualDelta;
+          updateBalanceDisplay(walletData.balance);
+          let _settled = false;
+          const _revert = () => { if (!_settled) { _settled = true; walletData.balance += _actualDelta; updateBalanceDisplay(walletData.balance); } };
           try {
             const res = await fetch("/app/api/shop/pin-chat", {
               method: "POST", headers: { "Content-Type": "application/json" },
@@ -7988,14 +8008,16 @@
             });
             if (!res.ok) {
               const e = await res.json().catch(() => ({}));
+              _revert();
               throw new Error({ insufficient_coins: "Недостаточно монет 🪙" }[e.detail] || "Ошибка");
             }
             const data = await res.json();
+            _settled = true; // success — reconcile with server truth, don't revert
             if (data.new_balance != null) updateBalanceDisplay(data.new_balance);
             toastMessage(`📌 Чат с ${chatName} закреплён!`);
             _shopInvalidateCache();
             await loadShop(true);
-          } catch (e) { toastMessage(e.message); }
+          } catch (e) { _revert(); toastMessage(e.message); }
         });
       });
 
@@ -8005,6 +8027,25 @@
           const theme   = btn.dataset.theme;
           const isOwned = btn.dataset.owned === "true";
           btn.disabled = true; btn.textContent = "⏳";
+          // Optimistic deduction only for purchases (not activating an already-owned theme).
+          // Subtract only this request's delta so concurrent requests don't clobber each
+          // other when one fails and one succeeds.
+          const themeCost = isOwned ? 0 : ((prices.theme_prices || {})[theme] ?? (THEMES.find(t => t.id === theme)?.price ?? 100));
+          // Optimistic deduction only for purchases (not activating an already-owned theme).
+          // Track the actual deducted amount (may be < cost at low balance) so the revert is symmetric.
+          let _actualDelta = 0;
+          if (!isOwned && themeCost > 0) {
+            const _balBefore = walletData.balance ?? 0;
+            _actualDelta = Math.min(themeCost, _balBefore);
+            walletData.balance = _balBefore - _actualDelta;
+            updateBalanceDisplay(walletData.balance);
+          }
+          let _settled = false;
+          const _revert = () => {
+            if (!_settled && _actualDelta > 0) {
+              _settled = true; walletData.balance += _actualDelta; updateBalanceDisplay(walletData.balance);
+            }
+          };
           try {
             const endpoint = isOwned ? "/app/api/shop/theme/activate" : "/app/api/shop/theme";
             const res = await fetch(endpoint, {
@@ -8013,10 +8054,12 @@
             });
             if (!res.ok) {
               const e = await res.json().catch(() => ({}));
+              _revert();
               throw new Error({ insufficient_coins: "Недостаточно монет 🪙", not_owned: "Тема не куплена" }[e.detail] || "Ошибка");
             }
             const data = await res.json();
             if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+            _settled = true; // success — reconcile with server truth, don't revert
             if (data.new_balance != null) updateBalanceDisplay(data.new_balance);
             // Update in-memory shopData immediately so openMyCard() gets the
             // new theme even if the user opens the card before loadShop() returns.
@@ -8026,6 +8069,7 @@
             _shopInvalidateCache();
             await loadShop(true);
           } catch (e) {
+            _revert();
             btn.disabled = false;
             btn.textContent = isOwned ? "Применить" : btn.textContent;
             toastMessage(e.message);
@@ -8037,7 +8081,16 @@
       document.querySelectorAll(".frame-btn[data-frame]").forEach(btn => {
         btn.addEventListener("click", async () => {
           const frame = btn.dataset.frame;
+          const cost = prices.frame ?? 150;
           btn.disabled = true;
+          // Optimistic deduction: track the actual deducted amount (may be < cost at low
+          // balance due to clamping) so the revert is exactly symmetric.
+          const _balBefore = walletData.balance ?? 0;
+          const _actualDelta = Math.min(cost, _balBefore);
+          walletData.balance = _balBefore - _actualDelta;
+          updateBalanceDisplay(walletData.balance);
+          let _settled = false;
+          const _revert = () => { if (!_settled) { _settled = true; walletData.balance += _actualDelta; updateBalanceDisplay(walletData.balance); } };
           try {
             const res = await fetch("/app/api/shop/frame", {
               method: "POST", headers: { "Content-Type": "application/json" },
@@ -8045,15 +8098,17 @@
             });
             if (!res.ok) {
               const e = await res.json().catch(() => ({}));
+              _revert();
               throw new Error({ insufficient_coins: "Недостаточно монет 🪙" }[e.detail] || "Ошибка");
             }
             const data = await res.json();
             if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+            _settled = true; // success — reconcile with server truth, don't revert
             updateBalanceDisplay(data.new_balance);
             toastMessage(`🖼 Рамка «${FRAMES.find(f => f.id === frame)?.label}» применена!`);
             _shopInvalidateCache();
             await loadShop(true);
-          } catch (e) { btn.disabled = false; toastMessage(e.message); }
+          } catch (e) { _revert(); btn.disabled = false; toastMessage(e.message); }
         });
       });
 
@@ -8061,6 +8116,15 @@
       document.getElementById("giftCoinsBtn")?.addEventListener("click", () => {
         if (!chats.length) return;
         openChatPickerModal("🎁 Подарить монеты", chats, async (chatId, chatName) => {
+          const cost = prices.gift ?? 30;
+          // Optimistic deduction: track the actual deducted amount (may be < cost at low
+          // balance due to clamping) so the revert is exactly symmetric.
+          const _balBefore = walletData.balance ?? 0;
+          const _actualDelta = Math.min(cost, _balBefore);
+          walletData.balance = _balBefore - _actualDelta;
+          updateBalanceDisplay(walletData.balance);
+          let _settled = false;
+          const _revert = () => { if (!_settled) { _settled = true; walletData.balance += _actualDelta; updateBalanceDisplay(walletData.balance); } };
           try {
             const res = await fetch("/app/api/shop/gift", {
               method: "POST", headers: { "Content-Type": "application/json" },
@@ -8068,15 +8132,17 @@
             });
             if (!res.ok) {
               const e = await res.json().catch(() => ({}));
+              _revert();
               throw new Error({ insufficient_coins: "Недостаточно монет 🪙", cannot_gift_self: "Нельзя подарить себе!" }[e.detail] || "Ошибка");
             }
             const data = await res.json();
             if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+            _settled = true; // success — reconcile with server truth, don't revert
             updateBalanceDisplay(data.new_balance);
             toastMessage(`🎁 Подарок отправлен в чат с ${chatName}! Получит ${prices.gift_amount ?? 50} 🪙`);
             _shopInvalidateCache();
             await loadShop(true);
-          } catch (e) { toastMessage(e.message); }
+          } catch (e) { _revert(); toastMessage(e.message); }
         });
       });
     }

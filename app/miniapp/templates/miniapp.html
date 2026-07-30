@@ -7484,6 +7484,9 @@
         ? `<div class="lb-my-rank-note">Твоё место: #${myRank}</div>` : "";
 
       return `
+        <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:4px">
+          <span id="questCacheAge" style="font-size:11px;color:var(--hint);opacity:0.75"></span>
+        </div>
         <div class="section-title" style="margin-top:8px">${_si("ico-coin")} Рейтинг монет</div>
         ${rows || `<div class="empty" style="padding:20px 0"><span class="big-emoji">🪙</span>Пока никто не зарабатывал монеты.</div>`}
         ${myNote}`;

@@ -2926,110 +2926,153 @@
   .interact-skeleton { padding: 16px 0; display: flex; flex-direction: column; gap: 12px; animation: pulse 1.2s ease-in-out infinite; }
   .interact-skel-card { height: 200px; background: rgba(224,54,90,0.07); border-radius: 20px; margin: 0 0 2px; }
   /* ── Giveaway tab ────────────────────────────────────────────────────────── */
-  .giveaway-wrap { padding: 12px 0 80px; display: flex; flex-direction: column; gap: 12px; }
-  .giveaway-banner {
-    margin: 0 12px; border-radius: 22px; overflow: hidden;
-    background: linear-gradient(135deg, #1a0533 0%, #3b0764 45%, #6d28d9 100%);
-    box-shadow: 0 4px 24px rgba(109,40,217,0.35);
+  .giveaway-wrap { padding: 0 0 24px; display: flex; flex-direction: column; }
+
+  /* Hero */
+  .giveaway-hero {
+    position: relative; overflow: hidden;
+    background: linear-gradient(160deg, #0d0121 0%, #1e0445 40%, #4c1d95 75%, #7c3aed 100%);
+    padding: 28px 20px 0;
   }
-  .giveaway-banner-top {
-    padding: 20px 20px 14px; text-align: center;
+  .giveaway-hero::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse 80% 55% at 50% -10%, rgba(139,92,246,0.5) 0%, transparent 65%);
   }
-  .giveaway-banner-emoji { font-size: 44px; line-height: 1; margin-bottom: 8px; }
-  .giveaway-banner-title {
-    font-size: 20px; font-weight: 900; color: #fff; letter-spacing: -0.5px;
-    text-shadow: 0 2px 12px rgba(0,0,0,0.4);
+  .giveaway-hero-body { position: relative; z-index: 1; text-align: center; }
+  .giveaway-hero-icon {
+    font-size: 56px; line-height: 1; margin-bottom: 10px; display: block;
+    filter: drop-shadow(0 4px 18px rgba(167,139,250,0.75));
+    animation: gvIconBob 2.8s ease-in-out infinite;
   }
-  .giveaway-banner-sub {
-    font-size: 12.5px; color: rgba(255,255,255,0.72); margin-top: 5px; line-height: 1.5;
+  @keyframes gvIconBob { 0%,100%{transform:translateY(0) scale(1)} 50%{transform:translateY(-6px) scale(1.05)} }
+  .giveaway-hero-title {
+    font-size: 26px; font-weight: 900; color: #fff; letter-spacing: -0.8px; line-height: 1.1;
+    text-shadow: 0 2px 20px rgba(139,92,246,0.55);
   }
-  .giveaway-countdown {
-    display: flex; gap: 8px; justify-content: center; padding: 14px 20px;
-    border-top: 1px solid rgba(255,255,255,0.10);
+  .giveaway-hero-sub {
+    font-size: 12.5px; color: rgba(255,255,255,0.60); margin: 8px auto 0;
+    line-height: 1.55; max-width: 270px;
+  }
+
+  /* Countdown */
+  .giveaway-countdown { position: relative; z-index: 1; }
+  .giveaway-cd-wrap {
+    display: flex; gap: 8px; justify-content: center;
+    padding: 18px 20px 22px;
   }
   .giveaway-cd-cell {
-    flex: 1; text-align: center; background: rgba(0,0,0,0.25);
-    border-radius: 12px; padding: 8px 4px;
+    flex: 1; text-align: center;
+    background: rgba(0,0,0,0.32); border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 14px; padding: 10px 4px; backdrop-filter: blur(6px);
   }
-  .giveaway-cd-val { font-size: 22px; font-weight: 900; color: #fff; line-height: 1; }
-  .giveaway-cd-lbl { font-size: 9px; color: rgba(255,255,255,0.55); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 3px; }
-  .giveaway-cd-finished { text-align: center; font-size: 15px; font-weight: 700; color: #c4b5fd; padding: 14px 20px; }
-  /* Top-3 podium */
-  .giveaway-section-title {
-    font-size: 13px; font-weight: 700; color: var(--hint);
+  .giveaway-cd-val  { font-size: 26px; font-weight: 900; color: #fff; line-height: 1; letter-spacing: -1px; }
+  .giveaway-cd-lbl  { font-size: 9px; color: rgba(255,255,255,0.48); text-transform: uppercase; letter-spacing: 0.8px; margin-top: 4px; }
+  .giveaway-cd-finished { text-align: center; font-size: 15px; font-weight: 700; color: #c4b5fd; padding: 18px 20px 22px; }
+
+  /* Prize cards row */
+  .giveaway-prizes { display: flex; gap: 8px; padding: 18px 14px 0; }
+  .giveaway-prize-card {
+    flex: 1; border-radius: 18px; padding: 12px 8px 10px;
+    text-align: center; position: relative; overflow: hidden;
+    border: 1.5px solid transparent; background: var(--secondary-bg);
+    box-shadow: var(--shadow); animation: riseIn 0.35s ease backwards;
+  }
+  .giveaway-prize-card.p1 { border-color: rgba(255,215,0,0.38); background: linear-gradient(160deg, rgba(255,215,0,0.10) 0%, var(--secondary-bg) 55%); animation-delay: 0.05s; }
+  .giveaway-prize-card.p2 { border-color: rgba(192,192,192,0.32); background: linear-gradient(160deg, rgba(192,192,192,0.09) 0%, var(--secondary-bg) 55%); animation-delay: 0.10s; }
+  .giveaway-prize-card.p3 { border-color: rgba(205,127,50,0.30); background: linear-gradient(160deg, rgba(205,127,50,0.09) 0%, var(--secondary-bg) 55%); animation-delay: 0.15s; }
+  .giveaway-prize-medal { font-size: 20px; display: block; margin-bottom: 4px; }
+  .giveaway-prize-img   { width: 52px; height: 52px; border-radius: 12px; object-fit: cover; margin: 0 auto 4px; display: block; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+  .giveaway-prize-lottie { width: 52px; height: 52px; border-radius: 12px; overflow: hidden; margin: 0 auto 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+  .giveaway-prize-name  { font-size: 10.5px; font-weight: 700; line-height: 1.3; word-break: break-word; }
+  .giveaway-prize-place { font-size: 10px; color: var(--hint); margin-top: 2px; }
+  .giveaway-prize-card.p1 .giveaway-prize-name { color: #c89a0a; }
+  .giveaway-prize-card.p2 .giveaway-prize-name { color: #9ca3af; }
+  .giveaway-prize-card.p3 .giveaway-prize-name { color: #a05a20; }
+  .giveaway-prize-empty { font-size: 26px; margin: 10px 0 6px; display: block; opacity: 0.28; }
+
+  /* Section divider */
+  .giveaway-divider {
+    font-size: 11px; font-weight: 700; color: var(--hint);
     text-transform: uppercase; letter-spacing: 0.6px;
-    padding: 0 18px; margin-top: 4px;
+    padding: 22px 18px 10px;
+    display: flex; align-items: center; gap: 8px;
   }
-  .giveaway-podium { display: flex; flex-direction: column; gap: 8px; padding: 0 12px; }
-  .giveaway-podium-card {
-    display: flex; align-items: center; gap: 12px;
-    background: var(--secondary-bg); border-radius: 16px;
-    padding: 12px 14px; box-shadow: var(--shadow);
-    border: 1.5px solid transparent;
+  .giveaway-divider::after { content: ""; flex: 1; height: 1px; background: rgba(120,120,128,0.12); }
+
+  /* Visual podium stage */
+  .giveaway-podium-stage {
+    display: flex; align-items: flex-end; justify-content: center;
+    gap: 8px; padding: 0 14px;
   }
-  .giveaway-podium-card.rank-1 { border-color: rgba(255,215,0,0.4); }
-  .giveaway-podium-card.rank-2 { border-color: rgba(192,192,192,0.35); }
-  .giveaway-podium-card.rank-3 { border-color: rgba(205,127,50,0.35); }
-  .giveaway-rank-badge { font-size: 26px; width: 34px; text-align: center; flex-shrink: 0; }
-  .giveaway-podium-avatar {
-    width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+  .giveaway-ps-slot { display: flex; flex-direction: column; align-items: center; flex: 1; max-width: 115px; }
+  .giveaway-ps-avatar {
+    position: relative;
+    width: 52px; height: 52px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-size: 16px; font-weight: 800; color: #fff;
+    font-size: 18px; font-weight: 900; color: #fff;
+    margin-bottom: 8px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.22);
+    animation: riseIn 0.4s ease backwards;
   }
-  .giveaway-podium-body { flex: 1; min-width: 0; }
-  .giveaway-podium-name { font-size: 14px; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .giveaway-podium-count { font-size: 12px; color: var(--hint); margin-top: 2px; }
-  .giveaway-prize-tag {
-    font-size: 11px; font-weight: 700; padding: 4px 10px;
-    border-radius: 99px; white-space: nowrap; flex-shrink: 0;
-    background: rgba(109,40,217,0.15); color: #8b5cf6;
+  .giveaway-ps-slot.rank-1 .giveaway-ps-avatar { width: 66px; height: 66px; font-size: 22px; box-shadow: 0 4px 22px rgba(255,215,0,0.30), 0 4px 14px rgba(0,0,0,0.2); animation-delay: 0.04s; }
+  .giveaway-ps-slot.rank-2 .giveaway-ps-avatar { animation-delay: 0.10s; }
+  .giveaway-ps-slot.rank-3 .giveaway-ps-avatar { animation-delay: 0.16s; }
+  .giveaway-ps-crown { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); font-size: 18px; line-height: 1; }
+  .giveaway-ps-name  { font-size: 11px; font-weight: 700; color: var(--text); text-align: center; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 3px; }
+  .giveaway-ps-count { font-size: 10px; color: var(--hint); margin-bottom: 8px; text-align: center; }
+  .giveaway-ps-base {
+    width: 100%; border-radius: 12px 12px 0 0;
+    display: flex; align-items: flex-start; justify-content: center;
+    padding-top: 10px;
+    font-size: 22px; font-weight: 900; color: rgba(255,255,255,0.40);
   }
-  .giveaway-prize-tag.g1 { background: rgba(255,215,0,0.15); color: #d4a017; }
-  .giveaway-prize-tag.g2 { background: rgba(192,192,192,0.18); color: #9ca3af; }
-  .giveaway-prize-tag.g3 { background: rgba(205,127,50,0.15); color: #b45309; }
-  /* NFT image / lottie prize */
-  .giveaway-prize-nft {
-    display: flex; flex-direction: column; align-items: center; gap: 3px;
-    flex-shrink: 0;
+  .giveaway-ps-slot.rank-1 .giveaway-ps-base { height: 80px; background: linear-gradient(to bottom, rgba(255,215,0,0.32), rgba(255,215,0,0.08)); border: 1px solid rgba(255,215,0,0.38); border-bottom: none; }
+  .giveaway-ps-slot.rank-2 .giveaway-ps-base { height: 58px; background: linear-gradient(to bottom, rgba(192,192,192,0.26), rgba(192,192,192,0.07)); border: 1px solid rgba(192,192,192,0.30); border-bottom: none; }
+  .giveaway-ps-slot.rank-3 .giveaway-ps-base { height: 42px; background: linear-gradient(to bottom, rgba(205,127,50,0.26), rgba(205,127,50,0.07)); border: 1px solid rgba(205,127,50,0.28); border-bottom: none; }
+  .giveaway-ps-slot.empty .giveaway-ps-avatar { background: rgba(120,120,128,0.13) !important; color: rgba(120,120,128,0.38); box-shadow: none; }
+  .giveaway-ps-slot.empty .giveaway-ps-name  { color: rgba(120,120,128,0.45); font-weight: 500; }
+  .giveaway-ps-slot.empty .giveaway-ps-count { opacity: 0.5; }
+
+  /* My rank card */
+  .giveaway-me-card {
+    margin: 14px 14px 0;
+    background: var(--secondary-bg); border-radius: 18px;
+    padding: 14px 16px; box-shadow: var(--shadow);
+    display: flex; align-items: center; gap: 12px;
+    border: 1.5px solid rgba(109,40,217,0.22);
+    animation: riseIn 0.35s 0.20s ease backwards;
   }
-  .giveaway-nft-img {
-    width: 62px; height: 62px; border-radius: 14px; object-fit: cover;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.25);
-  }
-  .giveaway-nft-lottie {
-    width: 66px; height: 66px; border-radius: 14px; overflow: hidden;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.25);
-    flex-shrink: 0;
-  }
-  .giveaway-podium-card.rank-1 .giveaway-nft-img,
-  .giveaway-podium-card.rank-1 .giveaway-nft-lottie { box-shadow: 0 0 0 2px rgba(255,215,0,0.55), 0 3px 12px rgba(0,0,0,0.25); }
-  .giveaway-podium-card.rank-2 .giveaway-nft-img,
-  .giveaway-podium-card.rank-2 .giveaway-nft-lottie { box-shadow: 0 0 0 2px rgba(192,192,192,0.5), 0 3px 12px rgba(0,0,0,0.25); }
-  .giveaway-podium-card.rank-3 .giveaway-nft-img,
-  .giveaway-podium-card.rank-3 .giveaway-nft-lottie { box-shadow: 0 0 0 2px rgba(205,127,50,0.5), 0 3px 12px rgba(0,0,0,0.25); }
-  .giveaway-nft-label {
-    font-size: 9px; font-weight: 700; color: var(--hint);
-    text-align: center; max-width: 70px;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .giveaway-empty { text-align: center; padding: 28px 16px; color: var(--hint); font-size: 13px; }
-  .giveaway-invite-btn {
-    margin: 0 12px; display: block; border: none; border-radius: 16px;
-    padding: 14px 0; font-size: 15px; font-weight: 800; cursor: pointer;
+  .giveaway-me-rank-bubble {
+    width: 46px; height: 46px; border-radius: 13px; flex-shrink: 0;
     background: linear-gradient(135deg, #6d28d9, #9333ea);
-    color: #fff; box-shadow: 0 3px 14px rgba(109,40,217,0.4);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 900; color: #fff;
+    box-shadow: 0 3px 12px rgba(109,40,217,0.35);
+  }
+  .giveaway-me-body  { flex: 1; min-width: 0; }
+  .giveaway-me-title { font-size: 13.5px; font-weight: 800; }
+  .giveaway-me-hint  { font-size: 11.5px; color: var(--hint); margin-top: 2px; line-height: 1.4; }
+  .giveaway-me-prog-wrap  { margin-top: 9px; }
+  .giveaway-me-prog-track { height: 5px; border-radius: 3px; background: rgba(120,120,128,0.13); overflow: hidden; }
+  .giveaway-me-prog-fill  { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #6d28d9, #9333ea); transition: width 1s cubic-bezier(0.4,0,0.2,1); }
+  .giveaway-me-prog-label { display: flex; justify-content: space-between; font-size: 10px; color: var(--hint); margin-top: 4px; }
+
+  /* Invite button */
+  .giveaway-invite-btn {
+    margin: 16px 14px 0; display: block; border: none; border-radius: 16px;
+    padding: 15px 0; font-size: 15px; font-weight: 800; cursor: pointer;
+    background: linear-gradient(135deg, #6d28d9 0%, #9333ea 100%);
+    color: #fff; box-shadow: 0 4px 20px rgba(109,40,217,0.42);
     touch-action: manipulation; transition: transform 0.12s, opacity 0.12s;
-    text-align: center;
+    text-align: center; width: calc(100% - 28px);
   }
   .giveaway-invite-btn:active { transform: scale(0.97); opacity: 0.88; }
-  .giveaway-locked {
-    margin: 0 12px; border-radius: 22px; padding: 32px 24px;
-    background: var(--secondary-bg); text-align: center;
-    box-shadow: var(--shadow);
-  }
-  .giveaway-locked-emoji { font-size: 48px; margin-bottom: 12px; }
-  .giveaway-locked-title { font-size: 18px; font-weight: 800; color: var(--text); margin-bottom: 6px; }
-  .giveaway-locked-sub { font-size: 13px; color: var(--hint); line-height: 1.6; }
+
+  /* Locked */
+  .giveaway-locked { margin: 20px 14px; border-radius: 22px; padding: 40px 24px; background: var(--secondary-bg); text-align: center; box-shadow: var(--shadow); }
+  .giveaway-locked-emoji { font-size: 52px; margin-bottom: 14px; display: block; }
+  .giveaway-locked-title { font-size: 20px; font-weight: 900; margin-bottom: 8px; }
+  .giveaway-locked-sub   { font-size: 13px; color: var(--hint); line-height: 1.65; }
 </style>
 </head>
 <body>
@@ -9380,6 +9423,9 @@
       return (name||"??").replace(/[^А-ЯA-ZЁё]/gi,"").slice(0,2).toUpperCase()
           || (name||"??").slice(0,2).toUpperCase();
     }
+    function _gvRefWord(n) {
+      return n===1 ? "реферал" : n<5 ? "реферала" : "рефералов";
+    }
 
     function _startGiveawayCountdown(deadline) {
       if (_giveawayTimer) { clearInterval(_giveawayTimer); _giveawayTimer = null; }
@@ -9391,15 +9437,16 @@
           el.innerHTML = `<div class="giveaway-cd-finished">🏆 Розыгрыш завершён!</div>`;
           clearInterval(_giveawayTimer); _giveawayTimer = null; return;
         }
-        const d = Math.floor(diff / 86400000);
-        const h = Math.floor((diff % 86400000) / 3600000);
-        const m = Math.floor((diff % 3600000) / 60000);
-        const s = Math.floor((diff % 60000) / 1000);
-        el.innerHTML = `
-          <div class="giveaway-cd-cell"><div class="giveaway-cd-val">${d}</div><div class="giveaway-cd-lbl">дней</div></div>
-          <div class="giveaway-cd-cell"><div class="giveaway-cd-val">${String(h).padStart(2,"0")}</div><div class="giveaway-cd-lbl">часов</div></div>
-          <div class="giveaway-cd-cell"><div class="giveaway-cd-val">${String(m).padStart(2,"0")}</div><div class="giveaway-cd-lbl">минут</div></div>
-          <div class="giveaway-cd-cell"><div class="giveaway-cd-val">${String(s).padStart(2,"0")}</div><div class="giveaway-cd-lbl">секунд</div></div>`;
+        const dv = Math.floor(diff / 86400000);
+        const hv = Math.floor((diff % 86400000) / 3600000);
+        const mv = Math.floor((diff % 3600000) / 60000);
+        const sv = Math.floor((diff % 60000) / 1000);
+        el.innerHTML = `<div class="giveaway-cd-wrap">
+          <div class="giveaway-cd-cell"><div class="giveaway-cd-val">${dv}</div><div class="giveaway-cd-lbl">дней</div></div>
+          <div class="giveaway-cd-cell"><div class="giveaway-cd-val">${String(hv).padStart(2,"0")}</div><div class="giveaway-cd-lbl">часов</div></div>
+          <div class="giveaway-cd-cell"><div class="giveaway-cd-val">${String(mv).padStart(2,"0")}</div><div class="giveaway-cd-lbl">минут</div></div>
+          <div class="giveaway-cd-cell"><div class="giveaway-cd-val">${String(sv).padStart(2,"0")}</div><div class="giveaway-cd-lbl">секунд</div></div>
+        </div>`;
       }
       tick();
       _giveawayTimer = setInterval(tick, 1000);
@@ -9447,7 +9494,7 @@
       const el = document.getElementById("giveawayContent");
       if (!giveawayData) return;
 
-      // Referrals sub-tab
+      // ── Referrals sub-tab ──────────────────────────────────────────────
       if (giveawaySubTab === "referrals") {
         const refHtml = referralLoaded
           ? (renderReferralSection() || `<div class="empty" style="padding:32px 16px;text-align:center"><span class="big-emoji">🔗</span><br>Реферальная программа недоступна.</div>`)
@@ -9457,11 +9504,12 @@
         return;
       }
 
+      // ── Locked state ───────────────────────────────────────────────────
       if (giveawayData.locked) {
         el.innerHTML = _giveawayTabBar() + `
           <div class="giveaway-wrap">
             <div class="giveaway-locked">
-              <div class="giveaway-locked-emoji">🔒</div>
+              <span class="giveaway-locked-emoji">🔒</span>
               <div class="giveaway-locked-title">Скоро!</div>
               <div class="giveaway-locked-sub">Розыгрыш ещё не открыт.<br>Следи за новостями!</div>
             </div>
@@ -9470,74 +9518,133 @@
       }
 
       const d = giveawayData;
-      const MEDALS = ["🥇","🥈","🥉"];
-      const PRIZE_CLS = ["g1","g2","g3"];
-      const prizes = [d.prize_1, d.prize_2, d.prize_3];
-      const desc = d.description || "Пригласи больше друзей и займи место в топе — победители получат NFT-подарки в Telegram!";
+      const prizes    = [d.prize_1,       d.prize_2,       d.prize_3];
+      const prizeImgs = [d.prize_1_image, d.prize_2_image, d.prize_3_image];
+      const MEDALS    = ["🥇","🥈","🥉"];
+      const PCLS      = ["p1","p2","p3"];
+      const PLACES    = ["1-е место","2-е место","3-е место"];
+      const desc = d.description || "Пригласи больше друзей — топ-3 получат призы!";
 
-      const prizeImages = [d.prize_1_image, d.prize_2_image, d.prize_3_image];
+      // Build rank→user lookup from API top array
+      const topByRank = {};
+      for (const r of (d.top || [])) topByRank[r.rank] = r;
 
-      function _prizeHtml(prizeText, prizeImg, cls, prizeIdx) {
-        if (!prizeText && !prizeImg) return "";
-        if (prizeImg && prizeImg.endsWith(".tgs")) return `
-          <div class="giveaway-prize-nft ${cls}">
-            <div id="gvLottie_${prizeIdx}" class="giveaway-nft-lottie"></div>
-            ${prizeText ? `<div class="giveaway-nft-label">${_esc(prizeText)}</div>` : ""}
-          </div>`;
-        if (prizeImg) return `
-          <div class="giveaway-prize-nft ${cls}">
-            <img src="${_esc(prizeImg)}" class="giveaway-nft-img" alt="${_esc(prizeText||"NFT")}" onerror="this.parentNode.innerHTML='<span class=\\'giveaway-prize-tag ${cls}\\'>🎁 ${_esc(prizeText||"NFT")}</span>'">
-            ${prizeText ? `<div class="giveaway-nft-label">${_esc(prizeText)}</div>` : ""}
-          </div>`;
-        return `<div class="giveaway-prize-tag ${cls}">🎁 ${_esc(prizeText)}</div>`;
+      // ── Prize showcase ─────────────────────────────────────────────────
+      function _prizeCard(rank) {
+        const i   = rank - 1;
+        const txt = prizes[i];
+        const img = prizeImgs[i];
+        let mediaHtml = "";
+        if (img && img.endsWith(".tgs")) {
+          mediaHtml = `<div id="gvPrizeLottie_${rank}" class="giveaway-prize-lottie"></div>`;
+        } else if (img) {
+          mediaHtml = `<img src="${_esc(img)}" class="giveaway-prize-img" alt="" onerror="this.style.display='none'">`;
+        } else {
+          mediaHtml = `<span class="giveaway-prize-empty">${txt ? "🎁" : "❓"}</span>`;
+        }
+        return `<div class="giveaway-prize-card ${PCLS[i]}">
+          <span class="giveaway-prize-medal">${MEDALS[i]}</span>
+          ${mediaHtml}
+          <div class="giveaway-prize-name">${txt ? _esc(txt) : "—"}</div>
+          <div class="giveaway-prize-place">${PLACES[i]}</div>
+        </div>`;
       }
+      const prizesHtml = `<div class="giveaway-prizes">
+        ${_prizeCard(1)}${_prizeCard(2)}${_prizeCard(3)}
+      </div>`;
 
-      const topCards = (d.top || []).map((r, i) => `
-        <div class="giveaway-podium-card rank-${r.rank}">
-          <div class="giveaway-rank-badge">${MEDALS[i] || "#"+r.rank}</div>
-          <div class="giveaway-podium-avatar" style="background:${_gvColor(r.display_name)}">${_gvInitials(r.display_name)}</div>
-          <div class="giveaway-podium-body">
-            <div class="giveaway-podium-name">${_esc(r.display_name)}</div>
-            <div class="giveaway-podium-count">${r.referral_count} ${r.referral_count===1?"реферал":r.referral_count<5?"реферала":"рефералов"}</div>
-          </div>
-          ${_prizeHtml(prizes[i], prizeImages[i], PRIZE_CLS[i], i+1)}
-        </div>`).join("");
+      // ── Visual podium (order: 2nd | 1st | 3rd) ────────────────────────
+      function _podiumSlot(rank) {
+        const u       = topByRank[rank];
+        const isEmpty = !u;
+        const avatarBg = isEmpty ? "" : `style="background:${_gvColor(u.display_name)}"`;
+        const avatarTxt = isEmpty ? "?" : _gvInitials(u.display_name);
+        const crownHtml = rank === 1 ? `<span class="giveaway-ps-crown">👑</span>` : "";
+        const name  = isEmpty ? "Свободно"         : _esc(u.display_name);
+        const count = isEmpty ? "Пригласи друзей"  : `${u.referral_count} ${_gvRefWord(u.referral_count)}`;
+        const baseNum = rank === 1 ? "1" : rank === 2 ? "2" : "3";
+        return `<div class="giveaway-ps-slot rank-${rank}${isEmpty?" empty":""}">
+          <div class="giveaway-ps-avatar" ${avatarBg}>${crownHtml}${avatarTxt}</div>
+          <div class="giveaway-ps-name">${name}</div>
+          <div class="giveaway-ps-count">${count}</div>
+          <div class="giveaway-ps-base">${baseNum}</div>
+        </div>`;
+      }
+      const podiumHtml = `<div class="giveaway-podium-stage">
+        ${_podiumSlot(2)}${_podiumSlot(1)}${_podiumSlot(3)}
+      </div>`;
 
-      const emptySlots = [1,2,3].slice((d.top||[]).length).map((_,i) => {
-        const rank = (d.top||[]).length + i + 1;
-        return `
-          <div class="giveaway-podium-card rank-${rank}" style="opacity:0.45">
-            <div class="giveaway-rank-badge">${MEDALS[rank-1]||"#"+rank}</div>
-            <div class="giveaway-podium-avatar" style="background:rgba(120,120,128,0.2)">?</div>
-            <div class="giveaway-podium-body">
-              <div class="giveaway-podium-name" style="color:var(--hint)">Свободно</div>
-              <div class="giveaway-podium-count">Пригласи друзей</div>
+      // ── My rank card ───────────────────────────────────────────────────
+      let meHtml = "";
+      const me = d.me || {};
+      if (me.referral_count > 0 && me.rank) {
+        const inTop3 = me.rank <= 3;
+        if (inTop3) {
+          const lbl = me.rank===1 ? "🥇 Ты лидер!" : me.rank===2 ? "🥈 2-е место" : "🥉 3-е место";
+          meHtml = `<div class="giveaway-me-card">
+            <div class="giveaway-me-rank-bubble">${me.rank}</div>
+            <div class="giveaway-me-body">
+              <div class="giveaway-me-title">${lbl} Ты в призах!</div>
+              <div class="giveaway-me-hint">${me.referral_count} ${_gvRefWord(me.referral_count)} · держи позицию</div>
             </div>
-            ${_prizeHtml(prizes[rank-1], prizeImages[rank-1], PRIZE_CLS[rank-1], rank)}
           </div>`;
-      }).join("");
+        } else {
+          // Gap to person directly above
+          const gap = me.next_threshold != null ? (me.next_threshold - me.referral_count + 1) : null;
+          const gapText = gap != null
+            ? `Ещё ${gap} ${_gvRefWord(gap)} до места выше`
+            : `${me.total_participants ? me.total_participants + " участников" : ""}`;
+          // Progress toward 3rd-place threshold
+          const t3 = topByRank[3]?.referral_count ?? topByRank[2]?.referral_count ?? topByRank[1]?.referral_count ?? 0;
+          const pct = t3 ? Math.min(100, Math.round(me.referral_count / t3 * 100)) : 0;
+          meHtml = `<div class="giveaway-me-card">
+            <div class="giveaway-me-rank-bubble">${me.rank}</div>
+            <div class="giveaway-me-body">
+              <div class="giveaway-me-title">${me.rank}-е место</div>
+              <div class="giveaway-me-hint">${gapText}</div>
+              ${t3 ? `<div class="giveaway-me-prog-wrap">
+                <div class="giveaway-me-prog-track"><div class="giveaway-me-prog-fill" style="width:${pct}%"></div></div>
+                <div class="giveaway-me-prog-label"><span>${me.referral_count} рефер.</span><span>${t3} до топ-3</span></div>
+              </div>` : ""}
+            </div>
+          </div>`;
+        }
+      } else if (me.referral_count === 0) {
+        // Zero referrals — minimal nudge card
+        meHtml = `<div class="giveaway-me-card">
+          <div class="giveaway-me-rank-bubble" style="font-size:20px">🚀</div>
+          <div class="giveaway-me-body">
+            <div class="giveaway-me-title">Вы ещё не участвуете</div>
+            <div class="giveaway-me-hint">Пригласите первого друга и попадите в таблицу</div>
+          </div>
+        </div>`;
+      }
 
       el.innerHTML = _giveawayTabBar() + `
         <div class="giveaway-wrap">
-          <div class="giveaway-banner">
-            <div class="giveaway-banner-top">
-              <div class="giveaway-banner-emoji">🎁</div>
-              <div class="giveaway-banner-title">Розыгрыш NFT</div>
-              <div class="giveaway-banner-sub">${_esc(desc)}</div>
+          <div class="giveaway-hero">
+            <div class="giveaway-hero-body">
+              <span class="giveaway-hero-icon">🎁</span>
+              <div class="giveaway-hero-title">Розыгрыш</div>
+              <div class="giveaway-hero-sub">${_esc(desc)}</div>
             </div>
-            ${d.deadline ? `<div class="giveaway-countdown" id="giveawayCountdown"></div>` : ""}
+            <div id="giveawayCountdown" class="giveaway-countdown">
+              ${d.deadline ? "" : '<div class="giveaway-cd-finished">🎁 Розыгрыш идёт!</div>'}
+            </div>
           </div>
-          <div class="giveaway-section-title">🏆 Топ рефералов</div>
-          <div class="giveaway-podium">${topCards}${emptySlots}</div>
+          ${prizesHtml}
+          <div class="giveaway-divider">🏆 Таблица лидеров</div>
+          ${podiumHtml}
+          ${meHtml}
           <button class="giveaway-invite-btn" onclick="switchGiveawaySubTab('referrals')">🔗 Пригласить друзей</button>
         </div>`;
 
       if (d.deadline) _startGiveawayCountdown(d.deadline);
 
-      // Load lottie animations for prizes after DOM is set
+      // Load TGS/Lottie prize animations
       _destroyGvLottie();
-      prizeImages.forEach((url, i) => {
-        if (url && url.endsWith(".tgs")) _loadLottieTgs(`gvLottie_${i+1}`, url);
+      prizeImgs.forEach((url, i) => {
+        if (url && url.endsWith(".tgs")) _loadLottieTgs(`gvPrizeLottie_${i+1}`, url);
       });
     }
 

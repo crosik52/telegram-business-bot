@@ -3811,12 +3811,21 @@ async def giveaway_info(
     if not is_admin and not cfg.is_visible_to_all:
         return {"locked": True}
 
-    top = await repo.get_top_referrers(limit=3)
+    user_id: int | None = user.get("id")
+
+    async def _no_rank() -> dict:
+        return {"rank": None, "referral_count": 0, "total_participants": 0, "next_threshold": None}
+
+    top, me = await asyncio.gather(
+        repo.get_top_referrers(limit=3),
+        repo.get_user_rank(user_id) if user_id else _no_rank(),
+    )
     return {
         "locked": False,
         "is_admin": is_admin,
         **_giveaway_cfg_dict(cfg),
         "top": top,
+        "me": me,
     }
 
 

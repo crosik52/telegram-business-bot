@@ -47,6 +47,43 @@ class GiveawayRepository:
             "updated_at": cfg.updated_at.isoformat() if cfg.updated_at else None,
         }
 
+    # ── User rank ─────────────────────────────────────────────────────────────
+
+    async def get_user_rank(self, user_telegram_id: int) -> dict:
+        """Return the current user's rank, referral count, total participants,
+        and the referral count of the person directly ahead of them."""
+        all_rows = (
+            await self._session.execute(
+                select(
+                    Referral.referrer_telegram_id,
+                    func.count(Referral.id).label("cnt"),
+                )
+                .where(Referral.status == "active")
+                .group_by(Referral.referrer_telegram_id)
+                .order_by(func.count(Referral.id).desc())
+            )
+        ).all()
+
+        total = len(all_rows)
+        user_count = 0
+        user_rank: int | None = None
+        next_threshold: int | None = None
+
+        for idx, (uid, cnt) in enumerate(all_rows):
+            if uid == user_telegram_id:
+                user_count = int(cnt)
+                user_rank = idx + 1
+                if idx > 0:
+                    next_threshold = int(all_rows[idx - 1][1])
+                break
+
+        return {
+            "rank": user_rank,
+            "referral_count": user_count,
+            "total_participants": total,
+            "next_threshold": next_threshold,
+        }
+
     # ── Leaderboard ───────────────────────────────────────────────────────────
 
     async def get_top_referrers(self, limit: int = 3) -> list[dict]:

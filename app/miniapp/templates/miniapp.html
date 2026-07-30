@@ -7590,6 +7590,9 @@
         questData      = await qRes.json();
         lbData         = await lbRes.json();
         _questsFetchTs = Date.now();
+        document.querySelectorAll("#questCacheAge").forEach(lbl => {
+          lbl.textContent = `Обновлено ${_questAgeLabel(_questsFetchTs)}`;
+        });
         renderQuestsTab(); // re-renders casino if on tasks/rating sub-tab
       } catch { /* silent */ }
     }

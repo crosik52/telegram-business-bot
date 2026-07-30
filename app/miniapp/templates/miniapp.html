@@ -9117,13 +9117,19 @@
       if (_questAgeTicker) clearInterval(_questAgeTicker);
       // Don't start if the user has already navigated away
       if (currentTab !== "casino") return;
+      // Update all age labels immediately so the freshly-rendered sub-tab
+      // shows the correct age without waiting for the first interval tick.
+      const _updateQuestAgeLabels = () => {
+        const text = _questsFetchTs ? `Обновлено ${_questAgeLabel(_questsFetchTs)}` : "";
+        document.querySelectorAll("#questCacheAge").forEach(lbl => { lbl.textContent = text; });
+      };
+      _updateQuestAgeLabels();
       const update = () => {
         if (currentTab !== "casino") { clearInterval(_questAgeTicker); _questAgeTicker = null; return; }
         const lbl = document.getElementById("questCacheAge");
         if (!lbl) { clearInterval(_questAgeTicker); _questAgeTicker = null; return; }
         lbl.textContent = _questsFetchTs ? `Обновлено ${_questAgeLabel(_questsFetchTs)}` : "";
       };
-      update();
       _questAgeTicker = setInterval(update, 5000);
     }
 

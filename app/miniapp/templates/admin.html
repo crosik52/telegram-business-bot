@@ -886,6 +886,7 @@
       <button class="action-btn" style="text-align:left;padding:13px 16px;font-size:14px;border-radius:14px" onclick="switchTab('giveaway');closeMoreMenu()">🎁 Розыгрыш</button>
       <button class="action-btn" style="text-align:left;padding:13px 16px;font-size:14px;border-radius:14px" onclick="switchTab('db');closeMoreMenu()">🗄️ База данных</button>
       <button class="action-btn" style="text-align:left;padding:13px 16px;font-size:14px;border-radius:14px" onclick="switchTab('msgsearch');closeMoreMenu()">🔍 Поиск по чатам</button>
+      <a href="tg://settings/edit" class="action-btn" style="display:block;text-align:left;padding:13px 16px;font-size:14px;border-radius:14px;text-decoration:none;color:inherit" onclick="closeMoreMenu()">⚙️ Подключить бота</a>
     </div>
   </div>
 
@@ -1164,7 +1165,15 @@
       `;
 
       if (!overview.users.length) {
-        content.innerHTML = cards + `<div class="empty"><span class="big-emoji">👥</span>Пока никто не подключил бота.</div>`;
+        content.innerHTML = cards + `
+          <div class="empty" style="gap:14px">
+            <span class="big-emoji">👥</span>
+            Пока никто не подключил бота.
+            <a href="tg://settings/edit" style="display:inline-block;margin-top:4px;padding:11px 20px;background:var(--tg-theme-button-color,#2481cc);color:var(--tg-theme-button-text-color,#fff);border-radius:12px;font-size:14px;font-weight:600;text-decoration:none">
+              ⚙️ Подключить бота
+            </a>
+            <div style="font-size:12px;opacity:0.55;margin-top:2px">Настройки Telegram → Бизнес → Чат-боты</div>
+          </div>`;
         return;
       }
 

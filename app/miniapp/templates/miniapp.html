@@ -9868,24 +9868,24 @@
           const quests = r.quests || [];
           const questsHtml = quests.length ? `
             <div style="margin-top:10px;text-align:left">
-              <div style="font-size:11px;font-weight:800;letter-spacing:0.5px;color:var(--hint);margin-bottom:6px">🎯 КВЕСТЫ ПАРЫ (неделя)</div>
+              <div style="font-size:10px;font-weight:800;letter-spacing:0.5px;color:var(--hint);margin-bottom:5px">🎯 КВЕСТЫ ПАРЫ (неделя)</div>
               ${quests.map(q => {
                 const pct = Math.round(q.progress / q.target * 100);
-                const btn = q.claimed
-                  ? `<span style="font-size:11px;color:#34c759;font-weight:700;flex-shrink:0">✓ Получено</span>`
+                const right = q.claimed
+                  ? `<span style="font-size:10px;color:#34c759;font-weight:700;white-space:nowrap">✓</span>`
                   : q.done
-                    ? `<button class="cert-quick-btn gift" style="padding:4px 10px;font-size:11px;flex-shrink:0"
-                        onclick="event.stopPropagation();claimCoupleQuest(${r.partner_id},'${q.id}')">Забрать +${q.reward_coins}🪙</button>`
-                    : `<span style="font-size:11px;color:var(--hint);flex-shrink:0">${q.progress}/${q.target}</span>`;
+                    ? `<button class="cert-quick-btn gift" style="padding:3px 8px;font-size:10px;white-space:nowrap"
+                        onclick="event.stopPropagation();claimCoupleQuest(${r.partner_id},'${q.id}')">+${q.reward_coins}🪙</button>`
+                    : `<span style="font-size:10px;color:var(--hint);white-space:nowrap">${q.progress}/${q.target}</span>`;
                 return `
-                  <div style="display:flex;align-items:center;gap:8px;padding:5px 0">
-                    <div style="flex:1;min-width:0">
-                      <div style="font-size:12px;font-weight:600">${q.title}</div>
-                      <div style="height:4px;border-radius:2px;background:rgba(128,128,128,0.2);margin-top:3px;overflow:hidden">
+                  <div style="display:flex;align-items:center;gap:6px;padding:3px 0">
+                    <div style="flex:1;min-width:0;overflow:hidden">
+                      <div style="font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${q.title}</div>
+                      <div style="height:3px;border-radius:2px;background:rgba(128,128,128,0.2);margin-top:2px;overflow:hidden">
                         <div style="height:100%;border-radius:2px;background:linear-gradient(90deg,#ff5e87,#ff9f0a);width:${pct}%"></div>
                       </div>
                     </div>
-                    ${btn}
+                    ${right}
                   </div>`;
               }).join("")}
             </div>` : "";

@@ -863,14 +863,69 @@ class PetRepository:
             "upgrades":    ups,
         }
 
+    async def get_user_rank(self, owner_telegram_id: int) -> dict | None:
+        """Return the current user's best alive pet rank (by XP DESC, id ASC).
+
+        Ordering matches get_leaderboard so ranks are consistent even under ties.
+        Returns None when the user has no alive pets.
+        """
+        now = dt.datetime.now(dt.timezone.utc)
+
+        # Find the user's best alive pet using the same ordering as the leaderboard
+        best = (
+            await self._session.execute(
+                select(ChatPet)
+                .where(
+                    ChatPet.owner_telegram_id == owner_telegram_id,
+                    ChatPet.is_alive.is_(True),
+                )
+                .order_by(ChatPet.xp.desc(), ChatPet.id.asc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+
+        if best is None:
+            return None
+
+        # Count alive pets globally that rank strictly above this one
+        # under the same (xp DESC, id ASC) ordering:
+        #   ranked above ↔ xp > best.xp  OR  (xp == best.xp AND id < best.id)
+        above_count: int = (
+            await self._session.execute(
+                select(func.count()).where(
+                    ChatPet.is_alive.is_(True),
+                    (ChatPet.xp > best.xp)
+                    | ((ChatPet.xp == best.xp) & (ChatPet.id < best.id)),
+                )
+            )
+        ).scalar_one()
+
+        rank = above_count + 1
+        sp    = SPECIES.get(best.species, {})
+        stage = _compute_stage(best.born_at, now)
+        emoji = (sp.get("stages") or ["🐾"])[min(stage - 1, 4)]
+        p_info = PERSONALITIES.get(best.personality, {})
+
+        return {
+            "pet_id":            best.id,
+            "rank":              rank,
+            "pet_name":          best.pet_name,
+            "species_emoji":     emoji,
+            "species_label":     sp.get("label", ""),
+            "level":             _compute_level(best.xp),
+            "xp":                best.xp,
+            "days_alive":        (now - _tz_aware(best.born_at)).days,
+            "personality_emoji": p_info.get("emoji", ""),
+        }
+
     async def get_leaderboard(self, limit: int = 20) -> list[dict]:
-        """Return top `limit` alive pets ordered by XP descending."""
+        """Return top `limit` alive pets ordered by XP DESC, id ASC (tie-break)."""
         now  = dt.datetime.now(dt.timezone.utc)
         rows = list(
             (await self._session.execute(
                 select(ChatPet)
                 .where(ChatPet.is_alive.is_(True))
-                .order_by(ChatPet.xp.desc())
+                .order_by(ChatPet.xp.desc(), ChatPet.id.asc())
                 .limit(limit)
             )).scalars().all()
         )
@@ -881,6 +936,7 @@ class PetRepository:
             emoji = (sp.get("stages") or ["🐾"])[min(stage - 1, 4)]
             p_info = PERSONALITIES.get(pet.personality, {})
             result.append({
+                "pet_id":            pet.id,
                 "rank":              rank,
                 "pet_name":          pet.pet_name,
                 "species_emoji":     emoji,

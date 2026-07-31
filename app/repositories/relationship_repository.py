@@ -4,7 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.business_connection import BusinessConnection
@@ -357,8 +357,88 @@ class RelationshipRepository:
         await self._session.flush()
         return rel
 
+    async def get_user_rank(self, user_id: int) -> dict | None:
+        """Return the current user's best active relationship rank (by XP DESC, id ASC).
+
+        Ordering matches get_leaderboard so ranks are consistent even under ties.
+        Returns None when the user has no active relationships.
+        """
+        from app.models.user import TelegramUser  # local import to avoid circulars
+
+        # Find the user's best active relationship using the same ordering as the leaderboard
+        best = (
+            await self._session.execute(
+                select(Relationship)
+                .where(
+                    Relationship.status == "active",
+                    (Relationship.user_a_id == user_id) | (Relationship.user_b_id == user_id),
+                )
+                .order_by(Relationship.xp.desc(), Relationship.id.asc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+
+        if best is None:
+            return None
+
+        # Count how many active relationships rank strictly above this one
+        # using the same (xp DESC, id ASC) ordering:
+        #   ranked above ↔ xp > best.xp  OR  (xp == best.xp AND id < best.id)
+        above_count: int = (
+            await self._session.execute(
+                select(func.count()).where(
+                    Relationship.status == "active",
+                    (Relationship.xp > best.xp)
+                    | ((Relationship.xp == best.xp) & (Relationship.id < best.id)),
+                )
+            )
+        ).scalar_one()
+
+        rank = above_count + 1
+
+        # Fetch partner name
+        partner_id = best.user_b_id if best.user_a_id == user_id else best.user_a_id
+        partner_user = (
+            await self._session.execute(
+                select(TelegramUser).where(TelegramUser.telegram_user_id == partner_id)
+            )
+        ).scalar_one_or_none()
+
+        if partner_user:
+            parts = [p for p in (partner_user.first_name, partner_user.last_name) if p]
+            partner_name = " ".join(parts) or partner_user.username or f"#{partner_id}"
+        else:
+            partner_name = f"#{partner_id}"
+
+        # Also fetch own name
+        own_user = (
+            await self._session.execute(
+                select(TelegramUser).where(TelegramUser.telegram_user_id == user_id)
+            )
+        ).scalar_one_or_none()
+        if own_user:
+            parts = [p for p in (own_user.first_name, own_user.last_name) if p]
+            own_name = " ".join(parts) or own_user.username or f"#{user_id}"
+        else:
+            own_name = f"#{user_id}"
+
+        tier_emoji = {"friends": "🤝", "dating": "💕", "married": "💍"}
+        user_a_name = own_name if best.user_a_id == user_id else partner_name
+        user_b_name = partner_name if best.user_a_id == user_id else own_name
+
+        return {
+            "rel_id":      best.id,
+            "rank":        rank,
+            "user_a_name": user_a_name,
+            "user_b_name": user_b_name,
+            "rel_type":    best.rel_type,
+            "tier_emoji":  tier_emoji.get(best.rel_type, "💫"),
+            "level":       best.level,
+            "xp":          best.xp,
+        }
+
     async def get_leaderboard(self, limit: int = 20) -> list[dict]:
-        """Top *limit* active relationships ordered by XP descending."""
+        """Top *limit* active relationships ordered by XP DESC, id ASC (tie-break)."""
         from app.models.user import TelegramUser  # local import to avoid circulars
 
         rows = list(
@@ -366,7 +446,7 @@ class RelationshipRepository:
                 await self._session.execute(
                     select(Relationship)
                     .where(Relationship.status == "active")
-                    .order_by(Relationship.xp.desc())
+                    .order_by(Relationship.xp.desc(), Relationship.id.asc())
                     .limit(limit)
                 )
             )
@@ -399,6 +479,7 @@ class RelationshipRepository:
         for i, r in enumerate(rows, 1):
             result.append(
                 {
+                    "rel_id":      r.id,
                     "rank":        i,
                     "user_a_name": name_map.get(r.user_a_id, f"#{r.user_a_id}"),
                     "user_b_name": name_map.get(r.user_b_id, f"#{r.user_b_id}"),

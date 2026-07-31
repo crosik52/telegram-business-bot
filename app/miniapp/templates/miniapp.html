@@ -3182,6 +3182,42 @@
   .rel-lb-level  { font-size: 15px; font-weight: 900; color: #c0557a; }
   .rel-lb-xp     { font-size: 10px; color: var(--hint); margin-top: 1px; }
 
+  /* ── Leaderboard "me" highlight ─────────────────────────────────────────── */
+  .lb-row-me.rel-lb-row,
+  .lb-row-me.pet-lb-row {
+    background: linear-gradient(135deg, rgba(36,129,204,0.12), rgba(88,86,214,0.08));
+    border: 1.5px solid rgba(36,129,204,0.30);
+    box-shadow: 0 0 0 0.5px rgba(36,129,204,0.18), inset 0 1px 0 rgba(255,255,255,0.12);
+  }
+  .theme-dark .lb-row-me.rel-lb-row,
+  .theme-dark .lb-row-me.pet-lb-row {
+    background: rgba(36,129,204,0.13);
+    border: 1.5px solid rgba(36,129,204,0.35);
+  }
+  .lb-me-chip {
+    display: inline-block;
+    background: var(--link);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 800;
+    border-radius: 5px;
+    padding: 1px 5px;
+    vertical-align: middle;
+    margin-left: 3px;
+    letter-spacing: 0.2px;
+  }
+  .lb-me-separator {
+    display: flex; align-items: center; gap: 8px;
+    margin: 8px 0 5px;
+    color: var(--hint); font-size: 10px; font-weight: 600;
+  }
+  .lb-me-separator::before,
+  .lb-me-separator::after {
+    content: ""; flex: 1; height: 1px;
+    background: rgba(120,120,128,0.20); border-style: dashed; border-width: 1px 0 0;
+  }
+  .lb-me-separator::before { content: "· · ·"; flex: 0; background: none; border: none; }
+
   /* ── Giveaway tab ────────────────────────────────────────────────────────── */
   .giveaway-wrap { padding: 0 0 24px; display: flex; flex-direction: column; }
 
@@ -9417,7 +9453,7 @@
 
       const LB_TTL = 60_000;
       if (interactLbCache && (Date.now() - interactLbCache.ts < LB_TTL)) {
-        pane.innerHTML = _renderInteractLbHTML(interactLbCache.relLb, interactLbCache.petLb);
+        pane.innerHTML = _renderInteractLbHTML(interactLbCache.relLb, interactLbCache.petLb, interactLbCache.relMe, interactLbCache.petMe);
         return;
       }
 
@@ -9428,54 +9464,109 @@
           fetch("/app/api/relationships/leaderboard", opts),
           fetch("/app/api/pet/leaderboard", opts),
         ]);
-        const relLb = relRes.ok ? (await relRes.json()).leaderboard : [];
-        const petLb = petRes.ok ? (await petRes.json()).leaderboard : [];
-        interactLbCache = { ts: Date.now(), relLb, petLb };
-        if (pane) pane.innerHTML = _renderInteractLbHTML(relLb, petLb);
+        const relData = relRes.ok ? await relRes.json() : {};
+        const petData = petRes.ok ? await petRes.json() : {};
+        const relLb = relData.leaderboard ?? [];
+        const petLb = petData.leaderboard ?? [];
+        const relMe = relData.me ?? null;
+        const petMe = petData.me ?? null;
+        interactLbCache = { ts: Date.now(), relLb, petLb, relMe, petMe };
+        if (pane) pane.innerHTML = _renderInteractLbHTML(relLb, petLb, relMe, petMe);
       } catch {
         if (pane) pane.innerHTML = `<div style="text-align:center;padding:28px 0;color:var(--hint);font-size:13px">Не удалось загрузить 😅</div>`;
       }
     }
 
-    function _renderInteractLbHTML(relLb, petLb) {
+    function _renderInteractLbHTML(relLb, petLb, relMe, petMe) {
       const medal = r => r===1?'🥇':r===2?'🥈':r===3?'🥉':r;
+      const tierLabel = { friends:"Друзья", dating:"Встречаются", married:"Женаты" };
+
+      // ── Relationship leaderboard ──────────────────────────────────────────
       let h = `<div class="interact-lb-section-title">💗 Топ отношений</div>`;
       if (!relLb?.length) {
         h += `<div style="text-align:center;padding:16px 0;color:var(--hint);font-size:13px;opacity:0.7">Пока нет данных</div>`;
       } else {
-        const tierLabel = { friends:"Друзья", dating:"Встречаются", married:"Женаты" };
-        h += relLb.map(e => `
-          <div class="rel-lb-row">
+        // Identify "me" by relationship id (immune to rank ties)
+        const relMeId   = relMe?.rel_id ?? null;
+        const relMeInList = relMeId !== null && relLb.some(e => e.rel_id === relMeId);
+        h += relLb.map(e => {
+          const isMe = relMeId !== null && e.rel_id === relMeId;
+          return `
+          <div class="rel-lb-row${isMe ? ' lb-row-me' : ''}">
             <div class="rel-lb-rank">${medal(e.rank)}</div>
             <div class="rel-lb-emoji">${esc(e.tier_emoji)}</div>
             <div class="rel-lb-body">
-              <div class="rel-lb-names">${esc(e.user_a_name)} &amp; ${esc(e.user_b_name)}</div>
+              <div class="rel-lb-names">${esc(e.user_a_name)} &amp; ${esc(e.user_b_name)}${isMe ? ' <span class="lb-me-chip">Вы</span>' : ''}</div>
               <div class="rel-lb-meta">${tierLabel[e.rel_type]||e.rel_type}</div>
             </div>
             <div class="rel-lb-right">
               <div class="rel-lb-level">Ур.${e.level}</div>
               <div class="rel-lb-xp">${e.xp} XP</div>
             </div>
-          </div>`).join("");
+          </div>`;
+        }).join("");
+
+        // Pin "me" row below the list when user's relationship is outside top-N
+        if (relMe && !relMeInList) {
+          h += `<div class="lb-me-separator"></div>
+          <div class="rel-lb-row lb-row-me">
+            <div class="rel-lb-rank">${relMe.rank}</div>
+            <div class="rel-lb-emoji">${esc(relMe.tier_emoji)}</div>
+            <div class="rel-lb-body">
+              <div class="rel-lb-names">${esc(relMe.user_a_name)} &amp; ${esc(relMe.user_b_name)} <span class="lb-me-chip">Вы</span></div>
+              <div class="rel-lb-meta">${tierLabel[relMe.rel_type]||relMe.rel_type}</div>
+            </div>
+            <div class="rel-lb-right">
+              <div class="rel-lb-level">Ур.${relMe.level}</div>
+              <div class="rel-lb-xp">${relMe.xp} XP</div>
+            </div>
+          </div>`;
+        }
       }
 
+      // ── Pet leaderboard ───────────────────────────────────────────────────
       h += `<div class="interact-lb-section-title" style="margin-top:20px">🐾 Топ питомцев</div>`;
       if (!petLb?.length) {
         h += `<div style="text-align:center;padding:16px 0;color:var(--hint);font-size:13px;opacity:0.7">Пока нет данных</div>`;
       } else {
-        h += `<div class="pet-lb-list">${petLb.map(e => `
-          <div class="pet-lb-row">
+        // Identify "me" by pet id (immune to rank ties)
+        const petMeId     = petMe?.pet_id ?? null;
+        const petMeInList = petMeId !== null && petLb.some(e => e.pet_id === petMeId);
+        const petRows = petLb.map(e => {
+          const isMe = petMeId !== null && e.pet_id === petMeId;
+          return `
+          <div class="pet-lb-row${isMe ? ' lb-row-me' : ''}">
             <div class="pet-lb-rank">${medal(e.rank)}</div>
             <div class="pet-lb-emoji">${esc(e.species_emoji)}</div>
             <div class="pet-lb-body">
-              <div class="pet-lb-name">${esc(e.pet_name)} ${esc(e.personality_emoji)}</div>
+              <div class="pet-lb-name">${esc(e.pet_name)} ${esc(e.personality_emoji)}${isMe ? ' <span class="lb-me-chip">Вы</span>' : ''}</div>
               <div class="pet-lb-meta">${esc(e.species_label)} · ${daysLabel(e.days_alive)}</div>
             </div>
             <div style="text-align:right;flex-shrink:0">
               <div class="pet-lb-level">Ур.${e.level}</div>
               <div style="font-size:10px;color:var(--hint);margin-top:1px">${e.xp} XP</div>
             </div>
-          </div>`).join("")}</div>`;
+          </div>`;
+        }).join("");
+
+        let meRow = "";
+        if (petMe && !petMeInList) {
+          meRow = `<div class="lb-me-separator"></div>
+          <div class="pet-lb-row lb-row-me">
+            <div class="pet-lb-rank">${petMe.rank}</div>
+            <div class="pet-lb-emoji">${esc(petMe.species_emoji)}</div>
+            <div class="pet-lb-body">
+              <div class="pet-lb-name">${esc(petMe.pet_name)} ${esc(petMe.personality_emoji)} <span class="lb-me-chip">Вы</span></div>
+              <div class="pet-lb-meta">${esc(petMe.species_label)} · ${daysLabel(petMe.days_alive)}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div class="pet-lb-level">Ур.${petMe.level}</div>
+              <div style="font-size:10px;color:var(--hint);margin-top:1px">${petMe.xp} XP</div>
+            </div>
+          </div>`;
+        }
+
+        h += `<div class="pet-lb-list">${petRows}${meRow}</div>`;
       }
 
       h += `<div style="text-align:center;font-size:10px;color:var(--hint);opacity:0.55;margin-top:12px;padding-bottom:8px">

@@ -1670,15 +1670,17 @@ async def miniapp_pet_upgrade(
 async def miniapp_pet_leaderboard(
     payload: StatsRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
-    """Return top 20 pets by XP (leaderboard)."""
+    """Return top 20 pets by XP (leaderboard) plus the caller's own rank."""
     settings = get_settings()
     user = verify_init_data(payload.init_data, settings.telegram_bot_token)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid Telegram init data")
 
+    owner_id = int(user["id"])
     repo = PetRepository(session)
     leaderboard = await repo.get_leaderboard(limit=20)
-    return {"leaderboard": leaderboard}
+    me = await repo.get_user_rank(owner_id)
+    return {"leaderboard": leaderboard, "me": me}
 
 
 # ── Relationship helpers ──────────────────────────────────────────────────────
@@ -1771,12 +1773,13 @@ async def rel_list(
 async def rel_leaderboard(
     payload: StatsRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
-    """Return top 20 relationships by XP."""
+    """Return top 20 relationships by XP plus the caller's own rank."""
     settings = get_settings()
-    _verify_rel_init(payload.init_data, settings)
+    owner_id = _verify_rel_init(payload.init_data, settings)
     repo = RelationshipRepository(session)
     leaderboard = await repo.get_leaderboard(limit=20)
-    return {"leaderboard": leaderboard}
+    me = await repo.get_user_rank(owner_id)
+    return {"leaderboard": leaderboard, "me": me}
 
 
 @router.post("/app/api/relationships/request")

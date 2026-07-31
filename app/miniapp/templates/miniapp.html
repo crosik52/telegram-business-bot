@@ -3138,6 +3138,19 @@
     content: ""; flex: 1; height: 0.5px;
     background: linear-gradient(90deg, rgba(120,120,128,0.28), transparent);
   }
+  .lb-refresh-btn {
+    border: none; background: rgba(120,120,128,0.10);
+    border-radius: 14px; padding: 4px 10px;
+    font-size: 11px; font-weight: 600; color: var(--hint);
+    display: flex; align-items: center; gap: 4px;
+    transition: background 0.15s, transform 0.1s;
+    cursor: pointer; flex-shrink: 0;
+    text-transform: none; letter-spacing: 0;
+  }
+  .lb-refresh-btn:active { transform: scale(0.93); }
+  .lb-refresh-btn:disabled { opacity: 0.45; cursor: default; }
+  .lb-refresh-btn.spinning .lb-refresh-icon { animation: spin 0.75s linear infinite; display: inline-block; }
+  .lb-refresh-icon { display: inline-block; }
 
   /* ── Visual podium ── */
   .giveaway-podium-stage {
@@ -9877,6 +9890,20 @@
       _giveawayLeaderboardInterval = setInterval(_silentRefreshGiveawayLeaderboard, 60_000);
     }
 
+    async function _manualRefreshLeaderboard() {
+      const btn = document.getElementById("lbRefreshBtn");
+      if (btn && btn.disabled) return;  // already refreshing
+      if (btn) { btn.classList.add("spinning"); btn.disabled = true; }
+      try {
+        await _silentRefreshGiveawayLeaderboard();
+      } finally {
+        if (btn) { btn.classList.remove("spinning"); btn.disabled = false; }
+      }
+      // Reset the 60-second auto-refresh timer so it counts from now
+      _startGiveawayLeaderboardRefresh();
+      if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
+    }
+
     function switchGiveawaySubTab(tab) {
       giveawaySubTab = tab;
       if (tab !== "contest") _stopGiveawayLeaderboardRefresh();
@@ -10060,7 +10087,7 @@
             </div>
           </div>
           ${prizesHtml}
-          <div class="giveaway-divider">🏆 Таблица лидеров</div>
+          <div class="giveaway-divider">🏆 Таблица лидеров<button id="lbRefreshBtn" class="lb-refresh-btn" onclick="_manualRefreshLeaderboard()" title="Обновить"><span class="lb-refresh-icon">↻</span> Обновить</button></div>
           <div id="lbCacheAge" class="lb-cache-age"></div>
           ${podiumHtml}
           <div id="giveawayMeCard">${meHtml}</div>

@@ -945,6 +945,66 @@
     color: #8a8a8e; border-top: 1px solid rgba(0,0,0,0.07);
     background: rgba(0,0,0,0.03);
   }
+  /* Leaderboard divider inside preview */
+  .gv-preview-sheet .gv-preview-divider {
+    display: flex; align-items: center; justify-content: center;
+    gap: 6px; padding: 10px 14px 8px;
+    font-size: 11px; font-weight: 700; color: #8a8a8e;
+    text-transform: uppercase; letter-spacing: 0.7px;
+    border-top: 1px solid rgba(0,0,0,0.07);
+  }
+  /* Podium inside preview */
+  .gv-preview-sheet .giveaway-podium-stage {
+    display: flex; align-items: flex-end; justify-content: center;
+    gap: 8px; padding: 0 14px 18px;
+  }
+  .gv-preview-sheet .giveaway-ps-slot {
+    display: flex; flex-direction: column; align-items: center; flex: 1; max-width: 115px;
+  }
+  .gv-preview-sheet .giveaway-ps-avatar {
+    position: relative; width: 52px; height: 52px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 900; color: #fff; margin-bottom: 8px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.12), 0 0 0 2px rgba(0,0,0,0.08);
+  }
+  .gv-preview-sheet .giveaway-ps-slot.rank-1 .giveaway-ps-avatar {
+    width: 66px; height: 66px; font-size: 22px;
+    box-shadow: 0 6px 24px rgba(255,215,0,0.28), 0 0 0 2.5px rgba(255,215,0,0.48);
+  }
+  .gv-preview-sheet .giveaway-ps-crown {
+    position: absolute; top: -16px; left: 50%; transform: translateX(-50%);
+    font-size: 18px; line-height: 1;
+  }
+  .gv-preview-sheet .giveaway-ps-name {
+    font-size: 11px; font-weight: 700; color: #17181a; text-align: center;
+    max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 3px;
+  }
+  .gv-preview-sheet .giveaway-ps-count {
+    font-size: 10px; color: #8a8a8e; margin-bottom: 8px; text-align: center;
+  }
+  .gv-preview-sheet .giveaway-ps-base {
+    width: 100%; border-radius: 12px 12px 0 0;
+    display: flex; align-items: flex-start; justify-content: center; padding-top: 10px;
+    font-size: 22px; font-weight: 900;
+  }
+  .gv-preview-sheet .giveaway-ps-slot.rank-1 .giveaway-ps-base {
+    height: 80px; color: rgba(180,140,0,0.55); background: rgba(255,215,0,0.14);
+    box-shadow: 0 0 0 0.5px rgba(255,215,0,0.38);
+  }
+  .gv-preview-sheet .giveaway-ps-slot.rank-2 .giveaway-ps-base {
+    height: 58px; color: rgba(140,140,150,0.55); background: rgba(192,192,192,0.13);
+    box-shadow: 0 0 0 0.5px rgba(192,192,192,0.28);
+  }
+  .gv-preview-sheet .giveaway-ps-slot.rank-3 .giveaway-ps-base {
+    height: 42px; color: rgba(160,90,30,0.55); background: rgba(205,127,50,0.13);
+    box-shadow: 0 0 0 0.5px rgba(205,127,50,0.26);
+  }
+  .gv-preview-sheet .giveaway-ps-slot.empty .giveaway-ps-avatar {
+    background: rgba(120,120,128,0.12) !important; color: rgba(120,120,128,0.40);
+    box-shadow: 0 0 0 1.5px rgba(120,120,128,0.16);
+  }
+  .gv-preview-sheet .giveaway-ps-slot.empty .giveaway-ps-name { color: rgba(120,120,128,0.50); font-weight: 500; }
+  .gv-preview-sheet .giveaway-ps-slot.empty .giveaway-ps-count { opacity: 0.55; }
 </style>
 </head>
 <body>
@@ -3733,6 +3793,27 @@
             ${cdHtml}
           </div>
           ${prizesHtml}
+          <div class="gv-preview-divider">🏆 Таблица лидеров</div>
+          <div class="giveaway-podium-stage">
+            <div class="giveaway-ps-slot rank-2 empty">
+              <div class="giveaway-ps-avatar">?</div>
+              <div class="giveaway-ps-name">Свободно</div>
+              <div class="giveaway-ps-count">Пригласи друзей</div>
+              <div class="giveaway-ps-base">2</div>
+            </div>
+            <div class="giveaway-ps-slot rank-1 empty">
+              <div class="giveaway-ps-avatar"><span class="giveaway-ps-crown">👑</span>?</div>
+              <div class="giveaway-ps-name">Свободно</div>
+              <div class="giveaway-ps-count">Пригласи друзей</div>
+              <div class="giveaway-ps-base">1</div>
+            </div>
+            <div class="giveaway-ps-slot rank-3 empty">
+              <div class="giveaway-ps-avatar">?</div>
+              <div class="giveaway-ps-name">Свободно</div>
+              <div class="giveaway-ps-count">Пригласи друзей</div>
+              <div class="giveaway-ps-base">3</div>
+            </div>
+          </div>
         </div>`;
       overlay.addEventListener("click", e => { if (e.target === overlay) closeGiveawayPreview(); });
       document.body.appendChild(overlay);

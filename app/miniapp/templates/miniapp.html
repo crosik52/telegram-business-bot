@@ -106,9 +106,11 @@
     padding: 0 14px calc(env(safe-area-inset-bottom, 0px) + 104px);
     background: var(--bg);
     color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    /* system-ui resolves to Roboto on Android Chrome, San Francisco on iOS */
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", sans-serif;
     -webkit-font-smoothing: antialiased;
-    overscroll-behavior-y: none;
+    text-rendering: optimizeLegibility;
+    overscroll-behavior: none;
   }
 
   /* ── Header ── */
@@ -558,13 +560,14 @@
   }
   .search-box input {
     flex: 1; border: none; outline: none;
-    background: transparent; color: var(--text); font-size: 14px;
+    background: transparent; color: var(--text); font-size: 16px;
   }
   .search-box input::placeholder { color: var(--hint); }
 
   .segmented {
     display: flex; background: rgba(120,120,128,0.12);
     border-radius: 12px; padding: 3px; margin-bottom: 14px; gap: 2px; overflow-x: auto;
+    scrollbar-width: none;
   }
   .segmented::-webkit-scrollbar { display: none; }
   .segmented button {
@@ -1883,7 +1886,7 @@
   }
   .crash-auto-cashout-input {
     flex: 1; padding: 7px 0; background: transparent; border: none;
-    color: rgba(245,245,245,0.9); font-size: 13px; font-weight: 700;
+    color: rgba(245,245,245,0.9); font-size: 16px; font-weight: 700;
     font-family: 'Geist', system-ui, sans-serif; text-align: right;
     outline: none; width: 0;
   }
@@ -2838,7 +2841,7 @@
   .balance-number-input {
     width: 100%; box-sizing: border-box;
     border: 1.5px solid rgba(120,120,128,0.28); border-radius: 11px;
-    padding: 10px 14px; font-size: 15px; font-weight: 600;
+    padding: 10px 14px; font-size: 16px; font-weight: 600;
     background: var(--bg); color: var(--text);
   }
   .balance-set-btn {
@@ -3449,6 +3452,58 @@
   .giveaway-locked-emoji { font-size: 52px; margin-bottom: 14px; display: block; }
   .giveaway-locked-title { font-size: 20px; font-weight: 900; margin-bottom: 8px; }
   .giveaway-locked-sub   { font-size: 13px; color: var(--hint); line-height: 1.65; }
+
+  /* ══════════════════════════════════════════
+     ANDROID / CROSS-PLATFORM OPTIMISATIONS
+  ══════════════════════════════════════════ */
+
+  /* Scroll containers — prevent body bounce leaking into sub-scrollers
+     and hide native scrollbars on every engine (not just WebKit) */
+  .ai-modal-body,
+  .adopt-chats,
+  .cp-overlay,
+  .balance-sheet {
+    overscroll-behavior: contain;
+    scrollbar-width: none;           /* Firefox / Samsung Internet */
+  }
+  .ai-modal-body::-webkit-scrollbar,
+  .adopt-chats::-webkit-scrollbar,
+  .cp-overlay::-webkit-scrollbar,
+  .balance-sheet::-webkit-scrollbar { display: none; }
+
+  /* Sticky tab bars — force GPU layer so Android doesn't repaint on scroll */
+  .inner-tab-bar,
+  .stats-pill-bar { will-change: transform; }
+
+  /* Fallback for older Telegram Android WebViews (pre-Chrome 76)
+     that don't support backdrop-filter: replace with an opaque-ish bg */
+  @supports not (backdrop-filter: blur(1px)) {
+    .card, .health-card, .heatmap-card, .badge-card,
+    .pet-card, .sub-card, .sub-plan-card, .theme-card,
+    .cert-card, .interact-pet-card {
+      background: var(--secondary-bg) !important;
+    }
+    .theme-dark .card,
+    .theme-dark .health-card, .theme-dark .heatmap-card,
+    .theme-dark .badge-card, .theme-dark .pet-card,
+    .theme-dark .sub-card, .theme-dark .sub-plan-card,
+    .theme-dark .theme-card, .theme-dark .cert-card,
+    .theme-dark .interact-pet-card {
+      background: rgba(44,44,46,0.96) !important;
+    }
+    .casino-card, .wallet-card {
+      background: rgba(18,18,18,0.96) !important;
+    }
+    .coin-pkg-card, .shop-item, .quest-card {
+      background: rgba(28,28,30,0.96) !important;
+    }
+    .bottom-tab-bar {
+      background: rgba(242,242,247,0.96) !important;
+    }
+    .theme-dark .bottom-tab-bar {
+      background: rgba(28,28,30,0.96) !important;
+    }
+  }
 </style>
 </head>
 <body>

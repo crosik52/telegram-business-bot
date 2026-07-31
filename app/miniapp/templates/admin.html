@@ -3625,6 +3625,7 @@
         _gvDestroyAdminLottie(idx);
         const el = document.getElementById(`gvAdminPreview_${idx}`);
         if (el) el.innerHTML = `<span style="font-size:28px">🎁</span>`;
+        _scheduleGiveawayPreviewSync();
         return;
       }
       sel.innerHTML = `<option>Загружаем варианты…</option>`;
@@ -3657,6 +3658,7 @@
       const url = `https://cdn.changes.tg/gifts/models/${encodeURIComponent(giftName)}/${encodeURIComponent(variant)}.tgs`;
       document.getElementById(`gv_prize_${idx}_image`).value = url;
       _gvRenderAdminPreview(idx, url);
+      _scheduleGiveawayPreviewSync();
     }
 
     async function _gvInitPicker(idx, storedUrl) {
@@ -3678,10 +3680,81 @@
     // ── Giveaway Preview ────────────────────────────────────────────────────
     const _gvPreviewLottie = {};
    let _gvPreviewCountdownTimer = null;
+   let _gvPreviewSyncTimer = null;
+   const _gvPreviewSyncListeners = []; // {el, event, fn}
 
     function _destroyGvPreviewLottie() {
       for (const inst of Object.values(_gvPreviewLottie)) { try { inst.destroy(); } catch {} }
       for (const k of Object.keys(_gvPreviewLottie)) delete _gvPreviewLottie[k];
+    }
+
+    function _syncGiveawayPreviewNow() {
+      const overlay = document.getElementById("gvPreviewOverlay");
+      if (!overlay) return;
+
+      const prizes    = [1,2,3].map(i => (document.getElementById(`gv_prize_${i}`)?.value || "").trim());
+      const prizeImgs = [1,2,3].map(i => (document.getElementById(`gv_prize_${i}_image`)?.value || "").trim());
+      const desc = (document.getElementById("gvDesc")?.value || "").trim() || "Пригласи больше друзей — топ-3 получат призы!";
+
+      // Update description
+      const heroSub = overlay.querySelector(".gv-hero-sub");
+      if (heroSub) heroSub.textContent = desc;
+
+      // Rebuild prize section
+      const MEDALS = ["🥇","🥈","🥉"];
+      const PCLS   = ["gp1","gp2","gp3"];
+      const PLACES = ["1-е место","2-е место","3-е место"];
+      const anyPrize = prizes.some(Boolean) || prizeImgs.some(Boolean);
+
+      function _prizeHtml(rank) {
+        const i = rank - 1;
+        const txt = prizes[i]; const img = prizeImgs[i];
+        const configured = !!(txt || img);
+        let mediaHtml = "";
+        if (img && img.endsWith(".tgs")) {
+          mediaHtml = `<div id="gvPreviewLottie_${rank}" class="gv-prize-lottie"></div>`;
+        } else if (img) {
+          mediaHtml = `<img src="${esc(img)}" class="gv-prize-img" alt="" onerror="this.style.display='none'">`;
+        } else {
+          mediaHtml = `<span class="gv-prize-empty">${txt ? "🎁" : "🔜"}</span>`;
+        }
+        return `<div class="gv-prize-card ${PCLS[i]}${configured ? "" : " gv-tba"}">
+          <span class="gv-prize-medal">${MEDALS[i]}</span>
+          ${mediaHtml}
+          <div class="gv-prize-name">${txt ? esc(txt) : "TBA"}</div>
+          <div class="gv-prize-place">${PLACES[i]}</div>
+        </div>`;
+      }
+
+      // Destroy existing Lottie instances before replacing HTML
+      _destroyGvPreviewLottie();
+
+      const newPrizesHtml = anyPrize
+        ? `<div class="gv-prizes">${_prizeHtml(1)}${_prizeHtml(2)}${_prizeHtml(3)}</div>`
+        : `<div class="gv-no-prizes">Призы не заданы — секция скрыта для пользователей</div>`;
+
+      const sheet = overlay.querySelector(".gv-preview-sheet");
+      const oldPrizes = sheet.querySelector(".gv-prizes, .gv-no-prizes");
+      if (oldPrizes) {
+        oldPrizes.outerHTML = newPrizesHtml;
+      } else {
+        // Insert before the divider if no existing prizes element
+        const divider = sheet.querySelector(".gv-preview-divider");
+        if (divider) divider.insertAdjacentHTML("beforebegin", newPrizesHtml);
+      }
+
+      // Re-init Lottie for any TGS prize images
+      prizeImgs.forEach((url, i) => {
+        if (url && url.endsWith(".tgs")) _loadGvPreviewLottie(`gvPreviewLottie_${i+1}`, url);
+      });
+    }
+
+    function _scheduleGiveawayPreviewSync() {
+      if (_gvPreviewSyncTimer) clearTimeout(_gvPreviewSyncTimer);
+      _gvPreviewSyncTimer = setTimeout(() => {
+        _gvPreviewSyncTimer = null;
+        _syncGiveawayPreviewNow();
+      }, 500);
     }
 
     async function _loadGvPreviewLottie(containerId, tgsUrl) {
@@ -3850,10 +3923,35 @@
       prizeImgs.forEach((url, i) => {
         if (url && url.endsWith(".tgs")) _loadGvPreviewLottie(`gvPreviewLottie_${i+1}`, url);
       });
+
+      // Attach live-sync listeners to form fields (debounced 500 ms)
+      const _syncFieldIds = [
+        "gv_prize_1", "gv_prize_2", "gv_prize_3",
+        "gv_prize_1_image", "gv_prize_2_image", "gv_prize_3_image",
+        "gvDesc",
+      ];
+      // Clear any stale listeners first
+      while (_gvPreviewSyncListeners.length) {
+        const { el, event, fn } = _gvPreviewSyncListeners.pop();
+        el.removeEventListener(event, fn);
+      }
+      for (const id of _syncFieldIds) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        const fn = _scheduleGiveawayPreviewSync;
+        el.addEventListener("input", fn);
+        _gvPreviewSyncListeners.push({ el, event: "input", fn });
+      }
     }
 
     function closeGiveawayPreview() {
       if (_gvPreviewCountdownTimer) { clearInterval(_gvPreviewCountdownTimer); _gvPreviewCountdownTimer = null; }
+      if (_gvPreviewSyncTimer) { clearTimeout(_gvPreviewSyncTimer); _gvPreviewSyncTimer = null; }
+      // Remove live-sync listeners
+      while (_gvPreviewSyncListeners.length) {
+        const { el, event, fn } = _gvPreviewSyncListeners.pop();
+        el.removeEventListener(event, fn);
+      }
       _destroyGvPreviewLottie();
       const el = document.getElementById("gvPreviewOverlay");
       if (el) el.remove();

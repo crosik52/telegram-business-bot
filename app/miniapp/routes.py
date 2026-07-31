@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, select, text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.business.dispatcher import get_bot
@@ -1368,10 +1368,13 @@ async def miniapp_leaderboard(
     from app.models.wallet import UserWallet  # local to avoid circular dep
     from app.models.subscription import UserSubscription  # local to avoid circular dep
 
+    # Secondary sort by owner_telegram_id guarantees a deterministic order when
+    # balances are tied, so in-list ranks and the pinned-row rank below stay
+    # consistent with each other.
     top_rows = (
         await session.execute(
             select(UserWallet.owner_telegram_id, UserWallet.balance, UserWallet.total_earned)
-            .order_by(UserWallet.balance.desc())
+            .order_by(UserWallet.balance.desc(), UserWallet.owner_telegram_id.asc())
             .limit(15)
         )
     ).all()
@@ -1413,6 +1416,7 @@ async def miniapp_leaderboard(
 
     entries = []
     my_rank: int | None = None
+    own_balance: int | None = None
     for i, row in enumerate(top_rows):
         fn, ln, un = names_map.get(row[0], (None, None, None))
         name_parts = [p for p in (fn, ln) if p]
@@ -1420,6 +1424,7 @@ async def miniapp_leaderboard(
         is_self = row[0] == owner_id
         if is_self:
             my_rank = i + 1
+            own_balance = row[1]
         entries.append(
             {
                 "rank": i + 1,
@@ -1440,16 +1445,27 @@ async def miniapp_leaderboard(
             )
         ).scalar_one_or_none()
         if own_balance is not None:
+            # Count wallets that rank *before* the caller using the same ordering
+            # as the top-15 query: balance DESC, then owner_telegram_id ASC.
+            # A wallet ranks before ours when it has a strictly higher balance,
+            # OR the same balance but a lower (earlier-sorting) telegram_id.
             higher = (
                 await session.execute(
                     select(func.count(UserWallet.id)).where(
-                        UserWallet.balance > own_balance
+                        or_(
+                            UserWallet.balance > own_balance,
+                            and_(
+                                UserWallet.balance == own_balance,
+                                UserWallet.owner_telegram_id < owner_id,
+                            ),
+                        )
                     )
                 )
             ).scalar_one()
             my_rank = higher + 1
 
-    return {"entries": entries, "my_rank": my_rank}
+    me = {"rank": my_rank, "balance": own_balance} if my_rank is not None else None
+    return {"entries": entries, "my_rank": my_rank, "me": me}
 
 
 # ── Pets ──────────────────────────────────────────────────────────────────────

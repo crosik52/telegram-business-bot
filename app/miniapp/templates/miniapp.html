@@ -8029,9 +8029,10 @@
     }
 
     function renderLeaderboardSection() {
-      const entries = lbData?.entries || [];
-      const myRank  = lbData?.my_rank;
-      const medals  = ["🥇","🥈","🥉"];
+      const entries  = lbData?.entries || [];
+      const me       = lbData?.me;
+      const medals   = ["🥇","🥈","🥉"];
+      const meInList = entries.some(e => e.is_self);
 
       const subBadge = (sub) => {
         if (sub === "vip")     return `<span class="lb-sub-badge vip">VIP</span>`;
@@ -8044,13 +8045,22 @@
           <div class="lb-rank">${medals[i] || ("#" + e.rank)}</div>
           <div class="lb-avatar" style="background:${colorFor(e.display_name)}">${initials(e.display_name)}</div>
           <div class="lb-body">
-            <div class="lb-name">${e.is_self ? "👤 Ты" : e.display_name}${subBadge(e.sub_type)}</div>
+            <div class="lb-name">${e.is_self ? "👤 Вы" : e.display_name}${e.is_self ? ' <span class="lb-me-chip">Вы</span>' : subBadge(e.sub_type)}</div>
           </div>
           <div class="lb-coins">${(e.balance ?? 0).toLocaleString("ru-RU")} 🪙</div>
         </div>`).join("");
 
-      const myNote = (myRank && !entries.find(e => e.is_self))
-        ? `<div class="lb-my-rank-note">Твоё место: #${myRank}</div>` : "";
+      const pinnedMe = (me && !meInList)
+        ? `<div class="lb-me-separator"></div>
+           <div class="lb-entry me">
+             <div class="lb-rank">#${me.rank}</div>
+             <div class="lb-avatar" style="background:var(--link)">Вы</div>
+             <div class="lb-body">
+               <div class="lb-name">👤 Вы <span class="lb-me-chip">Вы</span></div>
+             </div>
+             <div class="lb-coins">${(me.balance ?? 0).toLocaleString("ru-RU")} 🪙</div>
+           </div>`
+        : "";
 
       return `
         <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:4px">
@@ -8058,7 +8068,7 @@
         </div>
         <div class="section-title" style="margin-top:8px">${_si("ico-coin")} Рейтинг монет</div>
         ${rows || `<div class="empty" style="padding:20px 0"><span class="big-emoji">🪙</span>Пока никто не зарабатывал монеты.</div>`}
-        ${myNote}`;
+        ${pinnedMe}`;
     }
 
     // Quietly refresh quests+lb in background (no skeleton flash)

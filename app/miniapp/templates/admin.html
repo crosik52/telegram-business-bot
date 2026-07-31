@@ -3617,6 +3617,7 @@
 
     // ── Giveaway Preview ────────────────────────────────────────────────────
     const _gvPreviewLottie = {};
+   let _gvPreviewCountdownTimer = null;
 
     function _destroyGvPreviewLottie() {
       for (const inst of Object.values(_gvPreviewLottie)) { try { inst.destroy(); } catch {} }
@@ -3701,11 +3702,11 @@
           const hv = Math.floor((diff % 86400000) / 3600000);
           const mv = Math.floor((diff % 3600000) / 60000);
           const sv = Math.floor((diff % 60000) / 1000);
-          cdHtml = `<div class="gv-cd-wrap">
-            <div class="gv-cd-cell"><div class="gv-cd-val">${dv}</div><div class="gv-cd-lbl">дней</div></div>
-            <div class="gv-cd-cell"><div class="gv-cd-val">${String(hv).padStart(2,"0")}</div><div class="gv-cd-lbl">часов</div></div>
-            <div class="gv-cd-cell"><div class="gv-cd-val">${String(mv).padStart(2,"0")}</div><div class="gv-cd-lbl">минут</div></div>
-            <div class="gv-cd-cell"><div class="gv-cd-val">${String(sv).padStart(2,"0")}</div><div class="gv-cd-lbl">секунд</div></div>
+          cdHtml = `<div class="gv-cd-wrap" id="gvPreviewCdWrap">
+            <div class="gv-cd-cell"><div class="gv-cd-val" id="gvPreviewCdD">${dv}</div><div class="gv-cd-lbl">дней</div></div>
+            <div class="gv-cd-cell"><div class="gv-cd-val" id="gvPreviewCdH">${String(hv).padStart(2,"0")}</div><div class="gv-cd-lbl">часов</div></div>
+            <div class="gv-cd-cell"><div class="gv-cd-val" id="gvPreviewCdM">${String(mv).padStart(2,"0")}</div><div class="gv-cd-lbl">минут</div></div>
+            <div class="gv-cd-cell"><div class="gv-cd-val" id="gvPreviewCdS">${String(sv).padStart(2,"0")}</div><div class="gv-cd-lbl">секунд</div></div>
           </div>`;
         } else {
           cdHtml = `<div class="gv-cd-finished">🏆 Розыгрыш завершён!</div>`;
@@ -3736,6 +3737,34 @@
       overlay.addEventListener("click", e => { if (e.target === overlay) closeGiveawayPreview(); });
       document.body.appendChild(overlay);
 
+      // Start live countdown ticker if there is a future deadline
+      if (_gvPreviewCountdownTimer) { clearInterval(_gvPreviewCountdownTimer); _gvPreviewCountdownTimer = null; }
+      if (deadline) {
+        const deadlineMs = new Date(deadline).getTime();
+        _gvPreviewCountdownTimer = setInterval(() => {
+          const remaining = deadlineMs - Date.now();
+          const wrap = document.getElementById("gvPreviewCdWrap");
+          if (!wrap) { clearInterval(_gvPreviewCountdownTimer); _gvPreviewCountdownTimer = null; return; }
+          if (remaining <= 0) {
+            clearInterval(_gvPreviewCountdownTimer); _gvPreviewCountdownTimer = null;
+            wrap.outerHTML = `<div class="gv-cd-finished">🏆 Розыгрыш завершён!</div>`;
+            return;
+          }
+          const dv = Math.floor(remaining / 86400000);
+          const hv = Math.floor((remaining % 86400000) / 3600000);
+          const mv = Math.floor((remaining % 3600000) / 60000);
+          const sv = Math.floor((remaining % 60000) / 1000);
+          const dEl = document.getElementById("gvPreviewCdD");
+          const hEl = document.getElementById("gvPreviewCdH");
+          const mEl = document.getElementById("gvPreviewCdM");
+          const sEl = document.getElementById("gvPreviewCdS");
+          if (dEl) dEl.textContent = dv;
+          if (hEl) hEl.textContent = String(hv).padStart(2,"0");
+          if (mEl) mEl.textContent = String(mv).padStart(2,"0");
+          if (sEl) sEl.textContent = String(sv).padStart(2,"0");
+        }, 1000);
+      }
+
       // Load TGS prize animations
       prizeImgs.forEach((url, i) => {
         if (url && url.endsWith(".tgs")) _loadGvPreviewLottie(`gvPreviewLottie_${i+1}`, url);
@@ -3743,6 +3772,7 @@
     }
 
     function closeGiveawayPreview() {
+      if (_gvPreviewCountdownTimer) { clearInterval(_gvPreviewCountdownTimer); _gvPreviewCountdownTimer = null; }
       _destroyGvPreviewLottie();
       const el = document.getElementById("gvPreviewOverlay");
       if (el) el.remove();

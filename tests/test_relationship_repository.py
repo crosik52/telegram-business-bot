@@ -563,11 +563,15 @@ async def test_gift_cooldown_resets_after_upgrade(session):
         "First gift after upgrade should succeed and record XP"
     )
 
-    # Step 6 — B's cooldown was also reset; B can gift A right away
+    # Step 6 — B's cooldown was also reset; B can gift A right away.
+    # This reciprocal same-day gift starts the couple streak (day 1), so B's
+    # gift XP carries the +2%-per-streak-day bonus: 100 + round(100 * 1.02).
     result_b = await repo.gift(USER_B, USER_A)
-    assert result_b["new_xp"] == GIFT_XP * 2, (
+    assert result_b["new_xp"] == GIFT_XP + round(GIFT_XP * 1.02), (
         "B's gift after upgrade should also succeed (cooldown was reset for both sides)"
     )
+    assert result_b["streak_days"] == 1
+    assert result_b["streak_advanced"] is True
 
 
 # ---------------------------------------------------------------------------

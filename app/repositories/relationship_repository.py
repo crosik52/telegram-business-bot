@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import logging
 
 from sqlalchemy import func, or_, select
@@ -9,13 +10,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.business_connection import BusinessConnection
 from app.models.relationship import (
+    ANNIVERSARY_MONTH_BONUS,
+    ANNIVERSARY_YEAR_BONUS,
+    COUPLE_QUESTS,
     GIFT_COOLDOWN_H,
-    GIFT_COST,
-    GIFT_TO_PARTNER,
-    GIFT_XP,
+    GIFT_TYPES,
+    LEVEL_PERK_STEP,
+    LEVEL_TITLES,
     MAX_REL_LEVEL,
     REL_XP_BONUS,
     REQUEST_COST,
+    STREAK_MILESTONES,
+    STREAK_XP_BONUS_CAP,
+    STREAK_XP_BONUS_PER_DAY,
     TIER_ORDER,
     UPGRADE_COSTS,
     UPGRADE_MIN_LEVEL,
@@ -29,6 +36,34 @@ logger = logging.getLogger(__name__)
 
 def _level_from_xp(xp: int) -> int:
     return min(MAX_REL_LEVEL, xp // XP_PER_LEVEL + 1)
+
+
+def _title_for(rel_type: str, level: int) -> str:
+    """Highest bracket title whose min_level <= level."""
+    brackets = LEVEL_TITLES.get(rel_type, LEVEL_TITLES["friends"])
+    title = brackets[0][1]
+    for min_lvl, t in brackets:
+        if level >= min_lvl:
+            title = t
+    return title
+
+
+def _week_key(now: dt.datetime) -> str:
+    iso = now.isocalendar()
+    return f"{iso[0]}-W{iso[1]:02d}"
+
+
+def _load_meta(rel: Relationship) -> dict:
+    if not rel.meta:
+        return {}
+    try:
+        return json.loads(rel.meta)
+    except Exception:
+        return {}
+
+
+def _save_meta(rel: Relationship, meta: dict) -> None:
+    rel.meta = json.dumps(meta, ensure_ascii=False)
 
 
 class RelationshipRepository:
@@ -54,18 +89,34 @@ class RelationshipRepository:
 
     # ── Queries ───────────────────────────────────────────────────────────────
 
-    async def get_between(self, user1: int, user2: int) -> Relationship | None:
-        """Active or pending relationship between two users."""
+    async def get_between(
+        self, user1: int, user2: int, *, lock: bool = False
+    ) -> Relationship | None:
+        """Active or pending relationship between two users.
+
+        With lock=True the row is selected FOR UPDATE so all subsequent
+        validation (cooldowns, meta counters, claims) happens under the lock —
+        required for every economy mutation to avoid double-credits.
+        """
         a, b = self._pair(user1, user2)
-        return (
-            await self._session.execute(
-                select(Relationship).where(
-                    Relationship.user_a_id == a,
-                    Relationship.user_b_id == b,
-                    Relationship.status.in_(["pending", "active"]),
-                )
-            )
-        ).scalar_one_or_none()
+        q = select(Relationship).where(
+            Relationship.user_a_id == a,
+            Relationship.user_b_id == b,
+            Relationship.status.in_(["pending", "active"]),
+        )
+        if lock:
+            q = q.with_for_update()
+        return (await self._session.execute(q)).scalar_one_or_none()
+
+    async def _get_wallets_ordered(
+        self, uid1: int, uid2: int
+    ) -> tuple[UserWallet, UserWallet]:
+        """Lock both wallets in normalized id order to prevent deadlocks,
+        returning them as (wallet_for_uid1, wallet_for_uid2)."""
+        first, second = sorted((uid1, uid2))
+        w_first  = await self._get_wallet(first,  lock=True)
+        w_second = await self._get_wallet(second, lock=True)
+        return (w_first, w_second) if uid1 == first else (w_second, w_first)
 
     async def get_for_user(self, user_id: int) -> list[Relationship]:
         """All active + pending relationships for a user."""
@@ -142,9 +193,65 @@ class RelationshipRepository:
             )
         ).scalar_one_or_none()
 
-    def rel_xp_multiplier(self, tier: str | None) -> float:
-        """Return the pet XP multiplier for the given relationship tier (1.0 if none)."""
-        return REL_XP_BONUS.get(tier, 1.0) if tier else 1.0
+    async def get_active_bond(
+        self, user1: int, user2: int
+    ) -> tuple[str | None, int]:
+        """(rel_type, level) of the active relationship, or (None, 1).
+
+        Same BusinessConnection gating as get_active_tier; level feeds the
+        per-level pet-XP perk in rel_xp_multiplier().
+        """
+        for uid in (user1, user2):
+            connected = (
+                await self._session.execute(
+                    select(BusinessConnection.id).where(
+                        BusinessConnection.user_telegram_id == uid,
+                        BusinessConnection.is_enabled.is_(True),
+                    ).limit(1)
+                )
+            ).scalar_one_or_none()
+            if connected is None:
+                return None, 1
+
+        a, b = self._pair(user1, user2)
+        row = (
+            await self._session.execute(
+                select(Relationship.rel_type, Relationship.level).where(
+                    Relationship.user_a_id == a,
+                    Relationship.user_b_id == b,
+                    Relationship.status == "active",
+                )
+            )
+        ).first()
+        return (row[0], row[1] or 1) if row else (None, 1)
+
+    def rel_xp_multiplier(self, tier: str | None, level: int = 1) -> float:
+        """Pet XP multiplier for the given relationship tier + level perk."""
+        if not tier:
+            return 1.0
+        base = REL_XP_BONUS.get(tier, 1.0)
+        return base + max(0, level - 1) * LEVEL_PERK_STEP
+
+    @staticmethod
+    def _next_anniversary(accepted_at: dt.datetime, now: dt.datetime) -> tuple[int, str] | None:
+        """(days_until, label) of the next month/year anniversary, or None."""
+        if accepted_at.tzinfo is None:
+            accepted_at = accepted_at.replace(tzinfo=dt.timezone.utc)
+        months = (now.year - accepted_at.year) * 12 + (now.month - accepted_at.month)
+        for add in (0, 1, 2):
+            m = months + add
+            if m <= 0:
+                continue
+            y, mo = divmod(accepted_at.month - 1 + m, 12)
+            try:
+                target = accepted_at.replace(year=accepted_at.year + y, month=mo + 1)
+            except ValueError:  # e.g. Jan 31 → Feb: clamp to end of month
+                target = accepted_at.replace(year=accepted_at.year + y, month=mo + 2, day=1) - dt.timedelta(days=1)
+            if target.date() >= now.date():
+                days = (target.date() - now.date()).days
+                label = f"{m // 12} г." if m % 12 == 0 else f"{m} мес."
+                return days, label
+        return None
 
     def to_dict(self, rel: Relationship, viewer_id: int) -> dict:
         """Serialise a Relationship for API responses."""
@@ -165,11 +272,23 @@ class RelationshipRepository:
             and rel.rel_type != "married"
             and rel.level >= UPGRADE_MIN_LEVEL.get(rel.rel_type, 999)
         )
+        meta = _load_meta(rel)
+        streak = meta.get("streak", {})
+        next_anniv = (
+            self._next_anniversary(rel.accepted_at, now)
+            if rel.accepted_at and rel.status == "active" else None
+        )
+        # streak XP bonus currently in effect
+        streak_bonus = min(
+            streak.get("days", 0) * STREAK_XP_BONUS_PER_DAY, STREAK_XP_BONUS_CAP
+        )
         return {
             "id":           rel.id,
             "partner_id":   partner_id,
             "rel_type":     rel.rel_type,
             "level":        rel.level,
+            "max_level":    MAX_REL_LEVEL,
+            "title":        _title_for(rel.rel_type, rel.level),
             "xp":           rel.xp,
             "xp_in_level":  xp_in_level,
             "xp_pct":       round(xp_in_level / XP_PER_LEVEL * 100),
@@ -182,6 +301,12 @@ class RelationshipRepository:
             "accepted_at":  (
                 rel.accepted_at.isoformat() if rel.accepted_at else None
             ),
+            "streak_days":     streak.get("days", 0),
+            "streak_best":     streak.get("best", 0),
+            "streak_bonus_pct": round(streak_bonus * 100),
+            "total_gifts":     meta.get("totals", {}).get("gifts", 0),
+            "next_anniv_days": next_anniv[0] if next_anniv else None,
+            "next_anniv_label": next_anniv[1] if next_anniv else None,
         }
 
     # ── Mutations ─────────────────────────────────────────────────────────────
@@ -229,6 +354,7 @@ class RelationshipRepository:
             broken.accepted_at  = None
             broken.last_gift_a  = None
             broken.last_gift_b  = None
+            broken.meta         = None  # old streak/quest/anniversary state must not leak
             broken.created_at   = dt.datetime.now(dt.timezone.utc)
             await self._session.flush()
             return broken
@@ -275,19 +401,31 @@ class RelationshipRepository:
         rel.status = "broken"
         await self._session.flush()
 
-    async def gift(self, sender_id: int, partner_id: int) -> dict:
-        """Daily gift: deduct GIFT_COST, add GIFT_TO_PARTNER to partner,
-        and add GIFT_XP to both sides' relationship XP.
+    async def gift(
+        self, sender_id: int, partner_id: int, gift_id: str = "rose"
+    ) -> dict:
+        """Send a gift from the catalogue.  Cost/XP are ALWAYS taken from
+        GIFT_TYPES server-side — the client only picks the id.
 
-        Atomicity guarantee: both the sender debit and the partner credit are
-        performed inside the same SQLAlchemy session transaction.  If the
-        partner has no wallet row yet, _get_wallet() creates one (also within
-        the same transaction).  All changes are committed or rolled back
-        together by the caller — no partial state can persist.
+        Also advances the couple streak (a streak day = both partners gifted
+        on the same UTC date), weekly quest counters, and lifetime totals.
+
+        Atomicity guarantee: sender debit, partner credit, and any streak
+        milestone bonuses all happen in one session transaction.
         """
-        rel = await self.get_between(sender_id, partner_id)
+        gift_def = GIFT_TYPES.get(gift_id)
+        if gift_def is None:
+            raise ValueError("unknown_gift")
+
+        # Lock the relationship row first: all cooldown/streak/meta validation
+        # must happen under this lock to prevent concurrent double-gifts.
+        rel = await self.get_between(sender_id, partner_id, lock=True)
         if not rel or rel.status != "active":
             raise ValueError("not_related")
+
+        # tier gate for premium gifts
+        if TIER_ORDER.index(rel.rel_type) < TIER_ORDER.index(gift_def["min_tier"]):
+            raise ValueError("gift_tier_locked")
 
         now  = dt.datetime.now(dt.timezone.utc)
         last = self._last_gift(rel, sender_id)
@@ -299,28 +437,214 @@ class RelationshipRepository:
                 secs = int(GIFT_COOLDOWN_H * 3600 - (now - last).total_seconds())
                 raise ValueError(f"gift_cooldown:{secs}")
 
-        sender_w = await self._get_wallet(sender_id,  lock=True)
-        if sender_w.balance < GIFT_COST:
+        cost, to_partner = gift_def["cost"], gift_def["to_partner"]
+
+        # Wallets locked in normalized id order (deadlock-safe for reciprocal gifts)
+        sender_w, partner_w = await self._get_wallets_ordered(sender_id, partner_id)
+        if sender_w.balance < cost:
             raise ValueError("insufficient_funds")
-        sender_w.balance -= GIFT_COST
+        sender_w.balance -= cost
+        partner_w.balance += to_partner
 
-        partner_w = await self._get_wallet(partner_id, lock=True)
-        partner_w.balance += GIFT_TO_PARTNER
+        # ── meta: streak / weekly counters / totals ──────────────────────────
+        meta   = _load_meta(rel)
+        today  = now.date().isoformat()
+        wk     = _week_key(now)
+        week   = meta.get("week", {})
+        if week.get("key") != wk:
+            week = {"key": wk, "gifts": 0, "mutual": 0, "spent": 0, "claimed": []}
+        week["gifts"] = week.get("gifts", 0) + 1
+        week["spent"] = week.get("spent", 0) + cost
 
-        rel.xp    += GIFT_XP
+        side_key  = "gift_date_a" if sender_id == rel.user_a_id else "gift_date_b"
+        other_key = "gift_date_b" if sender_id == rel.user_a_id else "gift_date_a"
+        meta[side_key] = today
+
+        streak = meta.get("streak", {"days": 0, "best": 0, "last_mutual": None, "milestones": []})
+        streak_advanced = False
+        milestone_coins = 0
+        if meta.get(other_key) == today and streak.get("last_mutual") != today:
+            # both partners gifted today → advance (or reset-and-start) streak
+            prev = streak.get("last_mutual")
+            if prev == (now.date() - dt.timedelta(days=1)).isoformat():
+                streak["days"] = streak.get("days", 0) + 1
+            else:
+                streak["days"] = 1
+            streak["last_mutual"] = today
+            streak["best"] = max(streak.get("best", 0), streak["days"])
+            streak_advanced = True
+            week["mutual"] = week.get("mutual", 0) + 1
+            # milestone bonus — once per milestone per streak run
+            hit = streak["days"]
+            done: list = streak.get("milestones", [])
+            if hit in STREAK_MILESTONES and hit not in done:
+                milestone_coins = STREAK_MILESTONES[hit]
+                sender_w.balance  += milestone_coins
+                partner_w.balance += milestone_coins
+                done.append(hit)
+                streak["milestones"] = done
+        elif streak.get("last_mutual") and streak["last_mutual"] < (
+            now.date() - dt.timedelta(days=1)
+        ).isoformat():
+            # streak broken by a gap ≥ 2 days
+            streak["days"] = 0
+            streak["milestones"] = []
+
+        totals = meta.get("totals", {"gifts": 0, "spent": 0})
+        totals["gifts"] = totals.get("gifts", 0) + 1
+        totals["spent"] = totals.get("spent", 0) + cost
+
+        meta["streak"], meta["week"], meta["totals"] = streak, week, totals
+        _save_meta(rel, meta)
+
+        # ── XP with streak bonus ──────────────────────────────────────────────
+        bonus = min(streak.get("days", 0) * STREAK_XP_BONUS_PER_DAY, STREAK_XP_BONUS_CAP)
+        xp_gain = round(gift_def["xp"] * (1 + bonus))
+        rel.xp    += xp_gain
         rel.level  = _level_from_xp(rel.xp)
         self._set_last_gift(rel, sender_id, now)
 
         await self._session.flush()
         return {
+            "gift":             {"id": gift_id, **gift_def},
+            "xp_gained":        xp_gain,
             "new_xp":           rel.xp,
             "new_level":        rel.level,
+            "new_title":        _title_for(rel.rel_type, rel.level),
             "new_balance":      sender_w.balance,
-            "partner_received": GIFT_TO_PARTNER,
+            "partner_received": to_partner,
+            "streak_days":      streak.get("days", 0),
+            "streak_advanced":  streak_advanced,
+            "milestone_coins":  milestone_coins,
         }
 
+    # ── Couple quests ─────────────────────────────────────────────────────────
+
+    def quests_for(self, rel: Relationship) -> list[dict]:
+        """Weekly quest list with live progress from meta counters."""
+        now  = dt.datetime.now(dt.timezone.utc)
+        meta = _load_meta(rel)
+        week = meta.get("week", {})
+        if week.get("key") != _week_key(now):
+            week = {"gifts": 0, "mutual": 0, "spent": 0, "claimed": []}
+        counter_map = {"gifts_week": week.get("gifts", 0),
+                       "mutual_week": week.get("mutual", 0),
+                       "spent_week": week.get("spent", 0)}
+        out = []
+        for qid, q in COUPLE_QUESTS.items():
+            progress = min(counter_map.get(q["counter"], 0), q["target"])
+            out.append({
+                "id": qid, "title": q["title"], "desc": q["desc"],
+                "target": q["target"], "progress": progress,
+                "reward_coins": q["reward_coins"], "reward_xp": q["reward_xp"],
+                "done": progress >= q["target"],
+                "claimed": qid in week.get("claimed", []),
+            })
+        return out
+
+    async def claim_quest(
+        self, user_id: int, partner_id: int, quest_id: str
+    ) -> dict:
+        """Claim a completed weekly quest — rewards BOTH partners."""
+        q = COUPLE_QUESTS.get(quest_id)
+        if q is None:
+            raise ValueError("unknown_quest")
+        # Relationship lock BEFORE reading claim state — prevents double-claims.
+        rel = await self.get_between(user_id, partner_id, lock=True)
+        if not rel or rel.status != "active":
+            raise ValueError("not_related")
+
+        now  = dt.datetime.now(dt.timezone.utc)
+        meta = _load_meta(rel)
+        week = meta.get("week", {})
+        if week.get("key") != _week_key(now):
+            raise ValueError("quest_not_done")
+        counter_map = {"gifts_week": week.get("gifts", 0),
+                       "mutual_week": week.get("mutual", 0),
+                       "spent_week": week.get("spent", 0)}
+        if counter_map.get(q["counter"], 0) < q["target"]:
+            raise ValueError("quest_not_done")
+        if quest_id in week.get("claimed", []):
+            raise ValueError("quest_already_claimed")
+
+        w1, w2 = await self._get_wallets_ordered(user_id, partner_id)
+        w1.balance += q["reward_coins"]
+        w2.balance += q["reward_coins"]
+        rel.xp   += q["reward_xp"]
+        rel.level = _level_from_xp(rel.xp)
+
+        week.setdefault("claimed", []).append(quest_id)
+        meta["week"] = week
+        _save_meta(rel, meta)
+        await self._session.flush()
+        return {
+            "reward_coins": q["reward_coins"],
+            "reward_xp":    q["reward_xp"],
+            "new_balance":  w1.balance,
+            "new_xp":       rel.xp,
+            "new_level":    rel.level,
+        }
+
+    # ── Anniversaries ─────────────────────────────────────────────────────────
+
+    async def process_anniversary(self, rel: Relationship) -> dict | None:
+        """If today is a month/year anniversary not yet congratulated,
+        credit both partners and return {label, coins}.  Otherwise None.
+        Called from the /list route so it fires on next mini-app open."""
+        if rel.status != "active" or not rel.accepted_at:
+            return None
+        acc = rel.accepted_at
+        if acc.tzinfo is None:
+            acc = acc.replace(tzinfo=dt.timezone.utc)
+        now = dt.datetime.now(dt.timezone.utc)
+        months = (now.year - acc.year) * 12 + (now.month - acc.month)
+        if months <= 0:
+            return None
+        # clamp anniversary day for short months (Jan 31 → Feb 28)
+        import calendar
+        anniv_day = min(acc.day, calendar.monthrange(now.year, now.month)[1])
+        if now.day != anniv_day:
+            return None
+
+        key = f"{now.year}-{now.month:02d}"
+        # Quick unlocked pre-check (avoids locking on every /list call) …
+        if _load_meta(rel).get("anniv", {}).get("last") == key:
+            return None
+
+        # … then re-fetch FOR UPDATE and re-validate under the lock so two
+        # concurrent /list calls can't both credit the bonus.
+        rel = (
+            await self._session.execute(
+                select(Relationship)
+                .where(Relationship.id == rel.id, Relationship.status == "active")
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if rel is None:
+            return None
+        meta = _load_meta(rel)
+        anniv = meta.get("anniv", {})
+        if anniv.get("last") == key:
+            return None
+
+        is_year = months % 12 == 0
+        coins = ANNIVERSARY_YEAR_BONUS if is_year else ANNIVERSARY_MONTH_BONUS
+        label = f"{months // 12} г. вместе" if is_year else f"{months} мес. вместе"
+
+        w1, w2 = await self._get_wallets_ordered(rel.user_a_id, rel.user_b_id)
+        w1.balance += coins
+        w2.balance += coins
+
+        anniv["last"] = key
+        meta["anniv"] = anniv
+        _save_meta(rel, meta)
+        await self._session.flush()
+        return {"label": label, "coins": coins}
+
     async def upgrade_tier(self, user_id: int, partner_id: int) -> Relationship:
-        rel = await self.get_between(user_id, partner_id)
+        # Relationship lock BEFORE validation so two concurrent upgrades can't
+        # both pass the tier/level checks and double-charge the wallet.
+        rel = await self.get_between(user_id, partner_id, lock=True)
         if not rel or rel.status != "active":
             raise ValueError("not_related")
 

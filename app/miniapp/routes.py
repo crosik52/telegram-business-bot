@@ -284,6 +284,8 @@ class RelPartnerRequest(BaseModel):
 
     init_data:  str = Field(alias="initData")
     partner_id: int = Field(alias="partnerId")
+    gift_id:    str | None = Field(default=None, alias="giftId")
+    quest_id:   str | None = Field(default=None, alias="questId")
 
 
 class RelRespondRequest(BaseModel):
@@ -1758,15 +1760,34 @@ async def rel_list(
                 "username": _u.username,
             }
 
+    # Anniversary auto-congratulations (credited on first open that day)
+    anniversaries: list[dict] = []
+    for r in rels:
+        try:
+            hit = await repo.process_anniversary(r)
+            if hit:
+                pid = r.user_b_id if r.user_a_id == owner_id else r.user_a_id
+                anniversaries.append({"partner_id": pid, **hit})
+        except Exception:
+            logger.warning("anniversary processing failed for rel %s", r.id, exc_info=True)
+    if anniversaries:
+        await session.commit()
+
     result = []
     for r in rels:
         d = repo.to_dict(r, owner_id)
         info = name_map.get(d["partner_id"], {})
         d["partner_name"]     = info.get("name", f"#{d['partner_id']}")
         d["partner_username"] = info.get("username")
+        d["quests"]           = repo.quests_for(r) if r.status == "active" else []
         result.append(d)
 
-    return {"relationships": result}
+    from app.models.relationship import GIFT_TYPES as _GT
+    return {
+        "relationships": result,
+        "gift_types": [{"id": gid, **g} for gid, g in _GT.items()],
+        "anniversaries": anniversaries,
+    }
 
 
 @router.post("/app/api/relationships/leaderboard")
@@ -1994,12 +2015,97 @@ async def rel_gift(
     owner_id = _verify_rel_init(payload.init_data, settings)
     repo     = RelationshipRepository(session)
     try:
-        result = await repo.gift(owner_id, payload.partner_id)
+        result = await repo.gift(
+            owner_id, payload.partner_id, payload.gift_id or "rose"
+        )
         await session.commit()
         return result
     except ValueError as e:
         detail = str(e).split(":")[0]
         raise HTTPException(status_code=400, detail=detail) from e
+
+
+@router.post("/app/api/relationships/quest-claim")
+async def rel_quest_claim(
+    payload: RelPartnerRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    owner_id = _verify_rel_init(payload.init_data, settings)
+    repo     = RelationshipRepository(session)
+    if not payload.quest_id:
+        raise HTTPException(status_code=400, detail="quest_id_required")
+    try:
+        result = await repo.claim_quest(owner_id, payload.partner_id, payload.quest_id)
+        await session.commit()
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/app/api/relationships/pair-stats")
+async def rel_pair_stats(
+    payload: RelPartnerRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Fun couple stats: message counts between owner and partner + a
+    deterministic 'compatibility' score seeded by the pair ids."""
+    settings = get_settings()
+    owner_id = _verify_rel_init(payload.init_data, settings)
+    repo     = RelationshipRepository(session)
+    rel = await repo.get_between(owner_id, payload.partner_id)
+    if not rel or rel.status != "active":
+        raise HTTPException(status_code=400, detail="not_related")
+
+    from app.models.business_connection import BusinessConnection as _BC
+    from app.models.message import Message as _Msg
+    conn_ids = [
+        row[0] for row in (await session.execute(
+            select(_BC.business_connection_id).where(
+                _BC.user_telegram_id == owner_id
+            )
+        )).all()
+    ]
+    sent = received = 0
+    if conn_ids:
+        sent = (await session.execute(
+            select(func.count()).select_from(_Msg).where(
+                _Msg.business_connection_id.in_(conn_ids),
+                _Msg.chat_id == payload.partner_id,
+                _Msg.is_outgoing.is_(True),
+            )
+        )).scalar_one()
+        received = (await session.execute(
+            select(func.count()).select_from(_Msg).where(
+                _Msg.business_connection_id.in_(conn_ids),
+                _Msg.chat_id == payload.partner_id,
+                _Msg.is_outgoing.is_(False),
+            )
+        )).scalar_one()
+
+    total = sent + received
+    balance = round(min(sent, received) / max(sent, received) * 100) if sent and received else 0
+    # Deterministic playful score: stable per pair, nudged by real activity
+    a, b = min(owner_id, payload.partner_id), max(owner_id, payload.partner_id)
+    seed = (a * 31 + b * 17) % 41  # 0..40
+    activity = min(30, total // 50)             # up to +30 for chatting
+    balance_pts = round(balance * 0.29)          # up to +29 for symmetry
+    compat = min(100, 40 + seed % 21 + activity + balance_pts)  # 40..100
+
+    meta_totals = {}
+    try:
+        import json as _json
+        meta_totals = (_json.loads(rel.meta) if rel.meta else {}).get("totals", {})
+    except Exception:
+        pass
+
+    return {
+        "messages_sent":     sent,
+        "messages_received": received,
+        "messages_total":    total,
+        "balance_pct":       balance,
+        "compatibility":     compat,
+        "total_gifts":       meta_totals.get("gifts", 0),
+        "total_spent":       meta_totals.get("spent", 0),
+    }
 
 
 @router.post("/app/api/relationships/upgrade")

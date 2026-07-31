@@ -631,6 +631,73 @@ async def _cmd_card(
         )
         return
 
+    # Resolve display names for the image
+    from app.models.user import TelegramUser as _TU  # noqa: PLC0415
+    from sqlalchemy import select as _select  # noqa: PLC0415
+
+    def _disp(u: _TU | None, fallback: str) -> str:
+        if not u:
+            return fallback
+        parts = [p for p in (u.first_name, u.last_name) if p]
+        return " ".join(parts) or u.username or fallback
+
+    _users = {
+        u.telegram_user_id: u
+        for u in (
+            await session.execute(
+                _select(_TU).where(_TU.telegram_user_id.in_([owner_id, chat_id]))
+            )
+        ).scalars()
+    }
+    sender_name  = _disp(_users.get(owner_id), "Я")
+    partner_name = _disp(_users.get(chat_id), "Ты")
+
+    # Template body (or custom text) + tier title/streak from the relationship
+    templates = _CARD_TEMPLATES.get(rel.rel_type, _CARD_TEMPLATES["friends"])
+    _, default_body, _ = _random.choice(templates)
+    body = (args or "").strip() or default_body
+
+    days_together = None
+    if rel.accepted_at:
+        import datetime as _dt  # noqa: PLC0415
+        _acc = rel.accepted_at
+        if _acc.tzinfo is None:
+            _acc = _acc.replace(tzinfo=_dt.timezone.utc)
+        days_together = (_dt.datetime.now(_dt.timezone.utc) - _acc).days
+
+    streak_days = 0
+    title = None
+    try:
+        d = rel_repo.to_dict(rel, owner_id)
+        streak_days = d.get("streak_days", 0)
+        title = d.get("title")
+    except Exception:
+        pass
+
+    # Render the postcard image; fall back to the classic text card on error
+    try:
+        from app.services.postcard_service import render_postcard  # noqa: PLC0415
+        png = render_postcard(
+            rel_type=rel.rel_type,
+            sender_name=sender_name,
+            partner_name=partner_name,
+            message=body,
+            days_together=days_together,
+            streak_days=streak_days,
+            title=title,
+        )
+        await bot.send_photo(
+            chat_id=chat_id,
+            business_connection_id=business_connection_id,
+            photo=BufferedInputFile(png, filename="postcard.png"),
+        )
+        return
+    except Exception as exc:
+        logger.warning(
+            "Postcard image failed for chat %s (%s) — falling back to text",
+            chat_id, exc,
+        )
+
     card_text = _build_card(rel.rel_type, args)
     try:
         await bot.send_message(

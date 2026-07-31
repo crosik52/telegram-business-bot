@@ -3647,6 +3647,8 @@
     let minesRevealedCount = 0;
     let crashGameActive   = false;
     let lastRelationships = {};   // partner_id → rel dict from /api/relationships/list
+    let relGiftTypes = [];        // gift catalogue from /api/relationships/list
+    let _shownAnnivKeys = new Set(); // anniversary toasts already shown this session
     let _interactCache = { ts: 0, relData: null, petData: null }; // 45-second client cache
     let interactSubTab = "bonds";   // "bonds" | "top"
     let interactLbCache = null;     // { ts, relLb, petLb }
@@ -9436,6 +9438,14 @@
       // Keep global state in sync
       lastRelationships = {};
       for (const r of (relData.relationships || [])) lastRelationships[r.partner_id] = r;
+      if (relData.gift_types) relGiftTypes = relData.gift_types;
+      for (const a of (relData.anniversaries || [])) {
+        const k = `${a.partner_id}:${a.label}`;
+        if (!_shownAnnivKeys.has(k)) {
+          _shownAnnivKeys.add(k);
+          toastMessage(`🎉 Годовщина: ${a.label}! Вам обоим начислено +${a.coins} 🪙`);
+        }
+      }
       petData = petLocal;
 
       const relationships = relData.relationships || [];
@@ -9827,17 +9837,48 @@
           const xpPct     = r.xp_pct || 0;
           const xpIn      = r.xp_in_level || 0;
 
-          const xpSection = isMarried ? "" : `
+          const maxLvl   = r.max_level || 10;
+          const atMax    = (r.level || 1) >= maxLvl;
+          const xpSection = `
             <div class="cert-xp-section">
               <div class="cert-xp-row">
                 <span style="font-size:14px">💗</span>
-                <div class="cert-xp-track"><div class="cert-xp-fill" style="width:${xpPct}%"></div></div>
+                <div class="cert-xp-track"><div class="cert-xp-fill" style="width:${atMax ? 100 : xpPct}%"></div></div>
               </div>
-              <div class="cert-xp-label">${xpIn} / 200 XP до следующего уровня</div>
+              <div class="cert-xp-label">${atMax ? "Максимальный уровень ⭐" : `${xpIn} / 200 XP до следующего уровня`}</div>
               ${r.streak_days
-                ? `<div class="cert-xp-sub">🔥 Серия: ${r.streak_days} дн · Рекорд: ${r.record_streak || r.streak_days} дн · Действий: ${r.daily_actions || 0}</div>`
+                ? `<div class="cert-xp-sub">🔥 Стрик пары: ${r.streak_days} дн · Рекорд: ${r.streak_best || r.streak_days} дн${r.streak_bonus_pct ? ` · +${r.streak_bonus_pct}% XP` : ""}</div>`
+                : `<div class="cert-xp-sub" style="opacity:0.7">🔥 Дарите подарки друг другу в один день — получите стрик и бонусы!</div>`}
+              ${r.next_anniv_days != null
+                ? `<div class="cert-xp-sub">📅 ${r.next_anniv_days === 0 ? `Сегодня годовщина: ${r.next_anniv_label}! 🎉` : `До годовщины (${r.next_anniv_label}): ${r.next_anniv_days} дн.`}</div>`
                 : ""}
             </div>`;
+
+          // Weekly couple quests
+          const quests = r.quests || [];
+          const questsHtml = quests.length ? `
+            <div style="margin-top:10px;text-align:left">
+              <div style="font-size:11px;font-weight:800;letter-spacing:0.5px;color:var(--hint);margin-bottom:6px">🎯 КВЕСТЫ ПАРЫ (неделя)</div>
+              ${quests.map(q => {
+                const pct = Math.round(q.progress / q.target * 100);
+                const btn = q.claimed
+                  ? `<span style="font-size:11px;color:#34c759;font-weight:700;flex-shrink:0">✓ Получено</span>`
+                  : q.done
+                    ? `<button class="cert-quick-btn gift" style="padding:4px 10px;font-size:11px;flex-shrink:0"
+                        onclick="event.stopPropagation();claimCoupleQuest(${r.partner_id},'${q.id}')">Забрать +${q.reward_coins}🪙</button>`
+                    : `<span style="font-size:11px;color:var(--hint);flex-shrink:0">${q.progress}/${q.target}</span>`;
+                return `
+                  <div style="display:flex;align-items:center;gap:8px;padding:5px 0">
+                    <div style="flex:1;min-width:0">
+                      <div style="font-size:12px;font-weight:600">${q.title}</div>
+                      <div style="height:4px;border-radius:2px;background:rgba(128,128,128,0.2);margin-top:3px;overflow:hidden">
+                        <div style="height:100%;border-radius:2px;background:linear-gradient(90deg,#ff5e87,#ff9f0a);width:${pct}%"></div>
+                      </div>
+                    </div>
+                    ${btn}
+                  </div>`;
+              }).join("")}
+            </div>` : "";
 
           // Days together from accepted_at
           let daysTogether = "–";
@@ -9850,6 +9891,7 @@
 
           bodyHtml = `
             ${xpSection}
+            ${questsHtml}
             <div class="cert-stats-footer">
               <div class="cert-stat-cell">
                 <div class="cert-stat-val">${startDateStr}</div>
@@ -9860,13 +9902,20 @@
                 <div class="cert-stat-lbl">Дней вместе</div>
               </div>
               <div class="cert-stat-cell">
+                <div class="cert-stat-val">${r.total_gifts || 0}</div>
+                <div class="cert-stat-lbl">Подарков</div>
+              </div>
+              <div class="cert-stat-cell">
                 <div class="cert-stat-val">${r.xp || 0}</div>
                 <div class="cert-stat-lbl">Всего XP</div>
               </div>
             </div>
+            <div id="pair-stats-${r.partner_id}"></div>
             <div class="cert-quick-actions">
               <button class="cert-quick-btn gift" ${r.gift_ready ? "" : "disabled"}
-                onclick="event.stopPropagation();_interactRelAction('/app/api/relationships/gift',${r.partner_id},{},function(){toastMessage('🎁 Подарок отправлен! +100 XP обоим.')})">🎁 Подарить</button>
+                onclick="event.stopPropagation();openGiftPicker(${r.partner_id})">🎁 Подарить</button>
+              <button class="cert-quick-btn more"
+                onclick="event.stopPropagation();togglePairStats(${r.partner_id})">💞 Совместимость</button>
               <button class="cert-quick-btn more">⋯ Подробнее</button>
             </div>`;
         }
@@ -9896,11 +9945,110 @@
             </div>
             ${!isPending ? `
             <div class="cert-tier-badge-wrap">
-              <span class="cert-tier-badge ${tierBadgeCls}">Уровень ${r.level || 1} · ${tierLabel}</span>
+              <span class="cert-tier-badge ${tierBadgeCls}">Уровень ${r.level || 1}/${r.max_level || 10} · ${tierLabel}</span>
+              ${r.title ? `<div style="font-size:11px;font-weight:700;color:var(--hint);margin-top:4px;letter-spacing:0.3px">«${_esc(r.title)}»</div>` : ""}
             </div>` : ""}
             ${bodyHtml}
           </div>`;
       }).join("");
+    }
+
+    // ── Gift picker / couple quests / pair stats ─────────────────────────────
+
+    function openGiftPicker(partnerId) {
+      closeGiftPicker();
+      const rel = lastRelationships[partnerId];
+      const tierRank = { friends: 0, dating: 1, married: 2 };
+      const myRank = tierRank[rel?.rel_type] ?? 0;
+      const gifts = relGiftTypes.length ? relGiftTypes : [
+        { id: "rose", emoji: "🌹", label: "Роза", cost: 50, to_partner: 40, xp: 100, min_tier: "friends" },
+      ];
+      const rows = gifts.map(g => {
+        const locked = (tierRank[g.min_tier] ?? 0) > myRank;
+        const lockNote = locked
+          ? `<div style="font-size:10px;color:var(--hint)">🔒 нужен уровень «${g.min_tier === "dating" ? "Отношения" : "Брак"}»</div>` : "";
+        return `
+          <button style="display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border:none;border-radius:14px;
+            background:var(--card-bg,rgba(128,128,128,0.08));margin-bottom:8px;cursor:pointer;text-align:left;color:inherit;${locked ? "opacity:0.45" : ""}"
+            ${locked ? "disabled" : `onclick="sendRelGift(${partnerId},'${g.id}')"`}>
+            <span style="font-size:28px">${g.emoji}</span>
+            <span style="flex:1;min-width:0">
+              <div style="font-weight:700;font-size:14px">${g.label}</div>
+              <div style="font-size:11px;color:var(--hint)">партнёру +${g.to_partner} 🪙 · +${g.xp} XP</div>
+              ${lockNote}
+            </span>
+            <span style="font-weight:800;font-size:14px;flex-shrink:0">${g.cost} 🪙</span>
+          </button>`;
+      }).join("");
+      const ov = document.createElement("div");
+      ov.id = "gift-picker-overlay";
+      ov.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.45);display:flex;align-items:flex-end;justify-content:center";
+      ov.onclick = e => { if (e.target === ov) closeGiftPicker(); };
+      ov.innerHTML = `
+        <div style="width:100%;max-width:480px;background:var(--bg,#fff);border-radius:20px 20px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));max-height:70vh;overflow-y:auto">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div style="font-size:16px;font-weight:800">🎁 Выбери подарок</div>
+            <button style="border:none;background:none;font-size:20px;cursor:pointer;color:var(--hint)" onclick="closeGiftPicker()">✕</button>
+          </div>
+          ${rows}
+        </div>`;
+      document.body.appendChild(ov);
+    }
+
+    function closeGiftPicker() {
+      document.getElementById("gift-picker-overlay")?.remove();
+    }
+
+    function sendRelGift(partnerId, giftId) {
+      closeGiftPicker();
+      _interactRelAction("/app/api/relationships/gift", partnerId, { giftId }, d => {
+        let msg = `${d.gift?.emoji || "🎁"} Подарок отправлен! +${d.xp_gained || 0} XP обоим.`;
+        if (d.streak_advanced) msg += ` 🔥 Стрик: ${d.streak_days} дн!`;
+        if (d.milestone_coins) msg += ` 🏆 Бонус стрика: +${d.milestone_coins} 🪙 каждому!`;
+        toastMessage(msg);
+      });
+    }
+
+    function claimCoupleQuest(partnerId, questId) {
+      _interactRelAction("/app/api/relationships/quest-claim", partnerId, { questId }, d => {
+        toastMessage(`🎯 Квест выполнен! +${d.reward_coins} 🪙 каждому и +${d.reward_xp} XP.`);
+      });
+    }
+
+    async function togglePairStats(partnerId) {
+      const box = document.getElementById(`pair-stats-${partnerId}`);
+      if (!box) return;
+      if (box.innerHTML) { box.innerHTML = ""; return; }
+      box.innerHTML = `<div style="font-size:12px;color:var(--hint);padding:8px 0">Считаем совместимость…</div>`;
+      const initData = tg ? tg.initData : currentInitData;
+      try {
+        const res = await fetch("/app/api/relationships/pair-stats", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initData, partnerId }),
+        });
+        const d = await res.json();
+        if (!res.ok) { box.innerHTML = ""; toastMessage(`Ошибка: ${d.detail}`); return; }
+        box.innerHTML = `
+          <div style="margin-top:10px;padding:12px;border-radius:14px;background:rgba(255,94,135,0.08);text-align:left">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+              <span style="font-size:26px">💞</span>
+              <div>
+                <div style="font-size:20px;font-weight:800">${d.compatibility}%</div>
+                <div style="font-size:11px;color:var(--hint)">совместимость</div>
+              </div>
+            </div>
+            <div style="height:6px;border-radius:3px;background:rgba(128,128,128,0.2);overflow:hidden;margin-bottom:10px">
+              <div style="height:100%;background:linear-gradient(90deg,#ff5e87,#a259ff);width:${d.compatibility}%"></div>
+            </div>
+            <div style="display:flex;gap:12px;font-size:12px;color:var(--hint);flex-wrap:wrap">
+              <span>✉️ Отправлено: <b>${d.messages_sent}</b></span>
+              <span>📩 Получено: <b>${d.messages_received}</b></span>
+              <span>⚖️ Баланс: <b>${d.balance_pct}%</b></span>
+              <span>🎁 Подарков: <b>${d.total_gifts}</b></span>
+            </div>
+          </div>`;
+      } catch { box.innerHTML = ""; toastMessage("Ошибка, попробуй снова"); }
     }
 
     function renderPetMiniCards(pets) {

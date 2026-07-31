@@ -687,8 +687,8 @@ class PetRepository:
         ups = _get_upgrades(pet)
         skill_xp_mult = 1.0 + ups.get("xp_boost", 0) * 0.30
         rel_repo      = RelationshipRepository(self._session)
-        rel_tier      = await rel_repo.get_active_tier(owner_telegram_id, pet.chat_id)
-        rel_mult      = rel_repo.rel_xp_multiplier(rel_tier)
+        rel_tier, rel_level = await rel_repo.get_active_bond(owner_telegram_id, pet.chat_id)
+        rel_mult      = rel_repo.rel_xp_multiplier(rel_tier, rel_level)
         total_mult    = food["xp_mult"] * skill_xp_mult * max(1.0, xp_multiplier) * rel_mult
         xp_gained     = round(FEED_XP * total_mult)
 
@@ -744,8 +744,8 @@ class PetRepository:
         ups = _get_upgrades(pet)
         skill_xp_mult = 1.0 + ups.get("xp_boost", 0) * 0.30
         rel_repo      = RelationshipRepository(self._session)
-        rel_tier      = await rel_repo.get_active_tier(owner_telegram_id, pet.chat_id)
-        rel_mult      = rel_repo.rel_xp_multiplier(rel_tier)
+        rel_tier, rel_level = await rel_repo.get_active_bond(owner_telegram_id, pet.chat_id)
+        rel_mult      = rel_repo.rel_xp_multiplier(rel_tier, rel_level)
         xp_gained     = round(PLAY_XP * skill_xp_mult * max(1.0, xp_multiplier) * rel_mult)
         pet.xp       += xp_gained
         pet.level     = _compute_level(pet.xp)
@@ -796,8 +796,8 @@ class PetRepository:
         ups = _get_upgrades(pet)
         skill_xp_mult = 1.0 + ups.get("xp_boost", 0) * 0.30
         rel_repo      = RelationshipRepository(self._session)
-        rel_tier      = await rel_repo.get_active_tier(owner_telegram_id, pet.chat_id)
-        rel_mult      = rel_repo.rel_xp_multiplier(rel_tier)
+        rel_tier, rel_level = await rel_repo.get_active_bond(owner_telegram_id, pet.chat_id)
+        rel_mult      = rel_repo.rel_xp_multiplier(rel_tier, rel_level)
         xp_gained     = round(CUDDLE_XP * skill_xp_mult * max(1.0, xp_multiplier) * rel_mult)
         pet.xp       += xp_gained
         pet.level     = _compute_level(pet.xp)

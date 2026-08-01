@@ -8786,7 +8786,7 @@
     function renderReferralSection() {
       if (!referralData) return "";
       const d = referralData;
-      if (!d.enabled) return `<div class="ref-empty" style="margin-top:16px">🔗 Реферальная программа временно недоступна</div>`;
+      if (!d.enabled) return `<div class="ref-empty" style="margin-top:16px">🔗 Реферальная программа сейчас на паузе — загляни позже</div>`;
 
       const lvl    = d.level    || { name: "Bronze", emoji: "🥉", color: "#CD7F32" };
       const nextLv = d.next_level;
@@ -8797,7 +8797,8 @@
       if (nextLv) {
         const span = nextLv.min - lvl.min;
         progPct  = Math.min(100, Math.round((active - lvl.min) / span * 100));
-        progLabel = `${active} / ${nextLv.min} до уровня ${nextLv.name} ${nextLv.emoji}`;
+        const need = nextLv.min - active;
+        progLabel = `ещё ${need} ${need===1?"друг":need<5?"друга":"друзей"} — и ты ${nextLv.emoji} ${nextLv.name}`;
       }
 
       const milestonesHtml = (d.milestones || []).map(m => {
@@ -8810,7 +8811,7 @@
             <div class="ref-m-icon">${icon}</div>
             <div class="ref-m-body">
               <div class="ref-m-label">${esc(m.label)}</div>
-              <div class="ref-m-sub">${m.count} активных рефералов</div>
+              <div class="ref-m-sub">${done ? "Выполнено 🎉" : `нужно ${m.count} ${m.count===1?"друга":m.count<5?"друга":"друзей"}${isNext ? ` · осталось ${m.count - active}` : ""}`}</div>
               ${!done ? `<div class="ref-m-prog">
                 <div class="ref-m-track"><div class="ref-m-fill" style="width:${pct}%"></div></div>
                 <div class="ref-m-count">${active}/${m.count}</div>
@@ -8826,7 +8827,7 @@
             const sub     = r.referred_username ? "@" + r.referred_username : ("#" + r.referred_telegram_id);
             const initials = name.split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
             const bg      = colorFor(String(r.referred_telegram_id));
-            const statusLabel = r.status === "active" ? "Активен" : "Ожидает";
+            const statusLabel = r.status === "active" ? "✓ Активен" : "⏳ Не запустил";
             const statusCls   = r.status === "active" ? "ref-status-active" : "ref-status-pending";
             return `
               <div class="ref-recent-row">
@@ -8841,7 +8842,7 @@
                 </div>
               </div>`;
           }).join("")
-        : `<div class="ref-empty">Пока нет приглашённых</div>`;
+        : `<div class="ref-empty">👥 Ещё никого нет — поделись ссылкой первым!</div>`;
 
       const REWARD_ICONS = { welcome: "🎁", per_activation: "⭐", milestone: "🏆" };
       const rewardHtml = d.reward_logs?.length
@@ -8851,52 +8852,52 @@
               <div class="ref-reward-label">${esc(r.label)}</div>
               <div class="ref-reward-date">${r.granted_at?.slice(0,10) || ""}</div>
             </div>`).join("")
-        : `<div class="ref-empty">История наград пуста</div>`;
+        : `<div class="ref-empty">🎁 Пока пусто — награды появятся здесь</div>`;
 
       return `
         <div style="margin-top:20px">
           <!-- Hero -->
           <div class="ref-hero">
-            <div class="ref-hero-label">Реферальная программа</div>
+            <div class="ref-hero-label">👥 Приглашай друзей — получай Premium</div>
             <div class="ref-level-row">
               <div class="ref-level-badge">${esc(lvl.emoji || "🥉")}</div>
               <div>
                 <div class="ref-level-name">${esc(lvl.name)}</div>
-                <div class="ref-level-sub">Уровень участника</div>
+                <div class="ref-level-sub">твой уровень партнёра</div>
               </div>
             </div>
             ${nextLv ? `
             <div class="ref-prog-wrap">
               <div class="ref-prog-track"><div class="ref-prog-fill" style="width:${progPct}%"></div></div>
               <div class="ref-prog-label">${esc(progLabel)}</div>
-            </div>` : `<div class="ref-prog-label" style="color:rgba(255,255,255,0.7);margin-bottom:12px">💎 Максимальный уровень — Diamond!</div>`}
+            </div>` : `<div class="ref-prog-label" style="color:rgba(255,255,255,0.7);margin-bottom:12px">💎 Ты на вершине — уровень Diamond!</div>`}
             <div class="ref-link-wrap">
               <div class="ref-link-text" id="refLinkText">${esc(d.ref_link)}</div>
               <button class="ref-copy-btn" id="refCopyBtn">📋 Копировать</button>
             </div>
-            <button class="ref-share-btn" id="refShareBtn">🚀 Поделиться ссылкой</button>
+            <button class="ref-share-btn" id="refShareBtn">🚀 Поделиться с другом</button>
           </div>
 
           <!-- Stats -->
           <div class="ref-stats-row">
             <div class="ref-stat-card"><div class="ref-stat-val">${d.total_invited}</div><div class="ref-stat-lbl">Приглашено</div></div>
-            <div class="ref-stat-card"><div class="ref-stat-val" style="color:var(--green)">${d.active_count}</div><div class="ref-stat-lbl">Активных</div></div>
-            <div class="ref-stat-card"><div class="ref-stat-val" style="color:var(--hint)">${d.pending_count}</div><div class="ref-stat-lbl">Ожидают</div></div>
+            <div class="ref-stat-card"><div class="ref-stat-val" style="color:var(--green)">${d.active_count}</div><div class="ref-stat-lbl">Активных 🟢</div></div>
+            <div class="ref-stat-card"><div class="ref-stat-val" style="color:var(--hint)">${d.pending_count}</div><div class="ref-stat-lbl">Ждут ⏳</div></div>
           </div>
 
           ${(d.referrer_reward_days || d.referee_reward_days) ? `
           <div style="background:rgba(20,184,166,0.1);border-radius:14px;padding:12px 14px;margin-bottom:4px;font-size:12.5px;color:var(--text);line-height:1.6">
-            ${d.referrer_reward_days ? `⭐ <b>Ты</b> получаешь +${d.referrer_reward_days} дн. Premium за каждого активного реферала<br>` : ""}
-            ${d.referee_reward_days  ? `🎁 <b>Друг</b> получает +${d.referee_reward_days} дн. Premium при регистрации` : ""}
+            ${d.referrer_reward_days ? `⭐ <b>Ты</b> получаешь +${d.referrer_reward_days} дн. Premium за каждого активного друга<br>` : ""}
+            ${d.referee_reward_days  ? `🎁 <b>Твой друг</b> тоже получает +${d.referee_reward_days} дн. Premium — сразу при старте` : ""}
           </div>` : ""}
 
-          <div class="ref-section-title">Награды за количество</div>
+          <div class="ref-section-title">🏅 Бонусы за друзей</div>
           <div class="ref-milestone-list">${milestonesHtml}</div>
 
-          <div class="ref-section-title">Последние рефералы</div>
+          <div class="ref-section-title">👥 Последние приглашённые</div>
           <div class="ref-recent-list">${recentHtml}</div>
 
-          <div class="ref-section-title">История начислений</div>
+          <div class="ref-section-title">🎁 Что ты уже получил</div>
           <div class="ref-reward-list">${rewardHtml}</div>
         </div>
       `;

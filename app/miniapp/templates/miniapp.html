@@ -9870,8 +9870,8 @@
               </div>
               <div class="cert-xp-label">${atMax ? "Максимальный уровень ⭐" : `${xpIn} / 200 XP до следующего уровня`}</div>
               ${r.streak_days
-                ? `<div class="cert-xp-sub">🔥 Стрик пары: ${r.streak_days} дн · Рекорд: ${r.streak_best || r.streak_days} дн${r.streak_bonus_pct ? ` · +${r.streak_bonus_pct}% XP` : ""}</div>`
-                : `<div class="cert-xp-sub" style="opacity:0.7">🔥 Дарите подарки друг другу в один день — получите стрик и бонусы!</div>`}
+                ? `<div class="cert-xp-sub" id="rel-streak-${r.partner_id}">🔥 Стрик пары: ${r.streak_days} дн · Рекорд: ${r.streak_best || r.streak_days} дн${r.streak_bonus_pct ? ` · +${r.streak_bonus_pct}% XP` : ""}</div>`
+                : `<div class="cert-xp-sub" id="rel-streak-${r.partner_id}" style="opacity:0.7">🔥 Дарите подарки друг другу в один день — получите стрик и бонусы!</div>`}
               ${r.next_anniv_days != null
                 ? `<div class="cert-xp-sub">📅 ${r.next_anniv_days === 0 ? `Сегодня годовщина: ${r.next_anniv_label}! 🎉` : `До годовщины (${r.next_anniv_label}): ${r.next_anniv_days} дн.`}</div>`
                 : ""}
@@ -10029,6 +10029,32 @@
         if (d.streak_advanced) msg += ` 🔥 Стрик: ${d.streak_days} дн!`;
         if (d.milestone_coins) msg += ` 🏆 Бонус стрика: +${d.milestone_coins} 🪙 каждому!`;
         toastMessage(msg);
+
+        // Update streak label on the card in real time
+        const streakEl = document.getElementById(`rel-streak-${partnerId}`);
+        if (streakEl && d.streak_days != null) {
+          const rel = lastRelationships[partnerId] || {};
+          const best = Math.max(d.streak_days, rel.streak_best || 0);
+          const bonusPct = rel.streak_bonus_pct || 0;
+          if (d.streak_days > 0) {
+            streakEl.style.opacity = "";
+            streakEl.textContent = `🔥 Стрик пары: ${d.streak_days} дн · Рекорд: ${best} дн${bonusPct ? ` · +${bonusPct}% XP` : ""}`;
+          }
+          // Update cached relationship data
+          if (lastRelationships[partnerId]) {
+            lastRelationships[partnerId].streak_days = d.streak_days;
+            if (best > (lastRelationships[partnerId].streak_best || 0)) {
+              lastRelationships[partnerId].streak_best = best;
+            }
+            lastRelationships[partnerId].gift_ready = false;
+          }
+          // Disable the gift button on the card
+          const cardEl = document.querySelector(`[data-rel-open-id="${partnerId}"]`);
+          if (cardEl) {
+            const giftBtn = cardEl.querySelector(".cert-quick-btn.gift");
+            if (giftBtn) giftBtn.disabled = true;
+          }
+        }
       });
     }
 

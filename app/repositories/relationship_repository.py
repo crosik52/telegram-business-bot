@@ -284,6 +284,20 @@ class RelationshipRepository:
         streak_bonus = min(
             streak.get("days", 0) * STREAK_XP_BONUS_PER_DAY, STREAK_XP_BONUS_CAP
         )
+        # 24-hour postcard cooldown tracked per user side in meta
+        _postcard_key = "last_postcard_a" if viewer_id == rel.user_a_id else "last_postcard_b"
+        _last_postcard_raw = meta.get(_postcard_key)
+        if _last_postcard_raw:
+            try:
+                _lp = dt.datetime.fromisoformat(_last_postcard_raw)
+                if _lp.tzinfo is None:
+                    _lp = _lp.replace(tzinfo=dt.timezone.utc)
+                postcard_ready = (now - _lp).total_seconds() >= 86400
+            except Exception:
+                postcard_ready = True
+        else:
+            postcard_ready = True
+
         return {
             "id":           rel.id,
             "partner_id":   partner_id,
@@ -299,6 +313,7 @@ class RelationshipRepository:
             "initiator_id": rel.initiator_id,
             "is_initiator": rel.initiator_id == viewer_id,
             "gift_ready":   gift_ready,
+            "postcard_ready": postcard_ready,
             "can_upgrade":  can_upgrade,
             "upgrade_cost": UPGRADE_COSTS.get(rel.rel_type, 0),
             "accepted_at":  (

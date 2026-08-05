@@ -299,7 +299,11 @@ class RelRespondRequest(BaseModel):
     partner_id: int  = Field(alias="partnerId")
     accept:     bool
 
+class RelPostcardRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
 
+    init_data:  str = Field(alias="initData")
+    partner_id: int = Field(alias="partnerId")
 class PetPlayRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -2125,7 +2129,143 @@ async def rel_gift(
         detail = str(e).split(":")[0]
         raise HTTPException(status_code=400, detail=detail) from e
 
+@router.post("/app/api/relationships/postcard")
+async def rel_postcard(
+    payload: RelPostcardRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Generate and send a postcard image to the partner via direct bot message.
+    Blocked for 24 h after each send (flag stored in relationship meta).
 
+    Concurrency-safe pattern:
+    1. Lock the relationship row FOR UPDATE.
+    2. Check the 24-hour cooldown under the lock.
+    3. Write the cooldown timestamp and COMMIT before sending (reservation).
+    4. Attempt the Telegram send outside the holding lock.
+    5. On send failure, reopen a new transaction to clear the reservation so
+       the user can retry immediately.
+    """
+    import json as _json
+    import datetime as _dt
+
+    settings = get_settings()
+    owner_id = _verify_rel_init(payload.init_data, settings)
+    repo     = RelationshipRepository(session)
+    partner_id = payload.partner_id
+
+    # ── Step 1: lock the row and check cooldown atomically ────────────────────
+    rel = await repo.get_between(owner_id, partner_id, lock=True)
+    if rel is None or rel.status != "active":
+        raise HTTPException(status_code=404, detail="relationship_not_found")
+
+    _postcard_key = "last_postcard_a" if owner_id == rel.user_a_id else "last_postcard_b"
+    try:
+        _meta = _json.loads(rel.meta) if rel.meta else {}
+    except Exception:
+        _meta = {}
+
+    _raw = _meta.get(_postcard_key)
+    if _raw:
+        try:
+            _lp = _dt.datetime.fromisoformat(_raw)
+            if _lp.tzinfo is None:
+                _lp = _lp.replace(tzinfo=_dt.timezone.utc)
+            if (_dt.datetime.now(_dt.timezone.utc) - _lp).total_seconds() < 86400:
+                raise HTTPException(status_code=429, detail="postcard_cooldown")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
+    # ── Step 2: collect data we need while holding the lock ───────────────────
+    days_together: int | None = None
+    if rel.accepted_at:
+        _acc = rel.accepted_at
+        if _acc.tzinfo is None:
+            _acc = _acc.replace(tzinfo=_dt.timezone.utc)
+        days_together = max(0, (_dt.datetime.now(_dt.timezone.utc) - _acc).days)
+
+    streak_days = _meta.get("streak", {}).get("days", 0)
+    rel_type    = rel.rel_type
+
+    # ── Step 3: reserve the cooldown BEFORE sending (commit releases the lock) ─
+    _now_iso = _dt.datetime.now(_dt.timezone.utc).isoformat()
+    _meta[_postcard_key] = _now_iso
+    rel.meta = _json.dumps(_meta, ensure_ascii=False)
+    await session.commit()  # lock released here; concurrent requests now see the reservation
+
+    # ── Step 4: fetch user names (no lock needed anymore) ─────────────────────
+    from app.models.user import TelegramUser as _TU
+    _users = (await session.execute(
+        select(_TU).where(_TU.telegram_user_id.in_([owner_id, partner_id]))
+    )).scalars().all()
+    _name_map = {}
+    for _u in _users:
+        _parts = [p for p in [_u.first_name, _u.last_name] if p]
+        _name_map[_u.telegram_user_id] = " ".join(_parts) or f"#{_u.telegram_user_id}"
+
+    sender_name  = _name_map.get(owner_id, f"#{owner_id}")
+    partner_name = _name_map.get(partner_id, f"#{partner_id}")
+
+    # ── Step 5: generate postcard image ───────────────────────────────────────
+    from app.services.postcard_service import render_postcard as _render
+    from app.models.relationship import TIER_LABELS as _TL
+
+    async def _clear_reservation() -> None:
+        """Undo the cooldown reservation so the user can retry."""
+        try:
+            from sqlalchemy import text as _text
+            async with session.begin():
+                _rel2 = await repo.get_between(owner_id, partner_id, lock=True)
+                if _rel2:
+                    try:
+                        _m2 = _json.loads(_rel2.meta) if _rel2.meta else {}
+                    except Exception:
+                        _m2 = {}
+                    _m2.pop(_postcard_key, None)
+                    _rel2.meta = _json.dumps(_m2, ensure_ascii=False)
+        except Exception:
+            logger.warning("could not clear postcard reservation owner=%s", owner_id)
+
+    try:
+        _img_bytes = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: _render(
+                rel_type=rel_type,
+                sender_name=sender_name,
+                partner_name=partner_name,
+                message="Отправлено из мини-приложения 💌",
+                days_together=days_together,
+                streak_days=streak_days,
+            ),
+        )
+    except Exception as exc:
+        logger.exception("postcard render failed for owner=%s partner=%s", owner_id, partner_id)
+        await _clear_reservation()
+        raise HTTPException(status_code=500, detail="render_failed") from exc
+
+    # ── Step 6: send photo to partner ──────────────────────────────────────────
+    _bot = get_bot(settings)
+    if _bot is None:
+        await _clear_reservation()
+        raise HTTPException(status_code=503, detail="bot_unavailable")
+    try:
+        from aiogram.types import BufferedInputFile
+        _caption = (
+            f"💌 <b>{sender_name}</b> прислал(а) тебе открытку!\n"
+            f"Тип отношений: <b>{_TL.get(rel_type, rel_type)}</b>"
+        )
+        await _bot.send_photo(
+            partner_id,
+            BufferedInputFile(_img_bytes, filename="postcard.png"),
+            caption=_caption,
+            parse_mode="HTML",
+        )
+    except Exception as exc:
+        logger.exception("postcard send failed for owner=%s partner=%s", owner_id, partner_id)
+        await _clear_reservation()
+        raise HTTPException(status_code=500, detail="send_failed") from exc
+
+    return {"ok": True}
 @router.post("/app/api/relationships/quest-claim")
 async def rel_quest_claim(
     payload: RelPartnerRequest, session: AsyncSession = Depends(get_db_session)

@@ -10085,9 +10085,10 @@
             <div class="cert-quick-actions">
               <button class="cert-quick-btn gift" ${r.gift_ready ? "" : "disabled"}
                 onclick="event.stopPropagation();openGiftPicker(${r.partner_id})">🎁 Подарить</button>
+              <button class="cert-quick-btn more" ${r.postcard_ready ? "" : "disabled"}
+                onclick="event.stopPropagation();sendPostcard(${r.partner_id})" id="postcard-btn-${r.partner_id}">💌 Открытка</button>
               <button class="cert-quick-btn more"
                 onclick="event.stopPropagation();togglePairStats(${r.partner_id})">💞 Совместимость</button>
-              <button class="cert-quick-btn more">⋯ Подробнее</button>
             </div>`;
         }
 
@@ -10207,6 +10208,37 @@
           }
         }
       });
+    }
+
+    async function sendPostcard(partnerId) {
+      const btn = document.getElementById(`postcard-btn-${partnerId}`);
+      if (btn) btn.disabled = true;
+      const initData = tg ? tg.initData : currentInitData;
+      try {
+        const res = await fetch("/app/api/relationships/postcard", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initData, partnerId }),
+        });
+        const d = await res.json();
+        if (!res.ok) {
+          if (res.status === 429) {
+            toastMessage("💌 Открытка уже отправлена сегодня. Попробуй завтра!");
+          } else {
+            toastMessage(`Ошибка: ${d.detail || "не удалось отправить открытку"}`);
+          }
+          if (btn) btn.disabled = false;
+          return;
+        }
+        toastMessage("💌 Открытка отправлена партнёру!");
+        // Update cached relationship — disable postcard for 24h
+        if (lastRelationships[partnerId]) {
+          lastRelationships[partnerId].postcard_ready = false;
+        }
+      } catch (e) {
+        toastMessage("Ошибка сети. Попробуй ещё раз.");
+        if (btn) btn.disabled = false;
+      }
     }
 
     function claimCoupleQuest(partnerId, questId) {

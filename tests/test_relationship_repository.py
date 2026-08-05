@@ -634,6 +634,118 @@ async def test_concurrent_send_request_single_row(file_engine):
 
 
 # ---------------------------------------------------------------------------
+# Postcard cooldown: to_dict and concurrency
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_to_dict_postcard_ready_no_meta(session):
+    """postcard_ready is True when there is no prior postcard in meta."""
+    rel = await _seed_active_rel(session, 50001, 50002)
+    repo = RelationshipRepository(session)
+    result = repo.to_dict(rel, viewer_id=50001)
+    assert result["postcard_ready"] is True
+
+
+@pytest.mark.asyncio
+async def test_to_dict_postcard_ready_expired(session):
+    """postcard_ready is True when the last postcard was sent >24 h ago."""
+    import json
+
+    rel = await _seed_active_rel(session, 51001, 51002)
+    past = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=25)
+    rel.meta = json.dumps({"last_postcard_a": past.isoformat()})
+    await session.flush()
+
+    repo = RelationshipRepository(session)
+    result = repo.to_dict(rel, viewer_id=51001)
+    assert result["postcard_ready"] is True
+
+
+@pytest.mark.asyncio
+async def test_to_dict_postcard_ready_within_cooldown(session):
+    """postcard_ready is False when the last postcard was sent <24 h ago."""
+    import json
+
+    rel = await _seed_active_rel(session, 52001, 52002)
+    recent = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=1)
+    rel.meta = json.dumps({"last_postcard_a": recent.isoformat()})
+    await session.flush()
+
+    repo = RelationshipRepository(session)
+    result = repo.to_dict(rel, viewer_id=52001)
+    assert result["postcard_ready"] is False
+
+
+@pytest.mark.asyncio
+async def test_postcard_cooldown_reservation_blocks_subsequent(file_engine):
+    """The postcard reservation pattern ensures at most one send per 24 h.
+
+    The endpoint writes the cooldown timestamp and commits BEFORE sending
+    (reservation pattern). This test verifies that a second session which opens
+    AFTER the first commits correctly observes the reservation and rejects with
+    a cooldown error — which is exactly what happens in production under a row
+    lock (the second transaction blocks until the first commits, then reads the
+    committed reservation).
+
+    SQLite runs coroutines cooperatively (no true parallelism), so we test the
+    correct serialized behavior: session A reserves → session B detects cooldown.
+    The PostgreSQL row lock (SELECT FOR UPDATE) enforces the same invariant even
+    under true concurrency by serializing at the DB level.
+    """
+    import json as _json
+
+    factory = async_sessionmaker(file_engine, expire_on_commit=False, class_=AsyncSession)
+
+    # Seed an active relationship
+    owner_id, partner_id = 60001, 60002
+    a, b = min(owner_id, partner_id), max(owner_id, partner_id)
+    async with factory() as setup_sess:
+        setup_sess.add(Relationship(
+            user_a_id=a, user_b_id=b,
+            initiator_id=owner_id, rel_type="friends",
+            level=1, xp=0, status="active",
+            created_at=dt.datetime.now(dt.timezone.utc),
+            accepted_at=dt.datetime.now(dt.timezone.utc),
+        ))
+        await setup_sess.commit()
+
+    postcard_key = "last_postcard_a"  # owner_id == a
+
+    def _check_and_reserve(meta: dict) -> dict:
+        """Check cooldown, raise ValueError('postcard_cooldown') if active,
+        otherwise stamp the reservation into meta and return it."""
+        raw = meta.get(postcard_key)
+        if raw:
+            lp = dt.datetime.fromisoformat(raw)
+            if lp.tzinfo is None:
+                lp = lp.replace(tzinfo=dt.timezone.utc)
+            if (dt.datetime.now(dt.timezone.utc) - lp).total_seconds() < 86400:
+                raise ValueError("postcard_cooldown")
+        meta[postcard_key] = dt.datetime.now(dt.timezone.utc).isoformat()
+        return meta
+
+    # ── Session A: first request — should succeed ──────────────────────────
+    async with factory() as sess_a:
+        repo_a = RelationshipRepository(sess_a)
+        rel_a = await repo_a.get_between(owner_id, partner_id, lock=True)
+        meta_a = _json.loads(rel_a.meta) if rel_a.meta else {}
+        meta_a = _check_and_reserve(meta_a)          # no cooldown yet → stamps it
+        rel_a.meta = _json.dumps(meta_a)
+        await sess_a.commit()                         # reservation committed
+
+    # ── Session B: second request — must detect the reservation ───────────
+    async with factory() as sess_b:
+        repo_b = RelationshipRepository(sess_b)
+        rel_b = await repo_b.get_between(owner_id, partner_id, lock=True)
+        meta_b = _json.loads(rel_b.meta) if rel_b.meta else {}
+        # The timestamp written by session A must be visible here
+        assert postcard_key in meta_b, "Reservation from session A not persisted"
+        with pytest.raises(ValueError, match="postcard_cooldown"):
+            _check_and_reserve(meta_b)               # should raise
+
+
+# ---------------------------------------------------------------------------
 # to_dict: naive last_gift timezone normalisation
 # ---------------------------------------------------------------------------
 

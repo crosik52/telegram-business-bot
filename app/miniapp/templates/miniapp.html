@@ -2442,7 +2442,19 @@
     background: linear-gradient(135deg, rgba(255,149,0,0.04) 0%, rgba(52,199,89,0.03) 100%);
     pointer-events: none;
   }
-  .pet-card.dead { opacity: 0.45; }
+  .pet-card.dead { opacity: 0.55; }
+ .pet-revive-btn {
+   margin-top: 8px; width: 100%; padding: 7px 12px;
+   background: linear-gradient(135deg, #7c3aed, #a855f7);
+   color: #fff; border: none; border-radius: 10px;
+   font-size: 13px; font-weight: 700; cursor: pointer;
+   display: flex; align-items: center; justify-content: center; gap: 6px;
+ }
+ .pet-revive-btn:active { opacity: 0.85; transform: scale(0.98); }
+ .pet-revive-btn small { font-size: 11px; font-weight: 400; opacity: 0.8; }
+ .pet-revive-exhausted {
+   margin-top: 6px; font-size: 11px; color: var(--hint); text-align: left;
+ }
 
   /* hero section — centered avatar + speech bubble */
   .pet-hero { display: flex; flex-direction: column; align-items: center; padding: 8px 0 14px; }
@@ -7680,7 +7692,15 @@
         </div>`;
       }).join("");
 
-      const deadCards = dead.slice(0,2).map(p => `
+      const deadCards = dead.slice(0,2).map(p => {
+        const reviveBtn = p.can_revive
+          ? `<button class="pet-revive-btn" onclick="revivePet(${p.id})" data-pet-id="${p.id}">
+               ⭐ Возродить за 10 · <small>${p.max_revivals - p.revival_count} из ${p.max_revivals}</small>
+             </button>`
+          : (p.revival_count >= p.max_revivals
+              ? `<div class="pet-revive-exhausted">🪦 Возрождения исчерпаны</div>`
+              : `<div class="pet-revive-exhausted">⏳ Окно возрождения истекло</div>`);
+        return `
         <div class="pet-card dead">
           <div class="pet-dead-row">
             <div class="pet-avatar-wrap"><span class="pet-avatar">💀</span></div>
@@ -7693,9 +7713,11 @@
               <div class="pet-dead-cause">с ${esc(p.interlocutor_name)} · ${
                 p.death_cause==="starvation"?"😵 умер от голода":"💔 серия оборвалась"
               }</div>
+              ${reviveBtn}
             </div>
           </div>
-        </div>`).join("");
+        </div>`;
+      }).join("");
 
       const adoptCard = hasAdopt
         ? `<button class="pet-adopt-card" id="openAdoptBtn">
@@ -7741,6 +7763,37 @@
       });
       // Adopt
       document.querySelectorAll("#openAdoptBtn").forEach(b => b.addEventListener("click", openAdoptModal));
+    }
+
+    async function revivePet(petId) {
+      const btn = document.querySelector(`.pet-revive-btn[data-pet-id="${petId}"]`);
+      if (btn) { btn.disabled = true; btn.textContent = "⏳ Создаём счёт…"; }
+      try {
+        const res = await fetchApi("/app/api/pet/revive/invoice", { petId });
+        if (!res.ok || !res.invoice_link) throw new Error(res.detail || "invoice_failed");
+        // Open Telegram native Stars payment sheet
+        if (window.Telegram?.WebApp?.openInvoice) {
+          Telegram.WebApp.openInvoice(res.invoice_link, status => {
+            if (status === "paid") {
+              toastMessage("🌟 Оплачено! Питомец скоро возродится.");
+              setTimeout(() => refreshPetSection(), 2000);
+            } else if (status === "cancelled") {
+              toastMessage("Оплата отменена.");
+              if (btn) { btn.disabled = false; btn.innerHTML = "⭐ Возродить за 10"; }
+            } else {
+              toastMessage("Платёж не завершён.");
+              if (btn) { btn.disabled = false; btn.innerHTML = "⭐ Возродить за 10"; }
+            }
+          });
+        } else {
+          // Fallback: open link in browser (dev/desktop)
+          window.open(res.invoice_link, "_blank");
+          if (btn) { btn.disabled = false; btn.innerHTML = "⭐ Возродить за 10"; }
+        }
+      } catch (e) {
+        toastMessage("Не удалось создать счёт: " + (e.message || "ошибка"));
+        if (btn) { btn.disabled = false; btn.innerHTML = "⭐ Возродить за 10"; }
+      }
     }
 
     async function doPetFeed(petId, foodType, btn) {

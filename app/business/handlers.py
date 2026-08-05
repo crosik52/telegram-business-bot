@@ -1638,7 +1638,7 @@ async def on_chosen_inline_result(result: ChosenInlineResult, bot: Bot) -> None:
 @router.pre_checkout_query()
 async def on_pre_checkout_query(query: PreCheckoutQuery) -> None:
     """Validate and accept Stars payment pre-checkout queries."""
-    ok_prefixes = ("subscription_", "vip_subscription_", "coins_")
+    ok_prefixes = ("subscription_", "vip_subscription_", "coins_", "pet_revive_")
     if query.invoice_payload.startswith(ok_prefixes):
         await query.answer(ok=True)
     else:
@@ -1662,6 +1662,56 @@ async def on_successful_payment(message: Message, bot: Bot) -> None:
     user_id    = message.from_user.id
     charge_id  = payment.telegram_payment_charge_id
     stars_paid = payment.total_amount
+
+    # ── Pet revival ──────────────────────────────────────────────────────────
+    if payload.startswith("pet_revive_"):
+        # Payload: pet_revive_{user_id}_{pet_id}
+        parts = payload.split("_")
+        try:
+            pet_id = int(parts[-1])
+        except (ValueError, IndexError):
+            logger.error("Malformed pet_revive payload: %s", payload)
+            return
+
+        from app.repositories.pet_repository import PetRepository
+        try:
+            async with session_scope() as session:
+                repo = PetRepository(session)
+                pet = await repo.revive_pet(user_id, pet_id)
+                await session.commit()
+        except ValueError as exc:
+            logger.warning("Pet revival failed for user=%s pet=%s: %s", user_id, pet_id, exc)
+            try:
+                await bot.send_message(
+                    chat_id=user_id,
+                    text="😔 Не удалось возродить питомца. Возврат Stars будет выполнен автоматически.",
+                )
+            except Exception:
+                pass
+            return
+
+        pet_name = pet.get("pet_name", "питомец")
+        revival_count = pet.get("revival_count", 1)
+        max_revivals  = pet.get("max_revivals", 3)
+        revivals_left = max_revivals - revival_count
+        logger.info(
+            "Pet revived: user=%s pet_id=%s revival=%s/%s stars=%s charge=%s",
+            user_id, pet_id, revival_count, max_revivals, stars_paid, charge_id,
+        )
+        text = (
+            f"🌟 <b>Питомец возрождён!</b>\n\n"
+            f"«{pet_name}» снова живёт — весь прогресс сохранён!\n\n"
+            f"Осталось возрождений: <b>{revivals_left}</b> из <b>{max_revivals}</b>\n\n"
+            f"Открой мини-приложение, чтобы продолжить заботиться о питомце."
+        )
+        try:
+            await bot.send_message(
+                chat_id=user_id, text=text, parse_mode="HTML",
+                reply_markup=_miniapp_kb("🐾 Открыть питомца", "/app?tab=casino"),
+            )
+        except Exception:
+            logger.exception("Failed to send pet revival confirmation to user %s", user_id)
+        return
 
     # ── Coin package purchase ─────────────────────────────────────────────────
     if payload.startswith("coins_"):

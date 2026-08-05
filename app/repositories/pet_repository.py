@@ -311,6 +311,15 @@ def _pet_dict(
         # Relationship XP bonus for this pet's chat
         "rel_tier":         rel_tier,
         "rel_bonus":        rel_bonus,
+        # Revival
+        "revival_count":    pet.revival_count,
+        "max_revivals":     pet.max_revivals,
+        "can_revive": (
+            not pet.is_alive
+            and pet.revival_count < pet.max_revivals
+            and pet.died_at is not None
+            and (now - _tz_aware(pet.died_at)).total_seconds() <= 3 * 86400
+        ),
     }
 
 
@@ -854,6 +863,52 @@ class PetRepository:
             "new_balance": wallet.balance,
             "upgrades":    ups,
         }
+
+    async def revive_pet(self, owner_telegram_id: int, pet_id: int) -> dict:
+        """Revive a dead pet (called after successful 10-Star payment).
+
+        Rules
+        -----
+        - Caller must be one of the pair owners (user_a_id or user_b_id).
+        - revival_count < max_revivals (hard cap: 3).
+        - Died no more than 3 days ago.
+        - Resets hunger/mood to full, clears death metadata, increments revival_count.
+        """
+        now = dt.datetime.now(dt.timezone.utc)
+
+        pet = (
+            await self._session.execute(
+                select(ChatPet)
+                .where(
+                    ChatPet.id == pet_id,
+                    (ChatPet.user_a_id == owner_telegram_id)
+                    | (ChatPet.user_b_id == owner_telegram_id),
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+
+        if not pet:
+            raise ValueError("pet_not_found")
+        if pet.is_alive:
+            raise ValueError("pet_already_alive")
+        if pet.revival_count >= pet.max_revivals:
+            raise ValueError("no_revivals_left")
+        if pet.died_at is None:
+            raise ValueError("pet_not_dead")
+        if (now - _tz_aware(pet.died_at)).total_seconds() > 3 * 86400:
+            raise ValueError("revival_window_expired")
+
+        # Restore the pet
+        pet.is_alive     = True
+        pet.death_cause  = None
+        pet.died_at      = None
+        pet.last_fed_at  = None       # hunger clock starts fresh
+        pet.mood         = 100
+        pet.revival_count += 1
+
+        await self._session.flush()
+        return _pet_dict(pet, now, viewer_id=owner_telegram_id)
 
     async def get_user_rank(self, owner_telegram_id: int) -> dict | None:
         """Return the current user's best alive pet rank (by XP DESC, id ASC).

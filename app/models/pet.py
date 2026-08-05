@@ -52,3 +52,9 @@ class ChatPet(Base):
     # Display name of owner_telegram_id as seen from chat_id's business connection,
     # so the B-side user sees a sensible interlocutor label.
     partner_name: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+
+    # ── v5 fields — revival ───────────────────────────────────────────────────
+    # How many times this pet has been revived via Stars payment.
+    revival_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Maximum allowed revivals (always 3, stored to allow future admin overrides).
+    max_revivals: Mapped[int] = mapped_column(Integer, nullable=False, default=3)

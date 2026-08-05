@@ -1687,6 +1687,81 @@ async def miniapp_pet_upgrade(
     return {"ok": True, **result}
 
 
+class PetReviveInvoiceRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    init_data: str = Field(alias="initData")
+    pet_id: int = Field(alias="petId")
+
+
+_PET_REVIVE_STARS = 10
+
+
+@router.post("/app/api/pet/revive/invoice")
+async def miniapp_pet_revive_invoice(
+    payload: PetReviveInvoiceRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Create a 10-Star invoice link to revive a dead pet.
+
+    Validates eligibility first so the user never pays for an un-revivable pet.
+    The actual revival happens in the successful_payment bot handler.
+    """
+    from aiogram.types import LabeledPrice
+
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid Telegram init data")
+
+    owner_id = int(user["id"])
+
+    # Validate eligibility without locking (read-only pre-check)
+    from app.repositories.pet_repository import PetRepository
+    repo = PetRepository(session)
+    import datetime as _dt
+    from app.models.pet import ChatPet as _ChatPet
+    from sqlalchemy import select as _sel
+    now = _dt.datetime.now(_dt.timezone.utc)
+    pet = (
+        await session.execute(
+            _sel(_ChatPet).where(
+                _ChatPet.id == payload.pet_id,
+                (_ChatPet.user_a_id == owner_id) | (_ChatPet.user_b_id == owner_id),
+            )
+        )
+    ).scalar_one_or_none()
+
+    if pet is None:
+        raise HTTPException(status_code=404, detail="pet_not_found")
+    if pet.is_alive:
+        raise HTTPException(status_code=409, detail="pet_already_alive")
+    if pet.revival_count >= pet.max_revivals:
+        raise HTTPException(status_code=409, detail="no_revivals_left")
+    if pet.died_at is None or (_dt.datetime.now(_dt.timezone.utc) - (
+        pet.died_at if pet.died_at.tzinfo else pet.died_at.replace(tzinfo=_dt.timezone.utc)
+    )).total_seconds() > 3 * 86400:
+        raise HTTPException(status_code=409, detail="revival_window_expired")
+
+    bot = get_bot(settings)
+    revivals_left = pet.max_revivals - pet.revival_count
+    try:
+        invoice_link = await bot.create_invoice_link(
+            title=f"Возрождение питомца «{pet.pet_name}»",
+            description=(
+                f"Возродить питомца с сохранённым прогрессом. "
+                f"Осталось возрождений: {revivals_left - 1} из {pet.max_revivals}"
+            ),
+            payload=f"pet_revive_{owner_id}_{payload.pet_id}",
+            provider_token="",
+            currency="XTR",
+            prices=[LabeledPrice(label="Возрождение питомца", amount=_PET_REVIVE_STARS)],
+        )
+    except Exception as exc:
+        logger.exception("Failed to create pet revive invoice for user %s", owner_id)
+        raise HTTPException(status_code=502, detail="invoice_send_failed") from exc
+
+    return {"ok": True, "invoice_link": invoice_link, "stars": _PET_REVIVE_STARS}
+
+
 @router.post("/app/api/pet/leaderboard")
 async def miniapp_pet_leaderboard(
     payload: StatsRequest, session: AsyncSession = Depends(get_db_session)

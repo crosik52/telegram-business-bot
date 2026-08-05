@@ -59,7 +59,9 @@ class ChatPet(Base):
     # Maximum allowed revivals (always 3, stored to allow future admin overrides).
     max_revivals: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
 
-    # ── v6 fields — last-fed attribution ──────────────────────────────────────
-    # Telegram user ID of whoever last fed the pet (either partner).
-    # NULL means nobody has fed the pet yet.
+    # ── v6 fields — last-action attribution ──────────────────────────────────
+    # Telegram user ID of whoever last performed each care action (either partner).
+    # NULL means the action has never been performed.
     last_fed_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    last_played_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    last_cuddled_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

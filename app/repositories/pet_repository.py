@@ -255,6 +255,25 @@ def _pet_partner_id(pet: "ChatPet", uid: int) -> int:
     return pet.user_b_id if pet.user_a_id == uid else pet.user_a_id
 
 
+def _actor_name(
+    pet: "ChatPet",
+    actor_id: int | None,
+    viewer_id: int | None,
+    interlocutor_name: str,
+) -> str | None:
+    """Resolve an actor user-ID to a display name from the viewer's perspective.
+
+    Returns None when the action has never been performed.
+    Returns "Вы" when the actor is the viewer.
+    Returns the partner's display name otherwise.
+    """
+    if actor_id is None:
+        return None
+    if actor_id == viewer_id:
+        return "Вы"
+    return interlocutor_name or "Партнёр"
+
+
 def _pet_dict(
     pet: "ChatPet",
     now: dt.datetime,
@@ -320,16 +339,10 @@ def _pet_dict(
             and pet.died_at is not None
             and (now - _tz_aware(pet.died_at)).total_seconds() <= 3 * 86400
         ),
-        # Last-fed attribution — name resolved from the viewer's perspective
-        "last_fed_by_name": (
-            None if pet.last_fed_by is None
-            else "Вы" if pet.last_fed_by == viewer_id
-            else (
-                (pet.partner_name if viewer_id is not None and viewer_id != pet.owner_telegram_id
-                 else pet.interlocutor_name)
-                or f"Партнёр"
-            )
-        ),
+        # Last-action attribution — names resolved from the viewer's perspective
+        "last_fed_by_name":     _actor_name(pet, pet.last_fed_by,    viewer_id, interlocutor_name),
+        "last_played_by_name":  _actor_name(pet, pet.last_played_by,  viewer_id, interlocutor_name),
+        "last_cuddled_by_name": _actor_name(pet, pet.last_cuddled_by, viewer_id, interlocutor_name),
     }
 
 
@@ -787,6 +800,7 @@ class PetRepository:
         pet.mood            = new_mood
         pet.last_played_at  = now
         pet.last_cuddled_at = now
+        pet.last_played_by  = owner_telegram_id
 
         pet.total_plays += 1
 
@@ -839,9 +853,10 @@ class PetRepository:
         current_mood = _compute_mood(pet, now)
         new_mood     = min(100, current_mood + mood_gain)
 
-        pet.mood            = new_mood
-        pet.last_cuddled_at = now
-        pet.total_cuddles   += 1
+        pet.mood             = new_mood
+        pet.last_cuddled_at  = now
+        pet.last_cuddled_by  = owner_telegram_id
+        pet.total_cuddles    += 1
 
         ups = _get_upgrades(pet)
         skill_xp_mult = 1.0 + ups.get("xp_boost", 0) * 0.30
@@ -953,8 +968,10 @@ class PetRepository:
         pet.is_alive     = True
         pet.death_cause  = None
         pet.died_at      = None
-        pet.last_fed_at  = None       # hunger clock starts fresh
-        pet.last_fed_by  = None       # attribution cleared on revival
+        pet.last_fed_at      = None   # hunger clock starts fresh
+        pet.last_fed_by      = None   # attribution cleared on revival
+        pet.last_played_by   = None
+        pet.last_cuddled_by  = None
         pet.mood         = 100
         pet.revival_count += 1
 

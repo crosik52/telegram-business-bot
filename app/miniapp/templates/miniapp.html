@@ -2596,6 +2596,12 @@
    border-radius: 8px; line-height: 1.4;
  }
  .pet-last-fed-lbl b { color: var(--text); font-weight: 600; }
+ .pet-care-log {
+   font-size: 11.5px; color: var(--hint); margin-top: 8px;
+   padding: 5px 10px; background: rgba(120,120,128,0.06);
+   border-radius: 8px; line-height: 1.5;
+ }
+ .pet-care-log b { color: var(--text); font-weight: 600; }
  .pet-achievements-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
   .pet-achievement {
     font-size: 10px; font-weight: 700; padding: 2px 7px;
@@ -7543,6 +7549,12 @@
             <span class="pet-btn-label">Имя</span>
             <span class="pet-btn-sub">50 🪙</span>
           </button>
+        </div>
+        <div class="pet-care-log">
+          ${[
+            p.last_played_by_name  ? `🎾 Играл${p.last_played_by_name==="Вы"?"и":""}: <b>${esc(p.last_played_by_name)}</b>`  : "🎾 Ещё не играли",
+            p.last_cuddled_by_name ? `🤗 Обнимал${p.last_cuddled_by_name==="Вы"?"и":""}: <b>${esc(p.last_cuddled_by_name)}</b>` : "🤗 Ещё не обнимали",
+          ].join(" · ")}
         </div>`;
     }
 

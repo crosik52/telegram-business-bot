@@ -17,9 +17,12 @@ from aiogram.types import (
     WebAppInfo,
 )
 
+from sqlalchemy import select
+
 from app.config import get_settings
 from app.database.session import session_scope
 from app.logging_config import get_logger
+from app.models.wallet import UserWallet
 from app.repositories.referral_repository import ReferralRepository
 from app.bot import emoji as E
 
@@ -119,12 +122,10 @@ _HELP_SECTIONS: dict[str, tuple[str, str]] = {
     ),
     "help_connect": (
         "🔌 <b>Как подключить бота</b>",
-        "Чтобы бот начал работать, нужен Telegram Business:\n\n"
-        "1️⃣ Перейди в <b>Настройки → Telegram для бизнеса → Чат-боты</b>\n"
-        "   (или нажми кнопку ниже — откроется сразу нужный экран)\n\n"
-        "2️⃣ Добавь этого бота в список\n\n"
-        "3️⃣ Готово! Бот получит доступ к твоим бизнес-чатам\n\n"
-        "📌 Telegram Business есть в <b>Telegram Premium</b>. Если Premium нет — его можно получить через реферальную программу бота.",
+        "Чтобы бот начал работать:\n\n"
+        "1️⃣ Нажми на tg://settings/edit → пролистай до «автоматизации чатов»\n\n"
+        "2️⃣ Вставь туда @intro099_bot\n\n"
+        "3️⃣ Готово! Теперь бот работает и показывает статистику с момента подключения.",
     ),
 }
 
@@ -192,6 +193,20 @@ async def on_start(message: Message) -> None:
         except (ValueError, Exception) as exc:
             logger.debug("Referral deep-link error: %s", exc)
 
+    # ── Detect first-time user ────────────────────────────────────────────────
+    is_new_user = False
+    if message.from_user:
+        try:
+            async with session_scope() as db:
+                result = await db.execute(
+                    select(UserWallet).where(
+                        UserWallet.owner_telegram_id == message.from_user.id
+                    )
+                )
+                is_new_user = result.scalar_one_or_none() is None
+        except Exception as exc:
+            logger.debug("First-time user check failed: %s", exc)
+
     keyboard = None
     if settings.webhook_base_url:
         base_url = settings.webhook_base_url.rstrip("/")
@@ -214,7 +229,16 @@ async def on_start(message: Message) -> None:
         keyboard = _app_kb(base_url, extra_rows=extra)
 
     await message.answer(_GREETING, parse_mode="HTML", reply_markup=keyboard)
-    logger.info("Sent /start greeting to chat_id=%s", message.chat.id)
+
+    # ── Send connection instructions to first-time users ──────────────────────
+    if is_new_user:
+        _, connect_text = _HELP_SECTIONS["help_connect"]
+        connect_kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="⚙️ Открыть настройки Telegram", url="tg://settings/edit")
+        ]])
+        await message.answer(connect_text, parse_mode="HTML", reply_markup=connect_kb)
+
+    logger.info("Sent /start greeting to chat_id=%s (new=%s)", message.chat.id, is_new_user)
 
 
 # ── /help ──────────────────────────────────────────────────────────────────────

@@ -320,6 +320,16 @@ def _pet_dict(
             and pet.died_at is not None
             and (now - _tz_aware(pet.died_at)).total_seconds() <= 3 * 86400
         ),
+        # Last-fed attribution — name resolved from the viewer's perspective
+        "last_fed_by_name": (
+            None if pet.last_fed_by is None
+            else "Вы" if pet.last_fed_by == viewer_id
+            else (
+                (pet.partner_name if viewer_id is not None and viewer_id != pet.owner_telegram_id
+                 else pet.interlocutor_name)
+                or f"Партнёр"
+            )
+        ),
     }
 
 
@@ -731,6 +741,7 @@ class PetRepository:
         xp_gained     = round(FEED_XP * total_mult)
 
         pet.last_fed_at    = now
+        pet.last_fed_by    = owner_telegram_id
         pet.total_feedings += 1
         pet.xp             += xp_gained
         pet.level          = _compute_level(pet.xp)
@@ -943,6 +954,7 @@ class PetRepository:
         pet.death_cause  = None
         pet.died_at      = None
         pet.last_fed_at  = None       # hunger clock starts fresh
+        pet.last_fed_by  = None       # attribution cleared on revival
         pet.mood         = 100
         pet.revival_count += 1
 

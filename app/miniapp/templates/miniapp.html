@@ -2590,7 +2590,13 @@
   [data-theme="dark"] .pet-rel-bonus-badge { color: #f5c842; background: rgba(245,200,66,0.18); }
   .pet-rel-bonus-label { font-weight: 400; opacity: 0.75; }
 
-  .pet-achievements-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+  .pet-last-fed-lbl {
+   font-size: 12px; color: var(--hint); margin: 6px 0 8px;
+   padding: 5px 10px; background: rgba(120,120,128,0.07);
+   border-radius: 8px; line-height: 1.4;
+ }
+ .pet-last-fed-lbl b { color: var(--text); font-weight: 600; }
+ .pet-achievements-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
   .pet-achievement {
     font-size: 10px; font-weight: 700; padding: 2px 7px;
     border-radius: 7px; background: rgba(124,108,255,0.10); color: var(--ci-accent);
@@ -7510,6 +7516,11 @@
           </div>
         </div>
         ${relBadgeHtml}
+        <div class="pet-last-fed-lbl">${
+          p.last_fed_by_name
+            ? `🍽️ Последний раз кормил${p.last_fed_by_name==="Вы"?"и":"(а)"}: <b>${esc(p.last_fed_by_name)}</b>`
+            : `🍽️ Ещё не кормили`
+        }</div>
         ${badgesHtml}
         <div class="pet-actions">
           <button class="pet-action-btn pet-btn-feed" data-pet-id="${p.id}" data-action="feed" data-food-type="kibble" ${feedCd?"disabled":""}>

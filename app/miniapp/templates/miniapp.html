@@ -3110,6 +3110,42 @@
   .cert-quick-btn:disabled { opacity: 0.38; cursor: default; }
   .cert-quick-btn.gift { background: rgba(245,166,35,0.14); color: #d4962a; }
   .cert-quick-btn.more { background: rgba(224,54,90,0.10); color: #e06090; }
+  /* ── Friendship-category card theme (golden/amber instead of romantic pink) ── */
+  .cert-card--friendship {
+    box-shadow:
+      0 2px 14px rgba(212,150,42,0.13),
+      0 0 0 0.5px rgba(212,150,42,0.22),
+      inset 0 1px 0 rgba(255,255,255,0.30),
+      inset 0 -0.5px 0 rgba(212,150,42,0.08);
+  }
+  .theme-dark .cert-card--friendship {
+    box-shadow:
+      0 2px 14px rgba(0,0,0,0.22),
+      0 0 0 0.5px rgba(212,150,42,0.28),
+      inset 0 1px 0 rgba(255,255,255,0.14),
+      inset 0 -0.5px 0 rgba(0,0,0,0.20);
+  }
+  .cert-card--friendship .cert-card-header {
+    border-bottom-color: rgba(212,150,42,0.18);
+    color: #b87c1a;
+    background: rgba(212,150,42,0.08);
+  }
+  .cert-card--friendship .cert-avatar {
+    border-color: #f5a623;
+    box-shadow: 0 2px 10px rgba(245,166,35,0.28);
+  }
+  .cert-card--friendship .cert-avatar-user { color: #c08020; }
+  .cert-card--friendship .cert-xp-track    { background: rgba(212,150,42,0.14); }
+  .cert-card--friendship .cert-xp-fill     { background: linear-gradient(90deg, #ffd166, #d4962a); }
+  .cert-card--friendship .cert-xp-label,
+  .cert-card--friendship .cert-xp-sub      { color: #b87c1a; }
+  .cert-card--friendship .cert-stats-footer{ border-top-color: rgba(212,150,42,0.10); }
+  .cert-card--friendship .cert-stat-cell   { border-right-color: rgba(212,150,42,0.10); }
+  .cert-card--friendship .cert-stat-lbl    { color: #b87c1a; }
+  .cert-card--friendship .cert-pending-text{ color: #b87c1a; }
+  .cert-card--friendship .cert-open-hint   { color: #b87c1a; }
+  .cert-card--friendship .cert-quick-btn.more { background: rgba(212,150,42,0.12); color: #b87c1a; }
+  .cert-card--friendship .cert-action-btn  { background: rgba(212,150,42,0.10); color: #b87c1a; }
   /* Compact pet cards */
   .interact-pet-card {
     background: var(--secondary-bg); border-radius: 16px;
@@ -10006,8 +10042,11 @@
           ? `style="cursor:pointer" data-rel-open-id="${r.partner_id}" data-rel-open-name="${_esc(r.partner_name || '#' + r.partner_id)}"`
           : "";
 
+        const _friendshipCls = isFriendship ? " cert-card--friendship" : "";
+        const _midIcon = isFriendship ? "🤝" : "💗";
+        const _lvColor = isFriendship ? "#b87c1a" : "#c0557a";
         return `
-          <div class="cert-card" ${openDataAttr}>
+          <div class="cert-card${_friendshipCls}" ${openDataAttr}>
             <div class="cert-card-header">${headerText}</div>
             <div class="cert-avatars">
               <div class="cert-avatar-wrap">
@@ -10016,8 +10055,8 @@
                 ${lastStats?.username ? `<div class="cert-avatar-user">@${_esc(lastStats.username)}</div>` : ""}
               </div>
               <div class="cert-heart-mid">
-                <div class="cert-heart-icon">💗</div>
-                ${!isPending ? `<div style="font-size:9px;font-weight:800;color:#c0557a;text-align:center;letter-spacing:0.3px;margin-top:2px">УР. ${r.level || 1}</div>` : ""}
+                <div class="cert-heart-icon">${_midIcon}</div>
+                ${!isPending ? `<div style="font-size:9px;font-weight:800;color:${_lvColor};text-align:center;letter-spacing:0.3px;margin-top:2px">УР. ${r.level || 1}</div>` : ""}
               </div>
               <div class="cert-avatar-wrap">
                 ${partnerAvatar}

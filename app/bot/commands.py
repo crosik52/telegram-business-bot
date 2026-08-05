@@ -319,34 +319,53 @@ async def on_share_ref(callback: CallbackQuery) -> None:
 
 @router.message(Command("me"))
 async def on_me(message: Message) -> None:
-    """Quick personal stats: balance, subscription, pet, streak."""
+    """Profile card: coins, messages, subscription, pet, bond, member since."""
     if not message.from_user:
         return
 
-    uid = message.from_user.id
+    uid      = message.from_user.id
     settings = get_settings()
 
-    balance    = 0
-    sub_label  = "Нет"
-    pet_line   = "Нет питомца"
-    streak     = 0
+    balance      = 0
+    msg_count    = 0
+    sub_label    = "Нет"
+    pet_line     = ""
+    bond_line    = ""
+    member_since = ""
 
     try:
-        from app.models.wallet import UserWallet          # noqa: PLC0415
-        from app.models.pet import Pet                    # noqa: PLC0415
+        import json as _json                                                    # noqa: PLC0415
+        import datetime as _dt                                                  # noqa: PLC0415
+        from sqlalchemy import func, or_                                        # noqa: PLC0415
+        from app.models.business_connection import BusinessConnection           # noqa: PLC0415
+        from app.models.message import Message as MsgModel                     # noqa: PLC0415
+        from app.models.pet import Pet                                          # noqa: PLC0415
+        from app.models.relationship import Relationship                        # noqa: PLC0415
         from app.repositories.subscription_repository import SubscriptionRepository  # noqa: PLC0415
-        from sqlalchemy import select as _sel             # noqa: PLC0415
-        import datetime as _dt                            # noqa: PLC0415
 
         async with session_scope() as db:
-            # Wallet
-            w = (await db.execute(
-                _sel(UserWallet).where(UserWallet.owner_telegram_id == uid)
-            )).scalar_one_or_none()
-            if w:
-                balance = w.balance
 
-            # Subscription
+            # ── Wallet: fetch columns directly to avoid ORM expiry issues ─────
+            wallet_row = (await db.execute(
+                select(UserWallet.balance, UserWallet.created_at)
+                .where(UserWallet.owner_telegram_id == uid)
+            )).one_or_none()
+            if wallet_row is not None:
+                balance = wallet_row[0] or 0
+                if wallet_row[1]:
+                    member_since = wallet_row[1].strftime("%d.%m.%Y")
+
+            # ── Total messages via business connection join ───────────────────
+            msg_count = (await db.execute(
+                select(func.count(MsgModel.id))
+                .join(
+                    BusinessConnection,
+                    MsgModel.business_connection_id == BusinessConnection.business_connection_id,
+                )
+                .where(BusinessConnection.user_telegram_id == uid)
+            )).scalar() or 0
+
+            # ── Subscription ──────────────────────────────────────────────────
             sub_repo = SubscriptionRepository(db)
             vip = await sub_repo.get_active_vip_subscription(uid)
             if vip:
@@ -358,35 +377,62 @@ async def on_me(message: Message) -> None:
                     left = (sub.expires_at - _dt.datetime.now(_dt.timezone.utc)).days + 1
                     sub_label = f"⭐ Premium · ещё {left} дн."
 
-            # Alive pet (first)
+            # ── Pet ───────────────────────────────────────────────────────────
             pet = (await db.execute(
-                _sel(Pet).where(
+                select(Pet).where(
                     Pet.owner_telegram_id == uid,
                     Pet.is_alive.is_(True),
                 ).limit(1)
             )).scalar_one_or_none()
             if pet:
-                hunger = round(pet.hunger or 0)
-                mood   = round(pet.mood   or 0)
+                hunger   = round(pet.hunger or 0)
+                mood     = round(pet.mood   or 0)
                 pet_line = (
-                    f"{pet.pet_name} · Ур.{pet.level} · "
-                    f"🍖{hunger}% 😊{mood}%"
+                    f"🐾 Питомец: <b>{pet.pet_name}</b> · Ур.{pet.level} · "
+                    f"🍖{hunger}% 😊{mood}%\n"
                 )
 
-            # Daily streak (messages table count as proxy — use wallet daily_claimed if exists)
-            if hasattr(w, "streak_days") and w:
-                streak = getattr(w, "streak_days", 0) or 0
+            # ── Active relationship bond + streak ─────────────────────────────
+            rel = (await db.execute(
+                select(Relationship).where(
+                    or_(Relationship.user_a_id == uid, Relationship.user_b_id == uid),
+                    Relationship.status == "active",
+                ).limit(1)
+            )).scalar_one_or_none()
+            if rel:
+                tier_map = {
+                    "friends": "👫 Друзья",
+                    "dating":  "💕 Влюблённые",
+                    "married": "💍 Пара",
+                }
+                tier_label  = tier_map.get(rel.rel_type, rel.rel_type)
+                streak_days = 0
+                if rel.meta:
+                    try:
+                        meta        = _json.loads(rel.meta)
+                        streak_days = meta.get("streak", {}).get("days", 0)
+                    except Exception:
+                        pass
+                streak_part = f" · 🔥{streak_days} дн." if streak_days else ""
+                bond_line   = f"💞 Связь: <b>{tier_label} · Ур.{rel.level}{streak_part}</b>\n"
+
     except Exception:
         logger.exception("/me: DB query failed for user %s", uid)
 
-    streak_line = f"🔥 Стрик: {streak} дн.\n" if streak else ""
+    since_line = f"📅 В боте с: {member_since}\n" if member_since else ""
+
+    def _fmt(n: int) -> str:
+        """Format integer with thin-space thousands separator."""
+        return f"{n:,}".replace(",", "\u2009")
 
     text = (
-        f"📊 <b>Твой профиль</b>\n\n"
-        f"🪙 Баланс: <b>{balance:,}".replace(",", " ") + f" монет</b>\n"
+        f"👤 <b>Мой профиль</b>\n\n"
+        f"🪙 Монеты: <b>{_fmt(balance)}</b>\n"
+        f"💬 Сообщений: <b>{_fmt(msg_count)}</b>\n"
         f"⭐ Подписка: <b>{sub_label}</b>\n"
-        f"🐾 Питомец: {pet_line}\n"
-        f"{streak_line}"
+        + pet_line
+        + bond_line
+        + since_line
     )
 
     kb = None
@@ -396,4 +442,4 @@ async def on_me(message: Message) -> None:
             InlineKeyboardButton(text="📊 Открыть мини-приложение", web_app=WebAppInfo(url=base_url + "/app"))
         ]])
 
-    await message.answer(text, parse_mode="HTML", reply_markup=kb)
+    await message.answer(text.strip(), parse_mode="HTML", reply_markup=kb)

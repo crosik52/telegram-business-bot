@@ -43,7 +43,7 @@ from aiogram.types import (
     InlineKeyboardButton, InlineKeyboardMarkup,
     InlineQueryResultAudio, InlineQueryResultCachedAudio,
     InputMediaAudio, InputTextMessageContent,
-    Message, PreCheckoutQuery,
+    Message, PreCheckoutQuery, WebAppInfo,
 )
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,6 +66,16 @@ from app.services.video_service import extract_video_url, handle_video_link
 
 # Strong references to background download tasks — prevents GC before completion.
 _download_tasks: set[asyncio.Task] = set()
+
+
+def _miniapp_kb(label: str = "📊 Открыть мини-приложение", path: str = "/app") -> InlineKeyboardMarkup | None:
+    """Return a one-button keyboard that opens the mini-app, or None if no URL is configured."""
+    base = get_settings().webhook_base_url
+    if not base:
+        return None
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=label, web_app=WebAppInfo(url=base.rstrip("/") + path))
+    ]])
 
 # Global semaphore: at most 3 video downloads run concurrently across all chats.
 _download_semaphore = asyncio.Semaphore(3)
@@ -1596,8 +1606,9 @@ async def on_rel_friend_respond(callback: CallbackQuery, bot: Bot) -> None:
             await bot.send_message(
                 requester_id,
                 f"💛 <b>{resp_name}</b> принял(а) твой запрос дружбы!\n"
-                f"Откройте мини-приложение, чтобы отправить подарок 🎁",
+                f"Отправь первый подарок, чтобы начать прокачивать отношения 🎁",
                 parse_mode="HTML",
+                reply_markup=_miniapp_kb("🎁 Открыть Связи", "/app#interact"),
             )
         except Exception:
             pass
@@ -1682,7 +1693,10 @@ async def on_successful_payment(message: Message, bot: Bot) -> None:
             text = "🪙 Монеты зачислены! Открой мини-приложение."
 
         try:
-            await bot.send_message(chat_id=user_id, text=text, parse_mode="HTML")
+            await bot.send_message(
+                chat_id=user_id, text=text, parse_mode="HTML",
+                reply_markup=_miniapp_kb("🪙 Потратить монеты", "/app#giveaway"),
+            )
         except Exception:
             logger.exception("Failed to send coins confirmation to user %s", user_id)
         return
@@ -1734,6 +1748,9 @@ async def on_successful_payment(message: Message, bot: Bot) -> None:
         )
 
     try:
-        await bot.send_message(chat_id=user_id, text=text, parse_mode="HTML")
+        await bot.send_message(
+            chat_id=user_id, text=text, parse_mode="HTML",
+            reply_markup=_miniapp_kb("⭐ Открыть мини-приложение"),
+        )
     except Exception:
         logger.exception("Failed to send subscription confirmation to user %s", user_id)

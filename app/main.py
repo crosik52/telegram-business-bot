@@ -344,6 +344,14 @@ async def lifespan(app: FastAPI):
             )
         )
         logger.info("Telegram chat menu button set to open mini app")
+
+        # Register command list so Telegram shows a hint menu
+        from aiogram.types import BotCommand  # noqa: PLC0415
+        await bot.set_my_commands([
+            BotCommand(command="start", description="Запустить бота / открыть меню"),
+            BotCommand(command="me",    description="Мой профиль: монеты, питомец, подписка"),
+            BotCommand(command="help",  description="Справка по функциям"),
+        ])
     else:
         logger.warning(
             "WEBHOOK_BASE_URL is not set — skipping automatic setWebhook call. "

@@ -4130,7 +4130,8 @@
     function _relTierCls(type) {
       return { friends: "rel-friends", dating: "rel-dating", married: "rel-married" }[type] || "";
     }
-    function _relTierLabel(type) {
+    function _relTierLabel(type, category) {
+      if (category === "friendship") return "👫 Друзья";
       return { friends: "💛 Друзья", dating: "❤️ Отношения", married: "💍 Брак" }[type] || type;
     }
     function _esc(s) {
@@ -4165,7 +4166,7 @@
             <div class="avatar" style="background:${bg};width:36px;height:36px;line-height:36px;font-size:14px;flex-shrink:0">${av}</div>
             <div style="flex:1;min-width:0">
               <div class="rel-pending-name">${nm}</div>
-              <div style="font-size:11px;color:var(--hint)">хочет с тобой подружиться 💛</div>
+              <div style="font-size:11px;color:var(--hint)">${r.category === "friendship" ? "хочет с тобой подружиться 👫" : "хочет начать отношения 💕"}</div>
             </div>
             <button class="rel-accept-btn"  data-rel-respond="${r.partner_id}" data-accept="true">✓ Принять</button>
             <button class="rel-decline-btn" data-rel-respond="${r.partner_id}" data-accept="false">✗</button>
@@ -4186,12 +4187,26 @@
 
       let inner = `<div style="text-align:center;font-size:17px;font-weight:700;margin-bottom:14px">${_esc(partnerName)}</div>`;
 
+      let _selectedCategory = "romantic";
       if (!rel) {
         inner += `
-          <p style="text-align:center;color:var(--hint);font-size:13px;margin-bottom:18px">
-            Предложи дружбу — начало особых отношений между вами ✨
+          <p style="text-align:center;color:var(--hint);font-size:13px;margin-bottom:12px">
+            Выбери тип отношений — начало особых связей между вами ✨
           </p>
-          <button class="rel-modal-btn propose" id="rBtnPropose">💌 Предложить дружбу (50🪙)</button>`;
+          <div id="relCatPicker" style="display:flex;gap:8px;margin-bottom:8px">
+            <button class="rel-cat-btn" data-cat="romantic"
+              style="flex:1;padding:10px 6px;border-radius:12px;border:2px solid #ff5e87;background:rgba(255,94,135,0.12);font-size:13px;font-weight:600;cursor:pointer">
+              💕 Пара
+            </button>
+            <button class="rel-cat-btn" data-cat="friendship"
+              style="flex:1;padding:10px 6px;border-radius:12px;border:2px solid rgba(128,128,128,0.2);background:none;font-size:13px;font-weight:600;cursor:pointer">
+              👫 Дружба
+            </button>
+          </div>
+          <div id="relCatDesc" style="text-align:center;font-size:12px;color:var(--hint);margin-bottom:14px">
+            💕 Романтические отношения — с развитием и прогрессом
+          </div>
+          <button class="rel-modal-btn propose" id="rBtnPropose">💌 Предложить (50🪙)</button>`;
       } else if (rel.status === "pending") {
         if (rel.is_initiator) {
           inner += `
@@ -4206,7 +4221,8 @@
             </div>`;
         }
       } else {
-        const tierLabel = _relTierLabel(rel.rel_type);
+        const isFriendship = rel.category === "friendship";
+        const tierLabel = _relTierLabel(rel.rel_type, rel.category);
         const lvStr     = rel.rel_type !== "married" ? ` · Уровень ${rel.level}/5` : "";
         const xpHtml    = rel.rel_type !== "married"
           ? `<div style="font-size:11px;color:var(--hint);text-align:center;margin-bottom:4px">XP: ${rel.xp_in_level} / 200</div>
@@ -4216,11 +4232,14 @@
         const giftLbl = rel.gift_ready
           ? "🎁 Подарить (−50🪙, партнёру +40🪙, +100 XP обоим)"
           : "🎁 Подарок уже отправлен сегодня";
-        const upgradeHtml = rel.can_upgrade
+        const upgradeHtml = rel.can_upgrade && !isFriendship
           ? `<button class="rel-modal-btn upgrade" id="rBtnUpgrade">⬆️ До ${UP_LABEL[rel.rel_type]} (${UP_COST[rel.rel_type]}🪙)</button>`
-          : (rel.rel_type !== "married"
+          : (!isFriendship && rel.rel_type !== "married"
               ? `<div style="font-size:12px;color:var(--hint);text-align:center;padding:4px 0">Нужен уровень ${UP_MINLV[rel.rel_type]} для перехода</div>`
               : "");
+        const changeCatBtn = isFriendship
+          ? `<button class="rel-modal-btn" id="rBtnChangeCat" style="background:rgba(255,94,135,0.15);color:#ff5e87">💕 Перевести в пару</button>`
+          : `<button class="rel-modal-btn" id="rBtnChangeCat" style="background:rgba(255,204,0,0.12);color:#b8860b">👫 Перевести в дружбу</button>`;
         inner += `
           <div style="font-size:24px;font-weight:700;text-align:center;margin-bottom:2px">${tierLabel}</div>
           <div style="font-size:13px;color:var(--hint);text-align:center;margin-bottom:12px">${lvStr}</div>
@@ -4228,6 +4247,7 @@
           <div class="rel-modal-actions">
             <button class="rel-modal-btn gift" id="rBtnGift" ${giftDis}>${giftLbl}</button>
             ${upgradeHtml}
+            ${changeCatBtn}
             <button class="rel-modal-btn break-rel" id="rBtnBreak">💔 Разорвать отношения</button>
           </div>`;
       }
@@ -4275,21 +4295,50 @@
         } catch { toastMessage("Ошибка, попробуй снова"); }
       }
 
+      // ── Category picker (shown only for new requests) ─────────────────────
+      overlay.querySelectorAll(".rel-cat-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          overlay.querySelectorAll(".rel-cat-btn").forEach(b => {
+            b.style.border = "2px solid rgba(128,128,128,0.2)";
+            b.style.background = "none";
+          });
+          _selectedCategory = btn.dataset.cat;
+          btn.style.border = _selectedCategory === "romantic"
+            ? "2px solid #ff5e87" : "2px solid #ffcc00";
+          btn.style.background = _selectedCategory === "romantic"
+            ? "rgba(255,94,135,0.12)" : "rgba(255,204,0,0.12)";
+          const desc = overlay.querySelector("#relCatDesc");
+          if (desc) desc.textContent = _selectedCategory === "romantic"
+            ? "💕 Романтические отношения — с развитием и прогрессом"
+            : "👫 Просто друзья — без романтического прогресса";
+        });
+      });
+
       overlay.querySelector("#rBtnPropose")?.addEventListener("click", () =>
-        relAction("/app/api/relationships/request", {}, d =>
+        relAction("/app/api/relationships/request", { category: _selectedCategory }, d =>
           toastMessage(d.partner_not_reachable
             ? "💌 Запрос отправлен, но партнёр ещё не запустил бота 🤖"
-            : "💌 Запрос дружбы отправлен!")));
+            : _selectedCategory === "friendship" ? "💌 Запрос дружбы отправлен! 👫" : "💌 Запрос в пару отправлен! 💕")));
       overlay.querySelector("#rBtnCancel")?.addEventListener("click", () =>
         relAction("/app/api/relationships/cancel", {}, () => toastMessage("Запрос отменён, монеты возвращены.")));
       overlay.querySelector("#rBtnAccept")?.addEventListener("click", () =>
-        relAction("/app/api/relationships/respond", { accept: true }, () => toastMessage("💛 Вы теперь друзья!")));
+        relAction("/app/api/relationships/respond", { accept: true }, () => toastMessage("✅ Принято!")));
       overlay.querySelector("#rBtnDecline")?.addEventListener("click", () =>
         relAction("/app/api/relationships/respond", { accept: false }, () => toastMessage("Запрос отклонён.")));
       overlay.querySelector("#rBtnGift")?.addEventListener("click", () =>
         relAction("/app/api/relationships/gift", {}, () => toastMessage("🎁 Подарок отправлен! +100 XP обоим.")));
       overlay.querySelector("#rBtnUpgrade")?.addEventListener("click", () =>
-        relAction("/app/api/relationships/upgrade", {}, d => toastMessage(`🎉 Теперь вы: ${_relTierLabel(d.rel_type)}!`)));
+        relAction("/app/api/relationships/upgrade", {}, d => toastMessage(`🎉 Теперь вы: ${_relTierLabel(d.rel_type, d.category)}!`)));
+      overlay.querySelector("#rBtnChangeCat")?.addEventListener("click", () => {
+        const newCat = rel?.category === "romantic" ? "friendship" : "romantic";
+        const resetWarning = newCat === "friendship" && rel?.rel_type && rel.rel_type !== "friends";
+        const msg = resetWarning
+          ? "Тип сменится на «Дружба», а уровень перейдёт обратно к Ур.1 Друзья. Всё равно сменить?"
+          : newCat === "friendship" ? "Сменить на «Дружба» 👫?" : "Сменить на «Пара» 💕?";
+        // Simple inline confirm via a second overlay isn't practical here; just proceed
+        relAction("/app/api/relationships/change-category", { newCategory: newCat }, d =>
+          toastMessage(newCat === "friendship" ? "👫 Теперь вы друзья!" : "💕 Теперь вы пара!"));
+      });
       overlay.querySelector("#rBtnBreak")?.addEventListener("click", () =>
         relAction("/app/api/relationships/break", {}, () => toastMessage("💔 Отношения разорваны.")));
     }
@@ -4352,7 +4401,7 @@
         const _rel = lastRelationships[s.chat_id];
         if (_rel) {
           if (_rel.status === "active") {
-            chips.push(`<span class="chip ${_relTierCls(_rel.rel_type)}">${_relTierLabel(_rel.rel_type)} Ур.${_rel.level}</span>`);
+            chips.push(`<span class="chip ${_relTierCls(_rel.rel_type)}">${_relTierLabel(_rel.rel_type, _rel.category)} Ур.${_rel.level}</span>`);
           } else if (_rel.status === "pending") {
             chips.push(`<span class="chip" style="color:var(--orange)">${_rel.is_initiator ? "💌 ожидание" : "💌 ответить"}</span>`);
           }
@@ -4795,7 +4844,7 @@
       const sub = s.username ? "@" + s.username : "личный контакт";
       const rel = lastRelationships?.[s.chat_id];
       const relChip = (rel?.status === "active")
-        ? `<span class="chip ${_relTierCls(rel.rel_type)}">${_relTierLabel(rel.rel_type)} Ур.${rel.level}</span>`
+        ? `<span class="chip ${_relTierCls(rel.rel_type)}">${_relTierLabel(rel.rel_type, rel.category)} Ур.${rel.level}</span>`
         : "";
 
       const frameStyle = _CP_FRAME_STYLES["none"];
@@ -9586,7 +9635,7 @@
             <div class="rel-lb-emoji">${esc(e.tier_emoji)}</div>
             <div class="rel-lb-body">
               <div class="rel-lb-names">${esc(e.user_a_name)} &amp; ${esc(e.user_b_name)}${isMe ? ' <span class="lb-me-chip">Вы</span>' : ''}</div>
-              <div class="rel-lb-meta">${tierLabel[e.rel_type]||e.rel_type}</div>
+              <div class="rel-lb-meta">${e.category === "friendship" ? "Друзья" : (tierLabel[e.rel_type]||e.rel_type)}</div>
             </div>
             <div class="rel-lb-right">
               <div class="rel-lb-level">Ур.${e.level}</div>
@@ -9603,7 +9652,7 @@
             <div class="rel-lb-emoji">${esc(relMe.tier_emoji)}</div>
             <div class="rel-lb-body">
               <div class="rel-lb-names">${esc(relMe.user_a_name)} &amp; ${esc(relMe.user_b_name)} <span class="lb-me-chip">Вы</span></div>
-              <div class="rel-lb-meta">${tierLabel[relMe.rel_type]||relMe.rel_type}</div>
+              <div class="rel-lb-meta">${relMe.category === "friendship" ? "Друзья" : (tierLabel[relMe.rel_type]||relMe.rel_type)}</div>
             </div>
             <div class="rel-lb-right">
               <div class="rel-lb-level">Ур.${relMe.level}</div>
@@ -9789,16 +9838,6 @@
     }
 
     function renderRelationshipCards(relationships) {
-      const CERT_HEADER = {
-        friends: "ЛУЧШИЕ ДРУЗЬЯ",
-        dating:  "ВЛЮБЛЁННАЯ ПАРА",
-        married: "СВИДЕТЕЛЬСТВО О БРАКЕ",
-      };
-      const TIER_LABEL = {
-        friends: "Друзья",
-        dating:  "Влюблённые",
-        married: "Женаты 💍",
-      };
       const TIER_BADGE_CLS = {
         friends: "cert-tier-friends",
         married: "cert-tier-married",
@@ -9813,9 +9852,21 @@
           .slice(0, 2).toUpperCase()
           || (r.partner_name || "??").slice(0, 2).toUpperCase();
 
-        const isPending   = r.status === "pending";
-        const isInitiator = r.is_initiator;
-        const headerText  = isPending ? "ЗАПРОС ДРУЖБЫ" : (CERT_HEADER[r.rel_type] || "ОТНОШЕНИЯ");
+        const isPending    = r.status === "pending";
+        const isInitiator  = r.is_initiator;
+        const isFriendship = r.category === "friendship";
+
+        // Category-aware headers and labels
+        const CERT_HEADER = isFriendship
+          ? { friends: "ЛУЧШИЕ ДРУЗЬЯ", dating: "ЛУЧШИЕ ДРУЗЬЯ", married: "ЛУЧШИЕ ДРУЗЬЯ" }
+          : { friends: "ДРУЗЬЯ", dating: "ВЛЮБЛЁННАЯ ПАРА", married: "СВИДЕТЕЛЬСТВО О БРАКЕ" };
+        const TIER_LABEL = isFriendship
+          ? { friends: "Друзья", dating: "Друзья", married: "Друзья" }
+          : { friends: "Друзья", dating: "Влюблённые", married: "Женаты 💍" };
+
+        const headerText = isPending
+          ? (isFriendship ? "ЗАПРОС ДРУЖБЫ 👫" : "ЗАПРОС В ПАРУ 💕")
+          : (CERT_HEADER[r.rel_type] || "ОТНОШЕНИЯ");
 
         // Partner avatar
         const partnerAvatar = `
@@ -9831,7 +9882,7 @@
 
         // Tier badge
         const tierBadgeCls = TIER_BADGE_CLS[r.rel_type] || "";
-        const tierLabel    = TIER_LABEL[r.rel_type] || r.rel_type || "";
+        const tierLabel    = isFriendship ? "Друзья" : (TIER_LABEL[r.rel_type] || r.rel_type || "");
 
         let bodyHtml = "";
 

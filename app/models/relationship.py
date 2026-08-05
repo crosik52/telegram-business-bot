@@ -116,6 +116,12 @@ class Relationship(Base):
         String(20), nullable=False, default="friends", index=True
     )
 
+    # "friendship" — stays at friends tier, no romantic progression
+    # "romantic"   — can upgrade friends → dating → married (default)
+    category: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="romantic"
+    )
+
     level: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     xp:    Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 

@@ -282,10 +282,14 @@ class PetUpgradeRequest(BaseModel):
 class RelPartnerRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    init_data:  str = Field(alias="initData")
-    partner_id: int = Field(alias="partnerId")
-    gift_id:    str | None = Field(default=None, alias="giftId")
-    quest_id:   str | None = Field(default=None, alias="questId")
+    init_data:    str = Field(alias="initData")
+    partner_id:   int = Field(alias="partnerId")
+    gift_id:      str | None = Field(default=None, alias="giftId")
+    quest_id:     str | None = Field(default=None, alias="questId")
+    # Category for new requests: "friendship" | "romantic" (default)
+    category:     str = Field(default="romantic")
+    # For change-category endpoint
+    new_category: str | None = Field(default=None, alias="newCategory")
 
 
 class RelRespondRequest(BaseModel):
@@ -1827,7 +1831,10 @@ async def rel_request(
     owner_id = _verify_rel_init(payload.init_data, settings)
     repo     = RelationshipRepository(session)
     try:
-        rel = await repo.send_request(owner_id, payload.partner_id)
+        rel = await repo.send_request(
+            owner_id, payload.partner_id,
+            category=payload.category if payload.category in ("friendship", "romantic") else "romantic",
+        )
         await session.commit()
         # Push notification to partner + fallback owner alert
         _partner_not_reachable = False
@@ -1891,13 +1898,18 @@ async def rel_request(
                 # ── Primary: send via PARTNER's business connection ────────
                 # The message lands in the partner's conversation with the
                 # owner with the Accept/Decline keyboard visible right there.
+                _cat = payload.category if payload.category in ("friendship", "romantic") else "romantic"
+                _req_text = (
+                    f"💌 <b>{_name}</b> хочет с тобой подружиться! 👫\n\nПрими или отклони запрос:"
+                    if _cat == "friendship" else
+                    f"💕 <b>{_name}</b> хочет начать с тобой отношения!\n\nПрими или отклони запрос:"
+                )
                 _delivered = False
                 if _partner_bc_id:
                     try:
                         await _bot.send_message(
                             owner_id,        # chat_id = owner, from partner's bc
-                            f"💌 <b>{_name}</b> хочет с тобой подружиться!\n\n"
-                            f"Прими или отклони запрос:",
+                            _req_text,
                             parse_mode="HTML",
                             reply_markup=_kb,
                             business_connection_id=_partner_bc_id,
@@ -1914,8 +1926,7 @@ async def rel_request(
                     try:
                         await _bot.send_message(
                             payload.partner_id,
-                            f"💌 <b>{_name}</b> хочет с тобой подружиться!\n\n"
-                            f"Прими или отклони запрос:",
+                            _req_text,
                             parse_mode="HTML",
                             reply_markup=_kb,
                         )
@@ -2156,6 +2167,24 @@ async def rel_upgrade(
                 )
         except Exception:
             pass
+        return repo.to_dict(rel, owner_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/app/api/relationships/change-category")
+async def rel_change_category(
+    payload: RelPartnerRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    owner_id = _verify_rel_init(payload.init_data, settings)
+    repo     = RelationshipRepository(session)
+    new_cat  = payload.new_category or ""
+    if new_cat not in ("friendship", "romantic"):
+        raise HTTPException(status_code=400, detail="invalid_category")
+    try:
+        rel = await repo.change_category(owner_id, payload.partner_id, new_cat)
+        await session.commit()
         return repo.to_dict(rel, owner_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

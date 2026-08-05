@@ -267,10 +267,12 @@ class RelationshipRepository:
             now - last_gift
         ).total_seconds() >= GIFT_COOLDOWN_H * 3600
         xp_in_level = rel.xp % XP_PER_LEVEL
+        category = getattr(rel, "category", "romantic") or "romantic"
         can_upgrade = (
             rel.status == "active"
             and rel.rel_type != "married"
             and rel.level >= UPGRADE_MIN_LEVEL.get(rel.rel_type, 999)
+            and category == "romantic"
         )
         meta = _load_meta(rel)
         streak = meta.get("streak", {})
@@ -286,6 +288,7 @@ class RelationshipRepository:
             "id":           rel.id,
             "partner_id":   partner_id,
             "rel_type":     rel.rel_type,
+            "category":     category,
             "level":        rel.level,
             "max_level":    MAX_REL_LEVEL,
             "title":        _title_for(rel.rel_type, rel.level),
@@ -312,7 +315,10 @@ class RelationshipRepository:
     # ── Mutations ─────────────────────────────────────────────────────────────
 
     async def send_request(
-        self, requester_id: int, addressee_id: int
+        self,
+        requester_id: int,
+        addressee_id: int,
+        category: str = "romantic",
     ) -> Relationship:
         if requester_id == addressee_id:
             raise ValueError("cannot_self_request")
@@ -323,6 +329,10 @@ class RelationshipRepository:
                 if existing.status == "active"
                 else "request_pending"
             )
+
+        # Validate category
+        if category not in ("friendship", "romantic"):
+            category = "romantic"
 
         wallet = await self._get_wallet(requester_id, lock=True)
         if wallet.balance < REQUEST_COST:
@@ -348,6 +358,7 @@ class RelationshipRepository:
         if broken:
             broken.initiator_id = requester_id
             broken.rel_type     = "friends"
+            broken.category     = category
             broken.level        = 1
             broken.xp           = 0
             broken.status       = "pending"
@@ -364,6 +375,7 @@ class RelationshipRepository:
             user_b_id=b,
             initiator_id=requester_id,
             rel_type="friends",
+            category=category,
             level=1,
             xp=0,
             status="pending",
@@ -641,12 +653,36 @@ class RelationshipRepository:
         await self._session.flush()
         return {"label": label, "coins": coins}
 
+    async def change_category(
+        self, user_id: int, partner_id: int, new_category: str
+    ) -> Relationship:
+        """Switch relationship category between 'friendship' and 'romantic'.
+
+        If switching to 'friendship' and rel_type is not 'friends', rel_type is
+        reset to 'friends' (level/xp/streak preserved).
+        """
+        if new_category not in ("friendship", "romantic"):
+            raise ValueError("invalid_category")
+        rel = await self.get_between(user_id, partner_id)
+        if not rel or rel.status != "active":
+            raise ValueError("not_related")
+        rel.category = new_category
+        if new_category == "friendship" and rel.rel_type != "friends":
+            rel.rel_type = "friends"
+            rel.initiator_id = user_id
+        await self._session.flush()
+        return rel
+
     async def upgrade_tier(self, user_id: int, partner_id: int) -> Relationship:
         # Relationship lock BEFORE validation so two concurrent upgrades can't
         # both pass the tier/level checks and double-charge the wallet.
         rel = await self.get_between(user_id, partner_id, lock=True)
         if not rel or rel.status != "active":
             raise ValueError("not_related")
+
+        # Friendship category cannot have romantic tiers
+        if getattr(rel, "category", "romantic") == "friendship":
+            raise ValueError("friendship_no_upgrade")
 
         cur = rel.rel_type
         if cur == "married":

@@ -295,30 +295,75 @@ async def on_share_ref(callback: CallbackQuery) -> None:
     if not callback.from_user:
         return
     uid = callback.from_user.id
-    # Build ref link with bot username
+
+    # ── Bot username + referral stats ─────────────────────────────────────────
     try:
         bot_info = await callback.bot.get_me()  # type: ignore[union-attr]
         bot_username = bot_info.username or ""
     except Exception:
         bot_username = ""
-    link = (
-        f"https://t.me/{bot_username}?start=ref_{uid}"
-        if bot_username else None
+
+    link = f"https://t.me/{bot_username}?start=ref_{uid}" if bot_username else None
+
+    # Fetch light referral stats (active friends + level name)
+    active_count  = 0
+    level_name    = "Bronze"
+    ref_reward    = 7      # default fallback
+    try:
+        from app.repositories.referral_repository import ReferralRepository  # noqa: PLC0415
+        async with session_scope() as db:
+            ref_repo = ReferralRepository(db)
+            stats = await ref_repo.get_user_stats(uid, bot_username)
+            active_count = stats.get("active_count", 0)
+            level_name   = stats.get("level", {}).get("name", "Bronze")
+            ref_reward   = stats.get("referrer_reward_days", ref_reward)
+    except Exception:
+        pass
+
+    # ── Compose card ──────────────────────────────────────────────────────────
+    _LEVEL_EMOJI = {
+        "Bronze":   "🥉",
+        "Silver":   "🥈",
+        "Gold":     "🥇",
+        "Diamond":  "💎",
+        "Platinum": "👑",
+    }
+    lv_emoji = _LEVEL_EMOJI.get(level_name, "🔰")
+
+    friends_line = (
+        f"👥 Активных друзей: <b>{active_count}</b>\n"
+        f"{lv_emoji} Уровень: <b>{level_name}</b>\n\n"
+        if active_count > 0 else ""
     )
+
+    share_text = (
+        "🤖 Попробуй этого бота для Telegram Business!\n"
+        "📊 Статистика, питомец, монеты, уровни и многое другое.\n"
+        "Регистрируйся по моей ссылке 👇"
+    )
+    import urllib.parse as _up                                               # noqa: PLC0415
+    share_url = (
+        f"https://t.me/share/url?url={_up.quote(link, safe='')}"
+        f"&text={_up.quote(share_text, safe='')}"
+    ) if link else None
+
     try:
         if link:
             await callback.bot.send_message(  # type: ignore[union-attr]
                 uid,
-                f"🔗 <b>Твоя реферальная ссылка:</b>\n\n"
-                f"<code>{link}</code>\n\n"
-                f"Каждый активный друг приносит тебе бонусы ⭐",
+                f"🎁 <b>Пригласи друга — получи бонус!</b>\n\n"
+                f"{friends_line}"
+                f"💡 За каждого активного друга ты получаешь "
+                f"<b>{ref_reward} дней Premium</b> бесплатно.\n\n"
+                f"🔗 Твоя ссылка:\n"
+                f"<code>{link}</code>",
                 parse_mode="HTML",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                    InlineKeyboardButton(
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(
                         text="📤 Поделиться с другом",
-                        url=f"https://t.me/share/url?url={link}&text=%F0%9F%A4%96+Крутой+бот+для+Telegram+Business!",
-                    )
-                ]]),
+                        url=share_url,
+                    )],
+                ]),
             )
         else:
             await callback.bot.send_message(  # type: ignore[union-attr]

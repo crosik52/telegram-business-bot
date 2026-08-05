@@ -43,3 +43,12 @@ class ChatPet(Base):
     # ── v3 fields ────────────────────────────────────────────────────────────
     # JSON-encoded dict of skill upgrade levels, e.g. {"xp_boost":1,"lucky_paw":0,...}
     upgrades: Mapped[str | None] = mapped_column(String(400), nullable=True)
+
+    # ── v4 fields — shared-pair identity ─────────────────────────────────────
+    # Canonical pair key: user_a_id = min(owner, chat), user_b_id = max(owner, chat).
+    # One alive pet per pair enforced by partial unique index.
+    user_a_id: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    user_b_id: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    # Display name of owner_telegram_id as seen from chat_id's business connection,
+    # so the B-side user sees a sensible interlocutor label.
+    partner_name: Mapped[str] = mapped_column(String(100), nullable=False, default="")

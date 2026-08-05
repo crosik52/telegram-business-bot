@@ -1532,12 +1532,11 @@ async def miniapp_pet_adopt(
         species_label = species_info.get("label", pet["species"])
         pet_emoji = (species_info.get("stages") or ["🐾"])[-1]  # adult emoji
 
-        action = "завёл" if pet.get("mirror_created") else "тоже завёл"
         bot = get_bot(settings)
         await bot.send_message(
             chat_id=payload.chat_id,
             text=(
-                f"🐾 <b>{owner_name}</b> {action} с тобой питомца!\n\n"
+                f"🐾 <b>{owner_name}</b> завёл с тобой питомца!\n\n"
                 f"{pet_emoji} <b>{pet['pet_name']}</b> — {species_label}\n\n"
                 f"Питомец появился в твоём приложении. "
                 f"Не забывай кормить его, чтобы он не умер с голоду 🍖"

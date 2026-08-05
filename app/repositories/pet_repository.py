@@ -33,7 +33,7 @@ import json
 import math
 import random
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -250,7 +250,17 @@ def _display_name(first, last, username, chat_id: int) -> str:
     return f"Собеседник {chat_id}"
 
 
-def _pet_dict(pet: ChatPet, now: dt.datetime, rel_tier: str | None = None) -> dict:
+def _pet_partner_id(pet: "ChatPet", uid: int) -> int:
+    """Return the ID of the OTHER user in the shared pet pair."""
+    return pet.user_b_id if pet.user_a_id == uid else pet.user_a_id
+
+
+def _pet_dict(
+    pet: "ChatPet",
+    now: dt.datetime,
+    rel_tier: str | None = None,
+    viewer_id: int | None = None,
+) -> dict:
     hunger = _compute_hunger(pet, now) if pet.is_alive else 0
     mood   = _compute_mood(pet, now)   if pet.is_alive else 0
     level  = _compute_level(pet.xp)
@@ -258,6 +268,13 @@ def _pet_dict(pet: ChatPet, now: dt.datetime, rel_tier: str | None = None) -> di
     p_info  = PERSONALITIES.get(pet.personality, {"emoji": "❓", "label": "?"})
     from app.models.relationship import REL_XP_BONUS
     rel_bonus = REL_XP_BONUS.get(rel_tier, 1.0) if rel_tier else 1.0
+    # Resolve the interlocutor name from the viewer's perspective.
+    # If viewer is NOT the adopter (owner_telegram_id), the interlocutor is
+    # the adopter — show partner_name stored at adoption time.
+    if viewer_id is not None and viewer_id != pet.owner_telegram_id:
+        interlocutor_name = pet.partner_name or f"Собеседник {pet.owner_telegram_id}"
+    else:
+        interlocutor_name = pet.interlocutor_name
     return {
         "id":               pet.id,
         "chat_id":          pet.chat_id,
@@ -273,7 +290,7 @@ def _pet_dict(pet: ChatPet, now: dt.datetime, rel_tier: str | None = None) -> di
         "personality_emoji": p_info["emoji"],
         "personality_label": p_info["label"],
         "is_alive":         pet.is_alive,
-        "interlocutor_name": pet.interlocutor_name,
+        "interlocutor_name": interlocutor_name,
         "born_at":          pet.born_at.isoformat(),
         "last_fed_at":      pet.last_fed_at.isoformat() if pet.last_fed_at else None,
         "last_played_at":   pet.last_played_at.isoformat() if pet.last_played_at else None,
@@ -337,10 +354,14 @@ class PetRepository:
         now = dt.datetime.now(dt.timezone.utc)
         conn_ids = await self._get_conn_ids(owner_telegram_id)
 
+        # Fetch all pets where this user is either side of the pair
         pets: list[ChatPet] = list(
             (await self._session.execute(
                 select(ChatPet)
-                .where(ChatPet.owner_telegram_id == owner_telegram_id)
+                .where(
+                    (ChatPet.user_a_id == owner_telegram_id)
+                    | (ChatPet.user_b_id == owner_telegram_id)
+                )
                 .order_by(ChatPet.born_at.desc())
             )).scalars().all()
         )
@@ -350,14 +371,15 @@ class PetRepository:
 
         if alive_pets and conn_ids:
             two_days_ago = now - dt.timedelta(hours=48)
-            alive_chat_ids = [p.chat_id for p in alive_pets]
+            # Build the list of partner IDs (from the viewer's perspective)
+            alive_partner_ids = [_pet_partner_id(p, owner_telegram_id) for p in alive_pets]
 
             recent_chats: set[int] = {
                 r[0] for r in (
                     await self._session.execute(
                         select(Message.chat_id.distinct()).where(
                             Message.business_connection_id.in_(conn_ids),
-                            Message.chat_id.in_(alive_chat_ids),
+                            Message.chat_id.in_(alive_partner_ids),
                             Message.chat_id != owner_telegram_id,
                             Message.sent_at >= two_days_ago,
                             Message.is_deleted.is_(False),
@@ -368,6 +390,7 @@ class PetRepository:
 
             newly_dead: list[ChatPet] = []
             for pet in alive_pets:
+                partner_id = _pet_partner_id(pet, owner_telegram_id)
                 hunger = _compute_hunger(pet, now)
                 if hunger == 0:
                     pet.is_alive = False
@@ -375,7 +398,7 @@ class PetRepository:
                     pet.died_at = now
                     changed = True
                     newly_dead.append(pet)
-                elif pet.chat_id not in recent_chats and pet.personality != "brave":
+                elif partner_id not in recent_chats and pet.personality != "brave":
                     age_hours = (now - _tz_aware(pet.born_at)).total_seconds() / 3600
                     if age_hours > STREAK_GRACE_HOURS:
                         pet.is_alive = False
@@ -386,30 +409,13 @@ class PetRepository:
 
         if changed:
             await self._session.flush()
-            # Kill mirror pets for all newly-dead pets so both users see the
-            # death at the same time regardless of who opens the tab first.
-            for dead_pet in newly_dead:
-                await self._session.execute(
-                    update(ChatPet)
-                    .where(
-                        ChatPet.is_alive.is_(True),
-                        ChatPet.owner_telegram_id == dead_pet.chat_id,
-                        ChatPet.chat_id == dead_pet.owner_telegram_id,
-                    )
-                    .values(
-                        is_alive=False,
-                        death_cause=dead_pet.death_cause,
-                        died_at=now,
-                    )
-                )
-            await self._session.flush()
+            # No mirrors to propagate — the single shared row is already dead.
 
         alive_out = [p for p in pets if p.is_alive]
         dead_out  = [p for p in pets if not p.is_alive][:3]
 
-        # Fetch relationship tiers for alive pets so the card can show the XP bonus badge.
-        # Only include the bonus when the partner still has an active BusinessConnection;
-        # if they've disconnected the bot, the tier is present but the bonus silently drops.
+        # Relationship tier → XP bonus badge.
+        # Only include the bonus when the partner still has an active BusinessConnection.
         rel_tier_map: dict[int, str] = {}
         if alive_out:
             rel_repo = RelationshipRepository(self._session)
@@ -436,12 +442,16 @@ class PetRepository:
                 rel_tier_map = {k: v for k, v in raw_map.items() if k in connected_ids}
 
         pets_out = [
-            _pet_dict(p, now, rel_tier=rel_tier_map.get(p.chat_id) if p.is_alive else None)
+            _pet_dict(
+                p, now,
+                rel_tier=rel_tier_map.get(_pet_partner_id(p, owner_telegram_id)) if p.is_alive else None,
+                viewer_id=owner_telegram_id,
+            )
             for p in alive_out + dead_out
         ]
 
-        # Available chats
-        alive_pet_chats: set[int] = {p.chat_id for p in alive_out}
+        # Available chats — exclude partners we already have an alive pet with
+        alive_pet_chats: set[int] = {_pet_partner_id(p, owner_telegram_id) for p in alive_out}
         available_chats: list[dict] = []
         if conn_ids:
             two_days_ago = now - dt.timedelta(hours=48)
@@ -518,6 +528,7 @@ class PetRepository:
         pet_name = pet_name.strip()[:30] or random.choice(PET_NAMES)
         personality = random.choice(list(PERSONALITIES.keys()))
 
+        # Partner must have the bot connected
         partner_conn = (
             await self._session.execute(
                 select(BusinessConnection.business_connection_id).where(
@@ -528,11 +539,16 @@ class PetRepository:
         if not partner_conn:
             raise ValueError("partner_not_connected")
 
+        # Canonical pair key
+        user_a_id = min(owner_telegram_id, chat_id)
+        user_b_id = max(owner_telegram_id, chat_id)
+
+        # Check for existing alive pet for this pair (shared row)
         existing = (
             await self._session.execute(
                 select(ChatPet).where(
-                    ChatPet.owner_telegram_id == owner_telegram_id,
-                    ChatPet.chat_id == chat_id,
+                    ChatPet.user_a_id == user_a_id,
+                    ChatPet.user_b_id == user_b_id,
                     ChatPet.is_alive.is_(True),
                 )
             )
@@ -540,6 +556,7 @@ class PetRepository:
         if existing:
             raise ValueError("pet_exists")
 
+        # Resolve interlocutor name: how chat_id looks from owner's BC
         conn_ids = await self._get_conn_ids(owner_telegram_id)
         name_row = None
         if conn_ids:
@@ -565,26 +582,7 @@ class PetRepository:
             if name_row else f"Собеседник {chat_id}"
         )
 
-        now = dt.datetime.now(dt.timezone.utc)
-        pet = ChatPet(
-            owner_telegram_id=owner_telegram_id,
-            chat_id=chat_id,
-            pet_name=pet_name,
-            species=species,
-            interlocutor_name=interlocutor_name,
-            personality=personality,
-            is_alive=True,
-            born_at=now,
-        )
-        self._session.add(pet)
-        try:
-            await self._session.flush()
-        except IntegrityError:
-            await self._session.rollback()
-            raise ValueError("pet_exists")
-
-        # Mirror pet for partner
-        mirror_created = False
+        # Resolve partner_name: how owner looks from chat_id's BC
         b_conn_ids = await self._get_conn_ids(chat_id)
         owner_name_row = None
         if b_conn_ids:
@@ -605,42 +603,33 @@ class PetRepository:
                     .limit(1)
                 )
             ).first()
-
         owner_display_name = (
             _display_name(owner_name_row[0], owner_name_row[1], owner_name_row[2], owner_telegram_id)
             if owner_name_row else f"Собеседник {owner_telegram_id}"
         )
 
-        b_existing = (
-            await self._session.execute(
-                select(ChatPet).where(
-                    ChatPet.owner_telegram_id == chat_id,
-                    ChatPet.chat_id == owner_telegram_id,
-                    ChatPet.is_alive.is_(True),
-                )
-            )
-        ).scalar_one_or_none()
+        now = dt.datetime.now(dt.timezone.utc)
+        pet = ChatPet(
+            owner_telegram_id=owner_telegram_id,
+            chat_id=chat_id,
+            user_a_id=user_a_id,
+            user_b_id=user_b_id,
+            pet_name=pet_name,
+            species=species,
+            interlocutor_name=interlocutor_name,
+            partner_name=owner_display_name,
+            personality=personality,
+            is_alive=True,
+            born_at=now,
+        )
+        self._session.add(pet)
+        try:
+            await self._session.flush()
+        except IntegrityError:
+            await self._session.rollback()
+            raise ValueError("pet_exists")
 
-        if not b_existing:
-            mirror = ChatPet(
-                owner_telegram_id=chat_id,
-                chat_id=owner_telegram_id,
-                pet_name=pet_name,
-                species=species,
-                interlocutor_name=owner_display_name,
-                personality=personality,
-                is_alive=True,
-                born_at=now,
-            )
-            try:
-                async with self._session.begin_nested():
-                    self._session.add(mirror)
-                    await self._session.flush()
-                mirror_created = True
-            except IntegrityError:
-                pass
-
-        return {**_pet_dict(pet, now), "mirror_created": mirror_created}
+        return _pet_dict(pet, now, viewer_id=owner_telegram_id)
 
     async def feed(
         self,
@@ -687,7 +676,8 @@ class PetRepository:
         ups = _get_upgrades(pet)
         skill_xp_mult = 1.0 + ups.get("xp_boost", 0) * 0.30
         rel_repo      = RelationshipRepository(self._session)
-        rel_tier, rel_level = await rel_repo.get_active_bond(owner_telegram_id, pet.chat_id)
+        partner_id    = _pet_partner_id(pet, owner_telegram_id)
+        rel_tier, rel_level = await rel_repo.get_active_bond(owner_telegram_id, partner_id)
         rel_mult      = rel_repo.rel_xp_multiplier(rel_tier, rel_level)
         total_mult    = food["xp_mult"] * skill_xp_mult * max(1.0, xp_multiplier) * rel_mult
         xp_gained     = round(FEED_XP * total_mult)
@@ -744,7 +734,8 @@ class PetRepository:
         ups = _get_upgrades(pet)
         skill_xp_mult = 1.0 + ups.get("xp_boost", 0) * 0.30
         rel_repo      = RelationshipRepository(self._session)
-        rel_tier, rel_level = await rel_repo.get_active_bond(owner_telegram_id, pet.chat_id)
+        partner_id    = _pet_partner_id(pet, owner_telegram_id)
+        rel_tier, rel_level = await rel_repo.get_active_bond(owner_telegram_id, partner_id)
         rel_mult      = rel_repo.rel_xp_multiplier(rel_tier, rel_level)
         xp_gained     = round(PLAY_XP * skill_xp_mult * max(1.0, xp_multiplier) * rel_mult)
         pet.xp       += xp_gained
@@ -796,7 +787,8 @@ class PetRepository:
         ups = _get_upgrades(pet)
         skill_xp_mult = 1.0 + ups.get("xp_boost", 0) * 0.30
         rel_repo      = RelationshipRepository(self._session)
-        rel_tier, rel_level = await rel_repo.get_active_bond(owner_telegram_id, pet.chat_id)
+        partner_id    = _pet_partner_id(pet, owner_telegram_id)
+        rel_tier, rel_level = await rel_repo.get_active_bond(owner_telegram_id, partner_id)
         rel_mult      = rel_repo.rel_xp_multiplier(rel_tier, rel_level)
         xp_gained     = round(CUDDLE_XP * skill_xp_mult * max(1.0, xp_multiplier) * rel_mult)
         pet.xp       += xp_gained
@@ -876,7 +868,8 @@ class PetRepository:
             await self._session.execute(
                 select(ChatPet)
                 .where(
-                    ChatPet.owner_telegram_id == owner_telegram_id,
+                    (ChatPet.user_a_id == owner_telegram_id)
+                    | (ChatPet.user_b_id == owner_telegram_id),
                     ChatPet.is_alive.is_(True),
                 )
                 .order_by(ChatPet.xp.desc(), ChatPet.id.asc())
@@ -954,12 +947,14 @@ class PetRepository:
         # with_for_update() prevents concurrent mutations to the same pet row
         # (XP, mood, level, upgrades).  Lock order: pet → wallet (consistent
         # across all callers) to avoid deadlocks.
+        # Both users in the pair can interact with the shared pet.
         pet = (
             await self._session.execute(
                 select(ChatPet)
                 .where(
                     ChatPet.id == pet_id,
-                    ChatPet.owner_telegram_id == owner_telegram_id,
+                    (ChatPet.user_a_id == owner_telegram_id)
+                    | (ChatPet.user_b_id == owner_telegram_id),
                 )
                 .with_for_update()
             )

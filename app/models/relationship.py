@@ -83,6 +83,12 @@ UPGRADE_MIN_LEVEL: dict[str, int] = {
     "friends": 3,   # kept from the 5-level era — friendship stays accessible
     "dating":  7,   # raised (was 5) with the 10-level cap so marriage isn't a midpoint
 }
+# Minimum gifts each partner must have sent (tracked in meta gifts_by_a/gifts_by_b)
+# before the tier can be upgraded.  Ensures both sides actively participated.
+UPGRADE_MIN_GIFTS: dict[str, int] = {
+    "friends": 3,   # 3 gifts each before friends→dating
+    "dating":  7,   # 7 gifts each before dating→married
+}
 
 MARRIAGE_DAILY_BONUS = 100  # extra coins in daily claim per active marriage
 

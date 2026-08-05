@@ -25,6 +25,7 @@ from app.models.relationship import (
     STREAK_XP_BONUS_PER_DAY,
     TIER_ORDER,
     UPGRADE_COSTS,
+    UPGRADE_MIN_GIFTS,
     UPGRADE_MIN_LEVEL,
     XP_PER_LEVEL,
     Relationship,
@@ -268,13 +269,21 @@ class RelationshipRepository:
         ).total_seconds() >= GIFT_COOLDOWN_H * 3600
         xp_in_level = rel.xp % XP_PER_LEVEL
         category = getattr(rel, "category", "romantic") or "romantic"
+        meta = _load_meta(rel)
+        _min_gifts = UPGRADE_MIN_GIFTS.get(rel.rel_type, 0)
+        _by_a = meta.get("gifts_by_a", 0)
+        _by_b = meta.get("gifts_by_b", 0)
+        _both_gifted_enough = (
+            _min_gifts == 0
+            or (_by_a >= _min_gifts and _by_b >= _min_gifts)
+        )
         can_upgrade = (
             rel.status == "active"
             and rel.rel_type != "married"
             and rel.level >= UPGRADE_MIN_LEVEL.get(rel.rel_type, 999)
             and category == "romantic"
+            and _both_gifted_enough
         )
-        meta = _load_meta(rel)
         streak = meta.get("streak", {})
         next_anniv = (
             self._next_anniversary(rel.accepted_at, now)
@@ -521,6 +530,11 @@ class RelationshipRepository:
         totals["gifts"] = totals.get("gifts", 0) + 1
         totals["spent"] = totals.get("spent", 0) + cost
 
+        # Per-side gift counters used by upgrade_tier() to ensure both
+        # partners participated before allowing a tier upgrade.
+        gifts_side_key = "gifts_by_a" if sender_id == rel.user_a_id else "gifts_by_b"
+        meta[gifts_side_key] = meta.get(gifts_side_key, 0) + 1
+
         meta["streak"], meta["week"], meta["totals"] = streak, week, totals
         _save_meta(rel, meta)
 
@@ -705,6 +719,23 @@ class RelationshipRepository:
         if rel.level < UPGRADE_MIN_LEVEL.get(cur, 999):
             raise ValueError(f"need_level_{UPGRADE_MIN_LEVEL[cur]}")
 
+        # Both partners must have sent at least UPGRADE_MIN_GIFTS[cur] gifts
+        # so that one side can't spam gifts alone to force a tier upgrade.
+        min_gifts = UPGRADE_MIN_GIFTS.get(cur, 0)
+        if min_gifts > 0:
+            meta = _load_meta(rel)
+            by_a = meta.get("gifts_by_a", 0)
+            by_b = meta.get("gifts_by_b", 0)
+            # Determine which counter belongs to the initiator vs partner
+            if user_id == rel.user_a_id:
+                own_gifts, partner_gifts = by_a, by_b
+            else:
+                own_gifts, partner_gifts = by_b, by_a
+            if own_gifts < min_gifts:
+                raise ValueError(f"need_gifts_{min_gifts}")
+            if partner_gifts < min_gifts:
+                raise ValueError("partner_not_active")
+
         cost   = UPGRADE_COSTS[cur]
         wallet = await self._get_wallet(user_id, lock=True)
         if wallet.balance < cost:
@@ -717,6 +748,13 @@ class RelationshipRepository:
         rel.initiator_id = user_id
         rel.last_gift_a  = None
         rel.last_gift_b  = None
+
+        # Reset per-side gift counters for the new tier so requirements
+        # are re-evaluated fresh if the couple ever tries another upgrade.
+        meta = _load_meta(rel)
+        meta.pop("gifts_by_a", None)
+        meta.pop("gifts_by_b", None)
+        _save_meta(rel, meta)
 
         await self._session.flush()
         return rel

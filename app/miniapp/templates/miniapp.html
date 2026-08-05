@@ -8822,7 +8822,14 @@
     }
 
     document.getElementById("refreshBtn").addEventListener("click", () => loadStats(true));
-    loadStats(false);
+    loadStats(false).then(() => {
+      // Deep-link: open a specific tab when the WebApp URL contains ?tab=...
+      // (used by the bot keyboard buttons for Питомец, Связи, Premium)
+      const _startTab = new URLSearchParams(window.location.search).get("tab");
+      if (_startTab && _startTab !== "stats" && currentInitData) {
+        switchMainTab(_startTab);
+      }
+    });
 
     // Giveaway tab is now always visible in the bottom nav
 

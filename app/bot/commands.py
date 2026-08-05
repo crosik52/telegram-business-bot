@@ -37,11 +37,11 @@ def _app_kb(base_url: str, *, extra_rows: list[list[InlineKeyboardButton]] | Non
     rows: list[list[InlineKeyboardButton]] = [
         [InlineKeyboardButton(text="📊 Статистика и профиль", web_app=WebAppInfo(url=base_url + "/app"))],
         [
-            InlineKeyboardButton(text="🐾 Питомец", web_app=WebAppInfo(url=base_url + "/app#pet")),
-            InlineKeyboardButton(text="💞 Связи", web_app=WebAppInfo(url=base_url + "/app#interact")),
+            InlineKeyboardButton(text="🐾 Питомец", web_app=WebAppInfo(url=base_url + "/app?tab=casino")),
+            InlineKeyboardButton(text="💞 Связи", web_app=WebAppInfo(url=base_url + "/app?tab=interact")),
         ],
         [
-            InlineKeyboardButton(text="⭐ Premium", web_app=WebAppInfo(url=base_url + "/app#giveaway")),
+            InlineKeyboardButton(text="⭐ Premium", web_app=WebAppInfo(url=base_url + "/app?tab=giveaway")),
             InlineKeyboardButton(text="🔗 Пригласить друга", callback_data="share_ref"),
         ],
         [InlineKeyboardButton(text="❓ Помощь", callback_data="help_main")],
@@ -299,27 +299,39 @@ async def on_share_ref(callback: CallbackQuery) -> None:
     await callback.answer()
     if not callback.from_user:
         return
-    async with session_scope() as db:
-        repo = ReferralRepository(db)
-        info = await repo.get_referral_info(callback.from_user.id)
-    if info and info.get("ref_link"):
-        link = info["ref_link"]
-        await callback.message.answer(  # type: ignore[union-attr]
-            f"🔗 <b>Твоя реферальная ссылка:</b>\n\n"
-            f"<code>{link}</code>\n\n"
-            f"Каждый активный друг приносит тебе бонусы ⭐",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(
-                    text="📤 Поделиться",
-                    url=f"https://t.me/share/url?url={link}&text=Крутой+бот+для+Telegram+Business!",
-                )
-            ]]),
-        )
-    else:
-        await callback.message.answer(  # type: ignore[union-attr]
-            "🔗 Реферальная программа пока недоступна.",
-        )
+    uid = callback.from_user.id
+    # Build ref link with bot username
+    try:
+        bot_info = await callback.bot.get_me()  # type: ignore[union-attr]
+        bot_username = bot_info.username or ""
+    except Exception:
+        bot_username = ""
+    link = (
+        f"https://t.me/{bot_username}?start=ref_{uid}"
+        if bot_username else None
+    )
+    try:
+        if link:
+            await callback.bot.send_message(  # type: ignore[union-attr]
+                uid,
+                f"🔗 <b>Твоя реферальная ссылка:</b>\n\n"
+                f"<code>{link}</code>\n\n"
+                f"Каждый активный друг приносит тебе бонусы ⭐",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(
+                        text="📤 Поделиться с другом",
+                        url=f"https://t.me/share/url?url={link}&text=%F0%9F%A4%96+Крутой+бот+для+Telegram+Business!",
+                    )
+                ]]),
+            )
+        else:
+            await callback.bot.send_message(  # type: ignore[union-attr]
+                uid,
+                "🔗 Реферальная программа пока недоступна.",
+            )
+    except Exception as exc:
+        logger.warning("share_ref: failed to send ref link to %s: %s", uid, exc)
 
 
 # ── /me ───────────────────────────────────────────────────────────────────────

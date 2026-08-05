@@ -478,8 +478,8 @@ async def on_me(message: Message) -> None:
                         streak_days = meta.get("streak", {}).get("days", 0)
                     except Exception:
                         pass
-                streak_part = f" · 🔥{streak_days} дн." if streak_days else ""
-                bond_line   = f"💞 Связь: <b>{tier_label} · Ур.{rel.level}{streak_part}</b>\n"
+                streak_line = f"🔥 Стрик пары: <b>{streak_days} дн.</b>\n" if streak_days else ""
+                bond_line   = f"💞 Связь: <b>{tier_label} · Ур.{rel.level}</b>\n" + streak_line
 
     except Exception:
         logger.exception("/me: DB query failed for user %s", uid)

@@ -339,7 +339,7 @@ async def on_share_ref(callback: CallbackQuery) -> None:
     share_text = (
         "🤖 Попробуй этого бота для Telegram Business!\n"
         "📊 Статистика, питомец, монеты, уровни и многое другое.\n"
-        "Регистрируйся по моей ссылке 👇"
+        "Регистрируйся по ссылке:"
     )
     import urllib.parse as _up                                               # noqa: PLC0415
     share_url = (

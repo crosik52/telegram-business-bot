@@ -3784,7 +3784,7 @@
       }
     }
 
-    function showGiveawayPreview() {
+    async function showGiveawayPreview() {
       _destroyGvPreviewLottie();
       const existing = document.getElementById("gvPreviewOverlay");
       if (existing) existing.remove();
@@ -3848,6 +3848,50 @@
         cdHtml = `<div class="gv-cd-finished">🎁 Розыгрыш идёт!</div>`;
       }
 
+      // Fetch fresh leaderboard data for the preview
+      let topSlots = [];
+      try {
+        const lbRes = await fetch("/app/api/admin/giveaway/config", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData}),
+        });
+        if (lbRes.ok) {
+          const lbData = await lbRes.json();
+          topSlots = Array.isArray(lbData.top) ? lbData.top : [];
+        }
+      } catch (_) { /* fall through to placeholders */ }
+
+      function _podiumSlot(rank, entry) {
+        const crown = rank === 1 ? `<span class="giveaway-ps-crown">👑</span>` : "";
+        if (entry) {
+          const initials = entry.display_name
+            .split(" ").filter(Boolean).slice(0,2)
+            .map(w => w[0].toUpperCase()).join("") || "?";
+          const countLabel = entry.referral_count === 1
+            ? "1 реферал"
+            : `${entry.referral_count} реферала(ов)`;
+          return `<div class="giveaway-ps-slot rank-${rank}">
+            <div class="giveaway-ps-avatar">${crown}${esc(initials)}</div>
+            <div class="giveaway-ps-name">${esc(entry.display_name)}</div>
+            <div class="giveaway-ps-count">${countLabel}</div>
+            <div class="giveaway-ps-base">${rank}</div>
+          </div>`;
+        }
+        return `<div class="giveaway-ps-slot rank-${rank} empty">
+          <div class="giveaway-ps-avatar">${crown}?</div>
+          <div class="giveaway-ps-name">Свободно</div>
+          <div class="giveaway-ps-count">Пригласи друзей</div>
+          <div class="giveaway-ps-base">${rank}</div>
+        </div>`;
+      }
+
+      const byRank = {};
+      topSlots.forEach(e => { byRank[e.rank] = e; });
+      const podiumHtml = `
+        ${_podiumSlot(2, byRank[2] || null)}
+        ${_podiumSlot(1, byRank[1] || null)}
+        ${_podiumSlot(3, byRank[3] || null)}`;
+
       const overlay = document.createElement("div");
       overlay.id = "gvPreviewOverlay";
       overlay.className = "gv-preview-overlay";
@@ -3868,24 +3912,7 @@
           ${prizesHtml}
           <div class="gv-preview-divider">🏆 Таблица лидеров</div>
           <div class="giveaway-podium-stage">
-            <div class="giveaway-ps-slot rank-2 empty">
-              <div class="giveaway-ps-avatar">?</div>
-              <div class="giveaway-ps-name">Свободно</div>
-              <div class="giveaway-ps-count">Пригласи друзей</div>
-              <div class="giveaway-ps-base">2</div>
-            </div>
-            <div class="giveaway-ps-slot rank-1 empty">
-              <div class="giveaway-ps-avatar"><span class="giveaway-ps-crown">👑</span>?</div>
-              <div class="giveaway-ps-name">Свободно</div>
-              <div class="giveaway-ps-count">Пригласи друзей</div>
-              <div class="giveaway-ps-base">1</div>
-            </div>
-            <div class="giveaway-ps-slot rank-3 empty">
-              <div class="giveaway-ps-avatar">?</div>
-              <div class="giveaway-ps-name">Свободно</div>
-              <div class="giveaway-ps-count">Пригласи друзей</div>
-              <div class="giveaway-ps-base">3</div>
-            </div>
+            ${podiumHtml}
           </div>
         </div>`;
       overlay.addEventListener("click", e => { if (e.target === overlay) closeGiveawayPreview(); });

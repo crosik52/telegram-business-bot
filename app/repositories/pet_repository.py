@@ -383,7 +383,10 @@ class PetRepository:
             # Build the list of partner IDs (from the viewer's perspective)
             alive_partner_ids = [_pet_partner_id(p, owner_telegram_id) for p in alive_pets]
 
-            recent_chats: set[int] = {
+            # ── Side A: viewer's own BC — messages in the chat with each partner ──
+            # Includes both viewer→partner and partner→viewer messages captured by
+            # the viewer's bot connection.
+            viewer_recent: set[int] = {
                 r[0] for r in (
                     await self._session.execute(
                         select(Message.chat_id.distinct()).where(
@@ -396,6 +399,42 @@ class PetRepository:
                     )
                 ).all()
             }
+
+            # ── Side B: partner's own BC — messages they sent to the viewer ────────
+            # Covers the case where A's BC doesn't capture B's messages but B does
+            # have their own BC connected.  One batched query across all partners.
+            partner_active: set[int] = set()
+            partner_bc_rows = (
+                await self._session.execute(
+                    select(
+                        BusinessConnection.user_telegram_id,
+                        BusinessConnection.business_connection_id,
+                    ).where(
+                        BusinessConnection.user_telegram_id.in_(alive_partner_ids)
+                    )
+                )
+            ).all()
+            if partner_bc_rows:
+                all_partner_conn_ids = [r[1] for r in partner_bc_rows]
+                conn_to_partner: dict[str, int] = {r[1]: r[0] for r in partner_bc_rows}
+                active_conn_rows = (
+                    await self._session.execute(
+                        select(Message.business_connection_id.distinct()).where(
+                            Message.business_connection_id.in_(all_partner_conn_ids),
+                            Message.chat_id == owner_telegram_id,
+                            Message.sent_at >= two_days_ago,
+                            Message.is_deleted.is_(False),
+                        )
+                    )
+                ).all()
+                partner_active = {
+                    conn_to_partner[r[0]]
+                    for r in active_conn_rows
+                    if r[0] in conn_to_partner
+                }
+
+            # Pet is "in contact" if EITHER side has recent messages in the chat
+            recent_chats = viewer_recent | partner_active
 
             newly_dead: list[ChatPet] = []
             for pet in alive_pets:

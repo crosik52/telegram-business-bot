@@ -37,14 +37,9 @@ def _app_kb(base_url: str, *, extra_rows: list[list[InlineKeyboardButton]] | Non
     rows: list[list[InlineKeyboardButton]] = [
         [InlineKeyboardButton(text="📊 Статистика и профиль", web_app=WebAppInfo(url=base_url + "/app"))],
         [
-            InlineKeyboardButton(text="🐾 Питомец", web_app=WebAppInfo(url=base_url + "/app?tab=casino")),
-            InlineKeyboardButton(text="💞 Связи", web_app=WebAppInfo(url=base_url + "/app?tab=interact")),
-        ],
-        [
-            InlineKeyboardButton(text="⭐ Premium", web_app=WebAppInfo(url=base_url + "/app?tab=giveaway")),
             InlineKeyboardButton(text="🔗 Пригласить друга", callback_data="share_ref"),
+            InlineKeyboardButton(text="❓ Помощь", callback_data="help_main"),
         ],
-        [InlineKeyboardButton(text="❓ Помощь", callback_data="help_main")],
     ]
     if extra_rows:
         rows += extra_rows
@@ -358,7 +353,6 @@ async def on_me(message: Message) -> None:
         from sqlalchemy import func, or_                                        # noqa: PLC0415
         from app.models.business_connection import BusinessConnection           # noqa: PLC0415
         from app.models.message import Message as MsgModel                     # noqa: PLC0415
-        from app.models.pet import Pet                                          # noqa: PLC0415
         from app.models.relationship import Relationship                        # noqa: PLC0415
         from app.repositories.subscription_repository import SubscriptionRepository  # noqa: PLC0415
 
@@ -397,15 +391,22 @@ async def on_me(message: Message) -> None:
                     sub_label = f"⭐ Premium · ещё {left} дн."
 
             # ── Pet ───────────────────────────────────────────────────────────
+            from app.models.pet import ChatPet                              # noqa: PLC0415
             pet = (await db.execute(
-                select(Pet).where(
-                    Pet.owner_telegram_id == uid,
-                    Pet.is_alive.is_(True),
+                select(ChatPet).where(
+                    (ChatPet.user_a_id == uid) | (ChatPet.user_b_id == uid),
+                    ChatPet.is_alive.is_(True),
                 ).limit(1)
             )).scalar_one_or_none()
             if pet:
-                hunger   = round(pet.hunger or 0)
-                mood     = round(pet.mood   or 0)
+                # Compute live hunger from timestamps (same formula as pet_repository)
+                _now   = _dt.datetime.now(_dt.timezone.utc)
+                _ref   = pet.last_fed_at or pet.born_at
+                if _ref.tzinfo is None:
+                    _ref = _ref.replace(tzinfo=_dt.timezone.utc)
+                _hours = max(0.0, (_now - _ref).total_seconds() / 3600)
+                hunger = max(0, round(100 - _hours / 72 * 100))
+                mood   = round(pet.mood or 0)
                 pet_line = (
                     f"🐾 Питомец: <b>{pet.pet_name}</b> · Ур.{pet.level} · "
                     f"🍖{hunger}% 😊{mood}%\n"

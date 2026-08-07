@@ -1365,14 +1365,14 @@
       const subtitle = document.getElementById("subtitle");
       subtitle.textContent = "Все подключённые пользователи бота";
 
-      const activeCount   = overview.users.filter(u => !u.is_blocked).length;
-      const blockedCount  = overview.users.filter(u => u.is_blocked).length;
-      const totalMessages = overview.users.reduce((s, u) => s + u.total_messages, 0);
+      const connectedCount = overview.active_users ?? overview.users.filter(u => u.is_enabled).length;
+      const blockedCount   = overview.users.filter(u => u.is_blocked).length;
+      const totalMessages  = overview.users.reduce((s, u) => s + u.total_messages, 0);
 
       const cards = `
         <div class="cards">
-          <div class="card c-users"><span class="c-icon">👥</span><div class="c-val">${overview.total_users}</div><div class="c-lbl">Пользователей</div></div>
-          <div class="card c-active"><span class="c-icon">✅</span><div class="c-val">${activeCount}</div><div class="c-lbl">Активных</div></div>
+          <div class="card c-users"><span class="c-icon">👥</span><div class="c-val">${overview.total_users}</div><div class="c-lbl">Всего пользователей</div></div>
+          <div class="card c-active"><span class="c-icon">🔌</span><div class="c-val">${connectedCount}</div><div class="c-lbl">С подключением</div></div>
           <div class="card c-block"><span class="c-icon">🚫</span><div class="c-val">${blockedCount}</div><div class="c-lbl">Заблокировано</div></div>
           <div class="card c-msgs"><span class="c-icon">💬</span><div class="c-val">${totalMessages}</div><div class="c-lbl">Сообщений всего</div></div>
         </div>

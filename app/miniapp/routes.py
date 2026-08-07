@@ -2856,6 +2856,7 @@ async def admin_overview(
 
     return {
         "total_users": overview.total_users,
+        "active_users": overview.active_users,
         "users": [
             {
                 "owner_telegram_id": u.owner_telegram_id,

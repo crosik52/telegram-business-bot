@@ -85,6 +85,7 @@ class AdminUserRow:
 @dataclass
 class AdminOverview:
     total_users: int
+    active_users: int      # users with at least one is_enabled=True connection
     users: list[AdminUserRow] = field(default_factory=list)
 
 
@@ -426,11 +427,6 @@ class StatsRepository:
 
         users: list[AdminUserRow] = []
         for owner_telegram_id, conns in by_owner.items():
-            # Only show users who have at least one currently-enabled connection.
-            # Users who connected in the past but have since revoked access are excluded.
-            if not any(c.is_enabled for c in conns):
-                continue
-
             latest = max(conns, key=lambda c: c.connected_at)
 
             total_messages = edited_messages = deleted_messages = total_chats = 0
@@ -467,7 +463,8 @@ class StatsRepository:
 
         users.sort(key=lambda u: u.total_messages, reverse=True)
 
-        return AdminOverview(total_users=len(users), users=users)
+        active_users = sum(1 for u in users if u.is_enabled)
+        return AdminOverview(total_users=len(users), active_users=active_users, users=users)
 
     async def set_owner_settings(
         self,

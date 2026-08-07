@@ -426,6 +426,11 @@ class StatsRepository:
 
         users: list[AdminUserRow] = []
         for owner_telegram_id, conns in by_owner.items():
+            # Only show users who have at least one currently-enabled connection.
+            # Users who connected in the past but have since revoked access are excluded.
+            if not any(c.is_enabled for c in conns):
+                continue
+
             latest = max(conns, key=lambda c: c.connected_at)
 
             total_messages = edited_messages = deleted_messages = total_chats = 0

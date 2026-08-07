@@ -616,6 +616,38 @@ async def on_business_connection(connection: BusinessConnection) -> None:
             await ai_analysis_service.invalidate_cache_for_owner(
                 session, connection.user.id
             )
+            # Notify the user that they've disconnected the bot
+            try:
+                settings = get_settings()
+                base_url = (settings.webhook_base_url or "").rstrip("/")
+                reconnect_kb = None
+                if base_url:
+                    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo  # noqa: PLC0415
+                    reconnect_kb = InlineKeyboardMarkup(inline_keyboard=[[
+                        InlineKeyboardButton(
+                            text="📊 Открыть статистику",
+                            web_app=WebAppInfo(url=base_url + "/app"),
+                        )
+                    ]])
+                from app.business.dispatcher import get_bot as _get_bot  # noqa: PLC0415
+                _main_bot = _get_bot(get_settings())
+                await _main_bot.send_message(
+                    connection.user.id,
+                    "🔌 <b>Бот отключён от твоего аккаунта</b>\n\n"
+                    "Ты отключил бота от Telegram Business — "
+                    "новые сообщения больше не отслеживаются, уведомления об удалениях не приходят, "
+                    "питомец и статистика перестанут обновляться.\n\n"
+                    "Чтобы снова включить:\n"
+                    "⚙️ <b>Настройки → Telegram Business → Чат-боты</b> → выбери этого бота\n\n"
+                    "Все твои данные, монеты и история сохранены — ничего не потеряется 🔒",
+                    parse_mode="HTML",
+                    reply_markup=reconnect_kb,
+                )
+            except Exception as _exc:
+                logger.warning(
+                    "Could not send disconnect notification to user %s: %s",
+                    connection.user.id, _exc,
+                )
         else:
             _bc_cache[connection.id] = (connection.user.id, connection.can_reply)
 

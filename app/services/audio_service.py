@@ -381,9 +381,10 @@ async def stream_to_bytes(url: str) -> tuple[bytes, str]:
     elif "http_headers" in _cookie_opts and "Cookie" in _cookie_opts["http_headers"]:
         _cookies_arg = ["--add-header", f"Cookie:{_cookie_opts['http_headers']['Cookie']}"]
 
-    # Try multiple player clients in order — Android is fastest but often blocked
-    # on datacenter IPs; tv_embedded skips po_token requirement; web is a fallback.
-    _player_clients = ["android", "tv_embedded", "web"]
+    # Try multiple player clients in order.
+    # ios/mweb work best on datacenter IPs (no po_token required).
+    # tv_embedded is a reliable secondary; android/web are last resorts.
+    _player_clients = ["ios", "mweb", "tv_embedded", "android", "web"]
     raw_bytes: bytes = b""
     last_err = ""
 
@@ -395,18 +396,32 @@ async def stream_to_bytes(url: str) -> tuple[bytes, str]:
             "--max-filesize", "48m",
             "--no-part",
             "--no-warnings",
+            "--retries", "2",
             "-f", "bestaudio[ext=m4a]/bestaudio/best",
             *_cookies_arg,
             "-o", "-",
             url,
         ]
-        ytdlp_proc = await asyncio.create_subprocess_exec(
-            *ytdlp_args,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        raw_bytes, ytdlp_stderr = await ytdlp_proc.communicate()
+        try:
+            ytdlp_proc = await asyncio.create_subprocess_exec(
+                *ytdlp_args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            raw_bytes, ytdlp_stderr = await asyncio.wait_for(
+                ytdlp_proc.communicate(), timeout=90
+            )
+        except asyncio.TimeoutError:
+            logger.debug("stream_to_bytes: client=%s timed out, trying next", _client)
+            try:
+                ytdlp_proc.kill()
+            except Exception:
+                pass
+            raw_bytes = b""
+            last_err = "timeout"
+            continue
         if raw_bytes:
+            logger.debug("stream_to_bytes: client=%s succeeded", _client)
             break
         last_err = ytdlp_stderr.decode(errors="replace").strip()
         logger.debug("stream_to_bytes: client=%s failed, trying next. err=%s", _client, last_err[:200])
@@ -483,15 +498,16 @@ def _download_sync(
         return o
 
     # ── 1. Try YouTube with multiple player clients ───────────────────────────
-    # Android is fastest but often blocked on datacenter IPs.
-    # tv_embedded skips po_token; web is a last-resort YouTube attempt.
-    _yt_clients = ["android", "tv_embedded", "web"]
+    # ios/mweb work best on datacenter IPs (no po_token required).
+    # tv_embedded is reliable secondary; android/web are last resorts.
+    _yt_clients = ["ios", "mweb", "tv_embedded", "android", "web"]
 
     yt_error: Exception | None = None
     info: dict | None = None
     for _client in _yt_clients:
         yt_opts = _base_opts(out_dir)
         yt_opts["extractor_args"] = {"youtube": {"player_client": [_client]}}
+        yt_opts["retries"] = 2
         _apply_youtube_cookies(yt_opts, out_dir)
         try:
             with yt_dlp.YoutubeDL(yt_opts) as ydl:
@@ -520,17 +536,21 @@ def _download_sync(
         sc_query    = "scsearch1:" + " ".join(query_parts)
         sc_opts     = _base_opts(out_dir)
 
-        with yt_dlp.YoutubeDL(sc_opts) as ydl:
-            info = ydl.extract_info(sc_query, download=True)
-            # scsearch returns a playlist wrapper — unwrap it
-            if info and "entries" in info:
-                entries = [e for e in (info.get("entries") or []) if e]
-                info = entries[0] if entries else info
+        try:
+            with yt_dlp.YoutubeDL(sc_opts) as ydl:
+                info = ydl.extract_info(sc_query, download=True)
+                # scsearch returns a playlist wrapper — unwrap it
+                if info and "entries" in info:
+                    entries = [e for e in (info.get("entries") or []) if e]
+                    info = entries[0] if entries else info
 
-        title    = info.get("title")    or fallback_title
-        uploader = info.get("uploader") or info.get("channel") or fallback_uploader or ""
-        duration = int(info.get("duration") or 0)
-        logger.info("mp3: SoundCloud fallback succeeded for %r", fallback_title)
+            title    = info.get("title")    or fallback_title
+            uploader = info.get("uploader") or info.get("channel") or fallback_uploader or ""
+            duration = int(info.get("duration") or 0)
+            logger.info("mp3: SoundCloud fallback succeeded for %r", fallback_title)
+        except Exception as sc_exc:
+            logger.warning("mp3: SoundCloud fallback also failed: %s", sc_exc)
+            raise yt_error from sc_exc  # raise original YouTube error
 
     # Find the downloaded file (any audio extension)
     files = [p for p in Path(out_dir).iterdir()

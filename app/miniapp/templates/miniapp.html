@@ -1982,60 +1982,6 @@
     text-transform: uppercase;
   }
 
-  /* ══════════════════════════════════════════
-     DONATE / SUPPORT
-  ══════════════════════════════════════════ */
-  .donate-header {
-    text-align: center; padding: 10px 0 20px;
-    animation: fadeDown 0.4s ease;
-  }
-  .donate-icon { font-size: 48px; margin-bottom: 10px; }
-  .donate-title { font-size: 20px; font-weight: 800; margin-bottom: 6px; }
-  .donate-sub   { font-size: 13px; color: var(--hint); line-height: 1.5; }
-
-  .tiers-grid { display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px; }
-  .tier-card {
-    background: var(--secondary-bg); border-radius: var(--card-radius);
-    padding: 18px 16px; box-shadow: var(--shadow);
-    position: relative; overflow: hidden;
-    animation: riseIn 0.35s ease backwards;
-    border: 1.5px solid transparent;
-  }
-  .tier-card.popular {
-    border-color: rgba(124,58,237,0.5);
-    box-shadow: 0 4px 20px rgba(124,58,237,0.18);
-  }
-  .tier-popular-badge {
-    position: absolute; top: 0; right: 0;
-    background: linear-gradient(90deg,#7c3aed,#a855f7);
-    color: #fff; font-size: 11px; font-weight: 800;
-    padding: 4px 12px; border-bottom-left-radius: 12px;
-  }
-  .tier-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-  .tier-emoji { font-size: 32px; }
-  .tier-info {}
-  .tier-name  { font-size: 17px; font-weight: 800; }
-  .tier-price { font-size: 13px; color: var(--hint); margin-top: 2px; font-weight: 500; }
-  .tier-perks { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
-  .tier-perk  { font-size: 13px; color: var(--text); display: flex; align-items: center; gap: 6px; }
-  .tier-perk::before { content: "✓"; color: var(--green); font-weight: 800; flex-shrink: 0; }
-  .tier-btn {
-    width: 100%; border: none; border-radius: 12px; padding: 11px;
-    font-size: 13.5px; font-weight: 800;
-    background: rgba(120,120,128,0.1); color: var(--hint);
-    cursor: default;
-  }
-  .donate-stars-note {
-    background: var(--secondary-bg); border-radius: var(--card-radius);
-    padding: 16px; text-align: center; font-size: 12.5px; color: var(--hint);
-    line-height: 1.6; box-shadow: var(--shadow);
-  }
-  .donate-stars-note strong { color: var(--text); }
-  .donate-coming-soon {
-    display: inline-block; margin-top: 8px;
-    background: rgba(245,158,11,0.15); color: #f59e0b;
-    font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 8px;
-  }
   /* ── Quest tab colours ── */
 
   /* ── Quest card ── */
@@ -3824,8 +3770,6 @@
   </div>
 
   <div id="casinoContent"   style="display:none"></div>
-  <div id="donateContent"   style="display:none"></div>
-  <div id="questContent"    style="display:none"></div>
   <div id="shopContent"     style="display:none"></div>
   <div id="interactContent" style="display:none"></div>
   <div id="giveawayContent" style="display:none"></div>
@@ -5759,10 +5703,6 @@
     // WALLET / CASINO
     // ══════════════════════════════════════════════════════════════════
 
-    // Load wallet silently for donate tab (subscription info lives in walletData)
-    // loadWalletForDonate kept for backward compat (dead code — donate tab removed)
-    async function loadWalletForDonate() {}
-
     async function loadWallet() {
       const el = document.getElementById("casinoContent");
       el.innerHTML = `<div class="empty skeleton"><span class="big-emoji">🎰</span>Загружаем…</div>`;
@@ -7622,46 +7562,6 @@
         // If request fails, still keep animation going; result shown at explosion
         cashout && (cashout.textContent = `✅ Забрал ×${crashCashedOutMult.toFixed(2)} — летим…`);
       }
-    }
-
-    // ══════════════════════════════════════════════════════════════════
-    // DONATE / SUPPORT SECTION
-    // ══════════════════════════════════════════════════════════════════
-    function renderDonate() {
-      subData = walletData?.subscription || null;
-      const el = document.getElementById("donateContent");
-      el.innerHTML = `
-        <div class="donate-header">
-          <div class="donate-icon">💎</div>
-          <div class="donate-title">Поддержать проект</div>
-          <div class="donate-sub">Помоги нам развиваться и получи эксклюзивные возможности</div>
-        </div>
-        ${renderSubscriptionSection()}
-        <div class="donate-stars-note">
-          <strong>⭐ Telegram Stars</strong> — встроенная платёжная система Telegram.<br>
-          Покупаются прямо в приложении, безопасно и мгновенно.
-        </div>
-        ${renderReferralSection()}
-      `;
-      attachSubscriptionHandlers();
-      attachReferralDonateHandlers();
-    }
-
-    function renderTier(emoji, name, price, perks, isPopular) {
-      return `
-        <div class="tier-card${isPopular ? " popular" : ""}">
-          ${isPopular ? '<div class="tier-popular-badge">⭐ Хит</div>' : ""}
-          <div class="tier-top">
-            <div class="tier-emoji">${emoji}</div>
-            <div class="tier-info">
-              <div class="tier-name">${name}</div>
-              <div class="tier-price">${price}</div>
-            </div>
-          </div>
-          <div class="tier-perks">${perks.map(p => `<div class="tier-perk">${p}</div>`).join("")}</div>
-          <button class="tier-btn" disabled>Скоро доступно</button>
-        </div>
-      `;
     }
 
     // ══════════════════════════════════════════════════════════════════

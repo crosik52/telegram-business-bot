@@ -1164,7 +1164,7 @@ class PetRepository:
             raise ValueError("not_the_partner")
 
         if not accept:
-            return {"accepted": False, "wager": wager}
+            return {"accepted": False, "wager": wager, "challenger_id": challenger_id}
 
         # ── Battle accepted — resolve ─────────────────────────────────────────
         pet    = await self._get_alive_pet(responder_id, pet_id)
@@ -1204,6 +1204,7 @@ class PetRepository:
             "winner_id":        winner_id,
             "challenger_won":   challenger_won,
             "wager":            wager,
+            "challenger_id":    challenger_id,
             "challenger_power": round(ch_pw, 1),
             "responder_power":  round(rs_pw, 1),
             "base_power":       round(base_pw, 1),

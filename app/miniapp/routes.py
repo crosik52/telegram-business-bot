@@ -1906,9 +1906,27 @@ async def pet_battle_respond(
     try:
         result = await repo.battle_respond(owner_id, payload.pet_id, payload.accept)
         await session.commit()
-        return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # Notify the challenger via DM (fire-and-forget; never block the response)
+    challenger_id = result.get("challenger_id")
+    # Skip when the challenger cancelled their own challenge (no challenger_id returned)
+    if challenger_id and challenger_id != owner_id:
+        try:
+            bot = get_bot(settings)
+            if result.get("accepted"):
+                if result.get("challenger_won"):
+                    text = f"🏆 Питомец победил! +{result['wager']} 🪙"
+                else:
+                    text = f"😔 Питомец проиграл. −{result['wager']} 🪙"
+            else:
+                text = "⚔️ Партнёр отклонил вызов на бой."
+            await bot.send_message(chat_id=challenger_id, text=text)
+        except Exception:
+            logger.warning("Failed to send battle result DM to challenger %s", challenger_id)
+
+    return result
 
 
 @router.post("/app/api/pet/leaderboard")

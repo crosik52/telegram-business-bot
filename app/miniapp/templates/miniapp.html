@@ -3294,20 +3294,27 @@
     background: linear-gradient(180deg, rgba(109,40,217,0.06) 0%, transparent 300px);
   }
 
-  /* ── Hero ── */
+  /* ── Hero — floating card ── */
   .giveaway-hero {
     position: relative; overflow: hidden;
-    background: linear-gradient(160deg, #0d0121 0%, #1e0445 40%, #4c1d95 75%, #7c3aed 100%);
-    padding: 28px 20px 0;
+    background: linear-gradient(148deg, #1c0a3a 0%, #2e1264 42%, #4a1d96 76%, #5b2eb8 100%);
+    padding: 26px 20px 0;
+    margin: 12px 14px 0;
+    border-radius: 26px;
+    box-shadow:
+      0 10px 40px rgba(80,20,180,0.32),
+      0 0 0 0.5px rgba(139,92,246,0.28),
+      inset 0 1px 0 rgba(255,255,255,0.16),
+      inset 0 -1px 0 rgba(0,0,0,0.12);
   }
   .giveaway-hero::before {
     content: ""; position: absolute; inset: 0; pointer-events: none;
-    background: radial-gradient(ellipse 80% 55% at 50% -10%, rgba(139,92,246,0.5) 0%, transparent 65%);
+    background: radial-gradient(ellipse 72% 48% at 50% -8%, rgba(139,92,246,0.38) 0%, transparent 68%);
   }
-  /* Glass specular line across top edge of hero, matching nav bar */
+  /* Specular highlight on top edge */
   .giveaway-hero::after {
-    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-    background: linear-gradient(90deg, transparent 5%, rgba(255,255,255,0.40) 25%, rgba(255,255,255,0.82) 50%, rgba(255,255,255,0.40) 75%, transparent 95%);
+    content: ""; position: absolute; top: 0; left: 10%; right: 10%; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55) 40%, rgba(255,255,255,0.80) 50%, rgba(255,255,255,0.55) 60%, transparent);
     pointer-events: none; z-index: 2;
   }
   .giveaway-hero-body { position: relative; z-index: 1; text-align: center; }
@@ -3343,22 +3350,20 @@
 
   /* ── Countdown — liquid glass cells ── */
   .giveaway-countdown { position: relative; z-index: 1; }
-  .giveaway-cd-wrap { display: flex; gap: 8px; justify-content: center; padding: 18px 20px 22px; }
+  .giveaway-cd-wrap { display: flex; gap: 8px; justify-content: center; padding: 16px 16px 20px; }
   .giveaway-cd-cell {
-    flex: 1; text-align: center; border-radius: 14px; padding: 10px 4px;
-    background: rgba(255,255,255,0.08);
-    backdrop-filter: blur(24px) saturate(160%);
-    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    flex: 1; text-align: center; border-radius: 16px; padding: 11px 4px;
+    background: rgba(255,255,255,0.07);
+    backdrop-filter: blur(20px) saturate(150%);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
     box-shadow:
-      0 0 0 0.5px rgba(255,255,255,0.20),
-      inset 0 1px 0 rgba(255,255,255,0.30),
-      inset 0 -0.5px 0 rgba(0,0,0,0.14),
-      inset 1px 0 0 rgba(255,255,255,0.09),
-      inset -1px 0 0 rgba(255,255,255,0.09);
+      0 0 0 0.5px rgba(255,255,255,0.14),
+      inset 0 1px 0 rgba(255,255,255,0.22),
+      inset 0 -0.5px 0 rgba(0,0,0,0.10);
   }
-  .giveaway-cd-val { font-size: 26px; font-weight: 900; color: #fff; line-height: 1; letter-spacing: -1px; }
-  .giveaway-cd-lbl { font-size: 9px; color: rgba(255,255,255,0.48); text-transform: uppercase; letter-spacing: 0.8px; margin-top: 4px; }
-  .giveaway-cd-finished { position: relative; z-index: 1; text-align: center; font-size: 15px; font-weight: 700; color: #c4b5fd; padding: 18px 20px 22px; }
+  .giveaway-cd-val { font-size: 24px; font-weight: 800; color: #fff; line-height: 1; letter-spacing: -0.5px; }
+  .giveaway-cd-lbl { font-size: 9px; color: rgba(255,255,255,0.42); text-transform: uppercase; letter-spacing: 0.8px; margin-top: 4px; }
+  .giveaway-cd-finished { position: relative; z-index: 1; text-align: center; font-size: 15px; font-weight: 700; color: #c4b5fd; padding: 16px 16px 20px; }
 
   /* ── Prize cards — frosted glass panels ── */
   .giveaway-prizes { display: flex; gap: 8px; padding: 18px 14px 0; }

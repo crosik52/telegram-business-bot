@@ -6330,7 +6330,7 @@
         ["Ничего", "—"],
       ].map(([s,p])=>`<div class="slots-pt-row"><span class="slots-pt-sym">${s}</span><span class="slots-pt-pay">${p}</span></div>`).join("");
 
-      const chips = [10,25,50,100]
+      const chips = [10,50,200,500,2000,5000]
         .map(v=>`<button class="slots-bet-chip${v===10?' active':''}" onclick="selectSlotsBet(${v})" data-bet="${v}" ${balance<v?'disabled':''}>${v}</button>`)
         .join("");
 
@@ -6387,7 +6387,7 @@
 
     function renderFlipCard() {
       const balance = walletData?.balance || 0;
-      const maxBet  = Math.min(500, balance);
+      const maxBet  = Math.min(5000, balance);
       return `
         <div class="casino-card">
           <div class="casino-card-header">
@@ -6398,9 +6398,8 @@
             <div class="flip-coin-display" id="flipCoin">🪙</div>
             <div class="flip-coin-info">
               <div class="fci-label">Вероятность выигрыша</div>
-              <div class="fci-odds">
-                <div class="fci-odd"><div class="fci-val">50%</div><div class="fci-lbl">Орёл</div></div>
-                <div class="fci-odd"><div class="fci-val">50%</div><div class="fci-lbl">Решка</div></div>
+              <div class="fci-odds" id="flipOddsDisplay">
+                <div class="fci-odd"><div class="fci-val" id="flipOddsVal">50%</div><div class="fci-lbl">Орёл / Решка</div></div>
               </div>
             </div>
           </div>
@@ -6411,7 +6410,7 @@
               min="10" max="${maxBet}" value="${Math.min(50, maxBet)}" />
           </div>
           <div class="flip-presets">
-            ${[10,25,50,100].filter(v => v <= maxBet).map(v =>
+            ${[10,50,200,500,2000,5000].filter(v => v <= maxBet).map(v =>
               `<button class="flip-preset-btn" data-preset="${v}">${v}</button>`
             ).join("")}
             ${maxBet >= 10 ? `<button class="flip-preset-btn" data-preset="${maxBet}">Всё</button>` : ""}
@@ -6436,7 +6435,7 @@
 
     function renderMinesCard() {
       const balance = walletData?.balance || 0;
-      const maxBet  = Math.min(500, balance);
+      const maxBet  = Math.min(5000, balance);
       const selBet  = Math.min(minesBet, maxBet);
       const risk    = _minesRiskLabel(minesCount);
       const cells   = Array.from({length: 25}, (_, i) =>
@@ -6461,11 +6460,11 @@
             <div class="mines-config-row">
               <span class="mines-config-label">Ставка</span>
               <div class="mines-preset-group" id="minesBetBtns">
-                ${[10,25,50,100].filter(v=>v<=maxBet).map(v =>
+                ${[10,50,200,500,2000,5000].filter(v=>v<=maxBet).map(v =>
                   `<button class="mines-preset-btn${v===selBet?" sel":""}"
                      onclick="selectMinesBet(${v})">${v}</button>`
                 ).join("")}
-                ${maxBet>=10?`<button class="mines-preset-btn${selBet===maxBet&&maxBet>100?" sel":""}"
+                ${maxBet>=10?`<button class="mines-preset-btn${selBet===maxBet&&maxBet>500?" sel":""}"
                   onclick="selectMinesBet(${maxBet})">Всё</button>`:""}
               </div>
             </div>
@@ -6643,7 +6642,7 @@
 
     function renderCrashCard() {
       const balance = walletData?.balance || 0;
-      const maxBet  = Math.min(500, balance);
+      const maxBet  = Math.min(5000, balance);
       return `
         <div class="casino-card">
           <div class="casino-card-header">
@@ -6695,7 +6694,7 @@
             <div class="crash-mult-display" id="crashMultDisplay">1.00×</div>
           </div>
           <div class="crash-presets">
-            ${[10,25,50,100].filter(v=>v<=maxBet).map(v=>
+            ${[10,50,200,500,2000,5000].filter(v=>v<=maxBet).map(v=>
               `<button class="mines-preset-btn" onclick="setCrashBet(${v})">${v}</button>`
             ).join("")}
             ${maxBet>=10?`<button class="mines-preset-btn" onclick="setCrashBet(${maxBet})">Всё</button>`:""}
@@ -6744,9 +6743,13 @@
       document.querySelectorAll(".flip-preset-btn").forEach(btn => {
         btn.addEventListener("click", () => {
           const inp = document.getElementById("flipBet");
-          if (inp && btn.dataset.preset) inp.value = btn.dataset.preset;
+          if (inp && btn.dataset.preset) { inp.value = btn.dataset.preset; updateFlipOdds(); }
         });
       });
+      // Dynamic odds update when bet changes
+      const flipBetInp = document.getElementById("flipBet");
+      if (flipBetInp) flipBetInp.addEventListener("input", updateFlipOdds);
+      updateFlipOdds();
       // Flip buttons
       ["flipHeadsBtn","flipTailsBtn"].forEach(id => {
         const btn = document.getElementById(id);
@@ -6930,6 +6933,16 @@
       }
     }
 
+    function updateFlipOdds() {
+      const inp = document.getElementById("flipBet");
+      const lbl = document.getElementById("flipOddsVal");
+      if (!lbl) return;
+      const bet     = Math.max(10, Math.min(Number(inp?.value) || 10, 5000));
+      const winProb = Math.round((0.50 - 0.04 * (bet - 10) / (5000 - 10)) * 100);
+      lbl.textContent = winProb + "%";
+      lbl.style.color = bet <= 500 ? "" : bet <= 2000 ? "#fbbf24" : "#ff6b6b";
+    }
+
     async function doFlip(choice) {
       const betInput = document.getElementById("flipBet");
       const coinEl   = document.getElementById("flipCoin");
@@ -6972,7 +6985,7 @@
           updateBalanceDisplay(data.new_balance);
           [headsBtn, tailsBtn].forEach(b => { if (b) b.disabled = false; });
           // Update max bet in input
-          const maxBet = Math.min(500, data.new_balance);
+          const maxBet = Math.min(5000, data.new_balance);
           if (betInput) {
             betInput.max = maxBet;
             if (Number(betInput.value) > maxBet) betInput.value = maxBet;
@@ -6993,7 +7006,7 @@
       const btn = document.getElementById("minesStartBtn");
       if (!btn || btn.disabled) return;
       const balance = walletData?.balance || 0;
-      const bet = Math.max(10, Math.min(minesBet, 500, balance));
+      const bet = Math.max(10, Math.min(minesBet, 5000, balance));
       if (balance < bet) { toastMessage("Недостаточно монет!"); return; }
 
       btn.disabled = true;
@@ -7165,7 +7178,7 @@
       // Remove FOMO label if present
       document.querySelectorAll(".mines-fomo-label").forEach(el => el.remove());
       const startBtn = document.getElementById("minesStartBtn");
-      const maxBet   = Math.min(500, walletData?.balance || 0);
+      const maxBet   = Math.min(5000, walletData?.balance || 0);
       if (startBtn) {
         startBtn.style.display = "";
         startBtn.disabled      = false;
@@ -7183,7 +7196,7 @@
       if (!btn || btn.disabled) return;
       const betInput = document.getElementById("crashBet");
       const balance  = walletData?.balance || 0;
-      const bet      = Math.max(10, Math.min(Number(betInput?.value) || 50, 500, balance));
+      const bet      = Math.max(10, Math.min(Number(betInput?.value) || 50, 5000, balance));
       if (balance < bet) { toastMessage("Недостаточно монет!"); return; }
 
       btn.disabled = true;

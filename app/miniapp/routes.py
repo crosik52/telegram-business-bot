@@ -226,14 +226,14 @@ class SlotSpinRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     init_data: str = Field(alias="initData")
-    bet: int = Field(default=10, ge=10, le=100)
+    bet: int = Field(default=10, ge=10, le=5000)
 
 
 class FlipRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     init_data: str = Field(alias="initData")
-    bet: int = Field(ge=1, le=500)
+    bet: int = Field(ge=1, le=5000)
     choice: str  # "heads" or "tails"
 
 
@@ -241,7 +241,7 @@ class MinesStartRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     init_data:   str = Field(alias="initData")
-    bet:         int = Field(ge=1, le=500)
+    bet:         int = Field(ge=1, le=5000)
     mines_count: int = Field(alias="minesCount", ge=3, le=15)
 
 
@@ -262,7 +262,7 @@ class CrashStartRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     init_data: str = Field(alias="initData")
-    bet:       int = Field(ge=1, le=500)
+    bet:       int = Field(ge=1, le=5000)
 
 
 class CrashCashoutRequest(BaseModel):

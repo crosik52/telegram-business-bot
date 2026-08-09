@@ -27,9 +27,10 @@ DAILY_STREAK_BONUS_PER_DAY = 2
 DAILY_STREAK_BONUS_MAX = 50
 DAILY_COOLDOWN_HOURS = 20           # allows slightly-early next-day claims
 
-SLOT_COST = 10
+SLOT_COST    = 10
+SLOT_BET_MAX = 5000
 FLIP_MIN_BET = 10
-FLIP_MAX_BET = 500
+FLIP_MAX_BET = 5000
 
 SLOT_SYMBOLS = ["🍒", "🍋", "🍊", "🍇", "⭐", "💎"]
 SLOT_WEIGHTS  = [35,   25,   20,   12,    6,    2]   # sum = 100
@@ -48,12 +49,12 @@ MINES_GRID_SIZE = 25
 MINES_MIN_COUNT = 3
 MINES_MAX_COUNT = 15
 MINES_BET_MIN   = 10
-MINES_BET_MAX   = 500
-MINES_HOUSE_EDGE = 0.97   # 3 % edge
+MINES_BET_MAX   = 5000
+MINES_HOUSE_EDGE = 0.97   # base edge (scales dynamically with bet)
 
 CRASH_BET_MIN   = 10
-CRASH_BET_MAX   = 500
-CRASH_HOUSE_EDGE = 0.99   # 1 % edge
+CRASH_BET_MAX   = 5000
+CRASH_HOUSE_EDGE = 0.99   # base edge (scales dynamically with bet)
 
 # ── Per-process game sessions (single Railway instance → fine) ──────────────
 _mines_sessions: dict[int, dict] = {}   # owner_id → session
@@ -81,23 +82,51 @@ def _clamp_wallet(wallet: UserWallet) -> None:
     wallet.total_spent  = max(0, wallet.total_spent)
 
 
-def _mines_multiplier(mines: int, revealed: int) -> float:
-    """Expected payout multiplier with house edge for `revealed` safe cells."""
+def _dynamic_edge(bet: int, min_bet: int = 10, max_bet: int = 5000) -> float:
+    """House-edge multiplier that scales with bet size.
+
+    Small bets  (10 coins)   → 0.97 (3 % house edge — same as before)
+    Large bets  (5000 coins) → 0.90 (10 % house edge)
+    Linear interpolation in between.
+    """
+    t = (bet - min_bet) / max(1, max_bet - min_bet)
+    return round(0.97 - 0.07 * t, 4)
+
+
+def _flip_win_prob(bet: int) -> float:
+    """Win probability for coin flip that decreases with bet size.
+
+    Min bet (10)   → 50.0 % (fair coin)
+    Max bet (5000) → 46.0 % (4 % edge at top)
+    Linear interpolation.
+    """
+    t = (bet - FLIP_MIN_BET) / max(1, FLIP_MAX_BET - FLIP_MIN_BET)
+    return 0.50 - 0.04 * t
+
+
+def _mines_multiplier(mines: int, revealed: int, bet: int = MINES_BET_MIN) -> float:
+    """Expected payout multiplier with dynamic house edge for `revealed` safe cells."""
     if revealed == 0:
         return 1.0
     safe = MINES_GRID_SIZE - mines
     p = 1.0
     for i in range(revealed):
         p *= (safe - i) / (MINES_GRID_SIZE - i)
-    return round(MINES_HOUSE_EDGE / p, 2)
+    edge = _dynamic_edge(bet, MINES_BET_MIN, MINES_BET_MAX)
+    return round(edge / p, 2)
 
 
-def _generate_crash_point() -> float:
-    """Generate crash multiplier. Distribution: ~50 % crash at ≤ 2×, house edge ~1 %."""
+def _generate_crash_point(bet: int = CRASH_BET_MIN) -> float:
+    """Generate crash multiplier with dynamic house edge.
+
+    Small bets: ~1% house edge.  Large bets: ~10% house edge.
+    Distribution: ~50% crash at ≤ 2×.
+    """
+    edge = _dynamic_edge(bet, CRASH_BET_MIN, CRASH_BET_MAX)
     r = random.random()
-    if r < 0.01:
-        r = 0.01        # clamp so result ≤ 99 with 99 % edge
-    return round(max(1.0, CRASH_HOUSE_EDGE / r), 2)
+    if r < (1.0 - edge):
+        r = max(r, 1.0 - edge)   # clamp so crash can't exceed 1/edge
+    return round(max(1.0, edge / r), 2)
 
 
 # ── Result dataclasses ──────────────────────────────────────────────────────
@@ -311,7 +340,7 @@ class WalletRepository:
 
     # ── Slots spin (mutation) ──────────────────────────────────────────────
     async def spin_slots(self, owner_telegram_id: int, bet: int = SLOT_COST) -> SlotResult:
-        bet = max(SLOT_COST, min(bet, 100))   # clamp to allowed range
+        bet = max(SLOT_COST, min(bet, SLOT_BET_MAX))
         wallet = await self._get_for_update(owner_telegram_id)
 
         if wallet.balance < bet:
@@ -320,13 +349,14 @@ class WalletRepository:
         wallet.balance      -= bet
         wallet.total_spent  += bet
 
+        edge   = _dynamic_edge(bet, SLOT_COST, SLOT_BET_MAX)
         reels  = [_pick_symbol() for _ in range(3)]
         payout = 0
         if reels[0] == reels[1] == reels[2]:
             base = SLOT_THREE_PAYOUTS.get(reels[0], 0)
-            payout = int(base * bet / SLOT_COST)
+            payout = int(base * bet / SLOT_COST * edge)
         elif reels[0] == reels[1] or reels[1] == reels[2] or reels[0] == reels[2]:
-            payout = int(SLOT_TWO_PAYOUT * bet / SLOT_COST)
+            payout = int(SLOT_TWO_PAYOUT * bet / SLOT_COST * edge)
 
         if payout > 0:
             wallet.balance      += payout
@@ -454,7 +484,7 @@ class WalletRepository:
 
         sess["revealed"].append(cell_index)
         revealed_count = len(sess["revealed"])
-        mult   = _mines_multiplier(sess["mines_count"], revealed_count)
+        mult   = _mines_multiplier(sess["mines_count"], revealed_count, sess["bet"])
         payout = round(sess["bet"] * mult)
         wallet = await self._get_for_update(owner_telegram_id)
         return MinesRevealResult(
@@ -475,7 +505,7 @@ class WalletRepository:
             raise ValueError("no_cells_revealed")
 
         revealed_count = len(sess["revealed"])
-        mult       = _mines_multiplier(sess["mines_count"], revealed_count)
+        mult       = _mines_multiplier(sess["mines_count"], revealed_count, sess["bet"])
         payout     = round(sess["bet"] * mult)
         mines_list = sorted(sess["mines"])   # capture before deletion
         _live_events.append({
@@ -515,7 +545,7 @@ class WalletRepository:
         _clamp_wallet(wallet)
         await self.session.flush()
 
-        crash_at = _generate_crash_point()
+        crash_at = _generate_crash_point(bet)
         _crash_sessions[owner_telegram_id] = {
             "name": first_name[:14],
             "bet": bet, "crash_at": crash_at,
@@ -581,8 +611,13 @@ class WalletRepository:
         if wallet.balance < bet:
             raise ValueError("insufficient_balance")
 
-        server_side = random.choice(("heads", "tails"))
-        won         = server_side == choice
+        win_prob    = _flip_win_prob(bet)
+        won         = random.random() < win_prob
+        # server_side matches the choice if player wins, opposes it if they lose
+        if won:
+            server_side = choice
+        else:
+            server_side = "tails" if choice == "heads" else "heads"
 
         if won:
             wallet.balance      += bet

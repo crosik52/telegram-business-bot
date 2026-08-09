@@ -10,13 +10,13 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;900&display=swap">
 <style>
   :root {
-    --bg: var(--tg-theme-bg-color, #f2f2f7);
-    --secondary-bg: var(--tg-theme-secondary-bg-color, #ffffff);
-    --text: var(--tg-theme-text-color, #17181a);
-    --hint: var(--tg-theme-hint-color, #8a8a8e);
-    --link: var(--tg-theme-link-color, #2481cc);
-    --button: var(--tg-theme-button-color, #2481cc);
-    --button-text: var(--tg-theme-button-text-color, #ffffff);
+    --bg: #17181a;
+    --secondary-bg: #232428;
+    --text: #ffffff;
+    --hint: #8a8a8e;
+    --link: #2b80f7;
+    --button: #2b80f7;
+    --button-text: #ffffff;
     --green: #34c759;
     --orange: #ff9f0a;
     --red: #ff453a;
@@ -1022,47 +1022,46 @@
   }
 
   /* Dark mode */
-  @media (prefers-color-scheme: dark) {
-    .bottom-tab-bar {
-      background: rgba(22,22,28,0.72);
-      backdrop-filter: blur(40px) saturate(180%) brightness(0.92);
-      -webkit-backdrop-filter: blur(40px) saturate(180%) brightness(0.92);
-      box-shadow:
-        0 10px 36px rgba(0,0,0,0.50),
-        0 2px 10px rgba(0,0,0,0.34),
-        0 0 0 0.5px rgba(255,255,255,0.10),
-        inset 0 1px 0 rgba(255,255,255,0.13),
-        inset 0 -0.5px 0 rgba(255,255,255,0.04),
-        inset 1.5px 0 0 rgba(255,255,255,0.07),
-        inset -1.5px 0 0 rgba(255,255,255,0.07),
-        inset 0 0 28px rgba(255,255,255,0.05);
-    }
-    .bottom-tab-bar::before {
-      background: linear-gradient(
-        90deg,
-        transparent 0%,
-        rgba(255,255,255,0.07) 20%,
-        rgba(255,255,255,0.16) 50%,
-        rgba(255,255,255,0.07) 80%,
-        transparent 100%
-      );
-    }
-    .bottom-tab-bar::after {
-      background: linear-gradient(
-        165deg,
-        rgba(255,255,255,0.09) 0%,
-        transparent 45%,
-        rgba(255,255,255,0.04) 100%
-      );
-    }
-    .tab-bar-lens {
-      background: linear-gradient(
-        130deg,
-        rgba(255,255,255,0.07) 0%,
-        rgba(255,255,255,0.02) 40%,
-        rgba(255,255,255,0.06) 100%
-      );
-    }
+  /* Dark theme always active — bottom tab bar */
+  .bottom-tab-bar {
+    background: rgba(22,22,28,0.72);
+    backdrop-filter: blur(40px) saturate(180%) brightness(0.92);
+    -webkit-backdrop-filter: blur(40px) saturate(180%) brightness(0.92);
+    box-shadow:
+      0 10px 36px rgba(0,0,0,0.50),
+      0 2px 10px rgba(0,0,0,0.34),
+      0 0 0 0.5px rgba(255,255,255,0.10),
+      inset 0 1px 0 rgba(255,255,255,0.13),
+      inset 0 -0.5px 0 rgba(255,255,255,0.04),
+      inset 1.5px 0 0 rgba(255,255,255,0.07),
+      inset -1.5px 0 0 rgba(255,255,255,0.07),
+      inset 0 0 28px rgba(255,255,255,0.05);
+  }
+  .bottom-tab-bar::before {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255,255,255,0.07) 20%,
+      rgba(255,255,255,0.16) 50%,
+      rgba(255,255,255,0.07) 80%,
+      transparent 100%
+    );
+  }
+  .bottom-tab-bar::after {
+    background: linear-gradient(
+      165deg,
+      rgba(255,255,255,0.09) 0%,
+      transparent 45%,
+      rgba(255,255,255,0.04) 100%
+    );
+  }
+  .tab-bar-lens {
+    background: linear-gradient(
+      130deg,
+      rgba(255,255,255,0.07) 0%,
+      rgba(255,255,255,0.02) 40%,
+      rgba(255,255,255,0.06) 100%
+    );
   }
 
   /* ── Tab items ──────────────────────────────────────────────────────── */
@@ -3687,7 +3686,14 @@
     const _si = (id, sz = 16) => `<svg class="ico" aria-hidden="true" style="width:${sz}px;height:${sz}px"><use href="#${id}"></use></svg>`;
 
     const tg = window.Telegram && window.Telegram.WebApp;
-    if (tg) { tg.ready(); tg.expand(); }
+    if (tg) {
+      tg.ready();
+      tg.expand();
+      // Force dark theme regardless of device system setting
+      try { tg.setHeaderColor('#17181a'); } catch(e) {}
+      try { tg.setBackgroundColor('#17181a'); } catch(e) {}
+      try { tg.setBottomBarColor('#17181a'); } catch(e) {}
+    }
 
     let lastStats = null;
     let lastActivity = {};

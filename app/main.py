@@ -216,6 +216,53 @@ async def _note_reminder_loop() -> None:
         await asyncio.sleep(_NOTE_REMINDER_INTERVAL_SECONDS)
 
 
+async def _avatar_backfill() -> None:
+    """One-shot startup task: fetch Telegram profile photos for all known users
+    that don't yet have photo_file_id stored. Runs with a small delay between
+    requests to avoid hitting Telegram rate limits."""
+    await asyncio.sleep(15)  # let the app fully start first
+    try:
+        from app.business.dispatcher import get_bot
+        from app.database.session import get_db_session
+        from app.models.user import TelegramUser
+        from app.repositories.user_repository import UserRepository
+        from sqlalchemy import select
+
+        bot = get_bot(settings)
+        if not bot:
+            return
+
+        user_ids: list[int] = []
+        async for session in get_db_session():
+            rows = (
+                await session.execute(
+                    select(TelegramUser.telegram_user_id).where(
+                        TelegramUser.photo_file_id.is_(None)
+                    )
+                )
+            ).scalars().all()
+            user_ids = list(rows)
+
+        logger.info("Avatar backfill: %d users without photo", len(user_ids))
+        fetched = 0
+        for uid in user_ids:
+            try:
+                photos = await bot.get_user_profile_photos(uid, limit=1)
+                if photos and photos.photos:
+                    file_id = photos.photos[0][-1].file_id
+                    async for session in get_db_session():
+                        await UserRepository(session).update_photo(uid, file_id)
+                        await session.commit()
+                    fetched += 1
+            except Exception:
+                pass
+            await asyncio.sleep(0.07)  # ~14 req/s — well within Telegram limits
+
+        logger.info("Avatar backfill complete: fetched %d / %d photos", fetched, len(user_ids))
+    except Exception:
+        logger.exception("Avatar backfill failed")
+
+
 async def _cleanup_loop() -> None:
     """Background task: purge old media_cache and message rows every N hours."""
     from app.database.session import get_db_session
@@ -366,6 +413,8 @@ async def lifespan(app: FastAPI):
     milestone_sweep_task = asyncio.create_task(_milestone_sweep_loop())
     # ── Note reminder loop ────────────────────────────────────────────────────
     note_reminder_task = asyncio.create_task(_note_reminder_loop())
+    # ── One-shot avatar backfill for existing users ───────────────────────────
+    avatar_backfill_task = asyncio.create_task(_avatar_backfill())
 
     yield
 
@@ -373,6 +422,7 @@ async def lifespan(app: FastAPI):
     streak_task.cancel()
     milestone_sweep_task.cancel()
     note_reminder_task.cancel()
+    avatar_backfill_task.cancel()
     try:
         await cleanup_task
     except asyncio.CancelledError:
@@ -387,6 +437,10 @@ async def lifespan(app: FastAPI):
         pass
     try:
         await note_reminder_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await avatar_backfill_task
     except asyncio.CancelledError:
         pass
 

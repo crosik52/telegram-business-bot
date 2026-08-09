@@ -160,6 +160,23 @@
   .header-refresh:active { transform: scale(0.95); }
   .header-refresh.spinning .refresh-icon { animation: spin 0.75s linear infinite; display:inline-block; }
   .refresh-icon { display: inline-block; }
+  /* ── Header wallet pill ── */
+  .header-wallet-pill {
+    display: flex; justify-content: center; align-items: center;
+    gap: 7px; margin: 10px 0 0; flex-wrap: wrap;
+  }
+  .header-wallet-chip {
+    display: flex; align-items: center; gap: 5px;
+    background: rgba(120,120,128,0.11); border-radius: 20px;
+    padding: 5px 13px; font-size: 13px; font-weight: 700;
+    color: var(--text); transition: background 0.2s;
+  }
+  .header-wallet-chip.premium {
+    background: rgba(212,150,42,0.15); color: #c08020;
+  }
+  .header-wallet-chip.vip {
+    background: rgba(124,58,237,0.15); color: #9b6bff;
+  }
 
   /* ── Streak Banner ── */
   .streak-banner {
@@ -3750,6 +3767,7 @@
     </div>
     <h1 id="greeting">Моя статистика</h1>
     <p id="subtitle">Загружаем данные…</p>
+    <div class="header-wallet-pill" id="headerWalletPill" style="display:none"></div>
     <div class="header-actions" id="headerActions" style="display:none">
       <button class="header-refresh" id="refreshBtn">
         <span class="refresh-icon">↻</span> Обновить
@@ -5392,6 +5410,18 @@
     async function loadStats(isRefresh) {
       const initData = tg ? tg.initData : "";
       currentInitData = initData;
+      // Silently fetch wallet in background so the header balance pill
+      // appears even before the user ever visits the Games tab
+      if (!walletData) {
+        fetch("/app/api/wallet/info", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({initData}),
+        }).then(r => r.ok ? r.json() : null)
+          .then(data => { if (data) { walletData = data; updateHeaderWalletPill(); } })
+          .catch(() => {});
+      } else {
+        updateHeaderWalletPill();
+      }
       const subtitle = document.getElementById("subtitle");
       const content  = document.getElementById("content");
       const _fab     = document.getElementById("refreshBtn"); // kept for compat, hidden via CSS
@@ -6790,6 +6820,22 @@
       }
     }
 
+    function updateHeaderWalletPill() {
+      const el = document.getElementById("headerWalletPill");
+      if (!el || !walletData) return;
+      const bal  = (walletData.balance || 0).toLocaleString("ru-RU");
+      const sub  = walletData.subscription;
+      const tier = sub?.tier;
+      const hasPrem = sub?.active;
+      const premChip = hasPrem
+        ? (tier === "vip"
+            ? `<div class="header-wallet-chip vip">👑 VIP</div>`
+            : `<div class="header-wallet-chip premium">⭐ Премиум</div>`)
+        : "";
+      el.innerHTML = `<div class="header-wallet-chip">🪙 ${bal}</div>${premChip}`;
+      el.style.display = "flex";
+    }
+
     function updateBalanceDisplay(newBalance) {
       walletData.balance = newBalance;
       _shopInvalidateCache(); // any server-confirmed balance change must bust the shop cache
@@ -6799,6 +6845,7 @@
         el.classList.add("pop");
         setTimeout(() => el.classList.remove("pop"), 500);
       }
+      updateHeaderWalletPill();
     }
 
     async function claimDaily() {

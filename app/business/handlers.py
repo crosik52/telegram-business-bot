@@ -656,8 +656,7 @@ async def on_business_connection(connection: BusinessConnection) -> None:
 
 # ── New message handler ───────────────────────────────────────────────────────
 
-@router.business_message()
-_fetching_avatars: set[int] = set()  # debounce concurrent fetches per user
+_fetching_avatars: set[int] = set()  # debounce concurrent avatar fetches per user
 
 
 async def _try_fetch_avatar(bot: Bot, user_id: int) -> None:
@@ -682,6 +681,7 @@ async def _try_fetch_avatar(bot: Bot, user_id: int) -> None:
         _fetching_avatars.discard(user_id)
 
 
+@router.business_message()
 async def on_business_message(message: Message, bot: Bot) -> None:
     """Store every incoming/outgoing business message.
 

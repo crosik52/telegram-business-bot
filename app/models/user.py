@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, DateTime, String
+from sqlalchemy import BigInteger, DateTime, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -32,6 +32,7 @@ class TelegramUser(Base):
     first_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     last_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_bot: Mapped[bool] = mapped_column(default=False)
+    photo_file_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     first_seen_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: dt.datetime.now(dt.UTC)
     )

@@ -8,8 +8,10 @@ import datetime as dt
 import hashlib
 import re as _re
 
+import time as _time
+
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import and_, func, or_, select, text
@@ -114,6 +116,11 @@ class AdminActionLogRequest(BaseModel):
 GAME_EMOJIS = {"🎲", "🎯", "🏀", "⚽", "🎳", "🎰"}
 
 
+# ── Avatar URL cache (file_id → CDN URL, ~55-min TTL) ────────────────────────
+# Structure: user_telegram_id -> (cdn_url, expires_ts)
+_avatar_url_cache: dict[int, tuple[str, float]] = {}
+
+
 # ── Bot username cache (avoid get_me() on every referral request) ─────────────
 _bot_username_cache: str | None = None
 
@@ -129,6 +136,40 @@ async def _get_cached_bot_username(settings) -> str:
     except Exception:
         pass
     return _bot_username_cache or ""
+
+
+@router.get("/app/api/avatar/{user_id}")
+async def get_avatar(user_id: int, session: AsyncSession = Depends(get_db_session)):
+    """Proxy Telegram profile photo for a user. Returns 404 when no photo stored."""
+    from app.models.user import TelegramUser as _TU
+
+    cached = _avatar_url_cache.get(user_id)
+    if cached and cached[1] > _time.monotonic():
+        return RedirectResponse(url=cached[0], status_code=302)
+
+    user_row = (
+        await session.execute(select(_TU).where(_TU.telegram_user_id == user_id))
+    ).scalar_one_or_none()
+
+    if not user_row or not user_row.photo_file_id:
+        raise HTTPException(status_code=404, detail="No avatar")
+
+    try:
+        settings = get_settings()
+        bot = get_bot(settings)
+        if bot is None:
+            raise HTTPException(status_code=503, detail="Bot unavailable")
+        tg_file = await bot.get_file(user_row.photo_file_id)
+        cdn_url = (
+            f"https://api.telegram.org/file/bot{settings.telegram_bot_token}"
+            f"/{tg_file.file_path}"
+        )
+        _avatar_url_cache[user_id] = (cdn_url, _time.monotonic() + 3300)  # 55 min
+        return RedirectResponse(url=cdn_url, status_code=302)
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=404, detail="Avatar unavailable")
 
 
 def _compute_badges(stats) -> list[dict]:
@@ -1422,6 +1463,19 @@ async def miniapp_leaderboard(
         names_map = {r[0]: (r[1], r[2], r[3]) for r in name_rows}
         subs_map = {r[0]: r[1] for r in sub_rows}
 
+    from app.models.user import TelegramUser as _TU
+
+    photos_map: dict[int, str | None] = {}
+    if top_ids:
+        photo_rows = (
+            await session.execute(
+                select(_TU.telegram_user_id, _TU.photo_file_id).where(
+                    _TU.telegram_user_id.in_(top_ids)
+                )
+            )
+        ).all()
+        photos_map = {r[0]: r[1] for r in photo_rows}
+
     entries = []
     my_rank: int | None = None
     own_balance: int | None = None
@@ -1441,6 +1495,11 @@ async def miniapp_leaderboard(
                 "balance": row[1],
                 "total_earned": row[2],
                 "sub_type": subs_map.get(row[0]),
+                "avatar_url": (
+                    f"/app/api/avatar/{row[0]}"
+                    if photos_map.get(row[0])
+                    else None
+                ),
             }
         )
 
@@ -1808,6 +1867,21 @@ async def _enrich_interlocutors(
     except Exception:
         _by_pid = {}
 
+    from app.models.user import TelegramUser as _TU
+
+    # Bulk-fetch photo_file_ids so we can expose avatar_url per contact
+    chat_ids = [s.chat_id for s in interlocutors]
+    _photo_map: dict[int, str | None] = {}
+    if chat_ids:
+        _photo_rows = (
+            await session.execute(
+                select(_TU.telegram_user_id, _TU.photo_file_id).where(
+                    _TU.telegram_user_id.in_(chat_ids)
+                )
+            )
+        ).all()
+        _photo_map = {r[0]: r[1] for r in _photo_rows}
+
     return [
         {
             "chat_id":          s.chat_id,
@@ -1823,6 +1897,11 @@ async def _enrich_interlocutors(
             "longest_streak":   s.longest_streak,
             "mutual_connected": s.mutual_connected,
             "relationship":     _by_pid.get(s.chat_id),
+            "avatar_url": (
+                f"/app/api/avatar/{s.chat_id}"
+                if _photo_map.get(s.chat_id)
+                else None
+            ),
         }
         for s in interlocutors
     ]

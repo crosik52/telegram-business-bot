@@ -601,6 +601,11 @@
     width: 40px; height: 40px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     color: #fff; font-weight: 700; font-size: 15px; flex-shrink: 0;
+    position: relative; overflow: hidden;
+  }
+  .avatar-photo {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; border-radius: 50%;
   }
   .row-main { flex: 1; min-width: 0; }
   .row-name {
@@ -2014,7 +2019,7 @@
   }
   .lb-entry.me { border: 1.5px solid rgba(36,129,204,0.38); background: rgba(36,129,204,0.05); }
   .lb-rank   { font-size: 15px; font-weight: 900; width: 26px; text-align: center; flex-shrink: 0; }
-  .lb-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: #fff; flex-shrink: 0; }
+  .lb-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: #fff; flex-shrink: 0; position: relative; overflow: hidden; }
   .lb-body   { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   .lb-name   { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 5px; }
   .lb-sub-badge { font-size: 10px; font-weight: 800; border-radius: 4px; padding: 1px 5px; letter-spacing: 0.3px; flex-shrink: 0; }
@@ -2915,6 +2920,7 @@
     width: 94px; height: 94px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     font-size: 34px; font-weight: 800; color: #fff;
+    position: relative; overflow: hidden;
   }
   .cp-name {
     font-size: 22px; font-weight: 800; text-align: center;
@@ -3418,6 +3424,7 @@
     position: relative; width: 52px; height: 52px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     font-size: 18px; font-weight: 900; color: #fff; margin-bottom: 8px;
+    overflow: hidden;
     box-shadow: 0 4px 14px rgba(0,0,0,0.20), 0 0 0 2px rgba(255,255,255,0.18),
                 inset 0 1px 0 rgba(255,255,255,0.26);
     animation: riseIn 0.4s ease backwards;
@@ -3795,6 +3802,14 @@
       if (!parts.length) return "?";
       if (parts.length === 1) return parts[0][0].toUpperCase();
       return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+
+    // Overlay a real Telegram photo on top of an initials avatar.
+    // The <img> covers the circle; if it fails (404) it removes itself
+    // and the initials gradient beneath shows through.
+    function _avatarImg(url) {
+      if (!url) return '';
+      return `<img class="avatar-photo" src="${url}" alt="" onerror="this.remove()" loading="lazy">`;
     }
 
     function medal(rank) {
@@ -4479,7 +4494,7 @@
         return `
           <div class="row clickable" data-chat-id="${s.chat_id}"${s.username ? ` data-username="${s.username}"` : ""}>
             <div class="rank">${medal(i)}</div>
-            <div class="avatar" style="background:${colorFor(s.display_name)}">${initials(s.display_name)}</div>
+            <div class="avatar" style="background:${colorFor(s.display_name)}">${initials(s.display_name)}${_avatarImg(s.avatar_url)}</div>
             <div class="row-main">
               <div class="row-name">${s.display_name}</div>
               <div class="row-sub">
@@ -4915,7 +4930,7 @@
         <button class="cp-close-btn" id="cpCloseBtn">✕</button>
         <div class="cp-sheet">
           <div class="cp-avatar-wrap" id="cpAvatarWrap" style="background:${frameStyle}">
-            <div class="cp-avatar" style="background:${colorFor(s.display_name)}">${initials(s.display_name)}</div>
+            <div class="cp-avatar" style="background:${colorFor(s.display_name)}">${initials(s.display_name)}${_avatarImg(s.avatar_url)}</div>
           </div>
           <div class="cp-name">${_e(s.display_name)}</div>
           <div class="cp-sub-line">
@@ -8204,7 +8219,7 @@
       const rows = entries.map((e, i) => `
         <div class="lb-entry${e.is_self ? " me" : ""}" style="animation-delay:${0.05 + i * 0.04}s">
           <div class="lb-rank">${medals[i] || ("#" + e.rank)}</div>
-          <div class="lb-avatar" style="background:${colorFor(e.display_name)}">${initials(e.display_name)}</div>
+          <div class="lb-avatar" style="background:${colorFor(e.display_name)}">${initials(e.display_name)}${_avatarImg(e.avatar_url)}</div>
           <div class="lb-body">
             <div class="lb-name">${e.is_self ? "👤 Вы" : e.display_name}${e.is_self ? ' <span class="lb-me-chip">Вы</span>' : subBadge(e.sub_type)}</div>
           </div>
@@ -10529,12 +10544,13 @@
           const isEmpty = !u;
           const avatarBg = isEmpty ? "" : `style="background:${_gvColor(u.display_name)}"`;
           const avatarTxt = isEmpty ? "?" : _gvInitials(u.display_name);
+          const avatarPhoto = (!isEmpty && u.telegram_id) ? _avatarImg(`/app/api/avatar/${u.telegram_id}`) : '';
           const crownHtml = rank === 1 ? `<span class="giveaway-ps-crown">👑</span>` : "";
           const name  = isEmpty ? "Свободно"        : _esc(u.display_name);
           const count = isEmpty ? "Пригласи друзей" : `${u.referral_count} ${_gvRefWord(u.referral_count)}`;
           const baseNum = rank === 1 ? "1" : rank === 2 ? "2" : "3";
           return `<div class="giveaway-ps-slot rank-${rank}${isEmpty?" empty":""}">
-            <div class="giveaway-ps-avatar" ${avatarBg}>${crownHtml}${avatarTxt}</div>
+            <div class="giveaway-ps-avatar" ${avatarBg}>${crownHtml}${avatarTxt}${avatarPhoto}</div>
             <div class="giveaway-ps-name">${name}</div>
             <div class="giveaway-ps-count">${count}</div>
             <div class="giveaway-ps-base">${baseNum}</div>
@@ -10719,12 +10735,13 @@
         const isEmpty = !u;
         const avatarBg = isEmpty ? "" : `style="background:${_gvColor(u.display_name)}"`;
         const avatarTxt = isEmpty ? "?" : _gvInitials(u.display_name);
+        const avatarPhoto = (!isEmpty && u.telegram_id) ? _avatarImg(`/app/api/avatar/${u.telegram_id}`) : '';
         const crownHtml = rank === 1 ? `<span class="giveaway-ps-crown">👑</span>` : "";
         const name  = isEmpty ? "Свободно"         : _esc(u.display_name);
         const count = isEmpty ? "Пригласи друзей"  : `${u.referral_count} ${_gvRefWord(u.referral_count)}`;
         const baseNum = rank === 1 ? "1" : rank === 2 ? "2" : "3";
         return `<div class="giveaway-ps-slot rank-${rank}${isEmpty?" empty":""}">
-          <div class="giveaway-ps-avatar" ${avatarBg}>${crownHtml}${avatarTxt}</div>
+          <div class="giveaway-ps-avatar" ${avatarBg}>${crownHtml}${avatarTxt}${avatarPhoto}</div>
           <div class="giveaway-ps-name">${name}</div>
           <div class="giveaway-ps-count">${count}</div>
           <div class="giveaway-ps-base">${baseNum}</div>

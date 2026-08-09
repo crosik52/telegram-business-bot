@@ -657,6 +657,31 @@ async def on_business_connection(connection: BusinessConnection) -> None:
 # ── New message handler ───────────────────────────────────────────────────────
 
 @router.business_message()
+_fetching_avatars: set[int] = set()  # debounce concurrent fetches per user
+
+
+async def _try_fetch_avatar(bot: Bot, user_id: int) -> None:
+    """Background task: fetch Telegram profile photo and store file_id."""
+    if user_id in _fetching_avatars:
+        return
+    _fetching_avatars.add(user_id)
+    try:
+        photos = await bot.get_user_profile_photos(user_id, limit=1)
+        if not photos or not photos.photos:
+            return
+        # Pick the largest size of the first photo
+        file_id = photos.photos[0][-1].file_id
+        from app.database.session import session_scope as _ss
+        from app.repositories.user_repository import UserRepository as _UR
+        async with _ss() as sess:
+            await _UR(sess).update_photo(user_id, file_id)
+            await sess.commit()
+    except Exception:
+        pass
+    finally:
+        _fetching_avatars.discard(user_id)
+
+
 async def on_business_message(message: Message, bot: Bot) -> None:
     """Store every incoming/outgoing business message.
 
@@ -697,6 +722,10 @@ async def on_business_message(message: Message, bot: Bot) -> None:
             business_connection_id=bc_id,
             owner_telegram_id=owner_telegram_id,
         )
+
+        # ── Background avatar fetch for the sender ────────────────────────────
+        if message.from_user and message.from_user.id:
+            asyncio.create_task(_try_fetch_avatar(bot, message.from_user.id))
 
         # ── Streak success notification (fire-and-forget) ─────────────────────
         # Notify the owner via DM when the first incoming message of the day

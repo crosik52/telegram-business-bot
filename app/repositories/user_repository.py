@@ -52,6 +52,12 @@ class UserRepository:
             user.last_seen_at = now
         return user
 
+    async def update_photo(self, telegram_user_id: int, photo_file_id: str) -> None:
+        """Save (or overwrite) the profile photo file_id for a user."""
+        user = await self.get_by_telegram_id(telegram_user_id)
+        if user is not None and user.photo_file_id != photo_file_id:
+            user.photo_file_id = photo_file_id
+
     async def count(self) -> int:
         result = await self._session.execute(select(func.count(TelegramUser.id)))
         return int(result.scalar_one())

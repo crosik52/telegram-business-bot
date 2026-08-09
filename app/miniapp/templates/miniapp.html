@@ -10911,12 +10911,23 @@
         const diff = new Date(opensAt).getTime() - Date.now();
         if (diff <= 0) {
           el.innerHTML = _cdHtml(0);
-          // Wait 3 s before asking the server (keeps server authoritative).
-          await new Promise(resolve => { _giveawayTimer = setTimeout(resolve, 3000); });
-          _giveawayTimer = null;
-          if (!document.getElementById("lockedCountdown")) return; // DOM changed while waiting
-          giveawayData = null;
-          await loadGiveaway(); // triggers renderGiveawayTab; this chain ends here
+          // Retry fetching up to 3 times (5 s apart) until the server flips
+          // is_visible_to_all = true. This bridges the gap between the client
+          // countdown reaching zero and the server actually unlocking the contest.
+          const MAX_RETRIES = 3;
+          const RETRY_DELAY = 5000;
+          for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+            // Wait before each attempt (first wait is shorter to feel responsive).
+            const delay = attempt === 0 ? 3000 : RETRY_DELAY;
+            await new Promise(resolve => { _giveawayTimer = setTimeout(resolve, delay); });
+            _giveawayTimer = null;
+            if (!document.getElementById("lockedCountdown")) return; // DOM replaced while waiting
+            giveawayData = null;
+            await loadGiveaway(); // re-renders; if unlocked the countdown element is gone
+            if (!document.getElementById("lockedCountdown")) return; // unlocked — chain ends
+            // Still locked — continue to next retry
+          }
+          // All retries exhausted and still locked — leave the locked screen as-is.
           return;
         }
 

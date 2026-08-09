@@ -4237,6 +4237,7 @@ class GiveawayUpdateRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     init_data: str = Field(alias="initData")
     deadline: str | None = Field(default=None)          # ISO-8601 or None to clear
+    opens_at: str | None = Field(default=None, alias="opensAt")  # ISO-8601 or None to clear
     prize_1: str | None = Field(default=None, alias="prize1")
     prize_2: str | None = Field(default=None, alias="prize2")
     prize_3: str | None = Field(default=None, alias="prize3")
@@ -4268,8 +4269,14 @@ async def giveaway_info(
     repo = GiveawayRepository(session)
     cfg  = await repo.get_config()
 
-    if not is_admin and not cfg.is_visible_to_all:
-        return {"locked": True}
+    # Non-admins are locked out unless explicitly visible OR opens_at has passed
+    now_utc = dt.datetime.now(dt.timezone.utc)
+    opened_by_schedule = cfg.opens_at is not None and cfg.opens_at <= now_utc
+    if not is_admin and not cfg.is_visible_to_all and not opened_by_schedule:
+        return {
+            "locked": True,
+            "opens_at": cfg.opens_at.isoformat() if cfg.opens_at else None,
+        }
 
     user_id: int | None = user.get("id")
 
@@ -4334,6 +4341,16 @@ async def admin_giveaway_update(
                 raise HTTPException(status_code=400, detail="Invalid deadline format")
         else:
             updates["deadline"] = None
+    if "opens_at" in payload.model_fields_set:
+        if payload.opens_at:
+            try:
+                updates["opens_at"] = dt.datetime.fromisoformat(payload.opens_at).replace(
+                    tzinfo=dt.timezone.utc
+                )
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid opens_at format")
+        else:
+            updates["opens_at"] = None
 
     repo = GiveawayRepository(session)
     cfg  = await repo.update_config(**updates)
@@ -4347,6 +4364,7 @@ def _giveaway_cfg_dict(cfg) -> dict:
         "is_active": cfg.is_active,
         "is_visible_to_all": cfg.is_visible_to_all,
         "deadline": cfg.deadline.isoformat() if cfg.deadline else None,
+        "opens_at": cfg.opens_at.isoformat() if cfg.opens_at else None,
         "prize_1": cfg.prize_1,
         "prize_2": cfg.prize_2,
         "prize_3": cfg.prize_3,

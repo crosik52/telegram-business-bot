@@ -3469,6 +3469,16 @@
         } catch {}
       }
 
+      // Format opens_at for datetime-local input (UTC → local input value)
+      let opensAtVal = "";
+      if (d.opens_at) {
+        try {
+          const dt = new Date(d.opens_at);
+          opensAtVal = new Date(dt.getTime() - dt.getTimezoneOffset()*60000)
+            .toISOString().slice(0,16);
+        } catch {}
+      }
+
       const MEDALS = ["🥇","🥈","🥉"];
       const topRows = (d.top || []).map((r, i) => `
         <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--card-bg,#f2f2f7);border-radius:12px;margin-bottom:6px">
@@ -3508,6 +3518,12 @@
             <label style="display:flex;flex-direction:column;gap:4px">
               <span style="font-size:12px;font-weight:600;opacity:0.6">ДЕДЛАЙН (UTC)</span>
               <input type="datetime-local" id="gvDeadline" value="${deadlineVal}"
+                style="border:1.5px solid rgba(120,120,128,0.2);border-radius:10px;padding:9px 12px;font-size:14px;background:var(--bg,#f2f2f7);color:inherit;outline:none">
+            </label>
+
+            <label style="display:flex;flex-direction:column;gap:4px">
+              <span style="font-size:12px;font-weight:600;opacity:0.6">ДАТА ОТКРЫТИЯ (UTC) — обратный отсчёт для скрытых пользователей</span>
+              <input type="datetime-local" id="gvOpensAt" value="${opensAtVal}"
                 style="border:1.5px solid rgba(120,120,128,0.2);border-radius:10px;padding:9px 12px;font-size:14px;background:var(--bg,#f2f2f7);color:inherit;outline:none">
             </label>
 
@@ -3995,9 +4011,15 @@
           // datetime-local is local time → convert to UTC ISO
           deadlineISO = new Date(deadlineRaw).toISOString();
         }
+        const opensAtRaw = document.getElementById("gvOpensAt").value;
+        let opensAtISO = null;
+        if (opensAtRaw) {
+          opensAtISO = new Date(opensAtRaw).toISOString();
+        }
         const body = {
           initData,
           deadline: deadlineISO,
+          opensAt: opensAtISO,
           prize1: document.getElementById("gv_prize_1").value.trim() || null,
           prize2: document.getElementById("gv_prize_2").value.trim() || null,
           prize3: document.getElementById("gv_prize_3").value.trim() || null,

@@ -10667,6 +10667,56 @@
       _giveawayTimer = setInterval(tick, 1000);
     }
 
+    function _startLockedCountdown(opensAt) {
+      // Clear any existing giveaway timer before taking ownership.
+      if (_giveawayTimer) { clearInterval(_giveawayTimer); _giveawayTimer = null; }
+
+      function _cdHtml(diff) {
+        const d = Math.max(0, Math.floor(diff / 86400000));
+        const h = Math.max(0, Math.floor((diff % 86400000) / 3600000));
+        const m = Math.max(0, Math.floor((diff % 3600000) / 60000));
+        const s = Math.max(0, Math.floor((diff % 60000) / 1000));
+        return `<div class="giveaway-cd-wrap">
+          <div class="giveaway-cd-cell"><div class="giveaway-cd-val">${d}</div><div class="giveaway-cd-lbl">дней</div></div>
+          <div class="giveaway-cd-cell"><div class="giveaway-cd-val">${String(h).padStart(2,"0")}</div><div class="giveaway-cd-lbl">часов</div></div>
+          <div class="giveaway-cd-cell"><div class="giveaway-cd-val">${String(m).padStart(2,"0")}</div><div class="giveaway-cd-lbl">минут</div></div>
+          <div class="giveaway-cd-cell"><div class="giveaway-cd-val">${String(s).padStart(2,"0")}</div><div class="giveaway-cd-lbl">секунд</div></div>
+        </div>`;
+      }
+
+      // Self-scheduling step: one setTimeout handle in _giveawayTimer at a time.
+      // When diff > 0  → update display, reschedule in 1 s.
+      // When diff ≤ 0  → show zeros, wait 3 s, poll server once, then stop.
+      //   loadGiveaway() calls renderGiveawayTab() which either:
+      //     • replaces DOM with unlocked view (lockedCountdown gone → chain stops)
+      //     • re-renders locked+opensAt → _startLockedCountdown restarts a fresh chain
+      //     • re-renders locked without opensAt → static text, no timer
+      async function step() {
+        _giveawayTimer = null; // we're executing; handle is consumed
+        const el = document.getElementById("lockedCountdown");
+        if (!el) return; // DOM replaced — stop
+
+        const diff = new Date(opensAt).getTime() - Date.now();
+        if (diff <= 0) {
+          el.innerHTML = _cdHtml(0);
+          // Wait 3 s before asking the server (keeps server authoritative).
+          await new Promise(resolve => { _giveawayTimer = setTimeout(resolve, 3000); });
+          _giveawayTimer = null;
+          if (!document.getElementById("lockedCountdown")) return; // DOM changed while waiting
+          giveawayData = null;
+          await loadGiveaway(); // triggers renderGiveawayTab; this chain ends here
+          return;
+        }
+
+        el.innerHTML = _cdHtml(diff);
+        _giveawayTimer = setTimeout(step, 1000); // reschedule; exactly one handle stored
+      }
+
+      // Kick off immediately (setTimeout 0 keeps the call async so the caller
+      // always finishes before the first step runs, avoiding re-entrancy).
+      _giveawayTimer = setTimeout(step, 0);
+    }
+
     let giveawaySubTab = "contest";
 
     function _stopGiveawayLeaderboardRefresh() {
@@ -10847,6 +10897,7 @@
 
       // ── Locked state ───────────────────────────────────────────────────
       if (giveawayData.locked) {
+        const opensAt = giveawayData.opens_at;
         el.innerHTML = _giveawayTabBar() + `
           <div class="giveaway-wrap">
             <div class="giveaway-locked-hero">
@@ -10856,10 +10907,18 @@
                 </div>
                 <span class="giveaway-locked-icon">⏳</span>
                 <div class="giveaway-locked-title">Розыгрыш</div>
-                <div class="giveaway-locked-sub">Конкурс ещё не открыт.<br>Следи за новостями!</div>
+                ${opensAt
+                  ? `<div class="giveaway-locked-sub">Конкурс откроется через:</div>
+                     <div id="lockedCountdown" class="giveaway-countdown"></div>`
+                  : `<div class="giveaway-locked-sub">Конкурс ещё не открыт.<br>Следи за новостями!</div>`
+                }
               </div>
             </div>
           </div>`;
+        // Always start the countdown/polling loop when opens_at is known.
+        // The loop handles clock skew by showing zeros and polling the server
+        // until it confirms the giveaway is open.
+        if (opensAt) _startLockedCountdown(opensAt);
         return;
       }
 

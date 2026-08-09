@@ -355,6 +355,9 @@ async def lifespan(app: FastAPI):
                 "ALTER TABLE giveaway_config ADD COLUMN IF NOT EXISTS prize_3_image VARCHAR(512)"
             ))
             await conn.execute(text(
+                "ALTER TABLE giveaway_config ADD COLUMN IF NOT EXISTS opens_at TIMESTAMPTZ"
+            ))
+            await conn.execute(text(
                 "ALTER TABLE chat_settings ADD COLUMN IF NOT EXISTS delete_msgs_until TIMESTAMPTZ"
             ))
 

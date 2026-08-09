@@ -22,6 +22,9 @@ class GiveawayConfig(Base):
     deadline: Mapped[dt.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    opens_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Prizes (top-3): display name + image URL (for NFT preview)
     prize_1: Mapped[str | None] = mapped_column(String(200), nullable=True)

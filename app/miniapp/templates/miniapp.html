@@ -3550,17 +3550,60 @@
   }
   .giveaway-invite-btn:active { transform: scale(0.97); opacity: 0.88; animation: none; }
 
-  /* ── Locked — glass card ── */
-  .giveaway-locked {
-    margin: 20px 14px; border-radius: 22px; padding: 40px 24px; text-align: center;
-    background: rgba(255,255,255,0.14);
-    backdrop-filter: blur(24px) saturate(160%); -webkit-backdrop-filter: blur(24px) saturate(160%);
-    box-shadow: 0 4px 24px rgba(0,0,0,0.10), 0 0 0 0.5px rgba(255,255,255,0.36),
-                inset 0 1px 0 rgba(255,255,255,0.58);
+  /* ── Locked — hero-style (matches active state) ── */
+  .giveaway-locked-hero {
+    position: relative; overflow: hidden;
+    background: linear-gradient(160deg, #0d0121 0%, #1e0445 40%, #4c1d95 75%, #7c3aed 100%);
+    padding: 36px 20px 40px; text-align: center;
   }
-  .giveaway-locked-emoji { font-size: 52px; margin-bottom: 14px; display: block; }
-  .giveaway-locked-title { font-size: 20px; font-weight: 900; margin-bottom: 8px; }
-  .giveaway-locked-sub   { font-size: 13px; color: var(--hint); line-height: 1.65; }
+  .giveaway-locked-hero::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse 80% 55% at 50% -10%, rgba(139,92,246,0.5) 0%, transparent 65%);
+  }
+  /* Glass specular top edge */
+  .giveaway-locked-hero::after {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent 5%, rgba(255,255,255,0.40) 25%, rgba(255,255,255,0.82) 50%, rgba(255,255,255,0.40) 75%, transparent 95%);
+    pointer-events: none; z-index: 2;
+  }
+  .giveaway-locked-body { position: relative; z-index: 1; }
+  /* "Скоро" badge pill */
+  .giveaway-locked-badge {
+    display: inline-flex; align-items: center; gap: 6px; margin-bottom: 18px;
+    background: rgba(255,255,255,0.10); border: 0.5px solid rgba(255,255,255,0.22);
+    border-radius: 20px; padding: 5px 13px;
+    font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.82); letter-spacing: 0.3px;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  .giveaway-locked-badge-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #fbbf24; flex-shrink: 0;
+    box-shadow: 0 0 7px rgba(251,191,36,0.85);
+    animation: gvLockedDotPulse 2.2s ease-in-out infinite;
+  }
+  @keyframes gvLockedDotPulse {
+    0%,100%{opacity:1;box-shadow:0 0 7px rgba(251,191,36,0.85)}
+    50%{opacity:0.55;box-shadow:0 0 3px rgba(251,191,36,0.35)}
+  }
+  /* Hourglass icon */
+  .giveaway-locked-icon {
+    font-size: 72px; line-height: 1; margin-bottom: 16px; display: block;
+    filter: drop-shadow(0 4px 28px rgba(167,139,250,0.90));
+    animation: gvHourglassBob 3s ease-in-out infinite;
+  }
+  @keyframes gvHourglassBob {
+    0%,100%{transform:translateY(0) scale(1)}
+    40%{transform:translateY(-8px) scale(1.07)}
+    60%{transform:translateY(-5px) scale(1.04)}
+  }
+  .giveaway-locked-title {
+    font-size: 30px; font-weight: 900; letter-spacing: -1px; line-height: 1.1;
+    background: linear-gradient(135deg, #fff 0%, #e9d5ff 55%, #c4b5fd 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    margin-bottom: 10px;
+  }
+  .giveaway-locked-sub {
+    font-size: 13px; color: rgba(255,255,255,0.62); line-height: 1.6; max-width: 260px; margin: 0 auto;
+  }
 
   /* ══════════════════════════════════════════
      ANDROID / CROSS-PLATFORM OPTIMISATIONS
@@ -10729,10 +10772,15 @@
       if (giveawayData.locked) {
         el.innerHTML = _giveawayTabBar() + `
           <div class="giveaway-wrap">
-            <div class="giveaway-locked">
-              <span class="giveaway-locked-emoji">🔒</span>
-              <div class="giveaway-locked-title">Скоро!</div>
-              <div class="giveaway-locked-sub">Розыгрыш ещё не открыт.<br>Следи за новостями!</div>
+            <div class="giveaway-locked-hero">
+              <div class="giveaway-locked-body">
+                <div class="giveaway-locked-badge">
+                  <span class="giveaway-locked-badge-dot"></span>Скоро
+                </div>
+                <span class="giveaway-locked-icon">⏳</span>
+                <div class="giveaway-locked-title">Розыгрыш</div>
+                <div class="giveaway-locked-sub">Конкурс ещё не открыт.<br>Следи за новостями!</div>
+              </div>
             </div>
           </div>`;
         return;

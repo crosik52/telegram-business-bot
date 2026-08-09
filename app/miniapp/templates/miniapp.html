@@ -7806,12 +7806,18 @@
                          (ups.hunger_resist||0)*3 + (ups.mood_resist||0)*3;
       const power    = Math.round(level*15 + hunger*0.4 + mood*0.3 + skillBonus);
       const maxWager = Math.min(balance, 5000);
+      const battleLocked = level < 10;
       return `
         <div class="pet-battle-wrap">
           <div class="pet-battle-power-row">
-            <div class="pet-battle-power-num">⚔️ ${power}</div>
+            <div class="pet-battle-power-num">⚔️ ${battleLocked ? "?" : power}</div>
             <div class="pet-battle-power-lbl">Боевая мощь · Ур.${level} · Сытость ${hunger}% · Настроение ${mood}%</div>
           </div>
+          ${battleLocked ? `
+          <div class="pet-battle-pending" style="color:var(--hint)">
+            🔒 Бои открываются с <b>10 уровня</b><br>
+            <span style="font-size:12px">Сейчас у питомца уровень ${level} — корми и играй, чтобы прокачаться!</span>
+          </div>` : `
           <div id="petBattleStatus${p.id}">
             <div style="text-align:center;color:var(--hint);font-size:12px;padding:8px 0">Проверяем статус боя…</div>
           </div>
@@ -7833,6 +7839,7 @@
               ? `<button class="casino-spin-btn" style="margin-top:0" onclick="sendBattleChallenge(${p.id})">⚔️ Вызвать на бой</button>`
               : `<div style="text-align:center;color:var(--hint);font-size:12px">Нужно минимум 50 🪙 для боя</div>`}
           </div>
+          `}
         </div>`;
     }
 

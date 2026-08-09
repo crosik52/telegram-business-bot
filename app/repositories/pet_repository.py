@@ -1101,6 +1101,8 @@ class PetRepository:
         """Issue a battle challenge to the other pet owner."""
         wager = max(BATTLE_WAGER_MIN, min(wager, BATTLE_WAGER_MAX))
         pet   = await self._get_alive_pet(challenger_id, pet_id)
+        if _compute_level(pet.xp) < 10:
+            raise ValueError("pet_level_too_low")
         partner_id = _pet_partner_id(pet, challenger_id)
 
         existing = _battle_sessions.get(pet_id)

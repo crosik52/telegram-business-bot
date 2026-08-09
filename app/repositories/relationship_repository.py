@@ -332,6 +332,8 @@ class RelationshipRepository:
             "streak_best":     streak.get("best", 0),
             "streak_bonus_pct": round(streak_bonus * 100),
             "total_gifts":     meta.get("totals", {}).get("gifts", 0),
+            "total_spent":     meta.get("totals", {}).get("spent", 0),
+            "total_postcards": meta.get("totals", {}).get("postcards", 0),
             "next_anniv_days": next_anniv[0] if next_anniv else None,
             "next_anniv_label": next_anniv[1] if next_anniv else None,
         }

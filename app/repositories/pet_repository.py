@@ -91,6 +91,15 @@ CUDDLE_MOOD_GAIN = 15   # shy: 22
 
 MAX_LEVEL = 50
 
+# ── Battle system & hunger notifications ──────────────────────────────────────
+_battle_sessions: dict[int, dict] = {}         # pet_id → pending battle session
+_hunger_warned:   dict[int, "dt.datetime"] = {}  # pet_id → last hunger-warn sent
+
+BATTLE_WAGER_MIN       = 50
+BATTLE_WAGER_MAX       = 5000
+HUNGER_WARN_THRESHOLD  = 20    # warn when hunger < this percent
+HUNGER_WARN_COOLDOWN_H = 8     # hours between DMs per pet
+
 # Play messages to send to the chat partner
 PLAY_MESSAGES = [
     "🎾 {name} бросился ловить мяч и промахнулся… но очень старался!",
@@ -241,6 +250,26 @@ def _compute_level(xp: int) -> int:
 def _xp_for_next_level(level: int) -> int:
     """Total XP needed to reach the *next* level."""
     return ((level) ** 2) * 8
+
+
+def _pet_battle_power(pet: "ChatPet", hunger: int, mood: int) -> float:
+    """Compute raw battle power for one side of a pet battle.
+
+    Components (visible to players so they know what to optimise):
+      Level:          biggest factor (×15 per level)
+      Hunger:         well-fed pet fights harder (×0.4 per %)
+      Mood:           happy pet fights sharper  (×0.3 per %)
+      Skill bonuses:  xp_boost ×5, lucky_paw ×10, resist skills ×3 each
+    """
+    level = _compute_level(pet.xp)
+    ups   = _get_upgrades(pet)
+    skill_bonus = (
+        ups.get("xp_boost",      0) * 5 +
+        ups.get("lucky_paw",     0) * 10 +
+        ups.get("hunger_resist", 0) * 3 +
+        ups.get("mood_resist",   0) * 3
+    )
+    return level * 15 + hunger * 0.4 + mood * 0.3 + skill_bonus
 
 
 def _display_name(first, last, username, chat_id: int) -> str:
@@ -1062,6 +1091,149 @@ class PetRepository:
                 "days_alive":        (now - _tz_aware(pet.born_at)).days,
                 "personality_emoji": p_info.get("emoji", ""),
             })
+        return result
+
+    # ── Battle system ─────────────────────────────────────────────────────────
+
+    async def battle_challenge(
+        self, challenger_id: int, pet_id: int, wager: int
+    ) -> dict:
+        """Issue a battle challenge to the other pet owner."""
+        wager = max(BATTLE_WAGER_MIN, min(wager, BATTLE_WAGER_MAX))
+        pet   = await self._get_alive_pet(challenger_id, pet_id)
+        partner_id = _pet_partner_id(pet, challenger_id)
+
+        existing = _battle_sessions.get(pet_id)
+        if existing:
+            age = (dt.datetime.now(dt.timezone.utc) - existing["created_at"]).total_seconds()
+            if age <= 600:
+                if existing["challenger_id"] == challenger_id:
+                    raise ValueError("battle_already_challenged")
+                raise ValueError("battle_pending_from_partner")
+            del _battle_sessions[pet_id]   # expired, clean up
+
+        wallet = await self._lock_wallet(challenger_id)
+        if wallet is None or wallet.balance < wager:
+            raise ValueError("insufficient_coins")
+
+        _battle_sessions[pet_id] = {
+            "challenger_id": challenger_id,
+            "partner_id":    partner_id,
+            "wager":         wager,
+            "created_at":    dt.datetime.now(dt.timezone.utc),
+        }
+        return {"ok": True, "wager": wager, "partner_id": partner_id}
+
+    async def get_battle_status(self, viewer_id: int, pet_id: int) -> dict:
+        """Return pending battle info for this pet (if any), expire after 10 min."""
+        sess = _battle_sessions.get(pet_id)
+        if not sess:
+            return {"pending": False}
+        age = (dt.datetime.now(dt.timezone.utc) - sess["created_at"]).total_seconds()
+        if age > 600:
+            del _battle_sessions[pet_id]
+            return {"pending": False}
+        return {
+            "pending":       True,
+            "is_challenger": sess["challenger_id"] == viewer_id,
+            "wager":         sess["wager"],
+        }
+
+    async def battle_respond(
+        self, responder_id: int, pet_id: int, accept: bool
+    ) -> dict:
+        """Accept / decline / cancel a pending battle.
+
+        The challenger can cancel their own challenge by calling with accept=False.
+        """
+        sess = _battle_sessions.pop(pet_id, None)
+        if not sess:
+            raise ValueError("no_pending_battle")
+
+        challenger_id = sess["challenger_id"]
+        wager         = sess["wager"]
+
+        # Challenger cancelling their own outgoing challenge
+        if challenger_id == responder_id:
+            return {"accepted": False, "cancelled": True, "wager": wager}
+
+        if sess["partner_id"] != responder_id:
+            _battle_sessions[pet_id] = sess   # put back — wrong caller
+            raise ValueError("not_the_partner")
+
+        if not accept:
+            return {"accepted": False, "wager": wager}
+
+        # ── Battle accepted — resolve ─────────────────────────────────────────
+        pet    = await self._get_alive_pet(responder_id, pet_id)
+        now    = dt.datetime.now(dt.timezone.utc)
+        hunger = _compute_hunger(pet, now)
+        mood   = _compute_mood(pet, now)
+        base_pw = _pet_battle_power(pet, hunger, mood)
+
+        # Shared pet → same base power; individual randomness determines winner
+        ch_pw = base_pw * random.uniform(0.75, 1.25)
+        rs_pw = base_pw * random.uniform(0.75, 1.25)
+        challenger_won = ch_pw >= rs_pw
+        winner_id = challenger_id if challenger_won else responder_id
+
+        # Lock wallets in consistent low-id-first order to avoid deadlocks
+        uid_lo, uid_hi = min(challenger_id, responder_id), max(challenger_id, responder_id)
+        w_lo = await self._lock_wallet(uid_lo)
+        w_hi = await self._lock_wallet(uid_hi)
+        w_ch = w_lo if challenger_id == uid_lo else w_hi
+        w_rs = w_lo if responder_id  == uid_lo else w_hi
+
+        if w_ch is None or w_ch.balance < wager:
+            raise ValueError("challenger_broke")
+        if w_rs is None or w_rs.balance < wager:
+            raise ValueError("insufficient_coins")
+
+        w_win = w_ch if challenger_won else w_rs
+        w_los = w_rs if challenger_won else w_ch
+        w_los.balance      = max(0, w_los.balance - wager)
+        w_los.total_spent  = max(0, w_los.total_spent + wager)
+        w_win.balance      = min(999_999, w_win.balance + wager)
+        w_win.total_earned = max(0, w_win.total_earned + wager)
+
+        await self._session.flush()
+        return {
+            "accepted":         True,
+            "winner_id":        winner_id,
+            "challenger_won":   challenger_won,
+            "wager":            wager,
+            "challenger_power": round(ch_pw, 1),
+            "responder_power":  round(rs_pw, 1),
+            "base_power":       round(base_pw, 1),
+            "winner_balance":   w_win.balance,
+            "loser_balance":    w_los.balance,
+        }
+
+    # ── Hunger notifications ──────────────────────────────────────────────────
+
+    async def get_hungry_pets_for_notify(self) -> "list[tuple[ChatPet, int]]":
+        """Return (pet, hunger%) for alive pets that need a hunger-warning DM.
+
+        Pets are only included once per HUNGER_WARN_COOLDOWN_H hours.
+        """
+        now        = dt.datetime.now(dt.timezone.utc)
+        alive_pets = list(
+            (await self._session.execute(
+                select(ChatPet).where(ChatPet.is_alive.is_(True))
+            )).scalars().all()
+        )
+        result: list[tuple[ChatPet, int]] = []
+        for pet in alive_pets:
+            hunger = _compute_hunger(pet, now)
+            if hunger < HUNGER_WARN_THRESHOLD:
+                last       = _hunger_warned.get(pet.id)
+                cooldown_ok = (
+                    last is None
+                    or (now - last).total_seconds() > HUNGER_WARN_COOLDOWN_H * 3600
+                )
+                if cooldown_ok:
+                    _hunger_warned[pet.id] = now
+                    result.append((pet, hunger))
         return result
 
     # ── Private helpers ───────────────────────────────────────────────────────

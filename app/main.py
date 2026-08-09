@@ -216,6 +216,41 @@ async def _note_reminder_loop() -> None:
         await asyncio.sleep(_NOTE_REMINDER_INTERVAL_SECONDS)
 
 
+async def _pet_hunger_check_loop() -> None:
+    """Background task: send a DM to both pet owners when hunger drops below 20 %."""
+    await asyncio.sleep(90)   # let the app fully start first
+    while True:
+        try:
+            from app.business.dispatcher import get_bot  # noqa: PLC0415
+            from app.database.session import get_db_session  # noqa: PLC0415
+            from app.repositories.pet_repository import PetRepository  # noqa: PLC0415
+
+            bot = get_bot(settings)
+            if bot:
+                async for session in get_db_session():
+                    repo   = PetRepository(session)
+                    hungry = await repo.get_hungry_pets_for_notify()
+                    for pet, hunger in hungry:
+                        for uid in filter(None, [pet.user_a_id, pet.user_b_id]):
+                            try:
+                                await bot.send_message(
+                                    chat_id=uid,
+                                    text=(
+                                        f"🍽 <b>{pet.pet_name}</b> голодает!\n\n"
+                                        f"Сытость: {hunger}% — покорми питомца "
+                                        f"как можно скорее, иначе он умрёт с голоду 🐾"
+                                    ),
+                                    parse_mode="HTML",
+                                )
+                            except Exception:
+                                logger.debug(
+                                    "Hunger warn failed uid=%s pet_id=%s", uid, pet.id
+                                )
+        except Exception:
+            logger.exception("Pet hunger check loop error — will retry next cycle")
+        await asyncio.sleep(30 * 60)   # check every 30 minutes
+
+
 async def _avatar_backfill() -> None:
     """One-shot startup task: fetch Telegram profile photos for all known users
     that don't yet have photo_file_id stored. Runs with a small delay between
@@ -416,6 +451,8 @@ async def lifespan(app: FastAPI):
     milestone_sweep_task = asyncio.create_task(_milestone_sweep_loop())
     # ── Note reminder loop ────────────────────────────────────────────────────
     note_reminder_task = asyncio.create_task(_note_reminder_loop())
+    # ── Pet hunger warning loop ───────────────────────────────────────────────
+    pet_hunger_task = asyncio.create_task(_pet_hunger_check_loop())
     # ── One-shot avatar backfill for existing users ───────────────────────────
     avatar_backfill_task = asyncio.create_task(_avatar_backfill())
 
@@ -425,6 +462,7 @@ async def lifespan(app: FastAPI):
     streak_task.cancel()
     milestone_sweep_task.cancel()
     note_reminder_task.cancel()
+    pet_hunger_task.cancel()
     avatar_backfill_task.cancel()
     try:
         await cleanup_task
@@ -440,6 +478,10 @@ async def lifespan(app: FastAPI):
         pass
     try:
         await note_reminder_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await pet_hunger_task
     except asyncio.CancelledError:
         pass
     try:

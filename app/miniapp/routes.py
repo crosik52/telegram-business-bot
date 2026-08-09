@@ -1756,6 +1756,26 @@ class PetReviveInvoiceRequest(BaseModel):
     pet_id: int = Field(alias="petId")
 
 
+class PetBattleRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    init_data: str = Field(alias="initData")
+    pet_id:    int = Field(alias="petId")
+    wager:     int = Field(default=100, ge=50, le=5000)
+
+
+class PetBattleRespondRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    init_data: str = Field(alias="initData")
+    pet_id:    int = Field(alias="petId")
+    accept:    bool
+
+
+class PetBattleStatusRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    init_data: str = Field(alias="initData")
+    pet_id:    int = Field(alias="petId")
+
+
 _PET_REVIVE_STARS = 10
 
 
@@ -1823,6 +1843,63 @@ async def miniapp_pet_revive_invoice(
         raise HTTPException(status_code=502, detail="invoice_send_failed") from exc
 
     return {"ok": True, "invoice_link": invoice_link, "stars": _PET_REVIVE_STARS}
+
+
+# ── Pet battle endpoints ───────────────────────────────────────────────────────
+
+@router.post("/app/api/pet/battle/challenge")
+async def pet_battle_challenge(
+    payload: PetBattleRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Issue a battle challenge to the pet's partner."""
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid Telegram init data")
+    owner_id = int(user["id"])
+    repo = PetRepository(session)
+    try:
+        result = await repo.battle_challenge(owner_id, payload.pet_id, payload.wager)
+        await session.commit()
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/app/api/pet/battle/status")
+async def pet_battle_status(
+    payload: PetBattleStatusRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Return pending battle info for a pet (if any)."""
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid Telegram init data")
+    owner_id = int(user["id"])
+    repo = PetRepository(session)
+    try:
+        return await repo.get_battle_status(owner_id, payload.pet_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/app/api/pet/battle/respond")
+async def pet_battle_respond(
+    payload: PetBattleRespondRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Accept, decline, or cancel a pending battle challenge."""
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid Telegram init data")
+    owner_id = int(user["id"])
+    repo = PetRepository(session)
+    try:
+        result = await repo.battle_respond(owner_id, payload.pet_id, payload.accept)
+        await session.commit()
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/app/api/pet/leaderboard")
@@ -2269,6 +2346,10 @@ async def rel_postcard(
     # ── Step 3: reserve the cooldown BEFORE sending (commit releases the lock) ─
     _now_iso = _dt.datetime.now(_dt.timezone.utc).isoformat()
     _meta[_postcard_key] = _now_iso
+    # Track total postcards sent in lifetime totals
+    _totals = _meta.get("totals", {})
+    _totals["postcards"] = _totals.get("postcards", 0) + 1
+    _meta["totals"] = _totals
     rel.meta = _json.dumps(_meta, ensure_ascii=False)
     await session.commit()  # lock released here; concurrent requests now see the reservation
 

@@ -674,6 +674,18 @@ async def _cmd_card(
     except Exception:
         pass
 
+    # Track postcard count in relationship lifetime totals
+    try:
+        import json as _json_c  # noqa: PLC0415
+        _meta_c  = rel.meta if isinstance(rel.meta, dict) else (_json_c.loads(rel.meta) if rel.meta else {})
+        _totals_c = _meta_c.get("totals", {})
+        _totals_c["postcards"] = _totals_c.get("postcards", 0) + 1
+        _meta_c["totals"] = _totals_c
+        rel.meta = _json_c.dumps(_meta_c, ensure_ascii=False)
+        await session.commit()
+    except Exception:
+        pass   # non-critical; don't block the actual postcard
+
     # Render the postcard image; fall back to the classic text card on error
     try:
         from app.services.postcard_service import render_postcard  # noqa: PLC0415

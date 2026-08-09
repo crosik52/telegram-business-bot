@@ -49,12 +49,40 @@ class ShopRepository:
     # ── Shop config (singleton) ───────────────────────────────────────────────
 
     async def _get_shop_cfg(self) -> dict:
-        """Load shop config from DB. Falls back to DEFAULT_SHOP_CONFIG."""
+        """Load shop config from DB, forward-merged with DEFAULT_SHOP_CONFIG.
+
+        The merge ensures that any new themes / prices added to the codebase
+        default are always visible, even when the DB row was created before
+        they existed.  DB values win on conflicts (admin overrides preserved).
+        """
         result = await self._session.execute(select(ShopConfig).limit(1))
-        cfg = result.scalar_one_or_none()
-        if cfg is None:
+        cfg_row = result.scalar_one_or_none()
+        if cfg_row is None:
             return copy.deepcopy(DEFAULT_SHOP_CONFIG)
-        return cfg.items or copy.deepcopy(DEFAULT_SHOP_CONFIG)
+
+        stored = copy.deepcopy(cfg_row.items or DEFAULT_SHOP_CONFIG)
+
+        # ── Forward-merge theme section ───────────────────────────────────────
+        default_theme = DEFAULT_SHOP_CONFIG.get("theme", {})
+        theme_section = stored.setdefault("theme", {})
+
+        # Union options list: add any default themes not yet in DB options
+        existing_opts = theme_section.get("options")
+        if existing_opts is not None:
+            opts_set = set(existing_opts)
+            for opt in default_theme.get("options", []):
+                if opt not in opts_set:
+                    existing_opts.append(opt)
+                    opts_set.add(opt)
+
+        # Merge per-theme prices: DB wins; only fill in missing entries
+        default_prices = default_theme.get("theme_prices", {})
+        theme_prices = theme_section.setdefault("theme_prices", {})
+        for t, price in default_prices.items():
+            if t not in theme_prices:
+                theme_prices[t] = price
+
+        return stored
 
     async def get_shop_config_admin(self) -> dict:
         """Admin: return full shop config dict."""

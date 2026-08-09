@@ -1,4 +1,5 @@
 from app.models.admin_action_log import AdminActionLog
+from app.models.casino_win import CasinoWin
 from app.models.ai_analysis_daily_count import AiAnalysisDailyCount
 from app.models.analysis_result import AnalysisResult
 from app.models.boost import UserBoost
@@ -15,6 +16,7 @@ from app.models.wallet import UserWallet
 
 __all__ = [
     "AdminActionLog",
+    "CasinoWin",
     "AiAnalysisDailyCount",
     "AnalysisResult",
     "BusinessConnection",

@@ -1083,7 +1083,7 @@ async def wallet_slots(
     owner_id = int(user["id"])
     repo = WalletRepository(session)
     try:
-        result = await repo.spin_slots(owner_id, payload.bet)
+        result = await repo.spin_slots(owner_id, payload.bet, first_name=user.get("first_name", "Игрок"))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return {
@@ -1109,7 +1109,7 @@ async def wallet_flip(
     owner_id = int(user["id"])
     repo = WalletRepository(session)
     try:
-        result = await repo.flip_coin(owner_id, payload.bet, payload.choice)
+        result = await repo.flip_coin(owner_id, payload.bet, payload.choice, first_name=user.get("first_name", "Игрок"))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return {
@@ -1239,6 +1239,15 @@ async def wallet_live_players() -> dict:
     """Return live game activity for mines and crash. No auth required."""
     from app.repositories.wallet_repository import get_live_players  # noqa: PLC0415
     return get_live_players()
+
+
+@router.get("/app/api/wallet/casino-leaderboard")
+async def wallet_casino_leaderboard(
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Return top-10 biggest casino wins for today and this week. No auth required."""
+    from app.repositories.wallet_repository import get_casino_leaderboard  # noqa: PLC0415
+    return await get_casino_leaderboard(session)
 
 
 @router.get("/app/api/wallet/crash/history")

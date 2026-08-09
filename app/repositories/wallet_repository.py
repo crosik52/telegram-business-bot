@@ -18,6 +18,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.business_connection import BusinessConnection
+from app.models.casino_win import CasinoWin
 from app.models.relationship import MARRIAGE_DAILY_BONUS, Relationship
 from app.models.wallet import UserWallet
 
@@ -61,6 +62,7 @@ _mines_sessions: dict[int, dict] = {}   # owner_id → session
 _crash_sessions: dict[int, dict] = {}   # owner_id → session
 _crash_history:  list[dict]      = []   # global crash history (all users, last 200)
 _live_events:    list[dict]      = []   # recent cashout/mine/crash events (last 100)
+_winners_log:    list[dict]      = []   # casino wins log for daily/weekly leaderboard (last 1000)
 
 
 # ── Internal helpers ────────────────────────────────────────────────────────
@@ -339,7 +341,7 @@ class WalletRepository:
         )
 
     # ── Slots spin (mutation) ──────────────────────────────────────────────
-    async def spin_slots(self, owner_telegram_id: int, bet: int = SLOT_COST) -> SlotResult:
+    async def spin_slots(self, owner_telegram_id: int, bet: int = SLOT_COST, first_name: str = "Игрок") -> SlotResult:
         bet = max(SLOT_COST, min(bet, SLOT_BET_MAX))
         wallet = await self._get_for_update(owner_telegram_id)
 
@@ -364,6 +366,14 @@ class WalletRepository:
 
         _clamp_wallet(wallet)
         await self.session.flush()
+
+        if payout - bet > 0:
+            mult = round(payout / bet, 2) if bet else 0.0
+            self.session.add(CasinoWin(
+                uid=owner_telegram_id, name=first_name[:30], game="slots",
+                bet=bet, payout=payout, net=payout - bet, mult=mult,
+                ts=dt.datetime.now(dt.timezone.utc),
+            ))
 
         return SlotResult(
             reels=reels, payout=payout, net=payout - bet,
@@ -508,11 +518,12 @@ class WalletRepository:
         mult       = _mines_multiplier(sess["mines_count"], revealed_count, sess["bet"])
         payout     = round(sess["bet"] * mult)
         mines_list = sorted(sess["mines"])   # capture before deletion
+        _now = dt.datetime.now(dt.timezone.utc)
         _live_events.append({
             "game": "mines", "type": "cashout",
             "name": sess.get("name", "Игрок"), "bet": sess["bet"],
             "mult": mult, "payout": payout,
-            "ts": dt.datetime.now(dt.timezone.utc),
+            "ts": _now,
         })
         if len(_live_events) > 100:
             del _live_events[:-100]
@@ -522,6 +533,13 @@ class WalletRepository:
         wallet.balance      += payout
         wallet.total_earned += payout
         _clamp_wallet(wallet)
+        _win_bet = sess.get("bet", 0)
+        if payout - _win_bet > 0:
+            self.session.add(CasinoWin(
+                uid=owner_telegram_id, name=sess.get("name", "Игрок")[:30], game="mines",
+                bet=_win_bet, payout=payout, net=payout - _win_bet, mult=mult,
+                ts=dt.datetime.now(dt.timezone.utc),
+            ))
         await self.session.flush()
 
         return MinesCashoutResult(
@@ -588,6 +606,12 @@ class WalletRepository:
             "payout": payout,
             "ts": _now,
         })
+        if won and payout - bet > 0:
+            self.session.add(CasinoWin(
+                uid=owner_telegram_id, name=sess.get("name", "Игрок")[:30], game="crash",
+                bet=bet, payout=payout, net=payout - bet, mult=round(multiplier, 2),
+                ts=_now,
+            ))
         if len(_live_events) > 100:
             del _live_events[:-100]
         if len(_crash_history) > 200:
@@ -600,7 +624,7 @@ class WalletRepository:
 
     # ── Coin flip (mutation) ───────────────────────────────────────────────
     async def flip_coin(
-        self, owner_telegram_id: int, bet: int, choice: str
+        self, owner_telegram_id: int, bet: int, choice: str, first_name: str = "Игрок"
     ) -> FlipResult:
         if choice not in ("heads", "tails"):
             raise ValueError("invalid_choice")
@@ -631,10 +655,61 @@ class WalletRepository:
         _clamp_wallet(wallet)
         await self.session.flush()
 
+        if won:
+            self.session.add(CasinoWin(
+                uid=owner_telegram_id, name=first_name[:30], game="flip",
+                bet=bet, payout=bet * 2, net=bet, mult=2.0,
+                ts=dt.datetime.now(dt.timezone.utc),
+            ))
+
         return FlipResult(
             server_side=server_side, won=won,
             amount_change=amount_change, new_balance=wallet.balance,
         )
+
+
+# ── Casino wins leaderboard (DB-backed) ──────────────────────────────────────
+
+async def get_casino_leaderboard(session: AsyncSession) -> dict:
+    """Return top-10 biggest single wins (payout−bet) for today and this week.
+
+    Only rows with strictly positive net profit are persisted (enforced at write
+    time), so every row here is a genuine win.  Results are the true top-10 by
+    net profit for each period — no per-player deduplication.
+    """
+    from app.models.casino_win import CasinoWin as _CW  # avoid circular at module load
+
+    now         = dt.datetime.now(dt.timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start  = today_start - dt.timedelta(days=now.weekday())  # Monday
+
+    async def _top10(period_start: dt.datetime) -> list[dict]:
+        rows = (
+            await session.execute(
+                select(_CW)
+                .where(_CW.ts >= period_start)
+                .order_by(_CW.net.desc())
+                .limit(10)
+            )
+        ).scalars().all()
+
+        return [
+            {
+                "rank":   i + 1,
+                "name":   r.name,
+                "game":   r.game,
+                "bet":    r.bet,
+                "payout": r.payout,
+                "net":    r.net,
+                "mult":   round(float(r.mult), 2),
+            }
+            for i, r in enumerate(rows)
+        ]
+
+    return {
+        "today": await _top10(today_start),
+        "week":  await _top10(week_start),
+    }
 
 
 # ── Live players (module-level, no DB needed) ────────────────────────────────

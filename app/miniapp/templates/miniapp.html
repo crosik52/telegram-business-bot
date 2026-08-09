@@ -2106,6 +2106,45 @@
   .lb-coins  { font-size: 12px; font-weight: 700; color: var(--orange); flex-shrink: 0; }
   .lb-my-rank-note { text-align: center; font-size: 12.5px; color: var(--hint); margin: 4px 0 12px; }
 
+  /* ── Casino wins leaderboard ── */
+  .casino-wins-period-bar {
+    display: flex; gap: 6px; margin-bottom: 12px;
+  }
+  .casino-wins-period-btn {
+    flex: 1; border: 1px solid rgba(120,120,128,0.22);
+    border-radius: 10px; padding: 7px 0;
+    background: transparent; color: var(--hint);
+    font-family: inherit; font-size: 12px; font-weight: 700;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .casino-wins-period-btn.active {
+    background: rgba(124,108,255,0.18);
+    border-color: rgba(124,108,255,0.5);
+    color: #c5baff;
+  }
+  .casino-win-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 12px; border-radius: 13px;
+    background: var(--secondary-bg);
+    margin-bottom: 5px;
+    backdrop-filter: blur(14px) saturate(150%);
+    -webkit-backdrop-filter: blur(14px) saturate(150%);
+    box-shadow: 0 0 0 0.5px rgba(120,120,128,0.14), inset 0 1px 0 rgba(255,255,255,0.08);
+    animation: riseIn 0.3s ease backwards;
+  }
+  .theme-dark .casino-win-row {
+    background: rgba(255,255,255,0.05);
+    box-shadow: 0 0 0 0.5px rgba(255,255,255,0.10), inset 0 1px 0 rgba(255,255,255,0.12);
+  }
+  .casino-win-rank  { font-size: 14px; width: 24px; text-align: center; flex-shrink: 0; font-weight: 900; color: var(--hint); }
+  .casino-win-game  { font-size: 18px; flex-shrink: 0; }
+  .casino-win-body  { flex: 1; min-width: 0; }
+  .casino-win-name  { font-size: 12.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .casino-win-meta  { font-size: 10px; color: var(--hint); margin-top: 1px; }
+  .casino-win-right { text-align: right; flex-shrink: 0; }
+  .casino-win-net   { font-size: 13px; font-weight: 900; color: #34c759; }
+  .casino-win-mult  { font-size: 10px; color: var(--hint); margin-top: 1px; }
+
   /* ── Subscription card ── */
   .sub-card {
     border-radius: var(--card-radius);
@@ -5769,7 +5808,9 @@
       }
     }
 
-    let casinoSubTab = "games";
+    let casinoSubTab  = "games";
+    let casinoLbData  = null;   // {today:[...], week:[...]} from /api/wallet/casino-leaderboard
+    let casinoLbPeriod = "today"; // "today" | "week"
 
     function switchCasinoSubTab(tab) {
       casinoSubTab = tab;
@@ -8540,13 +8581,15 @@
       try {
         const opts = { method: "POST", headers: {"Content-Type":"application/json"},
                        body: JSON.stringify({initData: currentInitData}) };
-        const [qRes, lbRes] = await Promise.all([
-          fetch("/app/api/quests",      opts),
-          fetch("/app/api/leaderboard", opts),
+        const [qRes, lbRes, clbRes] = await Promise.all([
+          fetch("/app/api/quests",                    opts),
+          fetch("/app/api/leaderboard",               opts),
+          fetch("/app/api/wallet/casino-leaderboard", {method:"GET"}),
         ]);
         if (!qRes.ok || !lbRes.ok) throw new Error("api");
         questData      = await qRes.json();
         lbData         = await lbRes.json();
+        if (clbRes.ok) casinoLbData = await clbRes.json();
         questsLoaded   = true;
         _questsFetchTs = Date.now();
         renderQuestsTab();
@@ -8612,6 +8655,39 @@
         ${cards}`;
     }
 
+    function renderCasinoWinsSection() {
+      const GAME_ICONS = { slots: "🎰", flip: "🪙", mines: "💣", crash: "🚀" };
+      const GAME_NAMES = { slots: "Слоты", flip: "Монетка", mines: "Мины", crash: "Краш" };
+      const medals = ["🥇","🥈","🥉"];
+      const entries = (casinoLbData || {})[casinoLbPeriod] || [];
+
+      const rows = entries.length
+        ? entries.map((e, i) => `
+          <div class="casino-win-row" style="animation-delay:${0.04 + i * 0.035}s">
+            <div class="casino-win-rank">${medals[i] || ("#" + e.rank)}</div>
+            <div class="casino-win-game">${GAME_ICONS[e.game] || "🎮"}</div>
+            <div class="casino-win-body">
+              <div class="casino-win-name">${_esc(e.name)}</div>
+              <div class="casino-win-meta">${GAME_NAMES[e.game] || e.game} · ставка ${e.bet.toLocaleString("ru-RU")} 🪙</div>
+            </div>
+            <div class="casino-win-right">
+              <div class="casino-win-net">+${e.net.toLocaleString("ru-RU")} 🪙</div>
+              <div class="casino-win-mult">×${e.mult}</div>
+            </div>
+          </div>`).join("")
+        : `<div class="empty" style="padding:16px 0 8px;text-align:center"><span class="big-emoji">🎰</span><br><span style="font-size:13px;color:var(--hint)">Пока нет выигрышей. Первый твой!</span></div>`;
+
+      return `
+        <div class="section-title" style="margin-top:8px">🏆 Топ выигрышей</div>
+        <div class="casino-wins-period-bar">
+          <button class="casino-wins-period-btn${casinoLbPeriod==="today"?" active":""}"
+                  onclick="casinoLbPeriod='today'; renderCasino()">Сегодня</button>
+          <button class="casino-wins-period-btn${casinoLbPeriod==="week"?" active":""}"
+                  onclick="casinoLbPeriod='week'; renderCasino()">Неделя</button>
+        </div>
+        ${rows}`;
+    }
+
     function renderLeaderboardSection() {
       const entries  = lbData?.entries || [];
       const me       = lbData?.me;
@@ -8660,10 +8736,11 @@
         : "";
 
       return `
-        <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:4px">
+        ${renderCasinoWinsSection()}
+        <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:4px;margin-top:18px">
           <span id="questCacheAge" style="font-size:11px;color:var(--hint);opacity:0.75"></span>
         </div>
-        <div class="section-title" style="margin-top:8px">${_si("ico-coin")} Рейтинг монет</div>
+        <div class="section-title" style="margin-top:0">${_si("ico-coin")} Рейтинг монет</div>
         ${rows || `<div class="empty" style="padding:20px 0"><span class="big-emoji">🪙</span>Пока никто не зарабатывал монеты.</div>`}
         ${pinnedMe}${noWalletRow}`;
     }
@@ -8673,13 +8750,15 @@
       try {
         const opts = { method: "POST", headers: {"Content-Type":"application/json"},
                        body: JSON.stringify({initData: currentInitData}) };
-        const [qRes, lbRes] = await Promise.all([
-          fetch("/app/api/quests",      opts),
-          fetch("/app/api/leaderboard", opts),
+        const [qRes, lbRes, clbRes] = await Promise.all([
+          fetch("/app/api/quests",                    opts),
+          fetch("/app/api/leaderboard",               opts),
+          fetch("/app/api/wallet/casino-leaderboard", {method:"GET"}),
         ]);
         if (!qRes.ok || !lbRes.ok) return;
         questData      = await qRes.json();
         lbData         = await lbRes.json();
+        if (clbRes.ok) casinoLbData = await clbRes.json();
         _questsFetchTs = Date.now();
         document.querySelectorAll("#questCacheAge").forEach(lbl => {
           lbl.textContent = `Обновлено ${_questAgeLabel(_questsFetchTs)}`;

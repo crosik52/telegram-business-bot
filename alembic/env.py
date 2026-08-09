@@ -15,6 +15,7 @@ from app.database.base import Base
 from app.models import (  # noqa: F401  (ensure models are registered on Base)
     AiAnalysisDailyCount,
     BusinessConnection,
+    CasinoWin,
     ChatPet,
     DailyQuestCompletion,
     Message,

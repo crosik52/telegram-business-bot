@@ -147,11 +147,77 @@ _GREETING = (
 )
 
 
+async def _send_welcome(message: Message, *, is_new_user: bool, user=None) -> None:
+    """Send the standard /start greeting (after subscription is confirmed).
+
+    *user* overrides message.from_user when called from a callback context
+    (where message.from_user would be the bot, not the human).
+    """
+    from_user = user or message.from_user
+    settings = get_settings()
+    keyboard = None
+    if settings.webhook_base_url:
+        base_url = settings.webhook_base_url.rstrip("/")
+        extra: list[list[InlineKeyboardButton]] = []
+        extra.append([
+            InlineKeyboardButton(text="📜 Соглашение",         web_app=WebAppInfo(url=base_url + "/terms")),
+            InlineKeyboardButton(text="🔒 Конфиденциальность", web_app=WebAppInfo(url=base_url + "/privacy")),
+        ])
+        username    = (from_user.username or "").lstrip("@").lower() if from_user else ""
+        admin_uname = settings.miniapp_admin_username.lstrip("@").lower()
+        if admin_uname and username == admin_uname:
+            extra.append([
+                InlineKeyboardButton(text="🛠 Админ-панель", web_app=WebAppInfo(url=base_url + "/app/admin"))
+            ])
+        keyboard = _app_kb(base_url, extra_rows=extra)
+
+    await message.answer(_GREETING, parse_mode="HTML", reply_markup=keyboard)
+
+    if is_new_user:
+        _, connect_text = _HELP_SECTIONS["help_connect"]
+        connect_kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="⚙️ Открыть настройки Telegram", url="tg://settings/edit")
+        ]])
+        await message.answer(connect_text, parse_mode="HTML", reply_markup=connect_kb)
+
+    logger.info("Sent /start greeting to chat_id=%s (new=%s)", message.chat.id, is_new_user)
+
+
+async def _check_channel_gate(
+    bot,
+    user_id: int,
+) -> list:
+    """Return list of unsubscribed required channels (empty = all good)."""
+    try:
+        from app.repositories.channel_repository import ChannelRepository          # noqa: PLC0415
+        from app.services.channel_subscription_service import get_unsubscribed_channels  # noqa: PLC0415
+        async with session_scope() as db:
+            active = await ChannelRepository(db).get_active()
+        if not active:
+            return []
+        return await get_unsubscribed_channels(bot, user_id, active)
+    except Exception as exc:
+        logger.warning("channel_gate check failed for user %s — allowing through: %s", user_id, exc)
+        return []
+
+
+def _gate_keyboard(unsub_channels: list) -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton(text=f"📢 {ch.display_title}", url=ch.join_url)]
+        for ch in unsub_channels
+    ]
+    rows.append([InlineKeyboardButton(text="✅ Я подписался", callback_data="check_sub")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 @router.message(CommandStart())
 async def on_start(message: Message) -> None:
     """Greet the user with a feature overview and action buttons."""
 
-    settings = get_settings()
+    if not message.from_user:
+        return
+
+    user_id = message.from_user.id
 
     # ── Referral deep-link handling ───────────────────────────────────────────
     parts = (message.text or "").split()
@@ -197,50 +263,72 @@ async def on_start(message: Message) -> None:
 
     # ── Detect first-time user ────────────────────────────────────────────────
     is_new_user = False
-    if message.from_user:
+    try:
+        async with session_scope() as db:
+            result = await db.execute(
+                select(UserWallet).where(UserWallet.owner_telegram_id == user_id)
+            )
+            is_new_user = result.scalar_one_or_none() is None
+    except Exception as exc:
+        logger.debug("First-time user check failed: %s", exc)
+
+    # ── Channel subscription gate ─────────────────────────────────────────────
+    unsub = await _check_channel_gate(message.bot, user_id)
+    if unsub:
+        titles = "\n".join(f"• {ch.display_title}" for ch in unsub)
+        await message.answer(
+            f"👋 Привет! Чтобы получить доступ к боту — подпишись на {'канал' if len(unsub) == 1 else 'каналы'}:\n\n"
+            f"{titles}\n\n"
+            f"После подписки нажми кнопку ниже 👇",
+            parse_mode="HTML",
+            reply_markup=_gate_keyboard(unsub),
+        )
+        return
+
+    await _send_welcome(message, is_new_user=is_new_user)
+
+
+# ── "Я подписался" — повторная проверка подписки ─────────────────────────────
+
+@router.callback_query(F.data == "check_sub")
+async def on_check_sub(callback: CallbackQuery) -> None:
+    await callback.answer()
+    if not callback.from_user or not callback.message:
+        return
+
+    user_id = callback.from_user.id
+    unsub = await _check_channel_gate(callback.bot, user_id)
+
+    if unsub:
+        # Still not subscribed — update the message with fresh button list
         try:
-            async with session_scope() as db:
-                result = await db.execute(
-                    select(UserWallet).where(
-                        UserWallet.owner_telegram_id == message.from_user.id
-                    )
-                )
-                is_new_user = result.scalar_one_or_none() is None
-        except Exception as exc:
-            logger.debug("First-time user check failed: %s", exc)
+            titles = "\n".join(f"• {ch.display_title}" for ch in unsub)
+            await callback.message.edit_text(
+                f"❌ Ты ещё не подписан{'а' if False else ''}. Подпишись и нажми кнопку снова:\n\n{titles}",
+                parse_mode="HTML",
+                reply_markup=_gate_keyboard(unsub),
+            )
+        except Exception:
+            await callback.answer("Подпишись на каналы и попробуй снова.", show_alert=True)
+        return
 
-    keyboard = None
-    if settings.webhook_base_url:
-        base_url = settings.webhook_base_url.rstrip("/")
-        extra: list[list[InlineKeyboardButton]] = []
+    # Gate passed — delete gate message, detect new-user, send welcome
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
 
-        # Terms / privacy
-        extra.append([
-            InlineKeyboardButton(text="📜 Соглашение",       web_app=WebAppInfo(url=base_url + "/terms")),
-            InlineKeyboardButton(text="🔒 Конфиденциальность", web_app=WebAppInfo(url=base_url + "/privacy")),
-        ])
+    is_new_user = False
+    try:
+        async with session_scope() as db:
+            result = await db.execute(
+                select(UserWallet).where(UserWallet.owner_telegram_id == user_id)
+            )
+            is_new_user = result.scalar_one_or_none() is None
+    except Exception as exc:
+        logger.debug("First-time user check in check_sub failed: %s", exc)
 
-        # Admin button for the admin account
-        username     = (message.from_user.username or "").lstrip("@").lower() if message.from_user else ""
-        admin_uname  = settings.miniapp_admin_username.lstrip("@").lower()
-        if admin_uname and username == admin_uname:
-            extra.append([
-                InlineKeyboardButton(text="🛠 Админ-панель", web_app=WebAppInfo(url=base_url + "/app/admin"))
-            ])
-
-        keyboard = _app_kb(base_url, extra_rows=extra)
-
-    await message.answer(_GREETING, parse_mode="HTML", reply_markup=keyboard)
-
-    # ── Send connection instructions to first-time users ──────────────────────
-    if is_new_user:
-        _, connect_text = _HELP_SECTIONS["help_connect"]
-        connect_kb = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="⚙️ Открыть настройки Telegram", url="tg://settings/edit")
-        ]])
-        await message.answer(connect_text, parse_mode="HTML", reply_markup=connect_kb)
-
-    logger.info("Sent /start greeting to chat_id=%s (new=%s)", message.chat.id, is_new_user)
+    await _send_welcome(callback.message, is_new_user=is_new_user, user=callback.from_user)
 
 
 # ── /help ──────────────────────────────────────────────────────────────────────

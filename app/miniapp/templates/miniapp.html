@@ -3307,6 +3307,99 @@
   .interact-skeleton { padding: 16px 0; display: flex; flex-direction: column; gap: 12px; animation: pulse 1.2s ease-in-out infinite; }
   .interact-skel-card { height: 200px; background: rgba(224,54,90,0.07); border-radius: 20px; margin: 0 0 2px; }
 
+  /* ══ Top Contacts — glass redesign (scoped to .top-contacts-wrap) ══════════ */
+  .top-contacts-wrap .search-box {
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    background: rgba(120,120,128,0.08);
+    border: 0.5px solid rgba(120,120,128,0.16);
+    border-radius: 16px; padding: 11px 16px;
+  }
+  .theme-dark .top-contacts-wrap .search-box {
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.10);
+  }
+  .top-contacts-wrap .search-box input { font-size: 14px; }
+  .top-contacts-wrap .segmented { gap: 7px; }
+  .top-contacts-wrap .segmented button {
+    border-radius: 20px; font-size: 12px; padding: 7px 15px; font-weight: 600;
+    border: 0.5px solid transparent; background: rgba(120,120,128,0.10);
+    transition: all 0.18s;
+  }
+  .top-contacts-wrap .segmented button.active {
+    background: rgba(124,108,255,0.16); color: #7c6cff;
+    border-color: rgba(124,108,255,0.30);
+  }
+  .top-contacts-wrap .list {
+    padding: 0; background: transparent; box-shadow: none;
+    border-radius: 0;
+  }
+  /* Glass card row */
+  .top-contacts-wrap .row {
+    background: rgba(255,255,255,0.04);
+    backdrop-filter: blur(28px) saturate(200%);
+    -webkit-backdrop-filter: blur(28px) saturate(200%);
+    border: 0.5px solid rgba(255,255,255,0.09);
+    border-bottom: 0.5px solid rgba(255,255,255,0.09);
+    border-radius: 20px; padding: 13px 13px;
+    margin-bottom: 9px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.10);
+    overflow: hidden; position: relative; transition: background 0.15s, transform 0.1s;
+  }
+  .top-contacts-wrap .row::before {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0; height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 100%);
+    pointer-events: none; border-radius: 20px 20px 0 0;
+  }
+  .top-contacts-wrap .row:active { background: rgba(255,255,255,0.08); transform: scale(0.993); }
+  .top-contacts-wrap .row:last-child { border-bottom: 0.5px solid rgba(255,255,255,0.09); }
+  .top-contacts-wrap .bar-track { display: none; }
+  .top-contacts-wrap .row-chevron { display: none; }
+  .top-contacts-wrap .rank { font-size: 22px; line-height: 1; width: 28px; }
+  .top-contacts-wrap .avatar { width: 46px; height: 46px; font-size: 17px; box-shadow: 0 2px 10px rgba(0,0,0,0.22); }
+  .top-contacts-wrap .row-name { font-size: 14.5px; font-weight: 700; }
+  .top-contacts-wrap .row-count { font-size: 21px; font-weight: 900; }
+  .top-count-lbl { font-size: 9px; font-weight: 600; color: var(--hint); text-transform: uppercase; letter-spacing: 0.3px; margin-top: 1px; display: block; }
+  /* Action buttons */
+  .top-contacts-wrap .game-btn,
+  .top-contacts-wrap .rel-btn,
+  .top-contacts-wrap .ai-btn {
+    border-radius: 10px; padding: 4px 10px;
+    font-size: 11px; font-weight: 700; border: 0.5px solid transparent;
+  }
+  .top-contacts-wrap .game-btn { background: rgba(124,108,255,0.13); color: #7c6cff; border-color: rgba(124,108,255,0.22); }
+  .top-contacts-wrap .rel-btn  { background: rgba(224,54,90,0.11);  color: #e0365a; border-color: rgba(224,54,90,0.20); }
+  .top-contacts-wrap .ai-btn   { background: rgba(52,199,89,0.10);  color: #30a04e; border-color: rgba(52,199,89,0.18); }
+  /* Chips */
+  .top-contacts-wrap .chip { font-size: 10.5px; padding: 2px 7px; border-radius: 8px; }
+  /* Section header */
+  .top-contacts-wrap .section-title {
+    font-size: 11px; font-weight: 900; text-transform: uppercase;
+    letter-spacing: 0.7px; color: var(--hint);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 2px;
+  }
+  .top-contacts-wrap .section-title .sub { text-transform: none; letter-spacing: 0; font-weight: 600; }
+  /* Premium gate */
+  .top-contacts-wrap .premium-more-row {
+    background: rgba(124,108,255,0.08);
+    border: 0.5px solid rgba(124,108,255,0.22);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border-radius: 18px; padding: 14px 16px; cursor: pointer;
+  }
+  .top-contacts-wrap .premium-more-text { font-size: 13.5px; font-weight: 700; color: #7c6cff; }
+  .top-contacts-wrap .premium-more-hint { font-size: 11px; }
+  .top-contacts-wrap .premium-gate-chip {
+    background: rgba(124,108,255,0.20); color: #7c6cff;
+    border-radius: 12px; padding: 7px 14px; font-weight: 800;
+  }
+  /* Share buttons */
+  .top-contacts-wrap .share-btn {
+    background: rgba(120,120,128,0.10); border: 0.5px solid rgba(120,120,128,0.16);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border-radius: 14px; font-weight: 600; font-size: 13px;
+  }
   /* ── Interact leaderboard (Топ) sub-tab ── */
   .interact-lb-section-title {
     font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.7px;
@@ -3861,6 +3954,7 @@
     if (tg) {
       tg.ready();
       tg.expand();
+      try { tg.requestFullscreen(); } catch(e) {}   // Bot API 8.0+
       // Force dark theme regardless of device system setting
       try { tg.setHeaderColor('#17181a'); } catch(e) {}
       try { tg.setBackgroundColor('#17181a'); } catch(e) {}
@@ -4688,6 +4782,7 @@
             </div>
             <div class="row-right">
               <div class="row-count">${s.message_count}</div>
+              <span class="top-count-lbl">сообщ.</span>
               ${renderStreakBadge(s)}
             </div>
             <div class="row-chevron">›</div>
@@ -4707,15 +4802,15 @@
 
       const totalShown = visibleSorted.length;
       const totalAll   = stats.top_interlocutors.length;
-      return `
+      return `<div class="top-contacts-wrap">
         ${controls}
         ${renderPendingRelRequests()}
-        <div class="section-title">${_si("ico-trophy")} Топ собеседников <span class="sub">${totalShown}${!statsPremium && hiddenCount > 0 ? " из " + totalAll : " из " + totalAll}</span></div>
+        <div class="section-title">${_si("ico-trophy")} Топ собеседников <span class="sub">${totalShown} из ${totalAll}</span></div>
         <div class="list">${rows}</div>
         ${premiumMoreHtml}
         <button class="share-btn" id="shareBtn">📋 Скопировать сводку</button>
         <button class="share-btn" id="downloadCardBtn">🖼 Скачать карточку</button>
-      `;
+      </div>`;
     }
 
     function attachTopHandlers() {

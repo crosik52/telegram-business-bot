@@ -884,14 +884,28 @@ async def on_business_message(message: Message, bot: Bot) -> None:
         text_to_scan = message.text or message.caption or ""
         if text_to_scan and owner_telegram_id:
             video_match = extract_video_url(text_to_scan)
-            # If link was sent by contact, check dl_contact_videos setting
+            # If link was sent by contact, check per-scenario setting
             if video_match and _is_incoming:
-                from app.models.user_settings import UserSettings as _US  # noqa: PLC0415
+                from app.models.user_settings import UserSettings as _US          # noqa: PLC0415
+                from app.models.business_connection import BusinessConnection as _BC  # noqa: PLC0415
                 _us_v = (await session.execute(
                     select(_US).where(_US.owner_telegram_id == owner_telegram_id)
                 )).scalar_one_or_none()
-                if not getattr(_us_v, "dl_contact_videos", True):
-                    video_match = None  # feature disabled → skip
+                # Is the contact also running the bot? (mutual connection)
+                _contact_has_bot = (await session.execute(
+                    select(_BC.business_connection_id).where(
+                        _BC.user_telegram_id == message.chat.id,
+                        _BC.is_blocked.is_(False),
+                    ).limit(1)
+                )).scalar_one_or_none() is not None
+                if _contact_has_bot:
+                    # Mutual — their bot will download too; skip by default
+                    if not getattr(_us_v, "dl_contact_videos_mutual", False):
+                        video_match = None
+                else:
+                    # Solo — only you have the bot; respect the solo setting
+                    if not getattr(_us_v, "dl_contact_videos", True):
+                        video_match = None
             if video_match:
                 url, platform = video_match
                 chat_id = message.chat.id

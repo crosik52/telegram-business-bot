@@ -11836,12 +11836,23 @@
         <div class="settings-section-hdr">Медиа</div>
         <div class="settings-row">
           <div class="settings-row-left">
-            <span class="settings-row-label">Видео от собеседника</span>
-            <span class="settings-row-desc">Автоматически скачивать Reels/TikTok/Shorts из ссылок, которые отправил собеседник</span>
+            <span class="settings-row-label">Видео от собеседника без бота</span>
+            <span class="settings-row-desc">Скачивать Reels/TikTok/Shorts, если у собеседника бот не подключён — только ты можешь это сделать</span>
           </div>
           <label class="s-toggle">
-            <input type="checkbox" id="stg-dl-contact" ${d.dl_contact_videos ? "checked" : ""}
+            <input type="checkbox" id="stg-dl-solo" ${d.dl_contact_videos ? "checked" : ""}
               onchange="saveSetting('dl_contact_videos', this.checked)">
+            <span class="s-toggle-track"></span>
+          </label>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-left">
+            <span class="settings-row-label">Видео от собеседника с ботом</span>
+            <span class="settings-row-desc">Скачивать, если у собеседника тоже подключён бот. По умолчанию выключено — его бот сделает это сам</span>
+          </div>
+          <label class="s-toggle">
+            <input type="checkbox" id="stg-dl-mutual" ${d.dl_contact_videos_mutual ? "checked" : ""}
+              onchange="saveSetting('dl_contact_videos_mutual', this.checked)">
             <span class="s-toggle-track"></span>
           </label>
         </div>

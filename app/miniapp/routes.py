@@ -4228,6 +4228,7 @@ class UpdateSettingRequest(BaseModel):
 _ALLOWED_SETTING_KEYS = {
     "streak_reminders_enabled",
     "dl_contact_videos",
+    "dl_contact_videos_mutual",
     "chat_whitelist",   # repurposed as exclusion list (chats to skip)
 }
 
@@ -4251,17 +4252,19 @@ async def get_user_settings(
 
     if us is None:
         return {
-            "streak_reminders_enabled": True,
-            "dl_contact_videos":        True,
-            "chat_exclusions":          [],
-            "muted_streaks":            [],
+            "streak_reminders_enabled":  True,
+            "dl_contact_videos":         True,
+            "dl_contact_videos_mutual":  False,
+            "chat_exclusions":           [],
+            "muted_streaks":             [],
         }
 
     return {
-        "streak_reminders_enabled": getattr(us, "streak_reminders_enabled", True),
-        "dl_contact_videos":        getattr(us, "dl_contact_videos", True),
-        "chat_exclusions":          list(getattr(us, "chat_whitelist", None) or []),
-        "muted_streaks":            list(us.muted_streaks or []),
+        "streak_reminders_enabled":  getattr(us, "streak_reminders_enabled", True),
+        "dl_contact_videos":         getattr(us, "dl_contact_videos", True),
+        "dl_contact_videos_mutual":  getattr(us, "dl_contact_videos_mutual", False),
+        "chat_exclusions":           list(getattr(us, "chat_whitelist", None) or []),
+        "muted_streaks":             list(us.muted_streaks or []),
     }
 
 
@@ -4290,7 +4293,7 @@ async def update_user_setting(
 
     # Validate and coerce value per key
     val = payload.value
-    if payload.key in {"streak_reminders_enabled", "dl_contact_videos"}:
+    if payload.key in {"streak_reminders_enabled", "dl_contact_videos", "dl_contact_videos_mutual"}:
         val = bool(val)
     elif payload.key == "chat_whitelist":
         val = [int(x) for x in (val or [])]

@@ -402,6 +402,9 @@ async def lifespan(app: FastAPI):
                 "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS dl_contact_videos BOOLEAN NOT NULL DEFAULT TRUE"
             ))
             await conn.execute(text(
+                "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS dl_contact_videos_mutual BOOLEAN NOT NULL DEFAULT FALSE"
+            ))
+            await conn.execute(text(
                 "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS chat_filter_mode VARCHAR(20) NOT NULL DEFAULT 'all'"
             ))
             await conn.execute(text(

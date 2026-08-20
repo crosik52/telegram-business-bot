@@ -26,9 +26,14 @@ class UserSettings(Base):
     streak_reminders_enabled: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default="true", nullable=False
     )
-    # Download videos from links sent BY a contact (not the owner)
+    # Download videos from links sent BY a contact who does NOT have the bot connected
     dl_contact_videos: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default="true", nullable=False
+    )
+    # Download videos from links sent BY a contact who ALSO has the bot connected
+    # (default False — their bot will handle it themselves)
+    dl_contact_videos_mutual: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
     )
     # 'all' = collect every chat; 'whitelist' = only chats in chat_whitelist
     chat_filter_mode: Mapped[str] = mapped_column(

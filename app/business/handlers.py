@@ -717,16 +717,17 @@ async def on_business_message(message: Message, bot: Bot) -> None:
                 _bc_cache[bc_id] = (owner_telegram_id, can_reply)
 
         service = MessageService(session)
-        # ── Chat filter: skip ingestion if chat is not in the whitelist ───────
+        # ── Chat filter: skip ingestion if chat is in the exclusion list ────────
         _should_ingest = True
         if owner_telegram_id:
             from app.models.user_settings import UserSettings as _US  # noqa: PLC0415
             _us_f = (await session.execute(
                 select(_US).where(_US.owner_telegram_id == owner_telegram_id)
             )).scalar_one_or_none()
-            if _us_f and getattr(_us_f, "chat_filter_mode", "all") == "whitelist":
-                _wl = list(getattr(_us_f, "chat_whitelist", None) or [])
-                _should_ingest = message.chat.id in _wl
+            if _us_f:
+                _excluded = list(getattr(_us_f, "chat_whitelist", None) or [])
+                if message.chat.id in _excluded:
+                    _should_ingest = False
 
         if _should_ingest:
             await service.ingest_new_message(

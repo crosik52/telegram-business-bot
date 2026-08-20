@@ -11796,19 +11796,19 @@
         </div>`;
       }).join("");
 
-      // Build whitelist chips
-      const wlIds = d.chat_whitelist || [];
-      const wlChips = wlIds.map(cid => {
+      // Build exclusion chips
+      const exIds = d.chat_exclusions || [];
+      const exChips = exIds.map(cid => {
         const c = contacts.find(x => x.chat_id === cid);
         const name = c ? c.display_name : `#${cid}`;
-        return `<div class="settings-chip-row" data-wl-id="${cid}">
+        return `<div class="settings-chip-row" data-ex-id="${cid}">
           <span class="settings-chip-name">${esc(name)}</span>
-          <button class="settings-chip-remove" onclick="removeWhitelistChat(${cid})">Убрать</button>
+          <button class="settings-chip-remove" onclick="removeExcludedChat(${cid})">Убрать</button>
         </div>`;
       }).join("");
 
-      // Chat picker for whitelist (all contacts NOT yet in whitelist)
-      const available = contacts.filter(c => !wlIds.includes(c.chat_id));
+      // Chat picker — contacts not yet excluded
+      const available = contacts.filter(c => !exIds.includes(c.chat_id));
       const pickerOpts = available.map(c =>
         `<option value="${c.chat_id}">${esc(c.display_name)}</option>`
       ).join("");
@@ -11848,26 +11848,18 @@
 
         <!-- ── Сбор сообщений ── -->
         <div class="settings-section-hdr">Сбор сообщений</div>
-        <div class="settings-row" style="flex-direction:column; align-items:flex-start; gap:10px">
+        <div class="settings-row" style="flex-direction:column; align-items:flex-start; gap:0">
           <div class="settings-row-left">
-            <span class="settings-row-label">Откуда собирать статистику</span>
-            <span class="settings-row-desc">Сообщения из выбранных чатов идут в Топ, стрики и аналитику</span>
-          </div>
-          <div class="settings-filter-pills">
-            <button class="settings-filter-pill ${d.chat_filter_mode === 'all' ? 'active' : ''}"
-              onclick="setChatFilterMode('all')">Все чаты</button>
-            <button class="settings-filter-pill ${d.chat_filter_mode === 'whitelist' ? 'active' : ''}"
-              onclick="setChatFilterMode('whitelist')">Только выбранные</button>
+            <span class="settings-row-label">Исключения</span>
+            <span class="settings-row-desc">Сообщения из этих чатов не попадут в Топ, стрики и аналитику. Остальные собираются как обычно.</span>
           </div>
         </div>
-        ${d.chat_filter_mode === 'whitelist' ? `
-        <div id="whitelistSection">
-          <div class="settings-chip-list" id="wlChipList">${wlChips || '<div class="settings-empty-hint">Нет выбранных чатов — все новые сообщения пропускаются</div>'}</div>
+        <div id="exclusionSection">
+          <div class="settings-chip-list" id="exChipList">${exChips || '<div class="settings-empty-hint">Нет исключений — все чаты собираются</div>'}</div>
           ${available.length ? `
-          <select id="wlPicker" style="display:none">${pickerOpts}</select>
-          <button class="settings-chat-select-btn" onclick="addWhitelistChat()">+ Добавить чат</button>
-          ` : ""}
-        </div>` : ""}
+          <select id="exPicker" style="display:none">${pickerOpts}</select>
+          <button class="settings-chat-select-btn" onclick="addExcludedChat()">+ Добавить исключение</button>
+          ` : ""}</div>
       `;
     }
 
@@ -11889,17 +11881,6 @@
       }
     }
 
-    async function setChatFilterMode(mode) {
-      const pills = document.querySelectorAll(".settings-filter-pill");
-      pills.forEach(p => p.classList.toggle("active", p.textContent.includes(mode === "all" ? "Все" : "выбранные")));
-      await saveSetting("chat_filter_mode", mode);
-      if (_settingsData) {
-        _settingsData.chat_filter_mode = mode;
-        const body = document.getElementById("settingsModalBody");
-        if (body) _renderSettings(body);
-      }
-    }
-
     async function unmuteChatStreak(chatId) {
       const initData = tg ? tg.initData : currentInitData;
       try {
@@ -11917,24 +11898,24 @@
       } catch(e) { toastMessage("Ошибка"); }
     }
 
-    async function addWhitelistChat() {
-      const picker = document.getElementById("wlPicker");
+    async function addExcludedChat() {
+      const picker = document.getElementById("exPicker");
       if (!picker || !picker.value) return;
       const chatId = parseInt(picker.value);
-      const wl = [...(_settingsData?.chat_whitelist || []), chatId];
-      await saveSetting("chat_whitelist", wl);
+      const exl = [...(_settingsData?.chat_exclusions || []), chatId];
+      await saveSetting("chat_whitelist", exl);
       if (_settingsData) {
-        _settingsData.chat_whitelist = wl;
+        _settingsData.chat_exclusions = exl;
         const body = document.getElementById("settingsModalBody");
         if (body) _renderSettings(body);
       }
     }
 
-    async function removeWhitelistChat(chatId) {
-      const wl = (_settingsData?.chat_whitelist || []).filter(x => x !== chatId);
-      await saveSetting("chat_whitelist", wl);
+    async function removeExcludedChat(chatId) {
+      const exl = (_settingsData?.chat_exclusions || []).filter(x => x !== chatId);
+      await saveSetting("chat_whitelist", exl);
       if (_settingsData) {
-        _settingsData.chat_whitelist = wl;
+        _settingsData.chat_exclusions = exl;
         const body = document.getElementById("settingsModalBody");
         if (body) _renderSettings(body);
       }

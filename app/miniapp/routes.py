@@ -4228,8 +4228,7 @@ class UpdateSettingRequest(BaseModel):
 _ALLOWED_SETTING_KEYS = {
     "streak_reminders_enabled",
     "dl_contact_videos",
-    "chat_filter_mode",
-    "chat_whitelist",
+    "chat_whitelist",   # repurposed as exclusion list (chats to skip)
 }
 
 
@@ -4254,16 +4253,14 @@ async def get_user_settings(
         return {
             "streak_reminders_enabled": True,
             "dl_contact_videos":        True,
-            "chat_filter_mode":         "all",
-            "chat_whitelist":           [],
+            "chat_exclusions":          [],
             "muted_streaks":            [],
         }
 
     return {
         "streak_reminders_enabled": getattr(us, "streak_reminders_enabled", True),
         "dl_contact_videos":        getattr(us, "dl_contact_videos", True),
-        "chat_filter_mode":         getattr(us, "chat_filter_mode", "all") or "all",
-        "chat_whitelist":           list(getattr(us, "chat_whitelist", None) or []),
+        "chat_exclusions":          list(getattr(us, "chat_whitelist", None) or []),
         "muted_streaks":            list(us.muted_streaks or []),
     }
 
@@ -4295,9 +4292,6 @@ async def update_user_setting(
     val = payload.value
     if payload.key in {"streak_reminders_enabled", "dl_contact_videos"}:
         val = bool(val)
-    elif payload.key == "chat_filter_mode":
-        if val not in {"all", "whitelist"}:
-            raise HTTPException(status_code=400, detail="chat_filter_mode must be 'all' or 'whitelist'")
     elif payload.key == "chat_whitelist":
         val = [int(x) for x in (val or [])]
 

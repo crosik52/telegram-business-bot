@@ -11991,7 +11991,7 @@
       const opening = !panel.classList.contains("open");
       panel.classList.toggle("open", opening);
       btn?.classList.toggle("open", opening);
-      if (opening && input) { input.value = ""; filterExPicker(""); input.focus(); }
+      if (opening && input) { input.value = ""; filterExPicker(""); }
       if (tg && tg.HapticFeedback) tg.HapticFeedback.selectionChanged();
     }
 

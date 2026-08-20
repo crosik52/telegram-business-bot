@@ -411,6 +411,19 @@ class AdminSubRevokeRequest(BaseModel):
     owner_telegram_id: int = Field(alias="ownerTelegramId")
 
 
+class AdminChannelAddRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    init_data: str = Field(alias="initData")
+    username: str
+    title: str | None = None
+
+
+class AdminChannelActionRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    init_data: str = Field(alias="initData")
+    channel_id: int = Field(alias="channelId")
+
+
 def _sub_status_dict(sub, config, vip_config=None) -> dict:
     """Serialise subscription status for API responses."""
     import datetime as _dt
@@ -4568,6 +4581,89 @@ def _giveaway_cfg_dict(cfg) -> dict:
         "description": cfg.description,
         "updated_at": cfg.updated_at.isoformat() if cfg.updated_at else None,
     }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Admin — channel subscription gate management
+# ══════════════════════════════════════════════════════════════════════════════
+
+@router.post("/app/api/admin/channels")
+async def admin_channels_list(
+    payload: StatsRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Return all required channels (active and inactive)."""
+    _require_admin(payload.init_data)
+    from app.repositories.channel_repository import ChannelRepository  # noqa: PLC0415
+    repo = ChannelRepository(session)
+    channels = await repo.get_all()
+    return {
+        "channels": [
+            {
+                "id":         ch.id,
+                "username":   ch.channel_username,
+                "title":      ch.display_title,
+                "join_url":   ch.join_url,
+                "is_active":  ch.is_active,
+                "created_at": ch.created_at.isoformat(),
+            }
+            for ch in channels
+        ]
+    }
+
+
+@router.post("/app/api/admin/channels/add")
+async def admin_channels_add(
+    payload: AdminChannelAddRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Add a new required channel."""
+    _require_admin(payload.init_data)
+    from app.repositories.channel_repository import ChannelRepository  # noqa: PLC0415
+    username = payload.username.lstrip("@").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="username is required")
+    repo = ChannelRepository(session)
+    ch = await repo.add(username, payload.title or None)
+    await session.commit()
+    return {
+        "ok": True,
+        "channel": {
+            "id":        ch.id,
+            "username":  ch.channel_username,
+            "title":     ch.display_title,
+            "join_url":  ch.join_url,
+            "is_active": ch.is_active,
+        },
+    }
+
+
+@router.post("/app/api/admin/channels/toggle")
+async def admin_channels_toggle(
+    payload: AdminChannelActionRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Toggle a channel active / inactive."""
+    _require_admin(payload.init_data)
+    from app.repositories.channel_repository import ChannelRepository  # noqa: PLC0415
+    repo = ChannelRepository(session)
+    ch = await repo.toggle(payload.channel_id)
+    if not ch:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    await session.commit()
+    return {"ok": True, "is_active": ch.is_active}
+
+
+@router.post("/app/api/admin/channels/delete")
+async def admin_channels_delete(
+    payload: AdminChannelActionRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """Delete a required channel."""
+    _require_admin(payload.init_data)
+    from app.repositories.channel_repository import ChannelRepository  # noqa: PLC0415
+    repo = ChannelRepository(session)
+    ok = await repo.delete(payload.channel_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    await session.commit()
+    return {"ok": True}
 
 
 @router.post("/app/api/ai/ping")

@@ -25,19 +25,19 @@ async def get_unsubscribed_channels(
     unsubscribed: list[RequiredChannel] = []
     for ch in channels:
         try:
-            member = await bot.get_chat_member(ch.channel_username, user_id)
+            member = await bot.get_chat_member(ch.at_username, user_id)
             if member.status not in _SUBSCRIBED_STATUSES:
                 unsubscribed.append(ch)
         except (TelegramBadRequest, TelegramForbiddenError) as exc:
             logger.warning(
                 "channel_gate: cannot check %s for user %s: %s",
-                ch.channel_username, user_id, exc,
+                ch.at_username, user_id, exc,
             )
             unsubscribed.append(ch)
         except Exception as exc:  # noqa: BLE001
             logger.error(
                 "channel_gate: unexpected error for %s / user %s: %s",
-                ch.channel_username, user_id, exc,
+                ch.at_username, user_id, exc,
             )
             unsubscribed.append(ch)
     return unsubscribed

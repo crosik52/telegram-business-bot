@@ -717,11 +717,23 @@ async def on_business_message(message: Message, bot: Bot) -> None:
                 _bc_cache[bc_id] = (owner_telegram_id, can_reply)
 
         service = MessageService(session)
-        await service.ingest_new_message(
-            message,
-            business_connection_id=bc_id,
-            owner_telegram_id=owner_telegram_id,
-        )
+        # ── Chat filter: skip ingestion if chat is not in the whitelist ───────
+        _should_ingest = True
+        if owner_telegram_id:
+            from app.models.user_settings import UserSettings as _US  # noqa: PLC0415
+            _us_f = (await session.execute(
+                select(_US).where(_US.owner_telegram_id == owner_telegram_id)
+            )).scalar_one_or_none()
+            if _us_f and getattr(_us_f, "chat_filter_mode", "all") == "whitelist":
+                _wl = list(getattr(_us_f, "chat_whitelist", None) or [])
+                _should_ingest = message.chat.id in _wl
+
+        if _should_ingest:
+            await service.ingest_new_message(
+                message,
+                business_connection_id=bc_id,
+                owner_telegram_id=owner_telegram_id,
+            )
 
         # ── Background avatar fetch for the sender ────────────────────────────
         if message.from_user and message.from_user.id:
@@ -871,6 +883,14 @@ async def on_business_message(message: Message, bot: Bot) -> None:
         text_to_scan = message.text or message.caption or ""
         if text_to_scan and owner_telegram_id:
             video_match = extract_video_url(text_to_scan)
+            # If link was sent by contact, check dl_contact_videos setting
+            if video_match and _is_incoming:
+                from app.models.user_settings import UserSettings as _US  # noqa: PLC0415
+                _us_v = (await session.execute(
+                    select(_US).where(_US.owner_telegram_id == owner_telegram_id)
+                )).scalar_one_or_none()
+                if not getattr(_us_v, "dl_contact_videos", True):
+                    video_match = None  # feature disabled → skip
             if video_match:
                 url, platform = video_match
                 chat_id = message.chat.id

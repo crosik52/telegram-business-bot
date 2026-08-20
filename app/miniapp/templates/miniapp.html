@@ -3941,6 +3941,127 @@
     box-shadow: 0 1px 6px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.06);
   }
 
+  /* ══ Settings Modal ═══════════════════════════════════════════════════════ */
+  .header-settings-btn {
+    border: none; background: rgba(120,120,128,0.10);
+    border-radius: 50%; width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--hint); cursor: pointer; transition: background 0.15s, transform 0.1s;
+    flex-shrink: 0;
+  }
+  .header-settings-btn:active { background: rgba(120,120,128,0.22); transform: scale(0.93); }
+  .settings-modal-overlay {
+    position: fixed; inset: 0; z-index: 1100;
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    display: flex; align-items: flex-end;
+    opacity: 0; pointer-events: none; transition: opacity 0.22s;
+  }
+  .settings-modal-overlay.open { opacity: 1; pointer-events: all; }
+  .settings-modal {
+    width: 100%; max-height: 92dvh;
+    background: rgba(22,22,26,0.96);
+    backdrop-filter: blur(28px) saturate(200%);
+    -webkit-backdrop-filter: blur(28px) saturate(200%);
+    border: 0.5px solid rgba(255,255,255,0.10);
+    border-radius: 24px 24px 0 0;
+    box-shadow: 0 -8px 40px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.10);
+    display: flex; flex-direction: column;
+    transform: translateY(100%); transition: transform 0.30s cubic-bezier(.32,.72,0,1);
+  }
+  .settings-modal-overlay.open .settings-modal { transform: translateY(0); }
+  .settings-modal-handle {
+    width: 36px; height: 4px; border-radius: 2px;
+    background: rgba(255,255,255,0.20); margin: 10px auto 0;
+    flex-shrink: 0;
+  }
+  .settings-modal-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 18px 12px; flex-shrink: 0;
+  }
+  .settings-modal-title { font-size: 17px; font-weight: 800; flex: 1; }
+  .settings-modal-close {
+    border: none; background: rgba(120,120,128,0.14);
+    border-radius: 50%; width: 30px; height: 30px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; color: var(--hint); cursor: pointer;
+    line-height: 1;
+  }
+  .settings-modal-body {
+    flex: 1; overflow-y: auto; padding: 4px 16px 48px;
+    scrollbar-width: none;
+  }
+  .settings-modal-body::-webkit-scrollbar { display: none; }
+  .settings-section-hdr {
+    font-size: 11px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 0.7px; color: var(--hint);
+    margin: 18px 0 8px 4px;
+  }
+  .settings-row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; padding: 13px 14px;
+    background: var(--g-bg-list);
+    border: 0.5px solid var(--g-border);
+    border-radius: 16px; margin-bottom: 8px;
+    box-shadow: var(--g-shadow-soft), inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .settings-row-left { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+  .settings-row-label { font-size: 14px; font-weight: 600; }
+  .settings-row-desc  { font-size: 11px; color: var(--hint); line-height: 1.35; }
+  /* Toggle switch */
+  .s-toggle { position: relative; width: 50px; height: 28px; flex-shrink: 0; }
+  .s-toggle input { opacity: 0; width: 0; height: 0; }
+  .s-toggle-track {
+    position: absolute; inset: 0; border-radius: 14px;
+    background: rgba(120,120,128,0.28);
+    transition: background 0.2s; cursor: pointer;
+  }
+  .s-toggle input:checked + .s-toggle-track { background: #34c759; }
+  .s-toggle-track::after {
+    content: ""; position: absolute;
+    top: 3px; left: 3px; width: 22px; height: 22px;
+    border-radius: 50%; background: #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.22);
+    transition: transform 0.2s cubic-bezier(.32,.72,0,1);
+  }
+  .s-toggle input:checked + .s-toggle-track::after { transform: translateX(22px); }
+  /* Filter mode pills */
+  .settings-filter-pills { display: flex; gap: 7px; flex-wrap: wrap; }
+  .settings-filter-pill {
+    border: none; border-radius: 20px; padding: 7px 16px;
+    font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all 0.16s;
+    background: rgba(120,120,128,0.12); color: var(--hint);
+    border: 0.5px solid transparent;
+  }
+  .settings-filter-pill.active {
+    background: rgba(124,108,255,0.16); color: #7c6cff;
+    border-color: rgba(124,108,255,0.30);
+  }
+  /* Muted/whitelist chip list */
+  .settings-chip-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+  .settings-chip-row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 10px 14px;
+    background: rgba(34,34,38,0.70); border-radius: 13px;
+    border: 0.5px solid rgba(255,255,255,0.07);
+  }
+  .settings-chip-name { font-size: 13px; font-weight: 600; flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .settings-chip-remove {
+    border: none; background: rgba(255,69,58,0.13); color: #ff453a;
+    border-radius: 8px; padding: 4px 10px; font-size: 11px; font-weight: 700; cursor: pointer;
+  }
+  .settings-empty-hint {
+    font-size: 12px; color: var(--hint); text-align: center; padding: 12px 0;
+  }
+  .settings-chat-select-btn {
+    width: 100%; border: none; border-radius: 14px; padding: 11px;
+    background: rgba(124,108,255,0.12); color: #7c6cff;
+    font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 6px;
+    border: 0.5px solid rgba(124,108,255,0.22);
+  }
+  .settings-chat-select-btn:active { opacity: 0.72; }
+
   /* Fallback for older Telegram Android WebViews (pre-Chrome 76)
      that don't support backdrop-filter: replace with an opaque-ish bg */
   @supports not (backdrop-filter: blur(1px)) {
@@ -3983,6 +4104,9 @@
     <div class="header-actions" id="headerActions" style="display:none">
       <button class="header-refresh" id="refreshBtn">
         <span class="refresh-icon">↻</span> Обновить
+      </button>
+      <button class="header-settings-btn" id="openSettingsBtn" title="Настройки">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
     </div>
   </div>
@@ -11626,6 +11750,212 @@
       }
     }
 
+    // ══ Settings Modal ════════════════════════════════════════════════════════
+    let _settingsData = null;
+
+    function openSettingsModal() {
+      if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
+      const overlay = document.getElementById("settingsModalOverlay");
+      if (!overlay) return;
+      overlay.classList.add("open");
+      _loadSettings();
+    }
+
+    function closeSettingsModal() {
+      const overlay = document.getElementById("settingsModalOverlay");
+      if (overlay) overlay.classList.remove("open");
+    }
+
+    async function _loadSettings() {
+      const initData = tg ? tg.initData : currentInitData;
+      const body = document.getElementById("settingsModalBody");
+      if (!body) return;
+      body.innerHTML = `<div class="empty" style="padding:40px 0"><span class="big-emoji">⚙️</span>Загрузка…</div>`;
+      try {
+        const r = await fetch("/app/api/settings?" + new URLSearchParams({ initData }));
+        if (!r.ok) throw new Error(r.status);
+        _settingsData = await r.json();
+        _renderSettings(body);
+      } catch(e) {
+        body.innerHTML = `<div class="empty">Ошибка загрузки настроек</div>`;
+      }
+    }
+
+    function _renderSettings(body) {
+      const d = _settingsData;
+      const contacts = lastStats?.top_interlocutors || [];
+
+      // Build muted chats chips (names from top_interlocutors where possible)
+      const mutedIds = d.muted_streaks || [];
+      const mutedChips = mutedIds.map(cid => {
+        const c = contacts.find(x => x.chat_id === cid);
+        const name = c ? c.display_name : `#${cid}`;
+        return `<div class="settings-chip-row" data-muted-id="${cid}">
+          <span class="settings-chip-name">${esc(name)}</span>
+          <button class="settings-chip-remove" onclick="unmuteChatStreak(${cid})">Включить</button>
+        </div>`;
+      }).join("");
+
+      // Build whitelist chips
+      const wlIds = d.chat_whitelist || [];
+      const wlChips = wlIds.map(cid => {
+        const c = contacts.find(x => x.chat_id === cid);
+        const name = c ? c.display_name : `#${cid}`;
+        return `<div class="settings-chip-row" data-wl-id="${cid}">
+          <span class="settings-chip-name">${esc(name)}</span>
+          <button class="settings-chip-remove" onclick="removeWhitelistChat(${cid})">Убрать</button>
+        </div>`;
+      }).join("");
+
+      // Chat picker for whitelist (all contacts NOT yet in whitelist)
+      const available = contacts.filter(c => !wlIds.includes(c.chat_id));
+      const pickerOpts = available.map(c =>
+        `<option value="${c.chat_id}">${esc(c.display_name)}</option>`
+      ).join("");
+
+      body.innerHTML = `
+        <!-- ── Уведомления ── -->
+        <div class="settings-section-hdr">Уведомления</div>
+        <div class="settings-row">
+          <div class="settings-row-left">
+            <span class="settings-row-label">Стрик-уведомления</span>
+            <span class="settings-row-desc">Бот пишет, когда стрик с собеседником продолжается</span>
+          </div>
+          <label class="s-toggle">
+            <input type="checkbox" id="stg-streak-reminders" ${d.streak_reminders_enabled ? "checked" : ""}
+              onchange="saveSetting('streak_reminders_enabled', this.checked)">
+            <span class="s-toggle-track"></span>
+          </label>
+        </div>
+        ${mutedIds.length ? `
+        <div class="settings-section-hdr" style="margin-top:10px">Замьюченные стрики</div>
+        <div class="settings-chip-list" id="mutedChipList">${mutedChips}</div>
+        ` : ""}
+
+        <!-- ── Медиа ── -->
+        <div class="settings-section-hdr">Медиа</div>
+        <div class="settings-row">
+          <div class="settings-row-left">
+            <span class="settings-row-label">Видео от собеседника</span>
+            <span class="settings-row-desc">Автоматически скачивать Reels/TikTok/Shorts из ссылок, которые отправил собеседник</span>
+          </div>
+          <label class="s-toggle">
+            <input type="checkbox" id="stg-dl-contact" ${d.dl_contact_videos ? "checked" : ""}
+              onchange="saveSetting('dl_contact_videos', this.checked)">
+            <span class="s-toggle-track"></span>
+          </label>
+        </div>
+
+        <!-- ── Сбор сообщений ── -->
+        <div class="settings-section-hdr">Сбор сообщений</div>
+        <div class="settings-row" style="flex-direction:column; align-items:flex-start; gap:10px">
+          <div class="settings-row-left">
+            <span class="settings-row-label">Откуда собирать статистику</span>
+            <span class="settings-row-desc">Сообщения из выбранных чатов идут в Топ, стрики и аналитику</span>
+          </div>
+          <div class="settings-filter-pills">
+            <button class="settings-filter-pill ${d.chat_filter_mode === 'all' ? 'active' : ''}"
+              onclick="setChatFilterMode('all')">Все чаты</button>
+            <button class="settings-filter-pill ${d.chat_filter_mode === 'whitelist' ? 'active' : ''}"
+              onclick="setChatFilterMode('whitelist')">Только выбранные</button>
+          </div>
+        </div>
+        ${d.chat_filter_mode === 'whitelist' ? `
+        <div id="whitelistSection">
+          <div class="settings-chip-list" id="wlChipList">${wlChips || '<div class="settings-empty-hint">Нет выбранных чатов — все новые сообщения пропускаются</div>'}</div>
+          ${available.length ? `
+          <select id="wlPicker" style="display:none">${pickerOpts}</select>
+          <button class="settings-chat-select-btn" onclick="addWhitelistChat()">+ Добавить чат</button>
+          ` : ""}
+        </div>` : ""}
+      `;
+    }
+
+    async function saveSetting(key, value) {
+      if (tg && tg.HapticFeedback) tg.HapticFeedback.selectionChanged();
+      const initData = tg ? tg.initData : currentInitData;
+      try {
+        const r = await fetch("/app/api/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initData, key, value }),
+        });
+        if (!r.ok) throw new Error(r.status);
+        const data = await r.json();
+        if (_settingsData) _settingsData[key] = data[key];
+        toastMessage("Сохранено");
+      } catch(e) {
+        toastMessage("Ошибка сохранения");
+      }
+    }
+
+    async function setChatFilterMode(mode) {
+      const pills = document.querySelectorAll(".settings-filter-pill");
+      pills.forEach(p => p.classList.toggle("active", p.textContent.includes(mode === "all" ? "Все" : "выбранные")));
+      await saveSetting("chat_filter_mode", mode);
+      if (_settingsData) {
+        _settingsData.chat_filter_mode = mode;
+        const body = document.getElementById("settingsModalBody");
+        if (body) _renderSettings(body);
+      }
+    }
+
+    async function unmuteChatStreak(chatId) {
+      const initData = tg ? tg.initData : currentInitData;
+      try {
+        await fetch("/app/api/contact/streak-mute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initData, chatId, muted: false }),
+        });
+        if (_settingsData) {
+          _settingsData.muted_streaks = (_settingsData.muted_streaks || []).filter(x => x !== chatId);
+        }
+        const row = document.querySelector(`[data-muted-id="${chatId}"]`);
+        if (row) row.remove();
+        toastMessage("Уведомления включены");
+      } catch(e) { toastMessage("Ошибка"); }
+    }
+
+    async function addWhitelistChat() {
+      const picker = document.getElementById("wlPicker");
+      if (!picker || !picker.value) return;
+      const chatId = parseInt(picker.value);
+      const wl = [...(_settingsData?.chat_whitelist || []), chatId];
+      await saveSetting("chat_whitelist", wl);
+      if (_settingsData) {
+        _settingsData.chat_whitelist = wl;
+        const body = document.getElementById("settingsModalBody");
+        if (body) _renderSettings(body);
+      }
+    }
+
+    async function removeWhitelistChat(chatId) {
+      const wl = (_settingsData?.chat_whitelist || []).filter(x => x !== chatId);
+      await saveSetting("chat_whitelist", wl);
+      if (_settingsData) {
+        _settingsData.chat_whitelist = wl;
+        const body = document.getElementById("settingsModalBody");
+        if (body) _renderSettings(body);
+      }
+    }
+
+    document.getElementById("openSettingsBtn")?.addEventListener("click", openSettingsModal);
+
   </script>
+
+  <!-- ══ Settings Modal HTML ══════════════════════════════════════════════ -->
+  <div class="settings-modal-overlay" id="settingsModalOverlay"
+       onclick="if(event.target===this) closeSettingsModal()">
+    <div class="settings-modal">
+      <div class="settings-modal-handle"></div>
+      <div class="settings-modal-header">
+        <span class="settings-modal-title">⚙️ Настройки</span>
+        <button class="settings-modal-close" onclick="closeSettingsModal()">×</button>
+      </div>
+      <div class="settings-modal-body" id="settingsModalBody"></div>
+    </div>
+  </div>
+
 </body>
 </html>

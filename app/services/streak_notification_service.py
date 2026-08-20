@@ -178,13 +178,16 @@ async def _is_mutual(session: AsyncSession, contact_id: int) -> bool:
 # ── Success notification ──────────────────────────────────────────────────────
 
 async def _is_streak_muted(session: AsyncSession, owner_id: int, chat_id: int) -> bool:
-    """Return True if the owner has silenced streak notifications for this contact."""
+    """Return True if the owner has silenced streak notifications globally or for this contact."""
     from app.models.user_settings import UserSettings as _US
     us = (await session.execute(
         select(_US).where(_US.owner_telegram_id == owner_id)
     )).scalar_one_or_none()
     if us is None:
         return False
+    # Global toggle: if streak_reminders_enabled is False → all are muted
+    if not getattr(us, "streak_reminders_enabled", True):
+        return True
     return chat_id in (us.muted_streaks or [])
 
 

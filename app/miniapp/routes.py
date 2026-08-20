@@ -4217,6 +4217,95 @@ async def contact_streak_mute(
     return {"streak_muted": payload.chat_id in muted}
 
 
+# ── User Settings GET / POST ───────────────────────────────────────────────────
+
+class UpdateSettingRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    key:       str
+    value:     object   # bool | str | list – validated per key in the handler
+    model_config = {"populate_by_name": True}
+
+_ALLOWED_SETTING_KEYS = {
+    "streak_reminders_enabled",
+    "dl_contact_videos",
+    "chat_filter_mode",
+    "chat_whitelist",
+}
+
+
+@router.get("/app/api/settings")
+async def get_user_settings(
+    initData: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Return all user-configurable settings."""
+    settings = get_settings()
+    user = verify_init_data(initData, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid init data")
+
+    owner_id = user["id"]
+    from app.models.user_settings import UserSettings as _US  # noqa: PLC0415
+    us = (await session.execute(
+        select(_US).where(_US.owner_telegram_id == owner_id)
+    )).scalar_one_or_none()
+
+    if us is None:
+        return {
+            "streak_reminders_enabled": True,
+            "dl_contact_videos":        True,
+            "chat_filter_mode":         "all",
+            "chat_whitelist":           [],
+            "muted_streaks":            [],
+        }
+
+    return {
+        "streak_reminders_enabled": getattr(us, "streak_reminders_enabled", True),
+        "dl_contact_videos":        getattr(us, "dl_contact_videos", True),
+        "chat_filter_mode":         getattr(us, "chat_filter_mode", "all") or "all",
+        "chat_whitelist":           list(getattr(us, "chat_whitelist", None) or []),
+        "muted_streaks":            list(us.muted_streaks or []),
+    }
+
+
+@router.post("/app/api/settings")
+async def update_user_setting(
+    payload: UpdateSettingRequest,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Update a single user-configurable setting."""
+    settings = get_settings()
+    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid init data")
+
+    if payload.key not in _ALLOWED_SETTING_KEYS:
+        raise HTTPException(status_code=400, detail=f"Unknown setting: {payload.key}")
+
+    owner_id = user["id"]
+    from app.models.user_settings import UserSettings as _US  # noqa: PLC0415
+    us = (await session.execute(
+        select(_US).where(_US.owner_telegram_id == owner_id)
+    )).scalar_one_or_none()
+    if us is None:
+        us = _US(owner_telegram_id=owner_id)
+        session.add(us)
+
+    # Validate and coerce value per key
+    val = payload.value
+    if payload.key in {"streak_reminders_enabled", "dl_contact_videos"}:
+        val = bool(val)
+    elif payload.key == "chat_filter_mode":
+        if val not in {"all", "whitelist"}:
+            raise HTTPException(status_code=400, detail="chat_filter_mode must be 'all' or 'whitelist'")
+    elif payload.key == "chat_whitelist":
+        val = [int(x) for x in (val or [])]
+
+    setattr(us, payload.key, val)
+    await session.commit()
+    return {"ok": True, payload.key: val}
+
+
 class AiCacheInvalidateRequest(BaseModel):
     init_data:  str       = Field(...,        alias="initData")
     owner_id:   int       = Field(...,        alias="ownerId")

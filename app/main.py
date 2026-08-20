@@ -395,6 +395,18 @@ async def lifespan(app: FastAPI):
             await conn.execute(text(
                 "ALTER TABLE chat_settings ADD COLUMN IF NOT EXISTS delete_msgs_until TIMESTAMPTZ"
             ))
+            await conn.execute(text(
+                "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS streak_reminders_enabled BOOLEAN NOT NULL DEFAULT TRUE"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS dl_contact_videos BOOLEAN NOT NULL DEFAULT TRUE"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS chat_filter_mode VARCHAR(20) NOT NULL DEFAULT 'all'"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS chat_whitelist JSONB"
+            ))
 
     if settings.webhook_base_url:
         from aiogram.types import MenuButtonWebApp, WebAppInfo

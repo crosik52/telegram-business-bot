@@ -103,7 +103,7 @@
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
     margin: 0;
-    padding: 0 14px calc(env(safe-area-inset-bottom, 0px) + 104px);
+    padding: env(safe-area-inset-top, 0px) 14px calc(env(safe-area-inset-bottom, 0px) + 104px);
     background: var(--bg);
     color: var(--text);
     /* system-ui resolves to Roboto on Android Chrome, San Francisco on iOS */
@@ -3334,26 +3334,26 @@
     padding: 0; background: transparent; box-shadow: none;
     border-radius: 0;
   }
-  /* Glass card row */
+  /* Glass card row — solid bg for performance (no per-card backdrop-filter) */
   .top-contacts-wrap .row {
-    background: rgba(255,255,255,0.04);
-    backdrop-filter: blur(28px) saturate(200%);
-    -webkit-backdrop-filter: blur(28px) saturate(200%);
-    border: 0.5px solid rgba(255,255,255,0.09);
-    border-bottom: 0.5px solid rgba(255,255,255,0.09);
+    background: rgba(36,36,40,0.82);
+    border: 0.5px solid rgba(255,255,255,0.08);
+    border-bottom: 0.5px solid rgba(255,255,255,0.08);
     border-radius: 20px; padding: 13px 13px;
     margin-bottom: 9px;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.10);
-    overflow: hidden; position: relative; transition: background 0.15s, transform 0.1s;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.08);
+    overflow: hidden; position: relative;
+    transition: background 0.12s, transform 0.1s;
+    will-change: transform;
   }
   .top-contacts-wrap .row::before {
     content: "";
-    position: absolute; top: 0; left: 0; right: 0; height: 50%;
-    background: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 100%);
+    position: absolute; top: 0; left: 0; right: 0; height: 40%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, transparent 100%);
     pointer-events: none; border-radius: 20px 20px 0 0;
   }
-  .top-contacts-wrap .row:active { background: rgba(255,255,255,0.08); transform: scale(0.993); }
-  .top-contacts-wrap .row:last-child { border-bottom: 0.5px solid rgba(255,255,255,0.09); }
+  .top-contacts-wrap .row:active { background: rgba(48,48,54,0.90); transform: scale(0.993); }
+  .top-contacts-wrap .row:last-child { border-bottom: 0.5px solid rgba(255,255,255,0.08); }
   .top-contacts-wrap .bar-track { display: none; }
   .top-contacts-wrap .row-chevron { display: none; }
   .top-contacts-wrap .rank { font-size: 22px; line-height: 1; width: 28px; }
@@ -3361,16 +3361,19 @@
   .top-contacts-wrap .row-name { font-size: 14.5px; font-weight: 700; }
   .top-contacts-wrap .row-count { font-size: 21px; font-weight: 900; }
   .top-count-lbl { font-size: 9px; font-weight: 600; color: var(--hint); text-transform: uppercase; letter-spacing: 0.3px; margin-top: 1px; display: block; }
-  /* Action buttons */
+  /* Action buttons — neutral, uniform */
   .top-contacts-wrap .game-btn,
   .top-contacts-wrap .rel-btn,
   .top-contacts-wrap .ai-btn {
     border-radius: 10px; padding: 4px 10px;
-    font-size: 11px; font-weight: 700; border: 0.5px solid transparent;
+    font-size: 11px; font-weight: 600;
+    background: rgba(120,120,128,0.13); color: var(--hint);
+    border: 0.5px solid rgba(120,120,128,0.18);
+    transition: background 0.12s, opacity 0.12s;
   }
-  .top-contacts-wrap .game-btn { background: rgba(124,108,255,0.13); color: #7c6cff; border-color: rgba(124,108,255,0.22); }
-  .top-contacts-wrap .rel-btn  { background: rgba(224,54,90,0.11);  color: #e0365a; border-color: rgba(224,54,90,0.20); }
-  .top-contacts-wrap .ai-btn   { background: rgba(52,199,89,0.10);  color: #30a04e; border-color: rgba(52,199,89,0.18); }
+  .top-contacts-wrap .game-btn:active,
+  .top-contacts-wrap .rel-btn:active,
+  .top-contacts-wrap .ai-btn:active { opacity: 0.65; }
   /* Chips */
   .top-contacts-wrap .chip { font-size: 10.5px; padding: 2px 7px; border-radius: 8px; }
   /* Section header */

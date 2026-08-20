@@ -4059,8 +4059,60 @@
     background: rgba(124,108,255,0.12); color: #7c6cff;
     font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 6px;
     border: 0.5px solid rgba(124,108,255,0.22);
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    transition: background 0.15s;
   }
   .settings-chat-select-btn:active { opacity: 0.72; }
+  .settings-chat-select-btn .s-chevron {
+    font-size: 12px; transition: transform 0.2s cubic-bezier(.32,.72,0,1);
+    display: inline-block;
+  }
+  .settings-chat-select-btn.open .s-chevron { transform: rotate(180deg); }
+  /* Выдвигающийся список чатов */
+  .ex-picker-panel {
+    max-height: 0; overflow: hidden;
+    transition: max-height 0.28s cubic-bezier(.32,.72,0,1);
+    border-radius: 14px; margin-top: 6px;
+  }
+  .ex-picker-panel.open { max-height: 340px; }
+  .ex-picker-inner {
+    background: rgba(28,28,32,0.90);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border: 0.5px solid rgba(255,255,255,0.09);
+    border-radius: 14px; overflow: hidden;
+  }
+  .ex-picker-search {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 13px; border-bottom: 0.5px solid rgba(255,255,255,0.07);
+  }
+  .ex-picker-search input {
+    flex: 1; border: none; background: transparent;
+    font-size: 13px; color: var(--text); outline: none; font-family: inherit;
+  }
+  .ex-picker-search input::placeholder { color: var(--hint); }
+  .ex-picker-list {
+    max-height: 260px; overflow-y: auto; scrollbar-width: none;
+  }
+  .ex-picker-list::-webkit-scrollbar { display: none; }
+  .ex-picker-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 13px; cursor: pointer;
+    transition: background 0.12s; border-bottom: 0.5px solid rgba(255,255,255,0.05);
+  }
+  .ex-picker-item:last-child { border-bottom: none; }
+  .ex-picker-item:active { background: rgba(255,255,255,0.06); }
+  .ex-picker-avatar {
+    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 800; color: #fff;
+    position: relative; overflow: hidden;
+  }
+  .ex-picker-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+  .ex-picker-name { font-size: 13.5px; font-weight: 600; flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ex-picker-sub  { font-size: 10.5px; color: var(--hint); }
+  .ex-picker-add  { font-size: 18px; color: rgba(124,108,255,0.7); flex-shrink: 0; }
+  .ex-picker-empty { padding: 20px 13px; font-size: 12px; color: var(--hint); text-align: center; }
 
   /* Fallback for older Telegram Android WebViews (pre-Chrome 76)
      that don't support backdrop-filter: replace with an opaque-ish bg */
@@ -11868,9 +11920,31 @@
         <div id="exclusionSection">
           <div class="settings-chip-list" id="exChipList">${exChips || '<div class="settings-empty-hint">Нет исключений — все чаты собираются</div>'}</div>
           ${available.length ? `
-          <select id="exPicker" style="display:none">${pickerOpts}</select>
-          <button class="settings-chat-select-btn" onclick="addExcludedChat()">+ Добавить исключение</button>
-          ` : ""}</div>
+          <button class="settings-chat-select-btn" id="exPickerBtn" onclick="toggleExPicker()">
+            <span>+ Добавить исключение</span><span class="s-chevron">▾</span>
+          </button>
+          <div class="ex-picker-panel" id="exPickerPanel">
+            <div class="ex-picker-inner">
+              <div class="ex-picker-search">
+                <span style="color:var(--hint);font-size:14px">🔍</span>
+                <input id="exPickerSearch" placeholder="Найти собеседника…" oninput="filterExPicker(this.value)">
+              </div>
+              <div class="ex-picker-list" id="exPickerList">
+                ${available.map(c => `
+                  <div class="ex-picker-item" data-chat-id="${c.chat_id}"
+                       data-name="${esc(c.display_name).toLowerCase()}"
+                       onclick="pickExcludedChat(${c.chat_id})">
+                    <div class="ex-picker-avatar" style="background:${colorFor(c.display_name)}">${initials(c.display_name)}${_avatarImg(c.avatar_url)}</div>
+                    <div style="flex:1;min-width:0">
+                      <div class="ex-picker-name">${esc(c.display_name)}</div>
+                      ${c.username ? `<div class="ex-picker-sub">@${esc(c.username)}</div>` : ""}
+                    </div>
+                    <span class="ex-picker-add">+</span>
+                  </div>`).join("")}
+              </div>
+            </div>
+          </div>
+          ` : '<div class="settings-empty-hint">Все собеседники уже добавлены в исключения</div>'}</div>
       `;
     }
 
@@ -11909,10 +11983,28 @@
       } catch(e) { toastMessage("Ошибка"); }
     }
 
-    async function addExcludedChat() {
-      const picker = document.getElementById("exPicker");
-      if (!picker || !picker.value) return;
-      const chatId = parseInt(picker.value);
+    function toggleExPicker() {
+      const panel = document.getElementById("exPickerPanel");
+      const btn   = document.getElementById("exPickerBtn");
+      const input = document.getElementById("exPickerSearch");
+      if (!panel) return;
+      const opening = !panel.classList.contains("open");
+      panel.classList.toggle("open", opening);
+      btn?.classList.toggle("open", opening);
+      if (opening && input) { input.value = ""; filterExPicker(""); input.focus(); }
+      if (tg && tg.HapticFeedback) tg.HapticFeedback.selectionChanged();
+    }
+
+    function filterExPicker(query) {
+      const q = query.toLowerCase().trim();
+      document.querySelectorAll("#exPickerList .ex-picker-item").forEach(el => {
+        const name = (el.dataset.name || "").toLowerCase();
+        el.style.display = (!q || name.includes(q)) ? "" : "none";
+      });
+    }
+
+    async function pickExcludedChat(chatId) {
+      if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
       const exl = [...(_settingsData?.chat_exclusions || []), chatId];
       await saveSetting("chat_whitelist", exl);
       if (_settingsData) {

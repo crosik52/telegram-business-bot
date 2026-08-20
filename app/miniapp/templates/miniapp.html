@@ -3810,6 +3810,137 @@
   .inner-tab-bar,
   .stats-pill-bar { will-change: transform; }
 
+  /* ══════════════════════════════════════════════════════════════════════
+     GLASS SYSTEM — единый матовый/frosted-glass язык по всей мини-апке
+     Standalone-элементы (мало на экране) → backdrop-filter + blur.
+     List-элементы (много на экране) → плотный полупрозрачный фон, без blur.
+     ══════════════════════════════════════════════════════════════════════ */
+
+  /* ── CSS-токены ────────────────────────────────────────────────────── */
+  :root {
+    --g-bg-float:    rgba(24,24,28,0.82);   /* плавающие панели */
+    --g-bg-heavy:    rgba(20,20,24,0.92);   /* тяжёлые карты (wallet/casino) */
+    --g-bg-list:     rgba(34,34,38,0.84);   /* элементы списков */
+    --g-border:      rgba(255,255,255,0.09);
+    --g-inset:       rgba(255,255,255,0.09);
+    --g-shadow-soft: 0 2px 16px rgba(0,0,0,0.12);
+    --g-shadow-mid:  0 4px 24px rgba(0,0,0,0.16);
+    --g-blur:        blur(22px) saturate(180%);
+    --g-blur-heavy:  blur(28px) saturate(200%);
+  }
+
+  /* ── Standalone: backdrop-filter ──────────────────────────────────── */
+
+  /* Статистические блоки (слова, дайджест, здоровье, тепловая карта, бейджи) */
+  .words-card, .digest-card, .premium-gate-mini,
+  .health-card, .heatmap-card, .badge-card {
+    background: var(--g-bg-float);
+    backdrop-filter: var(--g-blur);
+    -webkit-backdrop-filter: var(--g-blur);
+    border: 0.5px solid var(--g-border);
+    box-shadow: var(--g-shadow-soft), inset 0 1px 0 var(--g-inset);
+  }
+
+  /* Стрик-баннер (без !important — градиентные варианты .warm/.hot/... выиграют) */
+  .streak-banner {
+    background: var(--g-bg-float);
+    backdrop-filter: var(--g-blur);
+    -webkit-backdrop-filter: var(--g-blur);
+    border: 0.5px solid var(--g-border);
+    box-shadow: var(--g-shadow-soft), inset 0 1px 0 var(--g-inset);
+  }
+
+  /* Кошелёк и казино — тяжёлое стекло */
+  .wallet-card {
+    background: var(--g-bg-heavy);
+    backdrop-filter: var(--g-blur-heavy);
+    -webkit-backdrop-filter: var(--g-blur-heavy);
+    border: 0.5px solid rgba(255,255,255,0.11);
+    box-shadow: var(--g-shadow-mid), inset 0 1px 0 rgba(255,255,255,0.12);
+  }
+  .casino-card {
+    background: var(--g-bg-heavy);
+    backdrop-filter: var(--g-blur);
+    -webkit-backdrop-filter: var(--g-blur);
+    border: 0.5px solid var(--g-border);
+    box-shadow: var(--g-shadow-mid), inset 0 1px 0 var(--g-inset);
+  }
+
+  /* Моя карточка в розыгрыше */
+  .giveaway-me-card {
+    backdrop-filter: var(--g-blur);
+    -webkit-backdrop-filter: var(--g-blur);
+    border: 0.5px solid rgba(109,40,217,0.30);
+    box-shadow: var(--g-shadow-soft), inset 0 1px 0 rgba(255,255,255,0.10);
+  }
+
+  /* CTA и benefits в подписке */
+  .sub-cta-wrap, .sub-bene-section {
+    background: var(--g-bg-float);
+    backdrop-filter: var(--g-blur);
+    -webkit-backdrop-filter: var(--g-blur);
+    border: 0.5px solid var(--g-border);
+    box-shadow: var(--g-shadow-soft), inset 0 1px 0 var(--g-inset);
+  }
+
+  /* Внутренняя вкладка-таббар */
+  .inner-tab-bar {
+    background: rgba(22,22,26,0.86);
+    backdrop-filter: var(--g-blur);
+    -webkit-backdrop-filter: var(--g-blur);
+    border: 0.5px solid var(--g-border);
+    box-shadow: var(--g-shadow-soft), inset 0 1px 0 var(--g-inset);
+  }
+
+  /* Нижний таббар — усиленное стекло */
+  .bottom-tab-bar {
+    background: rgba(18,18,22,0.88);
+    backdrop-filter: var(--g-blur-heavy);
+    -webkit-backdrop-filter: var(--g-blur-heavy);
+    border-top: 0.5px solid var(--g-border);
+    box-shadow: 0 -2px 20px rgba(0,0,0,0.16), inset 0 1px 0 var(--g-inset);
+  }
+  .theme-dark .bottom-tab-bar {
+    background: rgba(14,14,18,0.92);
+  }
+
+  /* Поле поиска */
+  .search-box {
+    background: rgba(28,28,32,0.76);
+    backdrop-filter: var(--g-blur);
+    -webkit-backdrop-filter: var(--g-blur);
+    border: 0.5px solid var(--g-border);
+    box-shadow: var(--g-shadow-soft);
+  }
+
+  /* ── List-элементы: без blur (GPU-экономия) ────────────────────────── */
+
+  .quest-card {
+    background: var(--g-bg-list);
+    border: 0.5px solid var(--g-border);
+    box-shadow: var(--g-shadow-soft), inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .shop-item, .coin-pkg-card {
+    background: var(--g-bg-list);
+    border: 0.5px solid var(--g-border);
+    box-shadow: var(--g-shadow-soft), inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .sub-plan-card {
+    background: var(--g-bg-list);
+    border: 0.5px solid var(--g-border);
+    box-shadow: var(--g-shadow-soft), inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .theme-card {
+    background: var(--g-bg-list);
+    border: 0.5px solid var(--g-border);
+    box-shadow: var(--g-shadow-soft), inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .interact-pet-card {
+    background: var(--g-bg-list);
+    border: 0.5px solid var(--g-border);
+    box-shadow: 0 1px 6px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+
   /* Fallback for older Telegram Android WebViews (pre-Chrome 76)
      that don't support backdrop-filter: replace with an opaque-ish bg */
   @supports not (backdrop-filter: blur(1px)) {

@@ -104,6 +104,8 @@ class AdminBroadcastRequest(BaseModel):
 
     init_data: str = Field(alias="initData")
     text: str
+    # [[{text, url}, ...], ...] — rows of inline keyboard buttons
+    buttons: list[list[dict]] | None = None
 
 
 class AdminActionLogRequest(BaseModel):
@@ -3452,11 +3454,32 @@ async def admin_broadcast(
     settings = get_settings()
     bot = get_bot(settings)
 
+    # Build optional inline keyboard
+    reply_markup = None
+    if payload.buttons:
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup  # noqa: PLC0415
+        kb_rows = []
+        for row in payload.buttons:
+            kb_row = [
+                InlineKeyboardButton(text=btn["text"], url=btn["url"])
+                for btn in row
+                if btn.get("text") and btn.get("url")
+            ]
+            if kb_row:
+                kb_rows.append(kb_row)
+        if kb_rows:
+            reply_markup = InlineKeyboardMarkup(inline_keyboard=kb_rows)
+
     sent = 0
     failed = 0
     for owner_id in owner_ids:
         try:
-            await bot.send_message(chat_id=owner_id, text=text)
+            await bot.send_message(
+                chat_id=owner_id,
+                text=text,
+                parse_mode="HTML",
+                reply_markup=reply_markup,
+            )
             sent += 1
         except Exception as exc:  # noqa: BLE001 - one failed recipient shouldn't stop the rest
             failed += 1

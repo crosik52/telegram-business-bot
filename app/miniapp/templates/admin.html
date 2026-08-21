@@ -402,14 +402,35 @@
     border-radius: var(--card-radius);
     padding: 16px;
     border: 1px solid var(--card-border);
-    margin-bottom: 14px;
+    margin-bottom: 12px;
   }
   .broadcast-label {
     font-size: 13px; font-weight: 700; margin-bottom: 10px;
     display: flex; align-items: center; gap: 6px;
   }
+  /* Formatting toolbar */
+  .fmt-toolbar {
+    display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px;
+  }
+  .fmt-btn {
+    min-width: 34px; height: 34px; padding: 0 8px;
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 9px;
+    background: rgba(255,255,255,0.06); color: var(--text);
+    font-size: 13px; font-family: inherit; font-weight: 600; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.12s, border-color 0.12s;
+    white-space: nowrap;
+  }
+  .fmt-btn:active { background: rgba(99,102,241,0.25); border-color: var(--accent); }
+  .fmt-btn.fmt-b  { font-weight: 800; }
+  .fmt-btn.fmt-i  { font-style: italic; }
+  .fmt-btn.fmt-u  { text-decoration: underline; }
+  .fmt-btn.fmt-s  { text-decoration: line-through; }
+  .fmt-btn.fmt-sp { filter: blur(2.5px); letter-spacing: 1px; }
+  .fmt-divider    { width: 1px; background: rgba(255,255,255,0.1); margin: 3px 2px; align-self: stretch; }
+  /* Textarea */
   .broadcast-card textarea {
-    width: 100%; min-height: 110px;
+    width: 100%; min-height: 130px; box-sizing: border-box;
     border: 1.5px solid rgba(255,255,255,0.12);
     border-radius: 14px; padding: 12px 13px;
     font-size: 14px; font-family: inherit; color: var(--text);
@@ -417,13 +438,79 @@
     transition: border-color 0.2s;
   }
   .broadcast-card textarea:focus { border-color: var(--accent); }
-  .char-count { font-size: 11px; color: var(--hint); text-align: right; margin: 5px 2px 10px; }
+  .char-count { font-size: 11px; color: var(--hint); text-align: right; margin: 4px 2px 0; }
+  /* Inline buttons builder */
+  .bc-section-hdr {
+    font-size: 12px; font-weight: 700; color: var(--hint);
+    margin: 14px 0 8px; display: flex; align-items: center; gap: 6px;
+    text-transform: uppercase; letter-spacing: .4px;
+  }
+  .bc-btn-rows { display: flex; flex-direction: column; gap: 8px; }
+  .bc-btn-row {
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px; padding: 10px 10px 6px;
+  }
+  .bc-btn-row-header {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 11px; color: var(--hint); margin-bottom: 8px; font-weight: 600;
+  }
+  .bc-btn-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+  .bc-btn-entry { display: flex; gap: 6px; align-items: center; }
+  .bc-btn-entry input {
+    flex: 1; min-width: 0; background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 9px;
+    padding: 8px 10px; font-size: 13px; color: var(--text); font-family: inherit; outline: none;
+  }
+  .bc-btn-entry input::placeholder { color: var(--hint); font-size: 12px; }
+  .bc-btn-entry input:focus { border-color: var(--accent); }
+  .bc-remove-btn {
+    width: 28px; height: 28px; border: none; border-radius: 8px; cursor: pointer;
+    background: rgba(255,60,60,0.12); color: #ff5555; font-size: 15px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .bc-add-btn-in-row, .bc-add-row-btn {
+    font-size: 12px; font-weight: 700; border: none; border-radius: 9px;
+    padding: 6px 12px; cursor: pointer; transition: opacity 0.15s;
+  }
+  .bc-add-btn-in-row { background: rgba(99,102,241,0.12); color: var(--accent); }
+  .bc-add-row-btn {
+    background: rgba(99,102,241,0.12); color: var(--accent);
+    width: 100%; padding: 10px; border-radius: 12px; margin-top: 4px;
+  }
+  /* Preview */
+  .bc-preview-wrap {
+    margin-top: 14px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 14px;
+  }
+  .bc-preview-hdr {
+    font-size: 12px; font-weight: 700; color: var(--hint);
+    margin-bottom: 8px; text-transform: uppercase; letter-spacing: .4px;
+  }
+  .bc-preview-bubble {
+    background: rgba(99,102,241,0.15); border-radius: 16px 16px 4px 16px;
+    padding: 12px 14px; font-size: 14px; line-height: 1.55; word-break: break-word;
+    border: 1px solid rgba(99,102,241,0.2); min-height: 24px;
+  }
+  .bc-preview-bubble tg-spoiler,
+  .bc-preview-bubble .tg-spoiler-preview { background: rgba(255,255,255,0.3); border-radius: 3px; color: transparent; }
+  .bc-preview-bubble blockquote {
+    margin: 6px 0; padding: 4px 10px;
+    border-left: 3px solid rgba(255,255,255,0.35); color: rgba(255,255,255,0.75);
+    font-style: normal;
+  }
+  .bc-preview-btns { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
+  .bc-preview-btn-row { display: flex; gap: 5px; }
+  .bc-preview-btn {
+    flex: 1; background: rgba(99,102,241,0.18); border-radius: 10px;
+    padding: 8px 10px; font-size: 13px; font-weight: 600; text-align: center;
+    color: var(--accent); border: 1px solid rgba(99,102,241,0.25);
+  }
   .primary-btn {
     width: 100%; border: none; border-radius: 14px; padding: 13px;
     font-size: 14px; font-weight: 700;
     background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
     color: #fff; box-shadow: 0 4px 20px rgba(99,102,241,0.45);
     transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+    margin-top: 14px;
   }
   .primary-btn:disabled { opacity: 0.45; box-shadow: none; }
   .primary-btn:active { opacity: 0.88; transform: scale(0.98); box-shadow: 0 2px 8px rgba(99,102,241,0.3); }
@@ -1769,25 +1856,160 @@
     }
 
     /* ── Broadcast ── */
+    // ── Formatting helpers ────────────────────────────────────────────────────
+    function _fmtWrap(tag, attrs) {
+      const ta = document.getElementById("broadcastText");
+      if (!ta) return;
+      const s = ta.selectionStart, e = ta.selectionEnd;
+      const sel = ta.value.slice(s, e);
+      const open  = attrs ? `<${tag} ${attrs}>` : `<${tag}>`;
+      const close = `</${tag}>`;
+      ta.value = ta.value.slice(0, s) + open + (sel || "текст") + close + ta.value.slice(e);
+      // Place caret inside or after inserted tag
+      const newPos = s + open.length + (sel || "текст").length;
+      ta.focus();
+      ta.setSelectionRange(sel ? newPos + close.length : s + open.length, sel ? newPos + close.length : newPos);
+      _updateBroadcastPreview();
+      document.getElementById("charCount").textContent = ta.value.length + " / 4096";
+    }
+
+    function _fmtLink() {
+      const url = prompt("URL ссылки:", "https://");
+      if (!url) return;
+      const ta = document.getElementById("broadcastText");
+      if (!ta) return;
+      const s = ta.selectionStart, e = ta.selectionEnd;
+      const sel = ta.value.slice(s, e) || "текст";
+      const ins = `<a href="${url}">${sel}</a>`;
+      ta.value = ta.value.slice(0, s) + ins + ta.value.slice(e);
+      ta.focus();
+      ta.setSelectionRange(s + ins.length, s + ins.length);
+      _updateBroadcastPreview();
+    }
+
+    // ── Inline button rows state ──────────────────────────────────────────────
+    let _bcRows = [];   // [{buttons:[{text,url}]}]
+
+    function _bcAddRow() {
+      _bcRows.push({ buttons: [{ text: "", url: "" }] });
+      _renderBcRows();
+    }
+    function _bcRemoveRow(ri) {
+      _bcRows.splice(ri, 1);
+      _renderBcRows();
+    }
+    function _bcAddBtn(ri) {
+      _bcRows[ri].buttons.push({ text: "", url: "" });
+      _renderBcRows();
+    }
+    function _bcRemoveBtn(ri, bi) {
+      _bcRows[ri].buttons.splice(bi, 1);
+      if (!_bcRows[ri].buttons.length) _bcRows.splice(ri, 1);
+      _renderBcRows();
+    }
+    function _bcInput(ri, bi, field, val) {
+      _bcRows[ri].buttons[bi][field] = val;
+      _updateBroadcastPreview();
+    }
+
+    function _renderBcRows() {
+      const wrap = document.getElementById("bcRowsWrap");
+      if (!wrap) return;
+      wrap.innerHTML = _bcRows.map((row, ri) => `
+        <div class="bc-btn-row">
+          <div class="bc-btn-row-header">
+            <span>Строка ${ri + 1}</span>
+            <button class="bc-remove-btn" onclick="_bcRemoveRow(${ri})">✕</button>
+          </div>
+          <div class="bc-btn-list">
+            ${row.buttons.map((btn, bi) => `
+              <div class="bc-btn-entry">
+                <input placeholder="Текст кнопки" value="${esc(btn.text)}"
+                  oninput="_bcInput(${ri},${bi},'text',this.value)">
+                <input placeholder="https://…" value="${esc(btn.url)}"
+                  oninput="_bcInput(${ri},${bi},'url',this.value)">
+                <button class="bc-remove-btn" onclick="_bcRemoveBtn(${ri},${bi})">✕</button>
+              </div>`).join("")}
+          </div>
+          <button class="bc-add-btn-in-row" onclick="_bcAddBtn(${ri})">+ Кнопка</button>
+        </div>`).join("");
+      _updateBroadcastPreview();
+    }
+
+    function _updateBroadcastPreview() {
+      const ta      = document.getElementById("broadcastText");
+      const bubble  = document.getElementById("bcPreviewBubble");
+      const btnWrap = document.getElementById("bcPreviewBtns");
+      if (!ta || !bubble) return;
+
+      // Render text: replace tg-spoiler with preview span
+      let html = ta.value
+        .replace(/&(?!amp;|lt;|gt;|quot;)/g, "&amp;")  // don't double-encode
+        .replace(/</g, v => v)    // keep tags as-is for inner render
+        ;
+      // Actually we want raw HTML (the textarea contains real Telegram HTML)
+      // Just sanitise unknown tags and render known ones
+      const preview = ta.value
+        .replace(/<tg-spoiler>/gi, '<span class="tg-spoiler-preview">')
+        .replace(/<\/tg-spoiler>/gi, "</span>");
+      bubble.innerHTML = preview || '<span style="opacity:0.35">Текст сообщения появится здесь</span>';
+
+      // Render buttons
+      if (btnWrap) {
+        btnWrap.innerHTML = _bcRows.filter(r => r.buttons.some(b => b.text)).map(row =>
+          `<div class="bc-preview-btn-row">${row.buttons.filter(b => b.text).map(b =>
+            `<div class="bc-preview-btn">${esc(b.text)}</div>`).join("")}</div>`
+        ).join("");
+      }
+    }
+
     function renderBroadcastTab() {
       const content  = document.getElementById("content");
       const subtitle = document.getElementById("subtitle");
       subtitle.textContent = "Рассылка активным пользователям";
       const activeCount = overview ? overview.users.filter(u => !u.is_blocked).length : "—";
+      _bcRows = [];
+
       content.innerHTML = `
         <div class="broadcast-card">
           <div class="broadcast-label">📢 Текст сообщения</div>
-          <textarea id="broadcastText" placeholder="Введи текст рассылки…" maxlength="4096"></textarea>
+
+          <!-- Formatting toolbar -->
+          <div class="fmt-toolbar">
+            <button class="fmt-btn fmt-b"  title="Жирный"        onclick="_fmtWrap('b')">B</button>
+            <button class="fmt-btn fmt-i"  title="Курсив"         onclick="_fmtWrap('i')">I</button>
+            <button class="fmt-btn fmt-u"  title="Подчёркнутый"  onclick="_fmtWrap('u')">U</button>
+            <button class="fmt-btn fmt-s"  title="Зачёркнутый"   onclick="_fmtWrap('s')">S</button>
+            <div class="fmt-divider"></div>
+            <button class="fmt-btn fmt-sp" title="Спойлер"        onclick="_fmtWrap('tg-spoiler')">спойлер</button>
+            <button class="fmt-btn"        title="Цитата"         onclick="_fmtWrap('blockquote')">❝</button>
+            <button class="fmt-btn"        title="Раскрывающаяся цитата" onclick="_fmtWrap('blockquote','expandable')">❝↕</button>
+            <div class="fmt-divider"></div>
+            <button class="fmt-btn"        title="Код"            onclick="_fmtWrap('code')"><code>код</code></button>
+            <button class="fmt-btn"        title="Моноширинный блок" onclick="_fmtWrap('pre')">pre</button>
+            <div class="fmt-divider"></div>
+            <button class="fmt-btn"        title="Ссылка"         onclick="_fmtLink()">🔗</button>
+          </div>
+
+          <textarea id="broadcastText" placeholder="Введи текст рассылки… Выдели фрагмент и нажми кнопку форматирования." maxlength="4096" oninput="_updateBroadcastPreview();document.getElementById('charCount').textContent=this.value.length+' / 4096'"></textarea>
           <div class="char-count" id="charCount">0 / 4096</div>
+
+          <!-- Inline buttons -->
+          <div class="bc-section-hdr">🔘 Инлайн-кнопки</div>
+          <div class="bc-btn-rows" id="bcRowsWrap"></div>
+          <button class="bc-add-row-btn" onclick="_bcAddRow()">+ Строка кнопок</button>
+
+          <!-- Preview -->
+          <div class="bc-preview-wrap">
+            <div class="bc-preview-hdr">👁 Превью</div>
+            <div class="bc-preview-bubble" id="bcPreviewBubble"><span style="opacity:0.35">Текст сообщения появится здесь</span></div>
+            <div class="bc-preview-btns"  id="bcPreviewBtns"></div>
+          </div>
+
           <button class="primary-btn" id="broadcastSendBtn">Отправить всем (${activeCount} польз.)</button>
           <div class="broadcast-hint">Сообщение получат все активные пользователи, не заблокированные в боте. Действие необратимо.</div>
         </div>
       `;
-      const textarea = document.getElementById("broadcastText");
-      const counter  = document.getElementById("charCount");
-      textarea.addEventListener("input", () => {
-        counter.textContent = textarea.value.length + " / 4096";
-      });
       document.getElementById("broadcastSendBtn").addEventListener("click", sendBroadcast);
     }
 
@@ -1796,19 +2018,30 @@
       const btn = document.getElementById("broadcastSendBtn");
       const text = textarea.value.trim();
       if (!text) { if (tg) tg.showAlert("Введи текст сообщения."); return; }
-      const confirmed = await confirmAction(`Отправить это сообщение всем активным пользователям?\n\n"${text.slice(0,200)}${text.length > 200 ? "…" : ""}"`);
+
+      // Collect valid button rows
+      const buttons = _bcRows
+        .map(row => row.buttons.filter(b => b.text.trim() && b.url.trim()))
+        .filter(row => row.length > 0);
+
+      const confirmed = await confirmAction(
+        `Отправить это сообщение всем активным пользователям?\n\n"${text.replace(/<[^>]+>/g,"").slice(0,200)}${text.length > 200 ? "…" : ""}"`
+      );
       if (!confirmed) return;
       btn.disabled = true; btn.textContent = "⏳ Отправляем…";
       try {
         const res = await fetch("/app/api/admin/broadcast", {
           method: "POST", headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({initData, text})
+          body: JSON.stringify({ initData, text, buttons: buttons.length ? buttons : null })
         });
         if (!res.ok) throw new Error();
         const data = await res.json();
         showToast(`✅ Отправлено: ${data.sent} из ${data.total_recipients}`);
         if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
         textarea.value = "";
+        _bcRows = [];
+        _renderBcRows();
+        _updateBroadcastPreview();
         document.getElementById("charCount").textContent = "0 / 4096";
       } catch { if (tg) tg.showAlert("Не удалось отправить. Попробуй ещё раз."); }
       finally {

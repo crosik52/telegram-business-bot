@@ -1,4 +1,4 @@
-"""chart_service.py — 640×360 px premium glassmorphism analytics card.
+"""chart_service.py — high-resolution 16:9 glassmorphism analytics card.
 
 Layout
 ──────────────────────────────────────────────────────────────────────────
@@ -78,8 +78,10 @@ C_OUT = "#3DD68C"   # outgoing — green
 
 DPI = 100
 RENDER_SCALE = 3
-W   = 640
+W   = 640                  # logical layout coordinates
 H   = 360
+OUTPUT_W = 1280            # exported PNG; 16:9, not tied to logical size
+OUTPUT_H = 720
 PAD = 14
 GAP = 7
 
@@ -140,7 +142,7 @@ def render_info_image(
     *,
     avatar_bytes: bytes | None = None,
 ) -> io.BytesIO:
-    """Return a 640×360 PNG premium glassmorphism analytics card."""
+    """Return a high-resolution 16:9 PNG glassmorphism analytics card."""
     _ensure_fonts()
 
     render_dpi = DPI * RENDER_SCALE
@@ -172,7 +174,7 @@ def render_info_image(
     high_res.seek(0)
     with Image.open(high_res) as rendered:
         rendered = rendered.convert("RGB")
-        rendered = rendered.resize((W, H), Image.Resampling.LANCZOS)
+        rendered = rendered.resize((OUTPUT_W, OUTPUT_H), Image.Resampling.LANCZOS)
         buf = io.BytesIO()
         rendered.save(buf, format="PNG", optimize=True)
     buf.seek(0)
@@ -418,16 +420,16 @@ def _draw_header(
 def _draw_primary_kpis(fig: plt.Figure, stats: InfoStats) -> None:
     avg  = _avg_per_day(stats)
     data = [
-        (stats.total,    "Всего",   ACC[0]),
-        (stats.outgoing, "Ваших",   ACC[1]),
-        (stats.incoming, "Их",      ACC[2]),
-        (avg,            "В день",  ACC[3]),
+        (stats.total,    "Всего сообщений", "messages", ACC[0]),
+        (stats.outgoing, "Ваших",           "outgoing", ACC[1]),
+        (stats.incoming, "Собеседника",      "incoming", ACC[2]),
+        (avg,            "В день",           "daily",    ACC[3]),
     ]
     full_w = W - PAD * 2
     n      = len(data)
     tile_w = (full_w - GAP * (n - 1)) / n
 
-    for i, (val, label, color) in enumerate(data):
+    for i, (val, label, icon, color) in enumerate(data):
         x = PAD + i * (tile_w + GAP)
         _glass_tile(fig, x, PRI_Y, tile_w, PRI_H, accent=color, zorder=3)
 
@@ -436,6 +438,8 @@ def _draw_primary_kpis(fig: plt.Figure, stats: InfoStats) -> None:
         ax.set_ylim(0, PRI_H)
         ax.set_facecolor("none")
         ax.axis("off")
+
+        _draw_icon(ax, icon, 17, PRI_H - 17, color, size=11)
 
         # Subtle glow ellipse behind number
         ax.add_patch(Ellipse((tile_w / 2, PRI_H / 2 + 6),
@@ -452,9 +456,9 @@ def _draw_primary_kpis(fig: plt.Figure, stats: InfoStats) -> None:
                 fontfamily=_F(700)["fontfamily"], zorder=4)
 
         # Label
-        ax.text(tile_w / 2, 16, label,
+        ax.text(tile_w / 2, 15, label,
                 ha="center", va="center",
-                color=C_SUB, fontsize=8.5, fontweight=500,
+                color=C_SUB, fontsize=7.8, fontweight=500,
                 fontfamily=_F(500)["fontfamily"], zorder=4)
 
 
@@ -462,15 +466,15 @@ def _draw_primary_kpis(fig: plt.Figure, stats: InfoStats) -> None:
 
 def _draw_secondary_kpis(fig: plt.Figure, stats: InfoStats) -> None:
     data = [
-        (stats.media_count, "Медиа",    ACC_S[0]),
-        (stats.audio_count, "Аудио",    ACC_S[1]),
-        (stats.edited,      "Изменено", ACC_S[2]),
-        (stats.deleted,     "Удалено",  ACC_S[3]),
+        (stats.media_count, "Медиа",    "media",  ACC_S[0]),
+        (stats.audio_count, "Аудио",    "audio",  ACC_S[1]),
+        (stats.edited,      "Изменено", "edit",   ACC_S[2]),
+        (stats.deleted,     "Удалено",  "delete", ACC_S[3]),
     ]
     n      = len(data)
     tile_w = (SEC_W - GAP * (n - 1)) / n
 
-    for i, (val, label, color) in enumerate(data):
+    for i, (val, label, icon, color) in enumerate(data):
         x = PAD + i * (tile_w + GAP)
         _glass_tile(fig, x, BOT_Y, tile_w, BOT_H, zorder=3)
 
@@ -480,10 +484,8 @@ def _draw_secondary_kpis(fig: plt.Figure, stats: InfoStats) -> None:
         ax.set_facecolor("none")
         ax.axis("off")
 
-        # Coloured accent dot
-        ax.add_patch(Circle((tile_w / 2, BOT_H - 20), 4,
-                            facecolor=color, edgecolor="none",
-                            transform=ax.transData, zorder=3))
+        # Semantic vector icon — clearer than a generic coloured dot.
+        _draw_icon(ax, icon, tile_w / 2, BOT_H - 21, color, size=14)
 
         # Number
         val_str = _fmt_num(val)
@@ -503,6 +505,140 @@ def _draw_secondary_kpis(fig: plt.Figure, stats: InfoStats) -> None:
         ax.axhline(22, xmin=(tile_w / 2 - rule_w / 2) / tile_w,
                    xmax=(tile_w / 2 + rule_w / 2) / tile_w,
                    color=_rgba(color, 0.50), linewidth=1.0, zorder=3)
+
+
+def _draw_icon(
+    ax: plt.Axes,
+    kind: str,
+    x: float,
+    y: float,
+    color: str,
+    *,
+    size: float = 12,
+) -> None:
+    """Draw a small crisp line icon in logical axis coordinates."""
+    lw = 1.35
+    c = _rgba(color, 0.92)
+    dim = _rgba(color, 0.16)
+    half = size / 2
+
+    # Soft glassy icon backing.
+    ax.add_patch(Circle(
+        (x, y), half + 4,
+        facecolor=dim,
+        edgecolor=_rgba(color, 0.20),
+        linewidth=0.6,
+        transform=ax.transData,
+        zorder=3,
+    ))
+
+    if kind == "messages":
+        bubble = FancyBboxPatch(
+            (x - half, y - half * 0.65), size, size * 0.78,
+            boxstyle="round,pad=0,rounding_size=2.2",
+            facecolor="none", edgecolor=c, linewidth=lw, zorder=4,
+        )
+        ax.add_patch(bubble)
+        ax.plot(
+            [x - half * 0.32, x - half * 0.52, x - half * 0.03],
+            [y - half * 0.65, y - half * 1.02, y - half * 0.65],
+            color=c, linewidth=lw, solid_capstyle="round", zorder=4,
+        )
+        ax.plot(
+            [x - half * 0.45, x + half * 0.45],
+            [y, y], color=c, linewidth=0.9, alpha=0.7, zorder=4,
+        )
+    elif kind in ("outgoing", "incoming"):
+        direction = 1 if kind == "outgoing" else -1
+        ax.plot(
+            [x - direction * half * 0.65, x + direction * half * 0.65],
+            [y - direction * half * 0.65, y + direction * half * 0.65],
+            color=c, linewidth=lw, solid_capstyle="round", zorder=4,
+        )
+        ax.plot(
+            [x + direction * half * 0.05, x + direction * half * 0.65,
+             x + direction * half * 0.65],
+            [y + direction * half * 0.65, y + direction * half * 0.65,
+             y + direction * half * 0.05],
+            color=c, linewidth=lw, solid_capstyle="round", zorder=4,
+        )
+    elif kind == "daily":
+        for idx, height in enumerate((0.55, 0.90, 1.25)):
+            bx = x - half * 0.68 + idx * half * 0.68
+            ax.plot(
+                [bx, bx],
+                [y - half * 0.70, y - half * 0.70 + half * height],
+                color=c, linewidth=2.0, solid_capstyle="round", zorder=4,
+            )
+    elif kind == "media":
+        rect = FancyBboxPatch(
+            (x - half, y - half * 0.72), size, size * 0.86,
+            boxstyle="round,pad=0,rounding_size=1.5",
+            facecolor="none", edgecolor=c, linewidth=lw, zorder=4,
+        )
+        ax.add_patch(rect)
+        ax.add_patch(Circle(
+            (x + half * 0.42, y + half * 0.22), half * 0.17,
+            facecolor=c, edgecolor="none", zorder=4,
+        ))
+        ax.plot(
+            [x - half * 0.72, x - half * 0.22, x + half * 0.05,
+             x + half * 0.72],
+            [y - half * 0.48, y + half * 0.05, y - half * 0.28,
+             y + half * 0.32],
+            color=c, linewidth=1.0, zorder=4,
+        )
+    elif kind == "audio":
+        ax.add_patch(FancyBboxPatch(
+            (x - half * 0.28, y - half * 0.50),
+            half * 0.56, half * 1.05,
+            boxstyle="round,pad=0,rounding_size=2.6",
+            facecolor="none", edgecolor=c, linewidth=lw, zorder=4,
+        ))
+        ax.add_patch(mpatches.Arc(
+            (x, y - half * 0.12), half * 1.30, half * 1.35,
+            theta1=200, theta2=340, color=c, linewidth=lw, zorder=4,
+        ))
+        ax.plot([x, x], [y - half * 0.80, y - half * 0.56],
+                color=c, linewidth=lw, zorder=4)
+        ax.plot([x - half * 0.35, x + half * 0.35],
+                [y - half * 0.80, y - half * 0.80],
+                color=c, linewidth=lw, zorder=4)
+    elif kind == "edit":
+        ax.plot(
+            [x - half * 0.58, x + half * 0.48],
+            [y - half * 0.48, y + half * 0.58],
+            color=c, linewidth=2.2, solid_capstyle="round", zorder=4,
+        )
+        ax.plot(
+            [x + half * 0.30, x + half * 0.62],
+            [y + half * 0.76, y + half * 0.44],
+            color=c, linewidth=2.2, solid_capstyle="round", zorder=4,
+        )
+        ax.plot(
+            [x - half * 0.70, x - half * 0.36],
+            [y - half * 0.68, y - half * 0.55],
+            color=c, linewidth=1.2, zorder=4,
+        )
+    elif kind == "delete":
+        ax.add_patch(FancyBboxPatch(
+            (x - half * 0.48, y - half * 0.62),
+            half * 0.96, half * 1.05,
+            boxstyle="round,pad=0,rounding_size=1.1",
+            facecolor="none", edgecolor=c, linewidth=lw, zorder=4,
+        ))
+        ax.plot([x - half * 0.68, x + half * 0.68],
+                [y + half * 0.56, y + half * 0.56],
+                color=c, linewidth=lw, zorder=4)
+        ax.plot([x - half * 0.24, x + half * 0.24],
+                [y + half * 0.76, y + half * 0.76],
+                color=c, linewidth=lw, zorder=4)
+        ax.plot([x - half * 0.17, x - half * 0.17],
+                [y - half * 0.35, y + half * 0.25],
+                color=c, linewidth=0.8, zorder=4)
+        ax.plot([x + half * 0.17, x + half * 0.17],
+                [y - half * 0.35, y + half * 0.25],
+                color=c, linewidth=0.8, zorder=4)
 
 
 # ── Conversation ring ──────────────────────────────────────────────────────────

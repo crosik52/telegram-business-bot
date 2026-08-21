@@ -278,49 +278,91 @@ def _icon(draw: ImageDraw.ImageDraw, kind: str, x: int, y: int, color: tuple[int
     scale, padding = 4, 11
     side = (size + padding * 2) * scale
     layer = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+    badge_radius = round((size / 2 + 4) * scale)
+    midpoint = side // 2
+    if size >= 17:
+        badge = ImageDraw.Draw(layer)
+        badge.rounded_rectangle(
+            (midpoint - badge_radius, midpoint - badge_radius, midpoint + badge_radius, midpoint + badge_radius),
+            radius=round(6 * scale),
+            fill=color + (20,),
+            outline=color + (55,),
+            width=scale,
+        )
     _icon_vector(ImageDraw.Draw(layer), kind, side // 2, side // 2, color, size * scale)
     icon = layer.resize((side // scale, side // scale), Image.Resampling.LANCZOS)
     draw._image.alpha_composite(icon, (x - icon.width // 2, y - icon.height // 2))
 
 
 def _icon_vector(draw: ImageDraw.ImageDraw, kind: str, x: int, y: int, color: tuple[int, int, int], size: int) -> None:
-    """Crisp semantic line icons, built from fixed vector primitives."""
-    h, w = size // 2, max(1, size // 9)
-    q = lambda value: round(value * size / 17)
+    """A compact 24-unit rounded-stroke icon family, drawn at 4×."""
+    q = lambda value: round(value * size / 24)
+    stroke = max(2, q(1.85))
+
+    def line(points: list[tuple[int, int]], width: int = stroke) -> None:
+        draw.line(points, fill=color, width=width, joint="curve")
+        radius = width // 2
+        for px, py in (points[0], points[-1]):
+            draw.ellipse((px - radius, py - radius, px + radius, py + radius), fill=color)
+
+    def rect(left: int, top: int, right: int, bottom: int, radius: int = 3) -> None:
+        draw.rounded_rectangle(
+            (x + q(left), y + q(top), x + q(right), y + q(bottom)),
+            radius=q(radius),
+            outline=color,
+            width=stroke,
+        )
+
     if kind == "messages":
-        draw.rounded_rectangle((x - h, y - h + q(1), x + h, y + h - q(3)), radius=q(3), outline=color, width=w)
-        draw.line((x - h // 2, y + h - q(3), x - h + q(1), y + h + q(3), x, y + h - q(3)), fill=color, width=w)
-    elif kind in ("incoming", "outgoing"):
-        direction = -1 if kind == "incoming" else 1
-        draw.line((x - direction * h, y + h, x + direction * h, y - h), fill=color, width=w)
-        draw.line((x + direction * h, y - h, x + direction * h, y - h + direction * h), fill=color, width=w)
-        draw.line((x + direction * h, y - h, x + direction * h - direction * h, y - h), fill=color, width=w)
+        rect(-9, -8, 9, 6, 4)
+        line([(x - q(3), y + q(6)), (x - q(5), y + q(10)), (x + q(1), y + q(6))])
+        line([(x - q(4), y - q(1)), (x + q(4), y - q(1))], max(2, q(1.3)))
+    elif kind == "outgoing":
+        # Paper plane: a decisive outline with a central fold.
+        line([(x - q(9), y - q(3)), (x + q(9), y - q(9)), (x + q(4), y + q(9)), (x - q(1), y + q(2)), (x - q(9), y - q(3))])
+        line([(x - q(1), y + q(2)), (x + q(9), y - q(9))], max(2, q(1.35)))
+    elif kind == "incoming":
+        # Inbox tray plus an unmistakable downward arrow.
+        line([(x - q(9), y + q(4)), (x - q(6), y + q(8)), (x + q(6), y + q(8)), (x + q(9), y + q(4))])
+        line([(x - q(9), y + q(4)), (x - q(9), y + q(9)), (x + q(9), y + q(9)), (x + q(9), y + q(4))])
+        line([(x, y - q(9)), (x, y + q(2))])
+        line([(x - q(4), y - q(2)), (x, y + q(2)), (x + q(4), y - q(2))])
     elif kind == "daily":
-        for index, height in enumerate((6, 12, 17)):
-            bx = x - q(7) + index * q(7)
-            draw.line((bx, y + q(8), bx, y + q(8) - q(height)), fill=color, width=q(3))
+        line([(x - q(9), y + q(9)), (x + q(9), y + q(9))], max(2, q(1.4)))
+        for offset, height in ((-6, 7), (0, 13), (6, 18)):
+            draw.rounded_rectangle((x + q(offset - 2), y + q(9 - height), x + q(offset + 2), y + q(9)),
+                                   radius=q(1.5), fill=color)
     elif kind == "media":
-        draw.rounded_rectangle((x - h, y - h + q(1), x + h, y + h - q(1)), radius=q(2), outline=color, width=w)
-        draw.ellipse((x + q(2), y - q(5), x + q(5), y - q(2)), fill=color)
-        draw.line((x - q(6), y + q(5), x - q(1), y, x + q(2), y + q(4), x + q(7), y - q(1)), fill=color, width=w)
+        rect(-9, -8, 9, 8, 3)
+        draw.ellipse((x + q(3), y - q(5), x + q(6), y - q(2)), fill=color)
+        line([(x - q(7), y + q(5)), (x - q(2), y), (x + q(1), y + q(3)), (x + q(5), y - q(1)), (x + q(8), y + q(4))],
+             max(2, q(1.4)))
     elif kind == "audio":
-        draw.rounded_rectangle((x - q(3), y - q(8), x + q(3), y + q(4)), radius=q(3), outline=color, width=w)
-        draw.arc((x - q(7), y - q(3), x + q(7), y + q(10)), 0, 180, fill=color, width=w)
-        draw.line((x, y + q(10), x, y + q(13)), fill=color, width=w)
+        rect(-3.5, -9, 3.5, 4, 3.5)
+        draw.arc((x - q(8), y - q(3), x + q(8), y + q(10)), 0, 180, fill=color, width=stroke)
+        line([(x, y + q(10)), (x, y + q(13))])
+        line([(x - q(4), y + q(13)), (x + q(4), y + q(13))])
     elif kind == "edit":
-        draw.line((x - q(7), y + q(7), x + q(6), y - q(6)), fill=color, width=q(3))
-        draw.line((x + q(4), y - q(8), x + q(8), y - q(4)), fill=color, width=q(3))
+        line([(x - q(7), y + q(8)), (x - q(5), y + q(3)), (x + q(6), y - q(8)), (x + q(9), y - q(5)),
+              (x - q(2), y + q(6)), (x - q(7), y + q(8))])
+        line([(x + q(4), y - q(7)), (x + q(7), y - q(4))], max(2, q(1.25)))
     elif kind == "delete":
-        draw.rounded_rectangle((x - q(5), y - q(5), x + q(5), y + q(8)), radius=q(1), outline=color, width=w)
-        draw.line((x - q(7), y - q(7), x + q(7), y - q(7)), fill=color, width=w)
-        draw.line((x - q(2), y - q(10), x + q(2), y - q(10)), fill=color, width=w)
+        rect(-6, -5, 6, 9, 2)
+        line([(x - q(8), y - q(7)), (x + q(8), y - q(7))])
+        line([(x - q(3), y - q(10)), (x + q(3), y - q(10))])
+        line([(x - q(2), y - q(2)), (x - q(2), y + q(5))], max(2, q(1.2)))
+        line([(x + q(2), y - q(2)), (x + q(2), y + q(5))], max(2, q(1.2)))
     elif kind == "note":
-        draw.rectangle((x - q(5), y - q(7), x + q(5), y + q(7)), outline=color, width=w)
-        draw.line((x - q(2), y - q(2), x + q(3), y - q(2)), fill=color, width=w)
+        rect(-7, -9, 7, 9, 2)
+        line([(x - q(3), y - q(3)), (x + q(4), y - q(3))], max(2, q(1.25)))
+        line([(x - q(3), y + q(2)), (x + q(2), y + q(2))], max(2, q(1.25)))
     elif kind == "mute":
-        draw.arc((x - q(6), y - q(5), x + q(3), y + q(5)), -70, 70, fill=color, width=w)
-        draw.line((x + q(4), y - q(6), x + q(4), y + q(3)), fill=color, width=w)
-        draw.line((x - q(8), y - q(8), x + q(8), y + q(8)), fill=color, width=w)
+        # Speaker with an overlaid slash rather than a vague crossed bell.
+        draw.polygon([(x - q(9), y - q(3)), (x - q(5), y - q(3)), (x + q(1), y - q(8)),
+                      (x + q(1), y + q(8)), (x - q(5), y + q(3)), (x - q(9), y + q(3))],
+                     outline=color)
+        line([(x + q(5), y - q(4)), (x + q(9), y), (x + q(5), y + q(4))], max(2, q(1.3)))
+        line([(x - q(10), y - q(10)), (x + q(10), y + q(10))], max(2, q(1.6)))
 
 
 def _font(size: int, weight: str = "regular") -> ImageFont.FreeTypeFont | ImageFont.ImageFont:

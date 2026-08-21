@@ -309,12 +309,80 @@ def fmt_duration(secs: int | None) -> str:
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
 
+# ── Non-music keyword filter ──────────────────────────────────────────────────
+# Titles containing any of these substrings (case-insensitive) are almost
+# never the track itself — they're reactions, reviews, covers analysis, etc.
+# Used as a last-resort filter when we fall back to plain ytsearch.
+
+_NON_MUSIC_KEYWORDS: frozenset[str] = frozenset({
+    "реакция", "reaction", "реакт", "react ",
+    "обзор", "review ", "разбор", "разборка",
+    "слушаю впервые", "слушаем впервые",
+    "история создания", "история песни", "история трека",
+    "объяснение", "explanation",
+    "трибьют", "tribute",
+    "подборка", "compilation",
+    "#shorts",
+    "podcast", "подкаст",
+    "стрим", "stream", "live stream",
+    "интервью", "interview",
+    "топ лучших", "топ песен",
+})
+
+
+def _is_music(title: str) -> bool:
+    """Return False when a title strongly suggests a non-music video."""
+    t = title.lower()
+    return not any(kw in t for kw in _NON_MUSIC_KEYWORDS)
+
+
 # ── Search (sync, runs in executor) ──────────────────────────────────────────
 
+def _run_search(search_url: str, opts: dict) -> list:
+    """Run one yt-dlp search and return raw entries list."""
+    import yt_dlp  # noqa: PLC0415
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(search_url, download=False)
+    return (info or {}).get("entries") or []
+
+
+def _parse_entries(raw: list, n: int, *, filter_non_music: bool = False) -> list[dict]:
+    """Convert raw yt-dlp entries to our result dicts."""
+    out = []
+    for e in raw:
+        if not e:
+            continue
+        dur    = e.get("duration") or 0
+        vid_id = e.get("id") or ""
+        if not vid_id:
+            continue
+        if dur and dur > MAX_DURATION_SECS:
+            continue
+        title = e.get("title") or "Без названия"
+        if filter_non_music and not _is_music(title):
+            continue
+        thumb = e.get("thumbnail") or ""
+        if not thumb:
+            thumbs = e.get("thumbnails") or []
+            if thumbs:
+                thumb = thumbs[-1].get("url", "")
+        out.append({
+            "url":       f"https://www.youtube.com/watch?v={vid_id}",
+            "title":     title,
+            "uploader":  e.get("uploader") or e.get("channel") or "",
+            "duration":  dur,
+            "thumbnail": thumb,
+        })
+        if len(out) >= n:
+            break
+    return out
+
+
 def _search_sync(query: str, n: int = 5) -> list[dict]:
+    """Search YouTube Music first; fall back to filtered YouTube search."""
     import yt_dlp  # noqa: PLC0415
 
-    opts = {
+    base_opts: dict = {
         "quiet":        True,
         "no_warnings":  True,
         "extract_flat": "in_playlist",
@@ -323,39 +391,51 @@ def _search_sync(query: str, n: int = 5) -> list[dict]:
             "youtube": {"player_client": ["android"]},
         },
     }
-    search_url = f"ytsearch{n or SEARCH_N}:{query}"
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(search_url, download=False)
 
-    logger.debug("mp3 search raw: type=%s entries=%s",
-                 type(info).__name__,
-                 len((info or {}).get("entries", [])))
+    want = n or SEARCH_N
+    # Fetch more than needed so the filter still leaves enough results
+    fetch = want * 3
 
-    out = []
-    for e in (info or {}).get("entries", []):
-        if not e:
-            continue
-        dur    = e.get("duration") or 0
-        vid_id = e.get("id") or ""
-        if not vid_id:
-            continue
-        # Skip only if we have a confirmed duration that's too long
-        if dur and dur > MAX_DURATION_SECS:
-            continue
-        # Best thumbnail: prefer the 480px hqdefault, fall back to any URL
-        thumb = e.get("thumbnail") or ""
-        if not thumb:
-            thumbs = e.get("thumbnails") or []
-            if thumbs:
-                thumb = thumbs[-1].get("url", "")
-        out.append({
-            "url":       f"https://www.youtube.com/watch?v={vid_id}",
-            "title":     e.get("title") or "Без названия",
-            "uploader":  e.get("uploader") or e.get("channel") or "",
-            "duration":  dur,
-            "thumbnail": thumb,
-        })
-    return out[:n]
+    # ── 1. YouTube Music (music-only index) ───────────────────────────────────
+    ym_results: list[dict] = []
+    try:
+        raw = _run_search(f"https://music.youtube.com/search?q={query}&sp=EgWKAQIIAWoKEAoQAxAEEAUQBg%3D%3D", base_opts)
+        ym_results = _parse_entries(raw, want)
+    except Exception:
+        pass  # fall through to ytsearchmusic
+
+    if not ym_results:
+        try:
+            raw = _run_search(f"ytsearchmusic{fetch}:{query}", base_opts)
+            ym_results = _parse_entries(raw, want)
+            logger.debug("mp3 ytsearchmusic: got %d results", len(ym_results))
+        except Exception as exc:
+            logger.debug("mp3 ytsearchmusic failed: %s", exc)
+
+    if len(ym_results) >= max(3, want // 2):
+        return ym_results[:want]
+
+    # ── 2. Fall back to regular ytsearch with non-music filter ────────────────
+    logger.debug("mp3: ytsearchmusic returned only %d — falling back to ytsearch", len(ym_results))
+    try:
+        raw = _run_search(f"ytsearch{fetch}:{query}", base_opts)
+        yt_results = _parse_entries(raw, want, filter_non_music=True)
+        logger.debug("mp3 ytsearch fallback: got %d after filter", len(yt_results))
+    except Exception as exc:
+        logger.warning("mp3 ytsearch fallback failed: %s", exc)
+        yt_results = []
+
+    # Merge: prefer ytmusic entries, fill gaps with filtered yt results
+    seen_ids: set[str] = {r["url"] for r in ym_results}
+    merged = list(ym_results)
+    for r in yt_results:
+        if r["url"] not in seen_ids:
+            merged.append(r)
+            seen_ids.add(r["url"])
+        if len(merged) >= want:
+            break
+
+    return merged[:want]
 
 
 async def search(query: str, n: int = SEARCH_N) -> list[dict]:

@@ -1329,7 +1329,8 @@ async def on_mp3_navigate(callback: CallbackQuery, bot: Bot) -> None:
     if session is None:
         try:
             await callback.message.edit_text(  # type: ignore[union-attr]
-                "⌛ Сессия истекла — выполните поиск заново (<code>!mp3 название</code>)."
+                "⌛ Сессия истекла — выполните поиск заново (<code>!mp3 название</code>).",
+                parse_mode="HTML",
             )
         except Exception:
             pass
@@ -1347,7 +1348,7 @@ async def on_mp3_navigate(callback: CallbackQuery, bot: Bot) -> None:
     chat_id  = first_result.chat_id  if first_result else None
     msg_id   = callback.message.message_id  # type: ignore[union-attr]
 
-    header = commands._page_header(session.query, page, total_pages)
+    header = commands._page_header(session.query, page, total_pages, total=len(entries))
 
     try:
         if bc_id and chat_id:
@@ -1356,11 +1357,12 @@ async def on_mp3_navigate(callback: CallbackQuery, bot: Bot) -> None:
                 chat_id=chat_id,
                 message_id=msg_id,
                 text=header,
+                parse_mode="HTML",
                 reply_markup=markup,
             )
         else:
             await callback.message.edit_text(  # type: ignore[union-attr]
-                header, reply_markup=markup,
+                header, parse_mode="HTML", reply_markup=markup,
             )
     except Exception as exc:
         logger.debug("mp3 navigate: edit failed: %s", exc)
@@ -1369,7 +1371,7 @@ async def on_mp3_navigate(callback: CallbackQuery, bot: Bot) -> None:
 @router.callback_query(F.data.startswith("mp3:"))
 async def on_mp3_callback(callback: CallbackQuery, bot: Bot) -> None:
     """User picked a track from the !mp3 search results — download and deliver."""
-    await callback.answer()  # dismiss the spinner on the button
+    await callback.answer("⏳ Загружаю трек…")
 
     key    = (callback.data or "").split(":", 1)[1]
     result = audio_service.get(key)
@@ -1378,7 +1380,8 @@ async def on_mp3_callback(callback: CallbackQuery, bot: Bot) -> None:
         # Result expired (>10 min) or unknown key
         try:
             await callback.message.edit_text(  # type: ignore[union-attr]
-                "⌛ Сессия истекла — выполните поиск заново (<code>!mp3 название</code>)."
+                "⌛ Сессия истекла — выполните поиск заново (<code>!mp3 название</code>).",
+                parse_mode="HTML",
             )
         except Exception:
             pass
@@ -1388,18 +1391,28 @@ async def on_mp3_callback(callback: CallbackQuery, bot: Bot) -> None:
     chat_id  = result.chat_id
     msg_id   = callback.message.message_id  # type: ignore[union-attr]
 
-    async def _edit_text(text: str) -> None:
+    async def _edit_text(text: str, markup: InlineKeyboardMarkup | None = None) -> None:
         try:
             await bot.edit_message_text(
                 business_connection_id=bc_id,
                 chat_id=chat_id,
                 message_id=msg_id,
                 text=text,
+                parse_mode="HTML",
+                reply_markup=markup,
             )
         except Exception:
             pass
 
-    await _edit_text(f"⏳ Скачиваю: <i>{html_escape(result.title)}</i>…")
+    # Build a nice "downloading" message with artist + duration
+    dur_str    = audio_service.fmt_duration(result.duration)
+    artist_str = f"\n👤 {html_escape(result.uploader)}" if result.uploader else ""
+    dur_label  = f"  ·  {dur_str}" if dur_str != "?:??" else ""
+    await _edit_text(
+        f"⏳ <b>Загружаю…</b>\n"
+        f"🎵 {html_escape(result.title)}"
+        f"{artist_str}{dur_label}"
+    )
 
     tmp_dir = tempfile.mkdtemp(prefix="audbot_")
     try:
@@ -1424,10 +1437,48 @@ async def on_mp3_callback(callback: CallbackQuery, bot: Bot) -> None:
 
     except Exception as exc:
         logger.warning("mp3: download/send failed for %s: %s", result.url, exc)
-        await _edit_text("❌ Не удалось скачать трек. Попробуйте другой вариант.")
+        # Restore the search keyboard so the user can pick another track
+        session   = audio_service.get_session(result.session_key) if result.session_key else None
+        if session:
+            entries     = session.entries
+            total_pages = (len(entries) + audio_service.PAGE_SIZE - 1) // audio_service.PAGE_SIZE
+            markup      = commands.build_page_markup(entries, result.session_key, page=0)
+            header      = commands._page_header(session.query, 0, total_pages, total=len(entries))
+            await _edit_text(
+                f"❌ <b>Не удалось скачать трек.</b>\n\n"
+                f"{header}\n\n<i>Попробуйте выбрать другой вариант:</i>",
+                markup=markup,
+            )
+        else:
+            await _edit_text(
+                "❌ <b>Не удалось скачать трек.</b>\n"
+                "Попробуйте другое название: <code>!mp3 название</code>"
+            )
 
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+@router.callback_query(F.data == "mp3_close")
+async def on_mp3_close(callback: CallbackQuery, bot: Bot) -> None:
+    """User dismissed the search results — delete the message."""
+    await callback.answer()
+    msg = callback.message
+    if not msg:
+        return
+    # Try to delete from business chat first, then fall back to plain delete
+    try:
+        # Extract bc_id + chat_id from cached result via any entry key in the session
+        # The message itself carries no bc context, so we find it from session entries
+        text = msg.text or ""
+        # Attempt direct delete (works if bot owns the message in a private chat)
+        await msg.delete()
+    except Exception:
+        # If delete fails (business chat), just remove the keyboard
+        try:
+            await msg.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
 
 
 # ── Inline mode: @bot название_песни ─────────────────────────────────────────

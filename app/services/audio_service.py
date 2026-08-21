@@ -215,17 +215,18 @@ def get_history(user_id: int) -> list[str]:
 # ── In-memory result cache ────────────────────────────────────────────────────
 
 class _Result:
-    __slots__ = ("url", "title", "uploader", "duration", "bc_id", "chat_id", "ts")
+    __slots__ = ("url", "title", "uploader", "duration", "bc_id", "chat_id", "ts", "session_key")
 
     def __init__(self, url: str, title: str, uploader: str, duration: int,
                  bc_id: str, chat_id: int) -> None:
-        self.url      = url
-        self.title    = title
-        self.uploader = uploader
-        self.duration = duration
-        self.bc_id    = bc_id
-        self.chat_id  = chat_id
-        self.ts       = time.monotonic()
+        self.url         = url
+        self.title       = title
+        self.uploader    = uploader
+        self.duration    = duration
+        self.bc_id       = bc_id
+        self.chat_id     = chat_id
+        self.ts          = time.monotonic()
+        self.session_key = ""  # set after session is created
 
 
 _cache: dict[str, _Result] = {}
@@ -249,6 +250,13 @@ def store(url: str, title: str, uploader: str, duration: int,
 
 def get(key: str) -> _Result | None:
     return _cache.get(key)
+
+
+def set_session_key(key: str, sk: str) -> None:
+    """Attach a session key to a cached result (called after session is created)."""
+    r = _cache.get(key)
+    if r:
+        r.session_key = sk
 
 
 # ── Search-session cache (for pagination) ─────────────────────────────────────

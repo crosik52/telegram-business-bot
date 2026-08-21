@@ -469,7 +469,8 @@ async def _cmd_mp3(
         search_msg = await bot.send_message(
             chat_id=chat_id,
             business_connection_id=business_connection_id,
-            text=f"🔍 Ищу: <i>{html_escape(query)}</i>…",
+            text=f"🔍 <i>Ищу «{html_escape(query)}»…</i>",
+            parse_mode="HTML",
         )
     except Exception as exc:
         logger.warning("mp3: could not send search placeholder: %s", exc)
@@ -487,7 +488,11 @@ async def _cmd_mp3(
                 business_connection_id=business_connection_id,
                 chat_id=chat_id,
                 message_id=search_msg.message_id,
-                text="❌ Ничего не найдено. Попробуйте другое название.",
+                text=(
+                    f"😔 По запросу <b>«{html_escape(query)}»</b> ничего не найдено.\n"
+                    f"Попробуйте уточнить название или написать исполнителя."
+                ),
+                parse_mode="HTML",
             )
         except Exception:
             pass
@@ -495,11 +500,13 @@ async def _cmd_mp3(
 
     # Store every result individually (for download); collect session entries
     entries: list[dict] = []
+    result_keys: list[str] = []
     for r in results:
         key = audio_service.store(
             r["url"], r["title"], r["uploader"], r["duration"],
             business_connection_id, chat_id,
         )
+        result_keys.append(key)
         entries.append({"key": key, "title": r["title"],
                         "uploader": r["uploader"], "duration": r["duration"]})
 
@@ -507,23 +514,37 @@ async def _cmd_mp3(
     session_key = audio_service.store_session(entries, query)
     total_pages = (len(entries) + audio_service.PAGE_SIZE - 1) // audio_service.PAGE_SIZE
 
+    # Link each result back to its session so the download handler can restore
+    # the search keyboard if the download fails.
+    for key in result_keys:
+        audio_service.set_session_key(key, session_key)
+
     try:
         await bot.edit_message_text(
             business_connection_id=business_connection_id,
             chat_id=chat_id,
             message_id=search_msg.message_id,
-            text=_page_header(query, 0, total_pages),
+            text=_page_header(query, 0, total_pages, total=len(entries)),
+            parse_mode="HTML",
             reply_markup=build_page_markup(entries, session_key, page=0),
         )
     except Exception as exc:
         logger.warning("mp3: could not edit search message: %s", exc)
 
 
-def _page_header(query: str, page: int, total_pages: int) -> str:
-    return (
-        f"🎵 <b>{html_escape(query)}</b> — выберите трек:\n"
-        f"<i>страница {page + 1} из {total_pages}</i>"
-    )
+def _page_header(query: str, page: int, total_pages: int, total: int | None = None) -> str:
+    q_escaped = html_escape(query)
+    meta_parts: list[str] = []
+    if total is not None:
+        meta_parts.append(f"найдено {total}")
+    if total_pages > 1:
+        meta_parts.append(f"стр. {page + 1} / {total_pages}")
+    meta_line = "  ·  ".join(meta_parts)
+    header = f"🎵 <b>{q_escaped}</b>"
+    if meta_line:
+        header += f"\n<i>{meta_line}</i>"
+    header += "\nВыберите трек:"
+    return header
 
 
 def build_page_markup(
@@ -541,13 +562,31 @@ def build_page_markup(
     total_pages = (total + ps - 1) // ps
 
     page_entries = entries[page * ps : (page + 1) * ps]
+    global_offset = page * ps   # track number = global_offset + i + 1
+
+    TRACK_EMOJIS = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
 
     buttons: list[list[InlineKeyboardButton]] = []
-    for e in page_entries:
+    for i, e in enumerate(page_entries):
+        num   = global_offset + i + 1
+        emoji = TRACK_EMOJIS[num - 1] if num <= len(TRACK_EMOJIS) else f"{num}."
         dur   = audio_service.fmt_duration(e["duration"])
-        title = e["title"][:42] + "…" if len(e["title"]) > 42 else e["title"]
+        title = e["title"]
+        artist = e.get("uploader", "")
+
+        # Truncate title smartly: keep artist visible if it fits
+        if artist:
+            max_title = 28
+            t_short = (title[:max_title] + "…") if len(title) > max_title else title
+            a_short = (artist[:16] + "…") if len(artist) > 16 else artist
+            label = f"{emoji} {t_short} — {a_short}  {dur}"
+        else:
+            max_title = 36
+            t_short = (title[:max_title] + "…") if len(title) > max_title else title
+            label = f"{emoji} {t_short}  {dur}"
+
         buttons.append([InlineKeyboardButton(
-            text=f"🎵 {title}  {dur}",
+            text=label,
             callback_data=f"mp3:{e['key']}",
         )])
 
@@ -555,16 +594,23 @@ def build_page_markup(
     nav: list[InlineKeyboardButton] = []
     if page > 0:
         nav.append(InlineKeyboardButton(
-            text="◀️", callback_data=f"mp3n:{session_key}:{page - 1}",
+            text="⬅️", callback_data=f"mp3n:{session_key}:{page - 1}",
         ))
-    nav.append(InlineKeyboardButton(
-        text=f"{page + 1}/{total_pages}", callback_data="mp3_noop",
-    ))
+    if total_pages > 1:
+        nav.append(InlineKeyboardButton(
+            text=f"· {page + 1}/{total_pages} ·", callback_data="mp3_noop",
+        ))
     if page < total_pages - 1:
         nav.append(InlineKeyboardButton(
-            text="▶️", callback_data=f"mp3n:{session_key}:{page + 1}",
+            text="➡️", callback_data=f"mp3n:{session_key}:{page + 1}",
         ))
-    buttons.append(nav)
+    if nav:
+        buttons.append(nav)
+
+    # Close button
+    buttons.append([InlineKeyboardButton(
+        text="✖ Закрыть", callback_data=f"mp3_close",
+    )])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 

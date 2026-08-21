@@ -399,18 +399,11 @@ def _search_sync(query: str, n: int = 5) -> list[dict]:
     # ── 1. YouTube Music (music-only index) ───────────────────────────────────
     ym_results: list[dict] = []
     try:
-        raw = _run_search(f"https://music.youtube.com/search?q={query}&sp=EgWKAQIIAWoKEAoQAxAEEAUQBg%3D%3D", base_opts)
+        raw = _run_search(f"ytsearchmusic{fetch}:{query}", base_opts)
         ym_results = _parse_entries(raw, want)
-    except Exception:
-        pass  # fall through to ytsearchmusic
-
-    if not ym_results:
-        try:
-            raw = _run_search(f"ytsearchmusic{fetch}:{query}", base_opts)
-            ym_results = _parse_entries(raw, want)
-            logger.debug("mp3 ytsearchmusic: got %d results", len(ym_results))
-        except Exception as exc:
-            logger.debug("mp3 ytsearchmusic failed: %s", exc)
+        logger.debug("mp3 ytsearchmusic: got %d results", len(ym_results))
+    except Exception as exc:
+        logger.debug("mp3 ytsearchmusic failed: %s", exc)
 
     if len(ym_results) >= max(3, want // 2):
         return ym_results[:want]

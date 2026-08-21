@@ -1,21 +1,22 @@
-"""chart_service.py — premium stats card for the !info command.
+"""chart_service.py — 640 × 360 px (16:9) stats card for !инфо / !info.
 
-Renders a 1080 × 1920 PNG (portrait) with:
-  • Header   — avatar circle with initials, contact name, date range
-  • Stat grid — 4 KPI cards (total / yours / theirs / avg per day)
-  • Donut     — inbound vs outbound split
-  • Bar chart — 30-day daily activity (inbound + outbound)
-  • Footer    — disclaimer
+Layout (three-zone landscape)
+─────────────────────────────────────────────────────────────────
+  Left zone   x  20–440  w=420   ← avatar + name + 4+4 KPIs
+  Separator   x 450      w=1     ← thin vertical rule
+  Right zone  x 461–620  w=159   ← donut chart (in/out split)
+─────────────────────────────────────────────────────────────────
 
-Color palette / typography follow the design spec supplied by the user.
-The font is Inter (bundled in app/assets/fonts/); falls back to DejaVu Sans.
+Left zone is split into three stacked rows:
+  Header row      y  18–87   h=69   avatar · name · period · badges
+  Primary KPIs    y 101–208  h=107  Total / Ваших / Их / В день
+  Secondary KPIs  y 220–342  h=122  Медиа / Аудио / Изменено / Удалено
 """
 
 from __future__ import annotations
 
 import datetime as dt
 import io
-import os
 from pathlib import Path
 from typing import NamedTuple
 
@@ -25,14 +26,14 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 import matplotlib.patches as mpatches
-import matplotlib.ticker as mticker
 import numpy as np
-from matplotlib.patches import FancyBboxPatch, Circle
+from matplotlib.patches import Circle, FancyBboxPatch
 
 # ── Font registration ─────────────────────────────────────────────────────────
 
 _FONTS_DIR = Path(__file__).parent.parent / "assets" / "fonts"
 _FONT_REGISTERED = False
+
 
 def _ensure_fonts() -> None:
     global _FONT_REGISTERED
@@ -42,516 +43,384 @@ def _ensure_fonts() -> None:
         fm.fontManager.addfont(str(ttf))
     _FONT_REGISTERED = True
 
-def _font(weight: int = 400) -> dict:
-    """Return fontdict for fig.text / ax.text."""
+
+def _F(weight: int = 400) -> dict:
     _ensure_fonts()
-    names = fm.fontManager.get_font_names()
-    family = "Inter" if "Inter" in names else "DejaVu Sans"
-    return {"fontfamily": family, "fontweight": weight}
+    fam = "Inter" if "Inter" in fm.fontManager.get_font_names() else "DejaVu Sans"
+    return {"fontfamily": fam, "fontweight": weight}
 
-# ── Palette ───────────────────────────────────────────────────────────────────
 
-BG_PAGE   = "#0e0e10"
-BG_CARD   = "#1c1c1e"
-C_PRIMARY = "#5856d6"   # purple — stat cards only
-C_BLUE    = "#0a84ff"   # blue — stat cards only
-C_GREEN   = "#30d158"
-C_AMBER   = "#ffd60a"
-C_RED     = "#ff453a"
-C_TEXT    = "#ffffff"
-C_HINT    = "#8e8e93"
-C_BORDER  = "#2c2c2e"
-C_SHADOW  = "#000000"
+# ── Colour palette ────────────────────────────────────────────────────────────
 
-# ── Chart-specific colors (bright enough to pop on dark cards) ────────────────
-C_IN  = "#5ac8fa"   # sky-cyan  — incoming
-C_OUT = "#ff9f0a"   # warm amber — outgoing
+BG      = "#07101E"     # deep navy page background
+CARD_BG = "#0C1929"     # slightly lighter card face
+DIV     = "#14263A"     # subtle divider / rule colour
+C_TEXT  = "#E3ECFF"     # near-white body text
+C_HINT  = "#3E5670"     # muted label / secondary text
+C_ACC   = "#7B72F8"     # indigo — avatar ring & accent
 
-# ── Canvas ────────────────────────────────────────────────────────────────────
+# Donut colours
+C_IN    = "#3BAEFF"     # incoming — vivid blue
+C_OUT   = "#2DD49E"     # outgoing — teal-green
 
-DPI   = 100
-W_PX  = 1080
-H_PX  = 1920
-PAD_X = 36          # horizontal page padding
-PAD_TOP = 52        # top page padding
+# Primary KPI accent colours  (Total / Outgoing / Incoming / Avg-per-day)
+_P = ["#3BAEFF", "#2DD49E", "#69D9FF", "#FFBB40"]
+# Secondary KPI accent colours (Media / Audio / Edited / Deleted)
+_S = ["#FF7E5C", "#B280FF", "#5AC8FF", "#4D6C8A"]
 
-# ── Public data contract (unchanged) ─────────────────────────────────────────
+# ── Canvas geometry (px, origin = top-left) ───────────────────────────────────
+
+DPI  = 100
+W    = 640
+H    = 360
+
+PAD_X   = 20
+PAD_Y   = 18
+
+LEFT_W  = 420
+SEP_X   = PAD_X + LEFT_W + 10   # = 450
+RIGHT_X = SEP_X + 11             # = 461
+RIGHT_W = W - PAD_X - RIGHT_X   # = 159
+
+INNER_H = H - PAD_Y * 2         # = 324
+
+# Row geometry inside left zone
+HDR_Y  = PAD_Y          # 18
+HDR_H  = 69
+KPI_Y  = HDR_Y + HDR_H + 14    # 101
+KPI_H  = 107
+SEC_Y  = KPI_Y + KPI_H + 12    # 220
+SEC_H  = H - PAD_Y - SEC_Y     # 122   (bottom-pad included in SEC_H)
+
+
+# ── Coordinate helpers ────────────────────────────────────────────────────────
+
+def _ax(fig: plt.Figure, x: float, y_top: float,
+        w: float, h: float) -> plt.Axes:
+    """Add axes region specified in px (y_top measured from top of canvas)."""
+    return fig.add_axes([x / W, (H - y_top - h) / H, w / W, h / H])
+
+
+def _ha(hex_color: str, alpha: float) -> tuple:
+    """#RRGGBB + alpha → (r, g, b, a) tuple for matplotlib."""
+    c = hex_color.lstrip("#")
+    return (int(c[0:2], 16) / 255,
+            int(c[2:4], 16) / 255,
+            int(c[4:6], 16) / 255,
+            alpha)
+
+
+# ── Public data contract ──────────────────────────────────────────────────────
 
 class InfoStats(NamedTuple):
     contact_name: str
-    total:       int
-    incoming:    int
-    outgoing:    int
-    deleted:     int
-    edited:      int
-    media_count: int
-    audio_count: int
-    first_seen:  dt.datetime | None
-    last_seen:   dt.datetime | None
-    note_count:  int
-    muted_until: dt.datetime | None
-    daily: list[tuple[str, int, int]]   # (label "dd.mm", inbound, outbound)
+    total:        int
+    incoming:     int
+    outgoing:     int
+    deleted:      int
+    edited:       int
+    media_count:  int
+    audio_count:  int
+    first_seen:   dt.datetime | None
+    last_seen:    dt.datetime | None
+    note_count:   int
+    muted_until:  dt.datetime | None
+    daily:        list[tuple[str, int, int]]   # (dd.mm, inbound, outbound)
 
 
-# ── Main entry point ──────────────────────────────────────────────────────────
+# ── Entry point ───────────────────────────────────────────────────────────────
 
 def render_info_image(stats: InfoStats) -> io.BytesIO:
-    """Return a 1080 × 1920 PNG stats card as BytesIO."""
+    """Return a 640 × 360 PNG stats card as BytesIO."""
     _ensure_fonts()
 
-    fig = plt.figure(figsize=(W_PX / DPI, H_PX / DPI), facecolor=BG_PAGE, dpi=DPI)
+    fig = plt.figure(figsize=(W / DPI, H / DPI), facecolor=BG, dpi=DPI)
     fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
 
-    # ── Layout constants (px from top-left) ──────────────────────────────────
-    CW = W_PX - PAD_X * 2   # card width = 1008
-    GAP_CARD  = 20
-    GAP_STATS = 14
-    STAT_W = (CW - GAP_STATS) // 2   # 497
-    STAT_H = 162
-    R = 0.010   # card corner rounding in figure-fraction units
-
-    y = PAD_TOP
-
-    # 1. Header card
-    HDR_H = 272
-    _card(fig, PAD_X, y, CW, HDR_H, R)
-    _draw_header(fig, stats, PAD_X, y, CW, HDR_H)
-    y += HDR_H + GAP_CARD
-
-    # 2. Stat grid (3 × 2)
-    avg = _avg_per_day(stats)
-    non_del = max(stats.total - stats.deleted, 0)
-    media_pct = round(stats.media_count / non_del * 100) if non_del else 0
-    audio_pct = round(stats.audio_count / non_del * 100) if non_del else 0
-    kpis = [
-        (stats.total,       "Всего сообщений",    "#0a84ff"),   # blue
-        (stats.outgoing,    "Ваших сообщений",    "#30d158"),   # green
-        (stats.incoming,    "Сообщений контакта", "#5ac8fa"),   # cyan
-        (avg,               "В среднем в день",   "#ffd60a"),   # amber
-        (stats.media_count, "Медиа и файлы",      "#ff6b00"),   # orange
-        (stats.audio_count, "Аудио и голосовые",  "#bf5af2"),   # violet
-    ]
-    for row in range(3):
-        for col in range(2):
-            sx = PAD_X + col * (STAT_W + GAP_STATS)
-            sy = y + row * (STAT_H + GAP_STATS)
-            val, lbl, clr = kpis[row * 2 + col]
-            _card(fig, sx, sy, STAT_W, STAT_H, R)
-            _draw_stat_card(fig, sx, sy, STAT_W, STAT_H, val, lbl, clr)
-    y += STAT_H * 3 + GAP_STATS * 2 + GAP_CARD
-
-    # 3. Donut card
-    DONUT_H = 340
-    _card(fig, PAD_X, y, CW, DONUT_H, R)
-    _section_title(fig, PAD_X + 28, y + 26, "Распределение сообщений")
-    ax_d = _add_axes(fig, PAD_X + 32, y + 52, CW - 64, DONUT_H - 64)
-    _draw_donut(ax_d, stats)
-    y += DONUT_H + GAP_CARD
-
-    # 4. Bar chart card
-    BAR_H = H_PX - y - PAD_TOP - 40   # fill remaining space
-    _card(fig, PAD_X, y, CW, BAR_H, R)
-    _section_title(fig, PAD_X + 28, y + 26, "Активность за 30 дней")
-    ax_b = _add_axes(fig, PAD_X + 32, y + 60, CW - 64, BAR_H - 84)
-    _draw_bars(ax_b, stats)
-    y += BAR_H + GAP_CARD
-
-    # 5. Footer
-    _fig_text(fig, W_PX / 2, (y + H_PX) / 2,
-              "Данные учитываются с момента подключения бота",
-              ha="center", va="center", fontsize=11, color=C_HINT,
-              fontstyle="italic")
+    _draw_bg_card(fig)
+    _draw_header(fig, stats)
+    _draw_primary_kpis(fig, stats)
+    _draw_secondary_kpis(fig, stats)
+    _draw_vsep(fig)
+    _draw_donut(fig, stats)
 
     buf = io.BytesIO()
     try:
-        fig.savefig(buf, format="png", facecolor=BG_PAGE, dpi=DPI, bbox_inches="tight")
+        fig.savefig(buf, format="png", facecolor=BG, dpi=DPI)
     finally:
         plt.close(fig)
     buf.seek(0)
     return buf
 
 
-# ── Layout helpers ────────────────────────────────────────────────────────────
+# ── Background card ───────────────────────────────────────────────────────────
 
-def _fx(px: float) -> float:
-    return px / W_PX
-
-def _fy(px_from_top: float, h_px: float = 0) -> float:
-    """Figure-fraction y for the *bottom* of a region."""
-    return (H_PX - px_from_top - h_px) / H_PX
-
-def _fw(px: float) -> float:
-    return px / W_PX
-
-def _fh(px: float) -> float:
-    return px / H_PX
-
-def _add_axes(fig: plt.Figure, x: float, y_top: float,
-              w: float, h: float) -> plt.Axes:
-    """Add axes at pixel coordinates (y_top = px from top of canvas)."""
-    return fig.add_axes([_fx(x), _fy(y_top, h), _fw(w), _fh(h)])
-
-def _fig_text(fig: plt.Figure, x_px: float, y_top_px: float,
-              text: str, **kwargs) -> None:
-    fd = _font(kwargs.pop("fontweight", 400))
-    fig.text(_fx(x_px), _fy(y_top_px), text,
-             transform=fig.transFigure,
-             fontfamily=fd["fontfamily"],
-             **kwargs)
-
-def _section_title(fig: plt.Figure, x_px: float, y_top_px: float,
-                   text: str) -> None:
-    fd = _font(600)
-    fig.text(_fx(x_px), _fy(y_top_px), text,
-             transform=fig.transFigure,
-             color=C_TEXT, fontsize=15,
-             fontfamily=fd["fontfamily"], fontweight=600,
-             va="top")
-
-
-# ── Card background ───────────────────────────────────────────────────────────
-
-def _card(fig: plt.Figure, x: float, y_top: float,
-          w: float, h: float, r: float) -> None:
-    """Draw a white rounded card with a soft drop-shadow."""
-    tr = fig.transFigure
-
-    # Shadow (offset 0, -6px; slightly larger; low alpha)
-    shadow_expand = 4
-    shadow_offset = 6
-    shadow = FancyBboxPatch(
-        (_fx(x - shadow_expand),
-         _fy(y_top + shadow_offset, h + shadow_expand * 2)),
-        _fw(w + shadow_expand * 2),
-        _fh(h + shadow_expand * 2),
-        boxstyle=f"round,pad=0,rounding_size={r * 1.1}",
-        transform=tr,
-        facecolor=C_SHADOW, edgecolor="none",
-        linewidth=0, alpha=0.45, zorder=1,
+def _draw_bg_card(fig: plt.Figure) -> None:
+    """Single rounded card that covers the entire canvas."""
+    MARGIN = 6
+    card = FancyBboxPatch(
+        (MARGIN / W, MARGIN / H),
+        (W - MARGIN * 2) / W,
+        (H - MARGIN * 2) / H,
+        boxstyle="round,pad=0,rounding_size=0.018",
+        transform=fig.transFigure,
+        facecolor=CARD_BG,
+        edgecolor=DIV,
+        linewidth=0.8,
+        zorder=0,
     )
-    fig.add_artist(shadow)
+    fig.add_artist(card)
 
-    # Card face
-    face = FancyBboxPatch(
-        (_fx(x), _fy(y_top, h)),
-        _fw(w), _fh(h),
-        boxstyle=f"round,pad=0,rounding_size={r}",
-        transform=tr,
-        facecolor=BG_CARD,
-        edgecolor=C_BORDER, linewidth=0.6,
-        zorder=2,
-    )
-    fig.add_artist(face)
-
-
-# ── Header section ────────────────────────────────────────────────────────────
-
-def _draw_header(fig: plt.Figure, stats: InfoStats,
-                 x: float, y_top: float, w: float, h: float) -> None:
-    ax = _add_axes(fig, x, y_top, w, h)
-    ax.set_xlim(0, w)
-    ax.set_ylim(0, h)
-    ax.set_facecolor("none")
-    ax.axis("off")
-    ax.set_zorder(3)
-
-    INNER = 32
-
-    # Avatar circle
-    AV_R = 52
-    cx, cy = INNER + AV_R, h - INNER - AV_R
-    circle = Circle((cx, cy), AV_R,
-                    facecolor=C_PRIMARY, edgecolor="none",
-                    transform=ax.transData, zorder=4)
-    ax.add_patch(circle)
-
-    # Initials
-    initials = _initials(stats.contact_name)
-    fd = _font(700)
-    ax.text(cx, cy, initials,
-            ha="center", va="center",
-            color="white", fontsize=22, fontweight=700,
-            fontfamily=fd["fontfamily"], zorder=5)
-
-    # Name
-    tx = cx * 2 + 8
-    fd600 = _font(600)
-    ax.text(tx, cy + 16, stats.contact_name,
-            ha="left", va="center",
-            color=C_TEXT, fontsize=20, fontweight=600,
-            fontfamily=fd600["fontfamily"], zorder=4)
-
-    # Subtitle line: period
-    period_str = _period_str(stats)
-    fd400 = _font(400)
-    ax.text(tx, cy - 14, period_str,
-            ha="left", va="center",
-            color=C_HINT, fontsize=12,
-            fontfamily=fd400["fontfamily"], zorder=4)
-
-    # Days badge
-    days = _days_total(stats)
-    badge_label = f"{days} дн."
-    badge_x = w - INNER - 10
-    badge_y = h - INNER - 14
-    badge_w, badge_h = 90, 32
-    badge = FancyBboxPatch(
-        (badge_x - badge_w, badge_y - badge_h / 2),
-        badge_w, badge_h,
-        boxstyle="round,pad=0,rounding_size=10",
-        transform=ax.transData,
-        facecolor=_hex_alpha(C_PRIMARY, 0.10),
-        edgecolor=_hex_alpha(C_PRIMARY, 0.25),
-        linewidth=1, zorder=4,
-    )
-    ax.add_patch(badge)
-    ax.text(badge_x - badge_w / 2, badge_y,
-            badge_label, ha="center", va="center",
-            color=C_PRIMARY, fontsize=12, fontweight=600,
-            fontfamily=fd600["fontfamily"], zorder=5)
-
-    # Divider
-    div_y = h - INNER * 2 - AV_R * 2 - 12
-    ax.axhline(div_y, xmin=INNER / w, xmax=(w - INNER) / w,
-               color=C_BORDER, linewidth=0.8, zorder=3)
-
-    # Bottom row: message count + notes + mute indicators
-    parts = [f"{stats.total} сообщений"]
-    if stats.note_count:
-        parts.append(f"{stats.note_count} заметок")
-    if stats.muted_until and stats.muted_until > dt.datetime.now(dt.timezone.utc):
-        parts.append(f"откл. до {stats.muted_until.strftime('%d.%m %H:%M')}")
-
-    bottom_y = div_y - 28
-    ax.text(INNER, bottom_y, "  •  ".join(parts),
-            ha="left", va="center",
-            color=C_HINT, fontsize=12,
-            fontfamily=fd400["fontfamily"], zorder=4)
-
-
-# ── Stat KPI card ─────────────────────────────────────────────────────────────
-
-def _draw_stat_card(fig: plt.Figure,
-                    x: float, y_top: float, w: float, h: float,
-                    value: float | int | str, label: str, color: str) -> None:
-    ax = _add_axes(fig, x, y_top, w, h)
-    ax.set_xlim(0, w)
-    ax.set_ylim(0, h)
-    ax.set_facecolor("none")
-    ax.axis("off")
-    ax.set_zorder(3)
-
-    fd700 = _font(700)
-    fd400 = _font(400)
-    fd600 = _font(600)
-
-    # Accent dot (icon substitute)
-    dot = Circle((28, h - 28), 10,
-                 facecolor=_hex_alpha(color, 0.15),
-                 edgecolor=color, linewidth=1.5,
-                 transform=ax.transData, zorder=4)
-    ax.add_patch(dot)
-    # Inner dot
-    dot2 = Circle((28, h - 28), 4,
-                  facecolor=color, edgecolor="none",
-                  transform=ax.transData, zorder=5)
-    ax.add_patch(dot2)
-
-    # Label (top)
-    ax.text(48, h - 28, label,
-            ha="left", va="center",
-            color=C_HINT, fontsize=11,
-            fontfamily=fd400["fontfamily"], zorder=4)
-
-    # Value (center, large) — shrink font for longer strings
-    val_str = value if isinstance(value, str) else _fmt_value(value)
-    val_fs = 22 if len(val_str) > 7 else 32
-    ax.text(w / 2, h / 2 + 8, val_str,
-            ha="center", va="center",
-            color=color, fontsize=val_fs, fontweight=700,
-            fontfamily=fd700["fontfamily"], zorder=4)
-
-    # Color bar at bottom — fill fraction based on value
-    if isinstance(value, str) and "%" in value:
-        import re as _re
-        m = _re.search(r"(\d+)%", value)
-        fill_frac = min(1.0, max(0.0, int(m.group(1)) / 100)) if m else 0.0
-    elif isinstance(value, (int, float)):
-        fill_frac = min(1.0, value / max(1, value + 1))
-    else:
-        fill_frac = 0.5
+    # Thin indigo accent bar at the very top of the card
     bar = FancyBboxPatch(
-        (24, 18), w - 48, 6,
-        boxstyle="round,pad=0,rounding_size=3",
-        transform=ax.transData,
-        facecolor=_hex_alpha(color, 0.18),
-        edgecolor="none", zorder=4,
+        (MARGIN / W, (H - MARGIN - 3) / H),
+        (W - MARGIN * 2) / W,
+        3 / H,
+        boxstyle="round,pad=0,rounding_size=0.005",
+        transform=fig.transFigure,
+        facecolor=C_ACC,
+        edgecolor="none",
+        zorder=1,
     )
-    ax.add_patch(bar)
-    filled_w = max(8, (w - 48) * fill_frac)
-    bar2 = FancyBboxPatch(
-        (24, 18), filled_w, 6,
-        boxstyle="round,pad=0,rounding_size=3",
-        transform=ax.transData,
-        facecolor=color, edgecolor="none", alpha=0.7, zorder=5,
-    )
-    ax.add_patch(bar2)
+    fig.add_artist(bar)
+
+
+# ── Header row ────────────────────────────────────────────────────────────────
+
+def _draw_header(fig: plt.Figure, stats: InfoStats) -> None:
+    ax = _ax(fig, PAD_X, HDR_Y, LEFT_W, HDR_H)
+    ax.set_xlim(0, LEFT_W)
+    ax.set_ylim(0, HDR_H)
+    ax.set_facecolor("none")
+    ax.axis("off")
+    ax.set_zorder(3)
+
+    AV_R  = 26
+    AV_CX = AV_R + 4
+    AV_CY = HDR_H / 2
+
+    # Avatar: outer glow ring + filled circle
+    glow = Circle((AV_CX, AV_CY), AV_R + 3,
+                  facecolor=_ha(C_ACC, 0.12),
+                  edgecolor="none",
+                  transform=ax.transData, zorder=3)
+    ax.add_patch(glow)
+    circ = Circle((AV_CX, AV_CY), AV_R,
+                  facecolor=_ha(C_ACC, 0.22),
+                  edgecolor=C_ACC,
+                  linewidth=1.5,
+                  transform=ax.transData, zorder=4)
+    ax.add_patch(circ)
+
+    initials = _initials(stats.contact_name)
+    fd7 = _F(700)
+    ax.text(AV_CX, AV_CY, initials,
+            ha="center", va="center",
+            color=C_ACC, fontsize=12, fontweight=700,
+            fontfamily=fd7["fontfamily"], zorder=5)
+
+    # Name + period
+    tx = AV_CX * 2 + 14
+    name = (stats.contact_name[:30] + "…") if len(stats.contact_name) > 30 else stats.contact_name
+    fd6 = _F(600)
+    ax.text(tx, AV_CY + 12, name,
+            ha="left", va="center",
+            color=C_TEXT, fontsize=13, fontweight=600,
+            fontfamily=fd6["fontfamily"], zorder=4)
+
+    days  = _days_total(stats)
+    per   = _period_str(stats)
+    sub   = f"{per}  ·  {days} д." if per != "—" else f"{days} д."
+    fd4 = _F(400)
+    ax.text(tx, AV_CY - 12, sub,
+            ha="left", va="center",
+            color=C_HINT, fontsize=8.5,
+            fontfamily=fd4["fontfamily"], zorder=4)
+
+    # Right-side badges
+    badges: list[str] = []
+    if stats.note_count:
+        badges.append(f"📝 {stats.note_count}")
+    now_utc = dt.datetime.now(dt.timezone.utc)
+    if stats.muted_until and stats.muted_until > now_utc:
+        badges.append(f"🔕 {stats.muted_until.strftime('%d.%m')}")
+    if badges:
+        ax.text(LEFT_W - 8, AV_CY, "  ·  ".join(badges),
+                ha="right", va="center",
+                color=_ha(C_HINT, 0.9), fontsize=8,
+                fontfamily=fd4["fontfamily"], zorder=4)
+
+    # Thin horizontal rule at bottom of header
+    ax.axhline(1, xmin=0, xmax=1, color=DIV, linewidth=0.8, zorder=3)
+
+
+# ── Primary KPIs (4 metrics in one row) ──────────────────────────────────────
+
+def _draw_primary_kpis(fig: plt.Figure, stats: InfoStats) -> None:
+    avg = _avg_per_day(stats)
+    kpis = [
+        (stats.total,    "Всего",    _P[0]),
+        (stats.outgoing, "Ваших",   _P[1]),
+        (stats.incoming, "Их",      _P[2]),
+        (avg,            "В день",  _P[3]),
+    ]
+    _kpi_row(fig, KPI_Y, KPI_H, kpis, val_fs=28)
+
+
+# ── Secondary KPIs (4 metrics in one row) ────────────────────────────────────
+
+def _draw_secondary_kpis(fig: plt.Figure, stats: InfoStats) -> None:
+    kpis = [
+        (stats.media_count, "Медиа",    _S[0]),
+        (stats.audio_count, "Аудио",    _S[1]),
+        (stats.edited,      "Изменено", _S[2]),
+        (stats.deleted,     "Удалено",  _S[3]),
+    ]
+    _kpi_row(fig, SEC_Y, SEC_H, kpis, val_fs=22)
+
+
+def _kpi_row(fig: plt.Figure, y_top: float, h: float,
+             kpis: list[tuple], val_fs: int) -> None:
+    """Render a horizontal row of N evenly-spaced KPI cells."""
+    n      = len(kpis)
+    cell_w = LEFT_W / n
+
+    for i, (val, label, color) in enumerate(kpis):
+        x  = PAD_X + i * cell_w
+        ax = _ax(fig, x, y_top, cell_w, h)
+        ax.set_xlim(0, cell_w)
+        ax.set_ylim(0, h)
+        ax.set_facecolor("none")
+        ax.axis("off")
+        ax.set_zorder(3)
+
+        cw = cell_w
+        fd4 = _F(400)
+        fd7 = _F(700)
+
+        # Thin horizontal rule at the top of this row
+        ax.axhline(h - 1, xmin=0.04, xmax=0.96,
+                   color=DIV, linewidth=0.8, zorder=3)
+
+        # Label (below top rule)
+        ax.text(cw / 2, h - 14, label,
+                ha="center", va="top",
+                color=C_HINT, fontsize=8,
+                fontfamily=fd4["fontfamily"], zorder=4)
+
+        # Value (center of cell)
+        val_str = _fmt_num(val)
+        ax.text(cw / 2, h / 2 + 2, val_str,
+                ha="center", va="center",
+                color=color, fontsize=val_fs, fontweight=700,
+                fontfamily=fd7["fontfamily"], zorder=4)
+
+        # Thin accent underbar
+        bar_w   = max(24, cw * 0.40)
+        bar_x   = (cw - bar_w) / 2
+        accent  = FancyBboxPatch(
+            (bar_x, 8), bar_w, 3,
+            boxstyle="round,pad=0,rounding_size=1.5",
+            facecolor=_ha(color, 0.35),
+            edgecolor="none",
+            zorder=4,
+            transform=ax.transData,
+        )
+        ax.add_patch(accent)
+
+        # Vertical separator (except after last cell)
+        if i < n - 1:
+            ax.axvline(cw - 0.5, ymin=0.06, ymax=0.88,
+                       color=DIV, linewidth=0.8, zorder=3)
+
+
+# ── Vertical separator ────────────────────────────────────────────────────────
+
+def _draw_vsep(fig: plt.Figure) -> None:
+    ax = _ax(fig, SEP_X, PAD_Y + 4, 1, INNER_H - 8)
+    ax.set_facecolor(DIV)
+    ax.axis("off")
+    ax.set_zorder(2)
 
 
 # ── Donut chart ───────────────────────────────────────────────────────────────
 
-def _draw_donut(ax: plt.Axes, stats: InfoStats) -> None:
+def _draw_donut(fig: plt.Figure, stats: InfoStats) -> None:
+    MARG = 10
+    ax = _ax(fig, RIGHT_X, PAD_Y + MARG, RIGHT_W, INNER_H - MARG * 2)
     ax.set_facecolor("none")
     ax.set_zorder(3)
     ax.axis("equal")
 
     total = stats.incoming + stats.outgoing
-    fd2 = _font(400)
+    fd7   = _F(700)
+    fd4   = _F(400)
+    fd5   = _F(500)
 
     if total == 0:
-        # Empty state: grey ring + label
-        wedges, _ = ax.pie(
-            [1], colors=[C_BORDER], startangle=90,
-            wedgeprops=dict(width=0.52, edgecolor=BG_PAGE, linewidth=3),
-        )
-        ax.text(0, 0, "—", ha="center", va="center",
-                color=C_HINT, fontsize=28, fontweight=700,
-                fontfamily=_font(700)["fontfamily"])
-        ax.text(0, -0.22, "нет данных", ha="center", va="center",
-                color=C_HINT, fontsize=11, fontfamily=fd2["fontfamily"])
-        ax.set_xlim(-1.4, 1.4)
+        ax.pie([1], colors=[DIV], startangle=90,
+               wedgeprops=dict(width=0.44, edgecolor=CARD_BG, linewidth=3))
+        ax.text(0, 0.10, "—",
+                ha="center", va="center",
+                color=C_HINT, fontsize=22, fontweight=700,
+                fontfamily=fd7["fontfamily"])
+        ax.text(0, -0.24, "нет данных",
+                ha="center", va="center",
+                color=C_HINT, fontsize=7.5,
+                fontfamily=fd4["fontfamily"])
+        ax.set_xlim(-1.6, 1.6)
+        ax.set_ylim(-1.7, 1.5)
         return
 
-    sizes  = [max(0, stats.incoming), max(0, stats.outgoing)]
-    colors = [C_IN, C_OUT]
-    labels = ["Входящие", "Исходящие"]
+    in_pct  = round(stats.incoming / total * 100)
 
     wedges, _ = ax.pie(
-        sizes,
-        colors=colors,
+        [max(stats.incoming, 0), max(stats.outgoing, 0)],
+        colors=[C_IN, C_OUT],
         startangle=90,
         counterclock=False,
-        wedgeprops=dict(width=0.55, edgecolor=BG_CARD, linewidth=4),
+        wedgeprops=dict(width=0.42, edgecolor=CARD_BG, linewidth=3),
     )
 
-    fd = _font(700)
-    fd2 = _font(400)
-
-    # Center: big percentage + label
-    in_pct = round(stats.incoming / total * 100)
-    ax.text(0, 0.12, f"{in_pct}%",
+    # Section label above donut
+    ax.text(0, 1.55, "диалог",
             ha="center", va="center",
-            color=C_TEXT, fontsize=30, fontweight=700,
-            fontfamily=fd["fontfamily"])
-    ax.text(0, -0.20, "входящих",
+            color=C_HINT, fontsize=7.5,
+            fontfamily=fd4["fontfamily"])
+
+    # Centre: big % + sub-label
+    ax.text(0, 0.15, f"{in_pct}%",
             ha="center", va="center",
-            color=C_HINT, fontsize=12,
-            fontfamily=fd2["fontfamily"])
+            color=C_TEXT, fontsize=19, fontweight=700,
+            fontfamily=fd7["fontfamily"])
+    ax.text(0, -0.19, "входящих",
+            ha="center", va="center",
+            color=C_HINT, fontsize=7,
+            fontfamily=fd4["fontfamily"])
 
-    # Legend with counts
-    legend_patches = [
-        mpatches.Patch(color=c, label=f"{l}  {v}")
-        for c, l, v in zip(colors, labels, sizes)
-    ]
-    ax.legend(
-        handles=legend_patches,
-        loc="lower center",
-        ncol=2,
-        fontsize=13,
-        framealpha=0,
-        labelcolor=C_TEXT,
-        bbox_to_anchor=(0.5, -0.20),
-        handlelength=1.4,
-        handleheight=1.1,
-    )
-    ax.set_xlim(-1.4, 1.4)
-
-
-# ── Bar chart ─────────────────────────────────────────────────────────────────
-
-def _draw_bars(ax: plt.Axes, stats: InfoStats) -> None:
-    ax.set_facecolor("none")
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-    ax.set_zorder(3)
-
-    if not stats.daily:
-        fd = _font(400)
-        ax.text(0.5, 0.5, "Нет данных за последние 30 дней",
-                ha="center", va="center", transform=ax.transAxes,
-                color=C_HINT, fontsize=13, fontfamily=fd["fontfamily"])
-        ax.set_xticks([])
-        ax.set_yticks([])
-        return
-
-    labels   = [d[0] for d in stats.daily]
-    inbound  = np.array([d[1] for d in stats.daily], dtype=float)
-    outbound = np.array([d[2] for d in stats.daily], dtype=float)
-    x = np.arange(len(labels))
-    n = len(labels)
-
-    BAR_W = 0.30
-    GAP   = 0.08
-
-    # Draw rounded bars (extend below 0 to clip bottom corners)
-    ax.set_ylim(0, max(max(inbound), max(outbound), 1) * 1.22)
-    ax.set_xlim(-0.7, n - 0.3)
-
-    for xi, (hi, ho) in enumerate(zip(inbound, outbound)):
-        for val, x_off, color in [(hi, -BAR_W / 2 - GAP / 2, C_IN),
-                                   (ho,  GAP / 2,             C_OUT)]:
-            if val > 0:
-                r = BAR_W * 0.48
-                p = FancyBboxPatch(
-                    (xi + x_off, -r),
-                    BAR_W, val + r,
-                    boxstyle=f"round,pad=0,rounding_size={r}",
-                    facecolor=color,
-                    edgecolor="none",
-                    linewidth=0,
-                    alpha=1.0,
-                    clip_on=True,
-                    zorder=3,
-                )
-                ax.add_patch(p)
-
-    # Grid — slightly brighter than card border so lines are visible
-    ax.yaxis.set_major_locator(mticker.MaxNLocator(integer=True, nbins=4))
-    ax.yaxis.grid(True, color="#3a3a3c", linewidth=0.8, alpha=1.0, zorder=0)
-    ax.set_axisbelow(True)
-
-    # Tick styling
-    tick_labels = [labels[i] if (n <= 15 or i % 2 == 0) else ""
-                   for i in range(n)]
-    ax.set_xticks(x)
-    ax.set_xticklabels(tick_labels, rotation=45, ha="right",
-                       fontsize=9, color="#aeaeb2")
-    ax.tick_params(axis="x", length=0, pad=6)
-    ax.tick_params(axis="y", colors="#aeaeb2", labelsize=9, length=0, pad=8)
-
-    # Legend
+    # Legend — two compact rows
     ax.legend(
         handles=[
-            mpatches.Patch(color=C_IN,  label="Входящие"),
-            mpatches.Patch(color=C_OUT, label="Исходящие"),
+            mpatches.Patch(color=C_IN,  label=f"↓  {_fmt_num(stats.incoming)}"),
+            mpatches.Patch(color=C_OUT, label=f"↑  {_fmt_num(stats.outgoing)}"),
         ],
-        loc="upper right",
-        fontsize=11,
+        loc="lower center",
+        ncol=2,
+        fontsize=7.5,
         framealpha=0,
         labelcolor=C_TEXT,
-        handlelength=1.2,
+        bbox_to_anchor=(0.5, -0.26),
+        handlelength=1.0,
+        handleheight=0.9,
+        handletextpad=0.4,
+        columnspacing=0.7,
+        prop={"family": _F(500)["fontfamily"], "weight": 500, "size": 7.5},
     )
-
-    # Apply font family to tick labels
-    try:
-        _name = _font(400)["fontfamily"]
-        for lbl in ax.get_xticklabels() + ax.get_yticklabels():
-            lbl.set_fontfamily(_name)
-    except Exception:
-        pass
+    ax.set_xlim(-1.6, 1.6)
+    ax.set_ylim(-1.75, 1.75)
 
 
-# ── Utility ───────────────────────────────────────────────────────────────────
+# ── Utilities ─────────────────────────────────────────────────────────────────
 
 def _initials(name: str) -> str:
     parts = name.strip().split()
@@ -562,10 +431,9 @@ def _initials(name: str) -> str:
 
 def _period_str(stats: InfoStats) -> str:
     if stats.first_seen and stats.last_seen:
-        f = stats.first_seen.strftime("%d.%m.%Y")
-        l = stats.last_seen.strftime("%d.%m.%Y")
-        return f"{f} — {l}"
-    return "Период неизвестен"
+        return (f"{stats.first_seen.strftime('%d.%m.%y')}"
+                f" — {stats.last_seen.strftime('%d.%m.%y')}")
+    return "—"
 
 
 def _days_total(stats: InfoStats) -> int:
@@ -575,18 +443,12 @@ def _days_total(stats: InfoStats) -> int:
 
 
 def _avg_per_day(stats: InfoStats) -> float:
-    days = _days_total(stats)
-    return round(stats.total / days, 1)
+    return round(stats.total / _days_total(stats), 1)
 
 
-def _fmt_value(v: float | int) -> str:
+def _fmt_num(v: float | int) -> str:
     if isinstance(v, float) and v != int(v):
         return f"{v:.1f}"
-    return str(int(v))
-
-
-def _hex_alpha(hex_color: str, alpha: float) -> tuple:
-    """Convert #RRGGBB + alpha to (r, g, b, a) for matplotlib."""
-    h = hex_color.lstrip("#")
-    r, g, b = int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255
-    return (r, g, b, alpha)
+    n = int(v)
+    # Thin-space thousands separator
+    return f"{n:,}".replace(",", "\u2009")

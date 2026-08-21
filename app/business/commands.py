@@ -100,7 +100,8 @@ async def _delete_cmd_msg(
 
 _HELP_TEXT = (
     f"📋 <b>Доступные команды</b> (пишите прямо в чате):\n\n"
-    f"<code>!info</code> · <code>!инфо</code> — статистика по собеседнику\n"
+    f"<code>!инфо</code> — статистика чата (в личку боту)\n"
+        f"<code>!инфо лс</code> — то же, но карточка отправляется прямо в чат\n"
     f"<code>!note текст</code> · <code>!заметка текст</code> — сохранить заметку\n"
     f"<code>!notes</code> · <code>!заметки</code> — показать все заметки\n"
     f"<code>!mute</code> · <code>!мут</code> — удалять все сообщения собеседника 3 минуты\n"
@@ -125,6 +126,8 @@ async def _cmd_info(
     chat_id: int,
     business_connection_id: str,
     session: AsyncSession,
+    args: str | None = None,
+    can_reply: bool = True,
     **_: object,
 ) -> None:
     base = [
@@ -252,10 +255,27 @@ async def _cmd_info(
         daily=daily,
     )
 
+    # Determine send target:
+    #   !инфо          → owner's DM with the bot (default)
+    #   !инфо лс / чат → business chat (directly to the contact)
+    _to_chat = args is not None and args.strip().lower() in ("лс", "чат", "dm", "дм")
+
+    if _to_chat and not can_reply:
+        from app.business import permissions as _perms  # noqa: PLC0415
+        await _perms.notify_missing(bot, owner_id, "can_reply", "!инфо лс")
+        return
+
     try:
         buf = render_info_image(info)
         photo = BufferedInputFile(buf.getvalue(), filename="stats.png")
-        await bot.send_photo(chat_id=owner_id, photo=photo)
+        if _to_chat:
+            await bot.send_photo(
+                chat_id=chat_id,
+                business_connection_id=business_connection_id,
+                photo=photo,
+            )
+        else:
+            await bot.send_photo(chat_id=owner_id, photo=photo)
     except Exception:
         logger.exception("Failed to render !info image; falling back to text")
         del_pct   = round(deleted / total * 100) if total else 0

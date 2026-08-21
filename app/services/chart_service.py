@@ -209,7 +209,7 @@ def _activity_chart(image: Image.Image, draw: ImageDraw.ImageDraw, stats: InfoSt
             draw.rounded_rectangle((left, int(bottom - total_height), right, int(bottom - inbound_h) + 2),
                                    radius=3, fill=OUTGOING)
         if index in (0, len(daily) - 1) or index % max(1, len(daily) // 4) == 0:
-            _centered(draw, (center, chart[3] + 18), label, _font(11), FAINT)
+            _centered(draw, (center, chart[3] + 18), label, _font(12), FAINT)
     draw.line((chart[0], chart[3] + 0.5, chart[2], chart[3] + 0.5), fill=(82, 97, 115), width=1)
 
 
@@ -218,31 +218,48 @@ def _conversation_panel(image: Image.Image, draw: ImageDraw.ImageDraw, stats: In
     x0, y0, x1, y1 = box
     draw.text((x0 + 24, y0 + 23), "БАЛАНС ДИАЛОГА", font=_font(13, "bold"), fill=MUTED)
     total = max(0, stats.incoming) + max(0, stats.outgoing)
-    cx, cy, radius = x0 + 122, y0 + 176, 74
-    draw.arc((cx - radius, cy - radius, cx + radius, cy + radius), -90, 270, fill=(63, 77, 95), width=18)
+    # Top content and bottom cells use separate vertical regions: 422–569 and
+    # 589–652 respectively. This prevents the former ring/cell collision.
+    cx, cy, radius = x0 + 107, y0 + 150, 57
     if total:
         incoming_angle = 360 * max(0, stats.incoming) / total
-        draw.arc((cx - radius, cy - radius, cx + radius, cy + radius), -90, -90 + incoming_angle,
-                 fill=INCOMING, width=18)
-        draw.arc((cx - radius, cy - radius, cx + radius, cy + radius), -90 + incoming_angle + 3, 267,
-                 fill=OUTGOING, width=18)
+        _smooth_ring(image, (cx, cy), radius, incoming_angle)
         percent = round(stats.incoming * 100 / total)
-        _centered(draw, (cx, cy - 8), f"{percent}%", _font(28, "bold"), TEXT)
-        _centered(draw, (cx, cy + 19), "входящих", _font(12, "medium"), MUTED)
+        _centered(draw, (cx, cy - 8), f"{percent}%", _font(25, "bold"), TEXT)
+        _centered(draw, (cx, cy + 18), "входящих", _font(13, "medium"), MUTED)
     else:
+        _smooth_ring(image, (cx, cy), radius, 0)
         _centered(draw, (cx, cy - 6), "—", _font(35, "bold"), MUTED)
-        _centered(draw, (cx, cy + 21), "нет данных", _font(12, "medium"), MUTED)
-    _stat_line(draw, x0 + 236, y0 + 105, INCOMING, "Входящие", stats.incoming)
-    _stat_line(draw, x0 + 236, y0 + 148, OUTGOING, "Исходящие", stats.outgoing)
-    draw.line((x0 + 236, y0 + 184, x1 - 24, y0 + 184), fill=(77, 92, 110), width=1)
+        _centered(draw, (cx, cy + 21), "нет данных", _font(13, "medium"), MUTED)
+    _stat_line(draw, x0 + 196, y0 + 91, INCOMING, "Входящие", stats.incoming)
+    _stat_line(draw, x0 + 196, y0 + 139, OUTGOING, "Исходящие", stats.outgoing)
+    draw.line((x0 + 24, y0 + 211, x1 - 24, y0 + 211), fill=(77, 92, 110), width=1)
     secondary = ((stats.media_count, "Медиа", "media"), (stats.audio_count, "Аудио", "audio"),
                  (stats.edited, "Изменено", "edit"), (stats.deleted, "Удалено", "delete"))
     for idx, (value, label, icon) in enumerate(secondary):
-        column_width = (x1 - x0 - 48) / 4
-        center_x = x0 + 24 + column_width * (idx + 0.5)
-        _icon(draw, icon, round(center_x), y0 + 231, ACCENTS[idx], 14)
-        _centered(draw, (center_x, y0 + 257), _fmt_num(value), _font(15, "bold"), TEXT)
-        _centered(draw, (center_x, y0 + 282), label, _font(10), MUTED)
+        cell_left = x0 + 24 + idx * 99
+        if idx:
+            draw.line((cell_left - 10, y0 + 231, cell_left - 10, y1 - 24), fill=(70, 84, 101), width=1)
+        _icon(draw, icon, cell_left + 18, y0 + 251, ACCENTS[idx], 17)
+        draw.text((cell_left + 34, y0 + 238), _fmt_num(value), font=_font(17, "bold"), fill=TEXT)
+        draw.text((cell_left + 7, y0 + 268), label, font=_font(12, "medium"), fill=MUTED)
+
+
+def _smooth_ring(image: Image.Image, center: tuple[int, int], radius: int, incoming_angle: float) -> None:
+    """Draw the annular chart at 4×, then Lanczos downsample the vector result."""
+    scale, stroke, pad = 4, 18, 8
+    side = (radius + stroke + pad) * 2
+    large = Image.new("RGBA", (side * scale, side * scale), (0, 0, 0, 0))
+    ring = ImageDraw.Draw(large)
+    midpoint = side * scale // 2
+    radius_px, width_px = radius * scale, stroke * scale
+    bounds = (midpoint - radius_px, midpoint - radius_px, midpoint + radius_px, midpoint + radius_px)
+    ring.arc(bounds, -90, 270, fill=(63, 77, 95, 255), width=width_px)
+    if incoming_angle:
+        ring.arc(bounds, -90, -90 + incoming_angle, fill=INCOMING + (255,), width=width_px)
+        ring.arc(bounds, -87 + incoming_angle, 267, fill=OUTGOING + (255,), width=width_px)
+    small = large.resize((side, side), Image.Resampling.LANCZOS)
+    image.alpha_composite(small, (center[0] - side // 2, center[1] - side // 2))
 
 
 def _stat_line(draw: ImageDraw.ImageDraw, x: int, y: int, color: tuple[int, int, int], label: str, value: int) -> None:
@@ -253,15 +270,26 @@ def _stat_line(draw: ImageDraw.ImageDraw, x: int, y: int, color: tuple[int, int,
 
 def _legend(draw: ImageDraw.ImageDraw, x: int, y: int, color: tuple[int, int, int], text: str) -> None:
     draw.ellipse((x, y + 3, x + 8, y + 11), fill=color)
-    draw.text((x + 14, y), text, font=_font(11, "medium"), fill=MUTED)
+    draw.text((x + 14, y), text, font=_font(12, "medium"), fill=MUTED)
 
 
 def _icon(draw: ImageDraw.ImageDraw, kind: str, x: int, y: int, color: tuple[int, int, int], size: int) -> None:
+    """Supersample compact semantic icons instead of scaling a finished bitmap."""
+    scale, padding = 4, 11
+    side = (size + padding * 2) * scale
+    layer = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+    _icon_vector(ImageDraw.Draw(layer), kind, side // 2, side // 2, color, size * scale)
+    icon = layer.resize((side // scale, side // scale), Image.Resampling.LANCZOS)
+    draw._image.alpha_composite(icon, (x - icon.width // 2, y - icon.height // 2))
+
+
+def _icon_vector(draw: ImageDraw.ImageDraw, kind: str, x: int, y: int, color: tuple[int, int, int], size: int) -> None:
     """Crisp semantic line icons, built from fixed vector primitives."""
     h, w = size // 2, max(1, size // 9)
+    q = lambda value: round(value * size / 17)
     if kind == "messages":
-        draw.rounded_rectangle((x - h, y - h + 1, x + h, y + h - 3), radius=3, outline=color, width=w)
-        draw.line((x - h // 2, y + h - 3, x - h + 1, y + h + 3, x, y + h - 3), fill=color, width=w)
+        draw.rounded_rectangle((x - h, y - h + q(1), x + h, y + h - q(3)), radius=q(3), outline=color, width=w)
+        draw.line((x - h // 2, y + h - q(3), x - h + q(1), y + h + q(3), x, y + h - q(3)), fill=color, width=w)
     elif kind in ("incoming", "outgoing"):
         direction = -1 if kind == "incoming" else 1
         draw.line((x - direction * h, y + h, x + direction * h, y - h), fill=color, width=w)
@@ -269,30 +297,30 @@ def _icon(draw: ImageDraw.ImageDraw, kind: str, x: int, y: int, color: tuple[int
         draw.line((x + direction * h, y - h, x + direction * h - direction * h, y - h), fill=color, width=w)
     elif kind == "daily":
         for index, height in enumerate((6, 12, 17)):
-            bx = x - 7 + index * 7
-            draw.line((bx, y + 8, bx, y + 8 - height), fill=color, width=3)
+            bx = x - q(7) + index * q(7)
+            draw.line((bx, y + q(8), bx, y + q(8) - q(height)), fill=color, width=q(3))
     elif kind == "media":
-        draw.rounded_rectangle((x - h, y - h + 1, x + h, y + h - 1), radius=2, outline=color, width=w)
-        draw.ellipse((x + 2, y - 5, x + 5, y - 2), fill=color)
-        draw.line((x - 6, y + 5, x - 1, y, x + 2, y + 4, x + 7, y - 1), fill=color, width=w)
+        draw.rounded_rectangle((x - h, y - h + q(1), x + h, y + h - q(1)), radius=q(2), outline=color, width=w)
+        draw.ellipse((x + q(2), y - q(5), x + q(5), y - q(2)), fill=color)
+        draw.line((x - q(6), y + q(5), x - q(1), y, x + q(2), y + q(4), x + q(7), y - q(1)), fill=color, width=w)
     elif kind == "audio":
-        draw.rounded_rectangle((x - 3, y - 8, x + 3, y + 4), radius=3, outline=color, width=w)
-        draw.arc((x - 7, y - 3, x + 7, y + 10), 0, 180, fill=color, width=w)
-        draw.line((x, y + 10, x, y + 13), fill=color, width=w)
+        draw.rounded_rectangle((x - q(3), y - q(8), x + q(3), y + q(4)), radius=q(3), outline=color, width=w)
+        draw.arc((x - q(7), y - q(3), x + q(7), y + q(10)), 0, 180, fill=color, width=w)
+        draw.line((x, y + q(10), x, y + q(13)), fill=color, width=w)
     elif kind == "edit":
-        draw.line((x - 7, y + 7, x + 6, y - 6), fill=color, width=3)
-        draw.line((x + 4, y - 8, x + 8, y - 4), fill=color, width=3)
+        draw.line((x - q(7), y + q(7), x + q(6), y - q(6)), fill=color, width=q(3))
+        draw.line((x + q(4), y - q(8), x + q(8), y - q(4)), fill=color, width=q(3))
     elif kind == "delete":
-        draw.rounded_rectangle((x - 5, y - 5, x + 5, y + 8), radius=1, outline=color, width=w)
-        draw.line((x - 7, y - 7, x + 7, y - 7), fill=color, width=w)
-        draw.line((x - 2, y - 10, x + 2, y - 10), fill=color, width=w)
+        draw.rounded_rectangle((x - q(5), y - q(5), x + q(5), y + q(8)), radius=q(1), outline=color, width=w)
+        draw.line((x - q(7), y - q(7), x + q(7), y - q(7)), fill=color, width=w)
+        draw.line((x - q(2), y - q(10), x + q(2), y - q(10)), fill=color, width=w)
     elif kind == "note":
-        draw.rectangle((x - 5, y - 7, x + 5, y + 7), outline=color, width=w)
-        draw.line((x - 2, y - 2, x + 3, y - 2), fill=color, width=w)
+        draw.rectangle((x - q(5), y - q(7), x + q(5), y + q(7)), outline=color, width=w)
+        draw.line((x - q(2), y - q(2), x + q(3), y - q(2)), fill=color, width=w)
     elif kind == "mute":
-        draw.arc((x - 6, y - 5, x + 3, y + 5), -70, 70, fill=color, width=w)
-        draw.line((x + 4, y - 6, x + 4, y + 3), fill=color, width=w)
-        draw.line((x - 8, y - 8, x + 8, y + 8), fill=color, width=w)
+        draw.arc((x - q(6), y - q(5), x + q(3), y + q(5)), -70, 70, fill=color, width=w)
+        draw.line((x + q(4), y - q(6), x + q(4), y + q(3)), fill=color, width=w)
+        draw.line((x - q(8), y - q(8), x + q(8), y + q(8)), fill=color, width=w)
 
 
 def _font(size: int, weight: str = "regular") -> ImageFont.FreeTypeFont | ImageFont.ImageFont:

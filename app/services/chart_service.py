@@ -26,7 +26,9 @@ class InfoStats(NamedTuple):
     daily: list[tuple[str, int, int]]
 
 
-CANVAS = (1280, 720)
+SCALE = 2
+OUTPUT_SIZE = (1280, 720)
+CANVAS = (1280 * SCALE, 720 * SCALE)
 MARGIN = 44
 FONT_DIR = Path(__file__).parent.parent / "assets" / "fonts"
 
@@ -43,6 +45,43 @@ OUTGOING = (206, 157, 112)
 ACCENTS = ((129, 175, 205), (207, 160, 113), (159, 145, 202), (180, 169, 121))
 
 
+def S(value: float) -> int:
+    return round(value * SCALE)
+
+
+class _ScaledDraw:
+    """ImageDraw facade: source layout remains logical, raster is 2×."""
+    def __init__(self, image: Image.Image) -> None:
+        self._image = image
+        self._draw = ImageDraw.Draw(image)
+
+    def _box(self, box):
+        return tuple(S(v) for v in box)
+
+    def text(self, xy, text, font=None, **kwargs):
+        return self._draw.text((S(xy[0]), S(xy[1])), text, font=font, **kwargs)
+
+    def textbbox(self, xy, text, font=None, **kwargs):
+        return self._draw.textbbox((S(xy[0]), S(xy[1])), text, font=font, **kwargs)
+
+    def __getattr__(self, name):
+        method = getattr(self._draw, name)
+        if name == "textlength":
+            return lambda text, font=None, **kw: method(text, font=font, **kw) / SCALE
+        if name in {"line", "polygon"}:
+            def draw_path(points, **kw):
+                if points and isinstance(points[0], (int, float)):
+                    points = [(points[i], points[i + 1]) for i in range(0, len(points), 2)]
+                return method([(S(p[0]), S(p[1])) for p in points],
+                              **{**kw, "width": S(kw["width"])} if "width" in kw else kw)
+            return draw_path
+        if name in {"ellipse", "rectangle", "rounded_rectangle", "arc"}:
+            return lambda box, *args, **kw: method(self._box(box), *[S(a) if isinstance(a, (int, float)) else a for a in args],
+                                                      **{**kw, **({"width": S(kw["width"])} if "width" in kw else {}),
+                                                         **({"radius": S(kw["radius"])} if "radius" in kw else {})})
+        return method
+
+
 def render_info_image(
     stats: InfoStats,
     *,
@@ -50,7 +89,7 @@ def render_info_image(
 ) -> io.BytesIO:
     """Render a 1280×720 PNG using only deterministic Pillow geometry."""
     image = _background()
-    draw = ImageDraw.Draw(image)
+    draw = _ScaledDraw(image)
 
     _panel(image, (MARGIN, 36, 1236, 154), radius=22)
     _header(image, draw, stats, avatar_bytes)
@@ -75,7 +114,8 @@ def render_info_image(
     _conversation_panel(image, draw, stats, (798, 358, 1236, 676))
 
     output = io.BytesIO()
-    image.convert("RGB").save(output, "PNG", optimize=True, compress_level=9)
+    final = image.convert("RGB").resize(OUTPUT_SIZE, Image.Resampling.LANCZOS)
+    final.save(output, "PNG", optimize=True, compress_level=9)
     output.seek(0)
     return output
 
@@ -98,12 +138,12 @@ def _background() -> Image.Image:
 def _panel(image: Image.Image, box: tuple[int, int, int, int], *, radius: int) -> None:
     """Raised matte panel, with shadow separated from its crisp one-pixel rim."""
     shadow = Image.new("RGBA", CANVAS, (0, 0, 0, 0))
-    sd = ImageDraw.Draw(shadow)
+    sd = _ScaledDraw(shadow)
     shifted = (box[0], box[1] + 8, box[2], box[3] + 8)
     sd.rounded_rectangle(shifted, radius=radius, fill=(0, 0, 0, 105))
-    image.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(9)))
+    image.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(S(9))))
     layer = Image.new("RGBA", CANVAS, (0, 0, 0, 0))
-    ld = ImageDraw.Draw(layer)
+    ld = _ScaledDraw(layer)
     ld.rounded_rectangle(box, radius=radius, fill=SURFACE, outline=EDGE, width=1)
     # Gentle top-facing material highlight, not a glow.
     ld.line((box[0] + radius, box[1], box[2] - radius, box[1]), fill=(173, 189, 206, 58), width=1)
@@ -136,15 +176,15 @@ def _header(image: Image.Image, draw: ImageDraw.ImageDraw, stats: InfoStats, ava
 def _avatar(image: Image.Image, draw: ImageDraw.ImageDraw, name: str, data: bytes | None,
             box: tuple[int, int, int, int]) -> None:
     mask = Image.new("L", CANVAS, 0)
-    ImageDraw.Draw(mask).ellipse(box, fill=255)
+    _ScaledDraw(mask).ellipse(box, fill=255)
     if data:
         try:
             source = Image.open(io.BytesIO(data)).convert("RGB")
             side = min(source.size)
             left, top = (source.width - side) // 2, (source.height - side) // 2
-            source = source.crop((left, top, left + side, top + side)).resize((64, 64), Image.Resampling.LANCZOS)
+            source = source.crop((left, top, left + side, top + side)).resize((S(64), S(64)), Image.Resampling.LANCZOS)
             layer = Image.new("RGBA", CANVAS, (0, 0, 0, 0))
-            layer.paste(source, box[:2])
+            layer.paste(source, (S(box[0]), S(box[1])))
             layer.putalpha(mask)
             image.alpha_composite(layer)
         except Exception:
@@ -164,7 +204,7 @@ def _avatar_fallback(draw: ImageDraw.ImageDraw, name: str, box: tuple[int, int, 
 
 def _chip(image: Image.Image, draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], text: str, kind: str) -> None:
     layer = Image.new("RGBA", CANVAS, (0, 0, 0, 0))
-    ld = ImageDraw.Draw(layer)
+    ld = _ScaledDraw(layer)
     ld.rounded_rectangle(box, radius=13, fill=(49, 62, 79, 210), outline=(100, 118, 137, 120), width=1)
     image.alpha_composite(layer)
     color = (191, 163, 119) if kind == "mute" else (129, 175, 205)
@@ -248,6 +288,7 @@ def _conversation_panel(image: Image.Image, draw: ImageDraw.ImageDraw, stats: In
 def _smooth_ring(image: Image.Image, center: tuple[int, int], radius: int, incoming_angle: float) -> None:
     """Draw the annular chart at 4×, then Lanczos downsample the vector result."""
     scale, stroke, pad = 4, 18, 8
+    radius, stroke, pad = S(radius), S(stroke), S(pad)
     side = (radius + stroke + pad) * 2
     large = Image.new("RGBA", (side * scale, side * scale), (0, 0, 0, 0))
     ring = ImageDraw.Draw(large)
@@ -259,7 +300,7 @@ def _smooth_ring(image: Image.Image, center: tuple[int, int], radius: int, incom
         ring.arc(bounds, -90, -90 + incoming_angle, fill=INCOMING + (255,), width=width_px)
         ring.arc(bounds, -87 + incoming_angle, 267, fill=OUTGOING + (255,), width=width_px)
     small = large.resize((side, side), Image.Resampling.LANCZOS)
-    image.alpha_composite(small, (center[0] - side // 2, center[1] - side // 2))
+    image.alpha_composite(small, (S(center[0]) - side // 2, S(center[1]) - side // 2))
 
 
 def _stat_line(draw: ImageDraw.ImageDraw, x: int, y: int, color: tuple[int, int, int], label: str, value: int) -> None:
@@ -276,9 +317,10 @@ def _legend(draw: ImageDraw.ImageDraw, x: int, y: int, color: tuple[int, int, in
 def _icon(draw: ImageDraw.ImageDraw, kind: str, x: int, y: int, color: tuple[int, int, int], size: int) -> None:
     """Supersample compact semantic icons instead of scaling a finished bitmap."""
     scale, padding = 4, 11
-    side = (size + padding * 2) * scale
+    base_size, base_padding = S(size), S(padding)
+    side = (base_size + base_padding * 2) * scale
     layer = Image.new("RGBA", (side, side), (0, 0, 0, 0))
-    badge_radius = round((size / 2 + 4) * scale)
+    badge_radius = round((base_size / 2 + S(4)) * scale)
     midpoint = side // 2
     if size >= 17:
         badge = ImageDraw.Draw(layer)
@@ -289,9 +331,9 @@ def _icon(draw: ImageDraw.ImageDraw, kind: str, x: int, y: int, color: tuple[int
             outline=color + (55,),
             width=scale,
         )
-    _icon_vector(ImageDraw.Draw(layer), kind, side // 2, side // 2, color, size * scale)
+    _icon_vector(ImageDraw.Draw(layer), kind, side // 2, side // 2, color, base_size * scale)
     icon = layer.resize((side // scale, side // scale), Image.Resampling.LANCZOS)
-    draw._image.alpha_composite(icon, (x - icon.width // 2, y - icon.height // 2))
+    draw._image.alpha_composite(icon, (S(x) - icon.width // 2, S(y) - icon.height // 2))
 
 
 def _icon_vector(draw: ImageDraw.ImageDraw, kind: str, x: int, y: int, color: tuple[int, int, int], size: int) -> None:
@@ -375,7 +417,7 @@ def _font(size: int, weight: str = "regular") -> ImageFont.FreeTypeFont | ImageF
     for name in names[weight]:
         try:
             path = FONT_DIR / name
-            return ImageFont.truetype(str(path) if path.exists() else name, size)
+            return ImageFont.truetype(str(path) if path.exists() else name, S(size))
         except OSError:
             continue
     return ImageFont.load_default()
@@ -384,7 +426,7 @@ def _font(size: int, weight: str = "regular") -> ImageFont.FreeTypeFont | ImageF
 def _centered(draw: ImageDraw.ImageDraw, center: tuple[float, float], text: str,
               font: ImageFont.ImageFont, fill: tuple[int, int, int]) -> None:
     box = draw.textbbox((0, 0), text, font=font)
-    draw.text((center[0] - (box[2] - box[0]) / 2, center[1] - (box[3] - box[1]) / 2),
+    draw.text((center[0] - (box[2] - box[0]) / (2 * SCALE), center[1] - (box[3] - box[1]) / (2 * SCALE)),
               text, font=font, fill=fill)
 
 

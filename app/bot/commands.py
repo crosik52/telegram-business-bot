@@ -16,6 +16,7 @@ from aiogram.types import (
     Message,
     WebAppInfo,
 )
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 
 from sqlalchemy import select
 
@@ -596,3 +597,159 @@ async def on_me(message: Message) -> None:
         ]])
 
     await message.answer(text.strip(), parse_mode="HTML", reply_markup=kb)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# /broadcast — admin-only: send any message to all users via copy_message
+# ══════════════════════════════════════════════════════════════════════════════
+
+# State: admin_user_id → {"from_chat_id": int, "message_id": int} | None (waiting)
+_pending_broadcast: dict[int, dict | None] = {}
+
+
+def _is_admin(username: str | None) -> bool:
+    if not username:
+        return False
+    settings = get_settings()
+    return username.lstrip("@").lower() == settings.miniapp_admin_username.lstrip("@").lower()
+
+
+def _broadcast_confirm_kb(count: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"✅ Разослать {count} пользователям", callback_data="broadcast_confirm")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="broadcast_cancel")],
+    ])
+
+
+@router.message(Command("broadcast"))
+async def on_broadcast_cmd(message: Message) -> None:
+    """Start broadcast session — admin only."""
+    if not message.from_user or not _is_admin(message.from_user.username):
+        await message.answer("⛔ Нет доступа.")
+        return
+
+    _pending_broadcast[message.from_user.id] = None  # mark as waiting
+
+    await message.answer(
+        "📢 <b>Режим рассылки</b>\n\n"
+        "Отправь мне <b>одно сообщение</b> — текст, фото, видео, с любым форматированием "
+        "и премиум-эмодзи. Я покажу тебе превью и попрошу подтверждение перед отправкой.\n\n"
+        "Чтобы отменить — нажми кнопку ниже.",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="broadcast_cancel")]
+        ]),
+    )
+
+
+@router.message(F.func(lambda m: m.from_user and m.from_user.id in _pending_broadcast and _pending_broadcast.get(m.from_user.id) is None))
+async def on_broadcast_message(message: Message) -> None:
+    """Capture the message the admin wants to broadcast."""
+    if not message.from_user:
+        return
+
+    admin_id = message.from_user.id
+
+    # Count recipients
+    recipient_count = 0
+    try:
+        from app.models.business_connection import BusinessConnection  # noqa: PLC0415
+        async with session_scope() as db:
+            from sqlalchemy import func as _func, distinct  # noqa: PLC0415
+            result = await db.execute(
+                select(_func.count(distinct(BusinessConnection.user_telegram_id)))
+                .where(BusinessConnection.is_blocked.is_(False))
+            )
+            recipient_count = result.scalar_one() or 0
+    except Exception as exc:
+        logger.warning("broadcast: failed to count recipients: %s", exc)
+
+    # Store the source message reference
+    _pending_broadcast[admin_id] = {
+        "from_chat_id": message.chat.id,
+        "message_id":   message.message_id,
+    }
+
+    # Forward to admin as preview, then ask for confirmation
+    await message.answer(
+        f"👆 <b>Превью сообщения</b>\n\n"
+        f"Сообщение выше будет скопировано <b>{recipient_count}</b> пользователям "
+        f"(все с активным подключением бота).\n\n"
+        f"Подтверждаешь рассылку?",
+        parse_mode="HTML",
+        reply_markup=_broadcast_confirm_kb(recipient_count),
+    )
+
+
+@router.callback_query(F.data == "broadcast_confirm")
+async def on_broadcast_confirm(callback: CallbackQuery) -> None:
+    await callback.answer()
+    if not callback.from_user or not _is_admin(callback.from_user.username):
+        await callback.answer("⛔ Нет доступа.", show_alert=True)
+        return
+
+    admin_id = callback.from_user.id
+    pending = _pending_broadcast.pop(admin_id, None)
+    if not pending:
+        await callback.message.edit_text("⚠️ Нет активной рассылки. Начни заново: /broadcast")  # type: ignore[union-attr]
+        return
+
+    from_chat_id = pending["from_chat_id"]
+    source_msg_id = pending["message_id"]
+
+    await callback.message.edit_text("⏳ Рассылаем…")  # type: ignore[union-attr]
+
+    # Fetch recipients
+    owner_ids: list[int] = []
+    try:
+        from app.models.business_connection import BusinessConnection  # noqa: PLC0415
+        from sqlalchemy import distinct  # noqa: PLC0415
+        async with session_scope() as db:
+            result = await db.execute(
+                select(distinct(BusinessConnection.user_telegram_id))
+                .where(BusinessConnection.is_blocked.is_(False))
+            )
+            owner_ids = [row[0] for row in result.all()]
+    except Exception as exc:
+        logger.error("broadcast_confirm: failed to fetch recipients: %s", exc)
+        await callback.message.edit_text("❌ Не удалось получить список пользователей.")  # type: ignore[union-attr]
+        return
+
+    sent = 0
+    failed = 0
+    for uid in owner_ids:
+        try:
+            await callback.bot.copy_message(  # type: ignore[union-attr]
+                chat_id=uid,
+                from_chat_id=from_chat_id,
+                message_id=source_msg_id,
+            )
+            sent += 1
+        except (TelegramForbiddenError, TelegramBadRequest) as exc:
+            failed += 1
+            logger.debug("broadcast: skip uid=%s: %s", uid, exc)
+        except Exception as exc:  # noqa: BLE001
+            failed += 1
+            logger.warning("broadcast: failed uid=%s: %s", uid, exc)
+
+    logger.info(
+        "Admin @%s broadcast via bot: sent=%s failed=%s",
+        callback.from_user.username, sent, failed,
+    )
+    await callback.message.edit_text(  # type: ignore[union-attr]
+        f"✅ <b>Рассылка завершена</b>\n\n"
+        f"Отправлено: <b>{sent}</b>\n"
+        f"Не доставлено: <b>{failed}</b>",
+        parse_mode="HTML",
+    )
+
+
+@router.callback_query(F.data == "broadcast_cancel")
+async def on_broadcast_cancel(callback: CallbackQuery) -> None:
+    await callback.answer()
+    if callback.from_user:
+        _pending_broadcast.pop(callback.from_user.id, None)
+    try:
+        await callback.message.edit_text("❌ Рассылка отменена.")  # type: ignore[union-attr]
+    except Exception:
+        pass

@@ -1,0 +1,79 @@
+Redesign the provided image into a much more polished, premium and visually appealing 640×360 px analytics card.
+
+Keep all existing information, numbers, labels and overall meaning from the reference image. Do not invent, remove or change any data.
+
+Completely focus on improving the visual design and UI presentation.
+
+Design direction
+
+Create a premium modern dark SaaS / Telegram analytics aesthetic.
+
+Use:
+
+dark graphite / near-black background
+subtle dark blue undertones
+elegant frosted glass / liquid glass UI
+translucent glass tiles
+soft blur
+subtle reflections
+thin semi-transparent borders
+soft ambient shadows
+gentle depth
+restrained blue, cyan, violet, green and yellow accents
+
+The glass effect should look matte, sophisticated and expensive, not glossy plastic or excessive 3D.
+
+Layout
+
+Keep the general information structure of the reference so that the same content remains easy to recognize, but significantly improve:
+
+spacing
+alignment
+proportions
+visual hierarchy
+typography
+grouping
+readability
+balance between elements
+
+Turn the statistics into elegant individual glass tiles/cards instead of flat text floating on the background.
+
+Make the main statistics visually dominant and secondary statistics more compact.
+
+Make the conversation distribution visualization feel integrated into the interface rather than looking like a separate generic chart.
+
+Header
+
+Make the profile/header section clean and premium, with a subtle glass avatar, refined typography and small muted secondary information.
+
+Charts
+
+Redesign the existing visualization using clean modern UI principles.
+
+Use subtle gradients and glow only where they improve readability.
+
+Keep charts simple, minimal and immediately understandable.
+
+Typography
+
+Use a modern font similar to SF Pro / Inter.
+
+Strong hierarchy:
+
+large bold numbers
+medium-weight labels
+small muted secondary information
+
+Make everything clearly readable at 640×360 px.
+
+Overall feeling
+
+The final result should look like a screenshot from a premium 2026 mobile analytics application.
+
+Think:
+
+Apple-style glassmorphism + premium fintech dashboard + Telegram-native UI.
+
+Clean, minimal, sophisticated, modern and expensive-looking.
+
+Do not make it look like a generic AI-generated infographic.

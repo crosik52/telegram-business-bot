@@ -1,14 +1,4 @@
-"""chart_service.py — high-resolution 16:9 glassmorphism analytics card.
-
-Layout
-──────────────────────────────────────────────────────────────────────────
-  Row 0  y 14–72   Header glass tile  (avatar · name · period · badges)
-  Row 1  y 79–179  4 Primary KPI glass tiles  (Всего / Ваших / Их / День)
-  Row 2  y 186–346 Bottom bar
-           Left    x  14–414  4 Secondary KPI glass tiles
-           Right   x 421–626  Conversation arc / donut tile
-──────────────────────────────────────────────────────────────────────────
-"""
+"""Deterministic Pillow renderer for the private conversation insights card."""
 
 from __future__ import annotations
 
@@ -17,728 +7,334 @@ import io
 from pathlib import Path
 from typing import NamedTuple
 
-import matplotlib
-matplotlib.use("Agg")
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-import matplotlib.pyplot as plt
-import matplotlib.font_manager as fm
-import matplotlib.patches as mpatches
-import numpy as np
-from PIL import Image
-from matplotlib.patches import (Circle, Ellipse, FancyBboxPatch,
-                                FancyArrowPatch)
-from matplotlib.colors import LinearSegmentedColormap
-
-# ── Font registration ──────────────────────────────────────────────────────────
-
-_FONTS_DIR = Path(__file__).parent.parent / "assets" / "fonts"
-_FONT_REGISTERED = False
-
-
-def _ensure_fonts() -> None:
-    global _FONT_REGISTERED
-    if _FONT_REGISTERED:
-        return
-    for ttf in _FONTS_DIR.glob("Inter-*.ttf"):
-        fm.fontManager.addfont(str(ttf))
-    _FONT_REGISTERED = True
-
-
-def _F(weight: int = 400) -> dict:
-    _ensure_fonts()
-    fam = "Inter" if "Inter" in fm.fontManager.get_font_names() else "DejaVu Sans"
-    return {"fontfamily": fam, "fontweight": weight}
-
-
-# ── Colour palette ─────────────────────────────────────────────────────────────
-
-BG = "#08101F"           # deep dark navy background
-
-# Glass tile colours (RGBA tuples)
-GLASS_FACE = (0.72, 0.82, 1.0, 0.075)   # matte blue-white glass
-GLASS_EDGE = (0.86, 0.92, 1.0, 0.16)    # brighter frosted rim
-GLASS_GLOW = (0.12, 0.30, 0.60, 0.18)   # ambient blue glow behind tile
-
-# Text
-C_TEXT = "#EEF2FF"   # near-white primary
-C_SUB  = "#4A5E82"   # muted label
-C_DIM  = "#2E3F5E"   # very dim / divider
-
-# Primary KPI accent colours (Blue / Cyan / Violet / Yellow)
-ACC = ["#4A9EFF", "#00D4FF", "#9B6DFF", "#FFD166"]
-
-# Secondary KPI accent colours (Coral / Teal / Periwinkle / Slate)
-ACC_S = ["#FF7B72", "#3DD68C", "#7C8CFF", "#A0B4C8"]
-
-# Donut
-C_IN  = "#4A9EFF"   # incoming — blue
-C_OUT = "#3DD68C"   # outgoing — green
-
-# ── Canvas geometry ────────────────────────────────────────────────────────────
-
-DPI = 100
-RENDER_SCALE = 3
-W   = 640                  # logical layout coordinates
-H   = 360
-OUTPUT_W = 1280            # exported PNG; 16:9, not tied to logical size
-OUTPUT_H = 720
-PAD = 14
-GAP = 7
-
-# Row heights
-HDR_Y = PAD               # 14
-HDR_H = 58                # → bottom = 72
-PRI_Y = HDR_Y + HDR_H + GAP   # 79
-PRI_H = 100               # → bottom = 179
-BOT_Y = PRI_Y + PRI_H + GAP   # 186
-BOT_H = H - PAD - BOT_Y  # 360-14-186 = 160
-
-# Bottom split
-SEC_W  = 400              # secondary KPI section width
-RING_X = PAD + SEC_W + GAP    # 421
-RING_W = W - PAD - RING_X     # 205
-
-# ── Helpers ────────────────────────────────────────────────────────────────────
-
-def _ax(fig: plt.Figure, x: float, y_top: float,
-        w: float, h: float, zorder: int = 3) -> plt.Axes:
-    ax = fig.add_axes([x / W, (H - y_top - h) / H, w / W, h / H])
-    ax.set_zorder(zorder)
-    return ax
-
-
-def _rgba(hex_color: str, alpha: float = 1.0) -> tuple:
-    c = hex_color.lstrip("#")
-    r, g, b = int(c[0:2], 16) / 255, int(c[2:4], 16) / 255, int(c[4:6], 16) / 255
-    return (r, g, b, alpha)
-
-
-def _hex_blend(hex_color: str, alpha: float) -> tuple:
-    return _rgba(hex_color, alpha)
-
-
-# ── Public data contract ───────────────────────────────────────────────────────
 
 class InfoStats(NamedTuple):
     contact_name: str
-    total:        int
-    incoming:     int
-    outgoing:     int
-    deleted:      int
-    edited:       int
-    media_count:  int
-    audio_count:  int
-    first_seen:   dt.datetime | None
-    last_seen:    dt.datetime | None
-    note_count:   int
-    muted_until:  dt.datetime | None
-    daily:        list[tuple[str, int, int]]   # (dd.mm, inbound, outbound)
+    total: int
+    incoming: int
+    outgoing: int
+    deleted: int
+    edited: int
+    media_count: int
+    audio_count: int
+    first_seen: dt.datetime | None
+    last_seen: dt.datetime | None
+    note_count: int
+    muted_until: dt.datetime | None
+    daily: list[tuple[str, int, int]]
 
 
-# ── Entry point ────────────────────────────────────────────────────────────────
+CANVAS = (1280, 720)
+MARGIN = 44
+FONT_DIR = Path(__file__).parent.parent / "assets" / "fonts"
+
+# A quiet ink-and-slate palette. Accent colour only carries meaning.
+INK = (13, 19, 29)
+SURFACE = (25, 34, 48, 238)
+SURFACE_ALT = (30, 40, 55, 245)
+EDGE = (88, 105, 126, 125)
+TEXT = (238, 242, 247)
+MUTED = (144, 157, 174)
+FAINT = (82, 96, 115)
+INCOMING = (103, 169, 205)
+OUTGOING = (206, 157, 112)
+ACCENTS = ((129, 175, 205), (207, 160, 113), (159, 145, 202), (180, 169, 121))
+
 
 def render_info_image(
     stats: InfoStats,
     *,
     avatar_bytes: bytes | None = None,
 ) -> io.BytesIO:
-    """Return a high-resolution 16:9 PNG glassmorphism analytics card."""
-    _ensure_fonts()
+    """Render a 1280×720 PNG using only deterministic Pillow geometry."""
+    image = _background()
+    draw = ImageDraw.Draw(image)
 
-    render_dpi = DPI * RENDER_SCALE
-    fig = plt.figure(
-        figsize=(W / DPI, H / DPI),
-        facecolor=BG,
-        dpi=render_dpi,
+    _panel(image, (MARGIN, 36, 1236, 154), radius=22)
+    _header(image, draw, stats, avatar_bytes)
+
+    # Four primary metrics establish the scan path.
+    metric_y, metric_h, metric_gap = 176, 160, 16
+    metric_w = (1192 - metric_gap * 3) // 4
+    primary = (
+        (stats.total, "ВСЕГО СООБЩЕНИЙ", "messages", ACCENTS[0]),
+        (stats.outgoing, "ОТПРАВЛЕНО ВАМИ", "outgoing", OUTGOING),
+        (stats.incoming, "ПОЛУЧЕНО", "incoming", INCOMING),
+        (_avg_per_day(stats), "В СРЕДНЕМ В ДЕНЬ", "daily", ACCENTS[3]),
     )
-    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+    for index, (value, label, icon, color) in enumerate(primary):
+        x = MARGIN + index * (metric_w + metric_gap)
+        _metric_card(image, draw, (x, metric_y, x + metric_w, metric_y + metric_h),
+                     value, label, icon, color, major=True)
 
-    _draw_bg(fig)
-    _draw_header(fig, stats, avatar_bytes)
-    _draw_primary_kpis(fig, stats)
-    _draw_secondary_kpis(fig, stats)
-    _draw_ring(fig, stats)
+    _panel(image, (MARGIN, 358, 778, 676), radius=22)
+    _activity_chart(image, draw, stats, (MARGIN, 358, 778, 676))
+    _panel(image, (798, 358, 1236, 676), radius=22)
+    _conversation_panel(image, draw, stats, (798, 358, 1236, 676))
 
-    high_res = io.BytesIO()
-    try:
-        fig.savefig(
-            high_res,
-            format="png",
-            facecolor=BG,
-            dpi=render_dpi,
-            metadata={"Software": "Telegram Analytics"},
-        )
-    finally:
-        plt.close(fig)
-
-    high_res.seek(0)
-    with Image.open(high_res) as rendered:
-        rendered = rendered.convert("RGB")
-        rendered = rendered.resize((OUTPUT_W, OUTPUT_H), Image.Resampling.LANCZOS)
-        buf = io.BytesIO()
-        rendered.save(buf, format="PNG", optimize=True)
-    buf.seek(0)
-    return buf
+    output = io.BytesIO()
+    image.convert("RGB").save(output, "PNG", optimize=True, compress_level=9)
+    output.seek(0)
+    return output
 
 
-# ── Background ─────────────────────────────────────────────────────────────────
-
-def _draw_bg(fig: plt.Figure) -> None:
-    """Subtle dark gradient + ambient glow blobs to give depth."""
-    ax = fig.add_axes([0, 0, 1, 1])
-    ax.set_xlim(0, W)
-    ax.set_ylim(0, H)
-    ax.set_facecolor(BG)
-    ax.axis("off")
-    ax.set_zorder(0)
-
-    # Left ambient glow (blue)
-    for r, a in [(200, 0.06), (130, 0.09), (70, 0.07)]:
-        ax.add_patch(Ellipse((0, H), r * 2.2, r * 1.4,
-                             facecolor=_rgba("#1A4080", a), edgecolor="none"))
-    # Right ambient glow (violet)
-    for r, a in [(180, 0.05), (100, 0.07), (55, 0.05)]:
-        ax.add_patch(Ellipse((W, 0), r * 2.0, r * 1.3,
-                             facecolor=_rgba("#3A1F6A", a), edgecolor="none"))
-    # Top-right subtle cyan
-    for r, a in [(120, 0.04), (60, 0.05)]:
-        ax.add_patch(Ellipse((W * 0.75, H), r * 2, r,
-                             facecolor=_rgba("#003850", a), edgecolor="none"))
+def _background() -> Image.Image:
+    """Matte vertical ink gradient with an intentionally restrained edge vignette."""
+    width, height = CANVAS
+    image = Image.new("RGBA", CANVAS)
+    pixels = image.load()
+    for y in range(height):
+        t = y / (height - 1)
+        base = tuple(round(INK[i] * (1 - t) + (18, 26, 38)[i] * t) for i in range(3))
+        for x in range(width):
+            edge = min(x, width - 1 - x) / (width / 2)
+            shade = int((1 - edge) * 7)
+            pixels[x, y] = tuple(max(0, component - shade) for component in base)
+    return image
 
 
-# ── Glass tile primitive ───────────────────────────────────────────────────────
-
-def _glass_tile(fig: plt.Figure, x: float, y_top: float,
-                w: float, h: float,
-                accent: str | None = None,
-                zorder: int = 2) -> None:
-    """Draw a frosted-glass rounded rectangle on the figure canvas."""
-    radius = 0.014   # relative rounding
-
-    # Wide ambient shadow plus a tighter coloured halo create real depth.
-    wide_shadow = FancyBboxPatch(
-        ((x - 4) / W, (H - y_top - h - 5) / H),
-        (w + 8) / W, (h + 10) / H,
-        boxstyle=f"round,pad=0,rounding_size={radius + 0.003}",
-        transform=fig.transFigure,
-        facecolor=(0.0, 0.0, 0.0, 0.19),
-        edgecolor="none",
-        zorder=zorder - 2,
-    )
-    fig.add_artist(wide_shadow)
-
-    shadow = FancyBboxPatch(
-        ((x - 2) / W, (H - y_top - h - 2) / H),
-        (w + 4) / W, (h + 4) / H,
-        boxstyle=f"round,pad=0,rounding_size={radius}",
-        transform=fig.transFigure,
-        facecolor=GLASS_GLOW,
-        edgecolor="none",
-        zorder=zorder - 1,
-    )
-    fig.add_artist(shadow)
-
-    # Glass body
-    tile = FancyBboxPatch(
-        (x / W, (H - y_top - h) / H),
-        w / W, h / H,
-        boxstyle=f"round,pad=0,rounding_size={radius}",
-        transform=fig.transFigure,
-        facecolor=GLASS_FACE,
-        edgecolor=GLASS_EDGE,
-        linewidth=0.75,
-        zorder=zorder,
-    )
-    fig.add_artist(tile)
-
-    # Liquid reflection: a muted, broad highlight over the upper glass area.
-    reflection = FancyBboxPatch(
-        ((x + 1.5) / W, (H - y_top - h * 0.40) / H),
-        (w - 3) / W, (h * 0.40 - 1.5) / H,
-        boxstyle=f"round,pad=0,rounding_size={radius}",
-        transform=fig.transFigure,
-        facecolor=(0.80, 0.90, 1.0, 0.025),
-        edgecolor="none",
-        zorder=zorder + 1,
-    )
-    fig.add_artist(reflection)
-
-    # Inner highlight — crisp rim on top and left.
-    highlight = FancyBboxPatch(
-        (x / W, (H - y_top - 1.5) / H),
-        w / W, 1.5 / H,
-        boxstyle=f"round,pad=0,rounding_size={radius}",
-        transform=fig.transFigure,
-        facecolor=(1, 1, 1, 0.06),
-        edgecolor="none",
-        zorder=zorder + 1,
-    )
-    fig.add_artist(highlight)
-
-    left_rim = FancyBboxPatch(
-        (x / W, (H - y_top - h + 3) / H),
-        1.2 / W, (h - 6) / H,
-        boxstyle=f"round,pad=0,rounding_size={radius}",
-        transform=fig.transFigure,
-        facecolor=(1, 1, 1, 0.075),
-        edgecolor="none",
-        zorder=zorder + 1,
-    )
-    fig.add_artist(left_rim)
-
-    # Coloured accent stripe at top
-    if accent:
-        stripe = FancyBboxPatch(
-            (x / W, (H - y_top - 2.5) / H),
-            w / W, 2.5 / H,
-            boxstyle=f"round,pad=0,rounding_size={radius}",
-            transform=fig.transFigure,
-            facecolor=_rgba(accent, 0.90),
-            edgecolor="none",
-            zorder=zorder + 2,
-        )
-        fig.add_artist(stripe)
+def _panel(image: Image.Image, box: tuple[int, int, int, int], *, radius: int) -> None:
+    """Raised matte panel, with shadow separated from its crisp one-pixel rim."""
+    shadow = Image.new("RGBA", CANVAS, (0, 0, 0, 0))
+    sd = ImageDraw.Draw(shadow)
+    shifted = (box[0], box[1] + 8, box[2], box[3] + 8)
+    sd.rounded_rectangle(shifted, radius=radius, fill=(0, 0, 0, 105))
+    image.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(9)))
+    layer = Image.new("RGBA", CANVAS, (0, 0, 0, 0))
+    ld = ImageDraw.Draw(layer)
+    ld.rounded_rectangle(box, radius=radius, fill=SURFACE, outline=EDGE, width=1)
+    # Gentle top-facing material highlight, not a glow.
+    ld.line((box[0] + radius, box[1], box[2] - radius, box[1]), fill=(173, 189, 206, 58), width=1)
+    image.alpha_composite(layer)
 
 
-# ── Header ─────────────────────────────────────────────────────────────────────
+def _header(image: Image.Image, draw: ImageDraw.ImageDraw, stats: InfoStats, avatar_bytes: bytes | None) -> None:
+    avatar_box = (66, 57, 130, 121)
+    _avatar(image, draw, stats.contact_name, avatar_bytes, avatar_box)
+    name = _truncate(stats.contact_name or "Собеседник", 38)
+    draw.text((150, 60), name, font=_font(27, "semibold"), fill=TEXT)
+    draw.text((151, 96), f"{_period_str(stats)}  /  {_days_total(stats)} дн.", font=_font(15), fill=MUTED)
+    draw.line((502, 64, 502, 126), fill=(87, 102, 121, 145), width=1)
+    draw.text((526, 65), "ЛИЧНЫЙ ДИАЛОГ", font=_font(13, "bold"), fill=FAINT)
+    draw.text((526, 91), "Статистика переписки", font=_font(17, "medium"), fill=TEXT)
 
-def _draw_header(
-    fig: plt.Figure,
-    stats: InfoStats,
-    avatar_bytes: bytes | None,
-) -> None:
-    _glass_tile(fig, PAD, HDR_Y, W - PAD * 2, HDR_H, zorder=2)
-
-    ax = _ax(fig, PAD, HDR_Y, W - PAD * 2, HDR_H, zorder=5)
-    tw = W - PAD * 2
-    ax.set_xlim(0, tw)
-    ax.set_ylim(0, HDR_H)
-    ax.set_facecolor("none")
-    ax.axis("off")
-
-    AV_R  = 22
-    AV_CX = AV_R + 14
-    AV_CY = HDR_H / 2
-
-    # Avatar glow ring
-    ax.add_patch(Circle((AV_CX, AV_CY), AV_R + 5,
-                        facecolor=_rgba("#4A9EFF", 0.10), edgecolor="none",
-                        transform=ax.transData, zorder=2))
-    # Avatar glass circle / current Telegram profile photo.
-    ax.add_patch(Circle((AV_CX, AV_CY), AV_R,
-                        facecolor=_rgba("#4A9EFF", 0.18),
-                        edgecolor=_rgba("#4A9EFF", 0.50),
-                        linewidth=1.2,
-                        transform=ax.transData, zorder=3))
-    avatar_drawn = False
-    if avatar_bytes:
-        try:
-            with Image.open(io.BytesIO(avatar_bytes)) as source:
-                avatar = source.convert("RGB")
-                side = min(avatar.size)
-                left = (avatar.width - side) // 2
-                top = (avatar.height - side) // 2
-                avatar = avatar.crop((left, top, left + side, top + side))
-                avatar = avatar.resize((256, 256), Image.Resampling.LANCZOS)
-
-            image = ax.imshow(
-                np.asarray(avatar),
-                extent=(
-                    AV_CX - AV_R + 1.5,
-                    AV_CX + AV_R - 1.5,
-                    AV_CY - AV_R + 1.5,
-                    AV_CY + AV_R - 1.5,
-                ),
-                interpolation="lanczos",
-                zorder=4,
-            )
-            image.set_clip_path(
-                Circle(
-                    (AV_CX, AV_CY),
-                    AV_R - 1.5,
-                    transform=ax.transData,
-                )
-            )
-            avatar_drawn = True
-        except Exception:
-            avatar_drawn = False
-
-    if not avatar_drawn:
-        ax.text(AV_CX, AV_CY, _initials(stats.contact_name),
-                ha="center", va="center",
-                color="#4A9EFF", fontsize=11, fontweight=700,
-                fontfamily=_F(700)["fontfamily"], zorder=4)
-
-    # Fine glossy crescent along the avatar rim.
-    ax.add_patch(mpatches.Arc(
-        (AV_CX, AV_CY), AV_R * 1.82, AV_R * 1.82,
-        theta1=28, theta2=142,
-        color=_rgba("#FFFFFF", 0.48),
-        linewidth=0.9,
-        transform=ax.transData,
-        zorder=5,
-    ))
-
-    tx = AV_CX * 2 + 10
-    name = (stats.contact_name[:34] + "…") if len(stats.contact_name) > 34 else stats.contact_name
-    # Name
-    ax.text(tx, AV_CY + 10, name,
-            ha="left", va="center",
-            color=C_TEXT, fontsize=12.5, fontweight=600,
-            fontfamily=_F(600)["fontfamily"], zorder=4)
-
-    # Period
-    per  = _period_str(stats)
-    days = _days_total(stats)
-    sub  = f"{per}  ·  {days} дн." if per != "—" else f"{days} дн."
-    ax.text(tx, AV_CY - 11, sub,
-            ha="left", va="center",
-            color=C_SUB, fontsize=8,
-            fontfamily=_F(400)["fontfamily"], zorder=4)
-
-    # Badges (right side)
-    badges: list[str] = []
+    chips: list[tuple[str, str]] = []
     if stats.note_count:
-        badges.append(f"Заметки: {stats.note_count}")
-    now_utc = dt.datetime.now(dt.timezone.utc)
-    if stats.muted_until and stats.muted_until > now_utc:
-        badges.append(f"Без звука до {stats.muted_until.strftime('%d.%m')}")
-    if badges:
-        ax.text(tw - 14, AV_CY, "  ·  ".join(badges),
-                ha="right", va="center",
-                color=C_SUB, fontsize=8,
-                fontfamily=_F(400)["fontfamily"], zorder=4)
-
-    # Thin separator dot between name column and badge column
-    if badges:
-        ax.axvline(tw - 110, ymin=0.2, ymax=0.8,
-                   color=_rgba(C_DIM, 0.8), linewidth=0.6, zorder=3)
+        chips.append((f"Заметки  {stats.note_count}", "note"))
+    if stats.muted_until and stats.muted_until > _now_for(stats.muted_until):
+        chips.append((f"Без звука до {stats.muted_until:%d.%m}", "mute"))
+    x = 1210
+    for text, kind in reversed(chips):
+        width = int(draw.textlength(text, font=_font(14, "medium"))) + 49
+        x -= width
+        _chip(image, draw, (x, 70, x + width, 111), text, kind)
+        x -= 10
 
 
-# ── Primary KPIs ───────────────────────────────────────────────────────────────
-
-def _draw_primary_kpis(fig: plt.Figure, stats: InfoStats) -> None:
-    avg  = _avg_per_day(stats)
-    data = [
-        (stats.total,    "Всего сообщений", "messages", ACC[0]),
-        (stats.outgoing, "Ваших",           "outgoing", ACC[1]),
-        (stats.incoming, "Собеседника",      "incoming", ACC[2]),
-        (avg,            "В день",           "daily",    ACC[3]),
-    ]
-    full_w = W - PAD * 2
-    n      = len(data)
-    tile_w = (full_w - GAP * (n - 1)) / n
-
-    for i, (val, label, icon, color) in enumerate(data):
-        x = PAD + i * (tile_w + GAP)
-        _glass_tile(fig, x, PRI_Y, tile_w, PRI_H, accent=color, zorder=3)
-
-        ax = _ax(fig, x, PRI_Y, tile_w, PRI_H, zorder=6)
-        ax.set_xlim(0, tile_w)
-        ax.set_ylim(0, PRI_H)
-        ax.set_facecolor("none")
-        ax.axis("off")
-
-        _draw_icon(ax, icon, 17, PRI_H - 17, color, size=11)
-
-        # Subtle glow ellipse behind number
-        ax.add_patch(Ellipse((tile_w / 2, PRI_H / 2 + 6),
-                             tile_w * 0.65, 38,
-                             facecolor=_rgba(color, 0.10),
-                             edgecolor="none",
-                             transform=ax.transData, zorder=1))
-
-        # Big number
-        val_str = _fmt_num(val)
-        ax.text(tile_w / 2, PRI_H / 2 + 10, val_str,
-                ha="center", va="center",
-                color=color, fontsize=26, fontweight=700,
-                fontfamily=_F(700)["fontfamily"], zorder=4)
-
-        # Label
-        ax.text(tile_w / 2, 15, label,
-                ha="center", va="center",
-                color=C_SUB, fontsize=7.8, fontweight=500,
-                fontfamily=_F(500)["fontfamily"], zorder=4)
+def _avatar(image: Image.Image, draw: ImageDraw.ImageDraw, name: str, data: bytes | None,
+            box: tuple[int, int, int, int]) -> None:
+    mask = Image.new("L", CANVAS, 0)
+    ImageDraw.Draw(mask).ellipse(box, fill=255)
+    if data:
+        try:
+            source = Image.open(io.BytesIO(data)).convert("RGB")
+            side = min(source.size)
+            left, top = (source.width - side) // 2, (source.height - side) // 2
+            source = source.crop((left, top, left + side, top + side)).resize((64, 64), Image.Resampling.LANCZOS)
+            layer = Image.new("RGBA", CANVAS, (0, 0, 0, 0))
+            layer.paste(source, box[:2])
+            layer.putalpha(mask)
+            image.alpha_composite(layer)
+        except Exception:
+            _avatar_fallback(draw, name, box)
+    else:
+        _avatar_fallback(draw, name, box)
+    draw.ellipse(box, outline=(174, 191, 205, 130), width=2)
 
 
-# ── Secondary KPIs ─────────────────────────────────────────────────────────────
-
-def _draw_secondary_kpis(fig: plt.Figure, stats: InfoStats) -> None:
-    data = [
-        (stats.media_count, "Медиа",    "media",  ACC_S[0]),
-        (stats.audio_count, "Аудио",    "audio",  ACC_S[1]),
-        (stats.edited,      "Изменено", "edit",   ACC_S[2]),
-        (stats.deleted,     "Удалено",  "delete", ACC_S[3]),
-    ]
-    n      = len(data)
-    tile_w = (SEC_W - GAP * (n - 1)) / n
-
-    for i, (val, label, icon, color) in enumerate(data):
-        x = PAD + i * (tile_w + GAP)
-        _glass_tile(fig, x, BOT_Y, tile_w, BOT_H, zorder=3)
-
-        ax = _ax(fig, x, BOT_Y, tile_w, BOT_H, zorder=6)
-        ax.set_xlim(0, tile_w)
-        ax.set_ylim(0, BOT_H)
-        ax.set_facecolor("none")
-        ax.axis("off")
-
-        # Semantic vector icon — clearer than a generic coloured dot.
-        _draw_icon(ax, icon, tile_w / 2, BOT_H - 21, color, size=14)
-
-        # Number
-        val_str = _fmt_num(val)
-        ax.text(tile_w / 2, BOT_H / 2 + 4, val_str,
-                ha="center", va="center",
-                color=C_TEXT, fontsize=20, fontweight=700,
-                fontfamily=_F(700)["fontfamily"], zorder=4)
-
-        # Label
-        ax.text(tile_w / 2, 14, label,
-                ha="center", va="center",
-                color=C_SUB, fontsize=8,
-                fontfamily=_F(400)["fontfamily"], zorder=4)
-
-        # Thin horizontal accent rule under label
-        rule_w = tile_w * 0.35
-        ax.axhline(22, xmin=(tile_w / 2 - rule_w / 2) / tile_w,
-                   xmax=(tile_w / 2 + rule_w / 2) / tile_w,
-                   color=_rgba(color, 0.50), linewidth=1.0, zorder=3)
+def _avatar_fallback(draw: ImageDraw.ImageDraw, name: str, box: tuple[int, int, int, int]) -> None:
+    draw.ellipse(box, fill=(42, 71, 91))
+    initials = _initials(name)
+    font = _font(21, "bold")
+    center = ((box[0] + box[2]) / 2, (box[1] + box[3]) / 2)
+    _centered(draw, center, initials, font, (211, 228, 239))
 
 
-def _draw_icon(
-    ax: plt.Axes,
-    kind: str,
-    x: float,
-    y: float,
-    color: str,
-    *,
-    size: float = 12,
-) -> None:
-    """Draw a small crisp line icon in logical axis coordinates."""
-    lw = 1.35
-    c = _rgba(color, 0.92)
-    dim = _rgba(color, 0.16)
-    half = size / 2
-
-    # Soft glassy icon backing.
-    ax.add_patch(Circle(
-        (x, y), half + 4,
-        facecolor=dim,
-        edgecolor=_rgba(color, 0.20),
-        linewidth=0.6,
-        transform=ax.transData,
-        zorder=3,
-    ))
-
-    if kind == "messages":
-        bubble = FancyBboxPatch(
-            (x - half, y - half * 0.65), size, size * 0.78,
-            boxstyle="round,pad=0,rounding_size=2.2",
-            facecolor="none", edgecolor=c, linewidth=lw, zorder=4,
-        )
-        ax.add_patch(bubble)
-        ax.plot(
-            [x - half * 0.32, x - half * 0.52, x - half * 0.03],
-            [y - half * 0.65, y - half * 1.02, y - half * 0.65],
-            color=c, linewidth=lw, solid_capstyle="round", zorder=4,
-        )
-        ax.plot(
-            [x - half * 0.45, x + half * 0.45],
-            [y, y], color=c, linewidth=0.9, alpha=0.7, zorder=4,
-        )
-    elif kind in ("outgoing", "incoming"):
-        direction = 1 if kind == "outgoing" else -1
-        ax.plot(
-            [x - direction * half * 0.65, x + direction * half * 0.65],
-            [y - direction * half * 0.65, y + direction * half * 0.65],
-            color=c, linewidth=lw, solid_capstyle="round", zorder=4,
-        )
-        ax.plot(
-            [x + direction * half * 0.05, x + direction * half * 0.65,
-             x + direction * half * 0.65],
-            [y + direction * half * 0.65, y + direction * half * 0.65,
-             y + direction * half * 0.05],
-            color=c, linewidth=lw, solid_capstyle="round", zorder=4,
-        )
-    elif kind == "daily":
-        for idx, height in enumerate((0.55, 0.90, 1.25)):
-            bx = x - half * 0.68 + idx * half * 0.68
-            ax.plot(
-                [bx, bx],
-                [y - half * 0.70, y - half * 0.70 + half * height],
-                color=c, linewidth=2.0, solid_capstyle="round", zorder=4,
-            )
-    elif kind == "media":
-        rect = FancyBboxPatch(
-            (x - half, y - half * 0.72), size, size * 0.86,
-            boxstyle="round,pad=0,rounding_size=1.5",
-            facecolor="none", edgecolor=c, linewidth=lw, zorder=4,
-        )
-        ax.add_patch(rect)
-        ax.add_patch(Circle(
-            (x + half * 0.42, y + half * 0.22), half * 0.17,
-            facecolor=c, edgecolor="none", zorder=4,
-        ))
-        ax.plot(
-            [x - half * 0.72, x - half * 0.22, x + half * 0.05,
-             x + half * 0.72],
-            [y - half * 0.48, y + half * 0.05, y - half * 0.28,
-             y + half * 0.32],
-            color=c, linewidth=1.0, zorder=4,
-        )
-    elif kind == "audio":
-        ax.add_patch(FancyBboxPatch(
-            (x - half * 0.28, y - half * 0.50),
-            half * 0.56, half * 1.05,
-            boxstyle="round,pad=0,rounding_size=2.6",
-            facecolor="none", edgecolor=c, linewidth=lw, zorder=4,
-        ))
-        ax.add_patch(mpatches.Arc(
-            (x, y - half * 0.12), half * 1.30, half * 1.35,
-            theta1=200, theta2=340, color=c, linewidth=lw, zorder=4,
-        ))
-        ax.plot([x, x], [y - half * 0.80, y - half * 0.56],
-                color=c, linewidth=lw, zorder=4)
-        ax.plot([x - half * 0.35, x + half * 0.35],
-                [y - half * 0.80, y - half * 0.80],
-                color=c, linewidth=lw, zorder=4)
-    elif kind == "edit":
-        ax.plot(
-            [x - half * 0.58, x + half * 0.48],
-            [y - half * 0.48, y + half * 0.58],
-            color=c, linewidth=2.2, solid_capstyle="round", zorder=4,
-        )
-        ax.plot(
-            [x + half * 0.30, x + half * 0.62],
-            [y + half * 0.76, y + half * 0.44],
-            color=c, linewidth=2.2, solid_capstyle="round", zorder=4,
-        )
-        ax.plot(
-            [x - half * 0.70, x - half * 0.36],
-            [y - half * 0.68, y - half * 0.55],
-            color=c, linewidth=1.2, zorder=4,
-        )
-    elif kind == "delete":
-        ax.add_patch(FancyBboxPatch(
-            (x - half * 0.48, y - half * 0.62),
-            half * 0.96, half * 1.05,
-            boxstyle="round,pad=0,rounding_size=1.1",
-            facecolor="none", edgecolor=c, linewidth=lw, zorder=4,
-        ))
-        ax.plot([x - half * 0.68, x + half * 0.68],
-                [y + half * 0.56, y + half * 0.56],
-                color=c, linewidth=lw, zorder=4)
-        ax.plot([x - half * 0.24, x + half * 0.24],
-                [y + half * 0.76, y + half * 0.76],
-                color=c, linewidth=lw, zorder=4)
-        ax.plot([x - half * 0.17, x - half * 0.17],
-                [y - half * 0.35, y + half * 0.25],
-                color=c, linewidth=0.8, zorder=4)
-        ax.plot([x + half * 0.17, x + half * 0.17],
-                [y - half * 0.35, y + half * 0.25],
-                color=c, linewidth=0.8, zorder=4)
+def _chip(image: Image.Image, draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], text: str, kind: str) -> None:
+    layer = Image.new("RGBA", CANVAS, (0, 0, 0, 0))
+    ld = ImageDraw.Draw(layer)
+    ld.rounded_rectangle(box, radius=13, fill=(49, 62, 79, 210), outline=(100, 118, 137, 120), width=1)
+    image.alpha_composite(layer)
+    color = (191, 163, 119) if kind == "mute" else (129, 175, 205)
+    _icon(draw, kind, box[0] + 19, (box[1] + box[3]) // 2, color, 15)
+    draw.text((box[0] + 32, box[1] + 12), text, font=_font(14, "medium"), fill=(211, 219, 226))
 
 
-# ── Conversation ring ──────────────────────────────────────────────────────────
+def _metric_card(image: Image.Image, draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int],
+                 value: int | float, label: str, icon: str, color: tuple[int, int, int], *, major: bool) -> None:
+    _panel(image, box, radius=18)
+    draw.line((box[0] + 20, box[1] + 20, box[0] + 53, box[1] + 20), fill=color, width=3)
+    _icon(draw, icon, box[2] - 34, box[1] + 36, color, 18)
+    draw.text((box[0] + 20, box[1] + 47), _fmt_num(value), font=_font(38, "bold"), fill=TEXT)
+    draw.text((box[0] + 20, box[1] + 108), label, font=_font(12, "bold"), fill=MUTED)
 
-def _draw_ring(fig: plt.Figure, stats: InfoStats) -> None:
-    _glass_tile(fig, RING_X, BOT_Y, RING_W, BOT_H, zorder=3)
 
-    ax = _ax(fig, RING_X, BOT_Y, RING_W, BOT_H, zorder=6)
-    ax.set_facecolor("none")
-    ax.set_zorder(6)
-    ax.axis("equal")
-
-    total = stats.incoming + stats.outgoing
-    fd7   = _F(700)
-    fd4   = _F(400)
-    fd5   = _F(500)
-
-    if total == 0:
-        ax.pie([1], colors=[_rgba(C_DIM, 0.4)], startangle=90,
-               wedgeprops=dict(width=0.38, edgecolor=_rgba(BG, 0.5), linewidth=2))
-        ax.text(0, 0.10, "—",
-                ha="center", va="center",
-                color=C_SUB, fontsize=20, fontweight=700,
-                fontfamily=fd7["fontfamily"])
-        ax.text(0, -0.28, "нет данных",
-                ha="center", va="center",
-                color=C_SUB, fontsize=7,
-                fontfamily=fd4["fontfamily"])
-        ax.set_xlim(-1.55, 1.55)
-        ax.set_ylim(-1.65, 1.55)
+def _activity_chart(image: Image.Image, draw: ImageDraw.ImageDraw, stats: InfoStats,
+                    box: tuple[int, int, int, int]) -> None:
+    x0, y0, x1, y1 = box
+    draw.text((x0 + 24, y0 + 23), "АКТИВНОСТЬ", font=_font(13, "bold"), fill=MUTED)
+    draw.text((x0 + 24, y0 + 47), "Последние 30 дней", font=_font(20, "semibold"), fill=TEXT)
+    _legend(draw, x1 - 196, y0 + 31, INCOMING, "Входящие")
+    _legend(draw, x1 - 96, y0 + 31, OUTGOING, "Исходящие")
+    chart = (x0 + 25, y0 + 98, x1 - 25, y1 - 48)
+    daily = stats.daily[-14:]
+    if not daily:
+        draw.line((chart[0], chart[3], chart[2], chart[3]), fill=(84, 98, 116), width=1)
+        _centered(draw, ((chart[0] + chart[2]) / 2, (chart[1] + chart[3]) / 2), "Нет сообщений за этот период",
+                  _font(16, "medium"), MUTED)
         return
-
-    in_pct  = round(stats.incoming / total * 100)
-    out_pct = 100 - in_pct
-
-    # Donut
-    wedges, _ = ax.pie(
-        [max(stats.incoming, 0), max(stats.outgoing, 0)],
-        colors=[C_IN, C_OUT],
-        startangle=90,
-        counterclock=False,
-        wedgeprops=dict(width=0.38,
-                        edgecolor=_rgba("#08101F", 0.80),
-                        linewidth=2.5),
-    )
-
-    # Glow ring (fake) — very subtle outer halo
-    ax.add_patch(Circle((0, 0), 1.06,
-                        facecolor="none",
-                        edgecolor=_rgba(C_IN, 0.12),
-                        linewidth=4,
-                        transform=ax.transData, zorder=0))
-
-    # Centre label
-    ax.text(0, 0.17, f"{in_pct}%",
-            ha="center", va="center",
-            color=C_TEXT, fontsize=17, fontweight=700,
-            fontfamily=fd7["fontfamily"])
-    ax.text(0, -0.18, "вход.",
-            ha="center", va="center",
-            color=C_SUB, fontsize=7,
-            fontfamily=fd4["fontfamily"])
-
-    # Legend
-    ax.legend(
-        handles=[
-            mpatches.Patch(color=C_IN,  label=f"↓ {_fmt_num(stats.incoming)}"),
-            mpatches.Patch(color=C_OUT, label=f"↑ {_fmt_num(stats.outgoing)}"),
-        ],
-        loc="lower center",
-        ncol=2,
-        fontsize=7.5,
-        framealpha=0,
-        labelcolor=C_TEXT,
-        bbox_to_anchor=(0.5, -0.28),
-        handlelength=0.85,
-        handleheight=0.85,
-        handletextpad=0.35,
-        columnspacing=0.6,
-        prop={"family": fd5["fontfamily"], "weight": 500, "size": 7.5},
-    )
-
-    ax.set_xlim(-1.55, 1.55)
-    ax.set_ylim(-1.70, 1.65)
+    max_value = max(1, max(incoming + outgoing for _, incoming, outgoing in daily))
+    slot = (chart[2] - chart[0]) / len(daily)
+    for index, (label, incoming, outgoing) in enumerate(daily):
+        center = chart[0] + slot * (index + 0.5)
+        total_height = (chart[3] - chart[1]) * (incoming + outgoing) / max_value
+        inbound_h = total_height * incoming / max(incoming + outgoing, 1)
+        width = max(7, int(slot * 0.48))
+        left, right = int(center - width / 2), int(center + width / 2)
+        bottom = chart[3]
+        draw.rounded_rectangle((left, int(bottom - inbound_h), right, bottom), radius=3, fill=INCOMING)
+        if outgoing:
+            draw.rounded_rectangle((left, int(bottom - total_height), right, int(bottom - inbound_h) + 2),
+                                   radius=3, fill=OUTGOING)
+        if index in (0, len(daily) - 1) or index % max(1, len(daily) // 4) == 0:
+            _centered(draw, (center, chart[3] + 18), label, _font(11), FAINT)
+    draw.line((chart[0], chart[3] + 0.5, chart[2], chart[3] + 0.5), fill=(82, 97, 115), width=1)
 
 
-# ── Utilities ──────────────────────────────────────────────────────────────────
+def _conversation_panel(image: Image.Image, draw: ImageDraw.ImageDraw, stats: InfoStats,
+                        box: tuple[int, int, int, int]) -> None:
+    x0, y0, x1, y1 = box
+    draw.text((x0 + 24, y0 + 23), "БАЛАНС ДИАЛОГА", font=_font(13, "bold"), fill=MUTED)
+    total = max(0, stats.incoming) + max(0, stats.outgoing)
+    cx, cy, radius = x0 + 122, y0 + 176, 74
+    draw.arc((cx - radius, cy - radius, cx + radius, cy + radius), -90, 270, fill=(63, 77, 95), width=18)
+    if total:
+        incoming_angle = 360 * max(0, stats.incoming) / total
+        draw.arc((cx - radius, cy - radius, cx + radius, cy + radius), -90, -90 + incoming_angle,
+                 fill=INCOMING, width=18)
+        draw.arc((cx - radius, cy - radius, cx + radius, cy + radius), -90 + incoming_angle + 3, 267,
+                 fill=OUTGOING, width=18)
+        percent = round(stats.incoming * 100 / total)
+        _centered(draw, (cx, cy - 8), f"{percent}%", _font(28, "bold"), TEXT)
+        _centered(draw, (cx, cy + 19), "входящих", _font(12, "medium"), MUTED)
+    else:
+        _centered(draw, (cx, cy - 6), "—", _font(35, "bold"), MUTED)
+        _centered(draw, (cx, cy + 21), "нет данных", _font(12, "medium"), MUTED)
+    _stat_line(draw, x0 + 236, y0 + 105, INCOMING, "Входящие", stats.incoming)
+    _stat_line(draw, x0 + 236, y0 + 148, OUTGOING, "Исходящие", stats.outgoing)
+    draw.line((x0 + 236, y0 + 184, x1 - 24, y0 + 184), fill=(77, 92, 110), width=1)
+    secondary = ((stats.media_count, "Медиа", "media"), (stats.audio_count, "Аудио", "audio"),
+                 (stats.edited, "Изменено", "edit"), (stats.deleted, "Удалено", "delete"))
+    for idx, (value, label, icon) in enumerate(secondary):
+        column_width = (x1 - x0 - 48) / 4
+        center_x = x0 + 24 + column_width * (idx + 0.5)
+        _icon(draw, icon, round(center_x), y0 + 231, ACCENTS[idx], 14)
+        _centered(draw, (center_x, y0 + 257), _fmt_num(value), _font(15, "bold"), TEXT)
+        _centered(draw, (center_x, y0 + 282), label, _font(10), MUTED)
+
+
+def _stat_line(draw: ImageDraw.ImageDraw, x: int, y: int, color: tuple[int, int, int], label: str, value: int) -> None:
+    draw.ellipse((x, y + 4, x + 10, y + 14), fill=color)
+    draw.text((x + 18, y), label, font=_font(13, "medium"), fill=MUTED)
+    draw.text((x + 18, y + 18), _fmt_num(value), font=_font(20, "bold"), fill=TEXT)
+
+
+def _legend(draw: ImageDraw.ImageDraw, x: int, y: int, color: tuple[int, int, int], text: str) -> None:
+    draw.ellipse((x, y + 3, x + 8, y + 11), fill=color)
+    draw.text((x + 14, y), text, font=_font(11, "medium"), fill=MUTED)
+
+
+def _icon(draw: ImageDraw.ImageDraw, kind: str, x: int, y: int, color: tuple[int, int, int], size: int) -> None:
+    """Crisp semantic line icons, built from fixed vector primitives."""
+    h, w = size // 2, max(1, size // 9)
+    if kind == "messages":
+        draw.rounded_rectangle((x - h, y - h + 1, x + h, y + h - 3), radius=3, outline=color, width=w)
+        draw.line((x - h // 2, y + h - 3, x - h + 1, y + h + 3, x, y + h - 3), fill=color, width=w)
+    elif kind in ("incoming", "outgoing"):
+        direction = -1 if kind == "incoming" else 1
+        draw.line((x - direction * h, y + h, x + direction * h, y - h), fill=color, width=w)
+        draw.line((x + direction * h, y - h, x + direction * h, y - h + direction * h), fill=color, width=w)
+        draw.line((x + direction * h, y - h, x + direction * h - direction * h, y - h), fill=color, width=w)
+    elif kind == "daily":
+        for index, height in enumerate((6, 12, 17)):
+            bx = x - 7 + index * 7
+            draw.line((bx, y + 8, bx, y + 8 - height), fill=color, width=3)
+    elif kind == "media":
+        draw.rounded_rectangle((x - h, y - h + 1, x + h, y + h - 1), radius=2, outline=color, width=w)
+        draw.ellipse((x + 2, y - 5, x + 5, y - 2), fill=color)
+        draw.line((x - 6, y + 5, x - 1, y, x + 2, y + 4, x + 7, y - 1), fill=color, width=w)
+    elif kind == "audio":
+        draw.rounded_rectangle((x - 3, y - 8, x + 3, y + 4), radius=3, outline=color, width=w)
+        draw.arc((x - 7, y - 3, x + 7, y + 10), 0, 180, fill=color, width=w)
+        draw.line((x, y + 10, x, y + 13), fill=color, width=w)
+    elif kind == "edit":
+        draw.line((x - 7, y + 7, x + 6, y - 6), fill=color, width=3)
+        draw.line((x + 4, y - 8, x + 8, y - 4), fill=color, width=3)
+    elif kind == "delete":
+        draw.rounded_rectangle((x - 5, y - 5, x + 5, y + 8), radius=1, outline=color, width=w)
+        draw.line((x - 7, y - 7, x + 7, y - 7), fill=color, width=w)
+        draw.line((x - 2, y - 10, x + 2, y - 10), fill=color, width=w)
+    elif kind == "note":
+        draw.rectangle((x - 5, y - 7, x + 5, y + 7), outline=color, width=w)
+        draw.line((x - 2, y - 2, x + 3, y - 2), fill=color, width=w)
+    elif kind == "mute":
+        draw.arc((x - 6, y - 5, x + 3, y + 5), -70, 70, fill=color, width=w)
+        draw.line((x + 4, y - 6, x + 4, y + 3), fill=color, width=w)
+        draw.line((x - 8, y - 8, x + 8, y + 8), fill=color, width=w)
+
+
+def _font(size: int, weight: str = "regular") -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    names = {
+        "regular": ("Inter-Regular.ttf", "DejaVuSans.ttf"),
+        "medium": ("Inter-Medium.ttf", "DejaVuSans.ttf"),
+        "semibold": ("Inter-SemiBold.ttf", "DejaVuSans-Bold.ttf"),
+        "bold": ("Inter-Bold.ttf", "DejaVuSans-Bold.ttf"),
+    }
+    for name in names[weight]:
+        try:
+            path = FONT_DIR / name
+            return ImageFont.truetype(str(path) if path.exists() else name, size)
+        except OSError:
+            continue
+    return ImageFont.load_default()
+
+
+def _centered(draw: ImageDraw.ImageDraw, center: tuple[float, float], text: str,
+              font: ImageFont.ImageFont, fill: tuple[int, int, int]) -> None:
+    box = draw.textbbox((0, 0), text, font=font)
+    draw.text((center[0] - (box[2] - box[0]) / 2, center[1] - (box[3] - box[1]) / 2),
+              text, font=font, fill=fill)
+
 
 def _initials(name: str) -> str:
     parts = name.strip().split()
-    if len(parts) >= 2:
-        return (parts[0][0] + parts[1][0]).upper()
-    return name[:2].upper() if name else "??"
+    return "".join(part[0] for part in parts[:2]).upper() or "??"
+
+
+def _truncate(text: str, length: int) -> str:
+    return text if len(text) <= length else f"{text[:length - 1]}…"
+
+
+def _now_for(value: dt.datetime) -> dt.datetime:
+    return dt.datetime.now(value.tzinfo) if value.tzinfo else dt.datetime.now()
 
 
 def _period_str(stats: InfoStats) -> str:
     if stats.first_seen and stats.last_seen:
-        return (f"{stats.first_seen.strftime('%d.%m.%y')}"
-                f" — {stats.last_seen.strftime('%d.%m.%y')}")
-    return "—"
+        return f"{stats.first_seen:%d.%m.%y} — {stats.last_seen:%d.%m.%y}"
+    return "Период не определён"
 
 
 def _days_total(stats: InfoStats) -> int:
@@ -751,8 +347,7 @@ def _avg_per_day(stats: InfoStats) -> float:
     return round(stats.total / _days_total(stats), 1)
 
 
-def _fmt_num(v: float | int) -> str:
-    if isinstance(v, float) and v != int(v):
-        return f"{v:.1f}"
-    n = int(v)
-    return f"{n:,}".replace(",", "\u2009")   # thin-space thousands separator
+def _fmt_num(value: float | int) -> str:
+    if isinstance(value, float) and not value.is_integer():
+        return f"{value:.1f}"
+    return f"{int(value):,}".replace(",", "\u2009")

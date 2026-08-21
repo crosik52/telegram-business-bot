@@ -24,6 +24,7 @@ import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 import matplotlib.patches as mpatches
 import numpy as np
+from PIL import Image
 from matplotlib.patches import (Circle, Ellipse, FancyBboxPatch,
                                 FancyArrowPatch)
 from matplotlib.colors import LinearSegmentedColormap
@@ -54,9 +55,9 @@ def _F(weight: int = 400) -> dict:
 BG = "#08101F"           # deep dark navy background
 
 # Glass tile colours (RGBA tuples)
-GLASS_FACE = (1.0, 1.0, 1.0, 0.045)   # very subtle white fill
-GLASS_EDGE = (1.0, 1.0, 1.0, 0.095)   # thin frosted border
-GLASS_GLOW = (0.12, 0.30, 0.60, 0.14)  # ambient blue glow behind tile
+GLASS_FACE = (0.72, 0.82, 1.0, 0.075)   # matte blue-white glass
+GLASS_EDGE = (0.86, 0.92, 1.0, 0.16)    # brighter frosted rim
+GLASS_GLOW = (0.12, 0.30, 0.60, 0.18)   # ambient blue glow behind tile
 
 # Text
 C_TEXT = "#EEF2FF"   # near-white primary
@@ -76,6 +77,7 @@ C_OUT = "#3DD68C"   # outgoing — green
 # ── Canvas geometry ────────────────────────────────────────────────────────────
 
 DPI = 100
+RENDER_SCALE = 3
 W   = 640
 H   = 360
 PAD = 14
@@ -133,24 +135,46 @@ class InfoStats(NamedTuple):
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 
-def render_info_image(stats: InfoStats) -> io.BytesIO:
+def render_info_image(
+    stats: InfoStats,
+    *,
+    avatar_bytes: bytes | None = None,
+) -> io.BytesIO:
     """Return a 640×360 PNG premium glassmorphism analytics card."""
     _ensure_fonts()
 
-    fig = plt.figure(figsize=(W / DPI, H / DPI), facecolor=BG, dpi=DPI)
+    render_dpi = DPI * RENDER_SCALE
+    fig = plt.figure(
+        figsize=(W / DPI, H / DPI),
+        facecolor=BG,
+        dpi=render_dpi,
+    )
     fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
 
     _draw_bg(fig)
-    _draw_header(fig, stats)
+    _draw_header(fig, stats, avatar_bytes)
     _draw_primary_kpis(fig, stats)
     _draw_secondary_kpis(fig, stats)
     _draw_ring(fig, stats)
 
-    buf = io.BytesIO()
+    high_res = io.BytesIO()
     try:
-        fig.savefig(buf, format="png", facecolor=BG, dpi=DPI)
+        fig.savefig(
+            high_res,
+            format="png",
+            facecolor=BG,
+            dpi=render_dpi,
+            metadata={"Software": "Telegram Analytics"},
+        )
     finally:
         plt.close(fig)
+
+    high_res.seek(0)
+    with Image.open(high_res) as rendered:
+        rendered = rendered.convert("RGB")
+        rendered = rendered.resize((W, H), Image.Resampling.LANCZOS)
+        buf = io.BytesIO()
+        rendered.save(buf, format="PNG", optimize=True)
     buf.seek(0)
     return buf
 
@@ -189,7 +213,18 @@ def _glass_tile(fig: plt.Figure, x: float, y_top: float,
     """Draw a frosted-glass rounded rectangle on the figure canvas."""
     radius = 0.014   # relative rounding
 
-    # Soft shadow/glow behind the tile
+    # Wide ambient shadow plus a tighter coloured halo create real depth.
+    wide_shadow = FancyBboxPatch(
+        ((x - 4) / W, (H - y_top - h - 5) / H),
+        (w + 8) / W, (h + 10) / H,
+        boxstyle=f"round,pad=0,rounding_size={radius + 0.003}",
+        transform=fig.transFigure,
+        facecolor=(0.0, 0.0, 0.0, 0.19),
+        edgecolor="none",
+        zorder=zorder - 2,
+    )
+    fig.add_artist(wide_shadow)
+
     shadow = FancyBboxPatch(
         ((x - 2) / W, (H - y_top - h - 2) / H),
         (w + 4) / W, (h + 4) / H,
@@ -214,7 +249,19 @@ def _glass_tile(fig: plt.Figure, x: float, y_top: float,
     )
     fig.add_artist(tile)
 
-    # Inner highlight — thin top edge
+    # Liquid reflection: a muted, broad highlight over the upper glass area.
+    reflection = FancyBboxPatch(
+        ((x + 1.5) / W, (H - y_top - h * 0.40) / H),
+        (w - 3) / W, (h * 0.40 - 1.5) / H,
+        boxstyle=f"round,pad=0,rounding_size={radius}",
+        transform=fig.transFigure,
+        facecolor=(0.80, 0.90, 1.0, 0.025),
+        edgecolor="none",
+        zorder=zorder + 1,
+    )
+    fig.add_artist(reflection)
+
+    # Inner highlight — crisp rim on top and left.
     highlight = FancyBboxPatch(
         (x / W, (H - y_top - 1.5) / H),
         w / W, 1.5 / H,
@@ -225,6 +272,17 @@ def _glass_tile(fig: plt.Figure, x: float, y_top: float,
         zorder=zorder + 1,
     )
     fig.add_artist(highlight)
+
+    left_rim = FancyBboxPatch(
+        (x / W, (H - y_top - h + 3) / H),
+        1.2 / W, (h - 6) / H,
+        boxstyle=f"round,pad=0,rounding_size={radius}",
+        transform=fig.transFigure,
+        facecolor=(1, 1, 1, 0.075),
+        edgecolor="none",
+        zorder=zorder + 1,
+    )
+    fig.add_artist(left_rim)
 
     # Coloured accent stripe at top
     if accent:
@@ -242,7 +300,11 @@ def _glass_tile(fig: plt.Figure, x: float, y_top: float,
 
 # ── Header ─────────────────────────────────────────────────────────────────────
 
-def _draw_header(fig: plt.Figure, stats: InfoStats) -> None:
+def _draw_header(
+    fig: plt.Figure,
+    stats: InfoStats,
+    avatar_bytes: bytes | None,
+) -> None:
     _glass_tile(fig, PAD, HDR_Y, W - PAD * 2, HDR_H, zorder=2)
 
     ax = _ax(fig, PAD, HDR_Y, W - PAD * 2, HDR_H, zorder=5)
@@ -260,17 +322,60 @@ def _draw_header(fig: plt.Figure, stats: InfoStats) -> None:
     ax.add_patch(Circle((AV_CX, AV_CY), AV_R + 5,
                         facecolor=_rgba("#4A9EFF", 0.10), edgecolor="none",
                         transform=ax.transData, zorder=2))
-    # Avatar glass circle
+    # Avatar glass circle / current Telegram profile photo.
     ax.add_patch(Circle((AV_CX, AV_CY), AV_R,
                         facecolor=_rgba("#4A9EFF", 0.18),
                         edgecolor=_rgba("#4A9EFF", 0.50),
                         linewidth=1.2,
                         transform=ax.transData, zorder=3))
-    # Initials
-    ax.text(AV_CX, AV_CY, _initials(stats.contact_name),
-            ha="center", va="center",
-            color="#4A9EFF", fontsize=11, fontweight=700,
-            fontfamily=_F(700)["fontfamily"], zorder=4)
+    avatar_drawn = False
+    if avatar_bytes:
+        try:
+            with Image.open(io.BytesIO(avatar_bytes)) as source:
+                avatar = source.convert("RGB")
+                side = min(avatar.size)
+                left = (avatar.width - side) // 2
+                top = (avatar.height - side) // 2
+                avatar = avatar.crop((left, top, left + side, top + side))
+                avatar = avatar.resize((256, 256), Image.Resampling.LANCZOS)
+
+            image = ax.imshow(
+                np.asarray(avatar),
+                extent=(
+                    AV_CX - AV_R + 1.5,
+                    AV_CX + AV_R - 1.5,
+                    AV_CY - AV_R + 1.5,
+                    AV_CY + AV_R - 1.5,
+                ),
+                interpolation="lanczos",
+                zorder=4,
+            )
+            image.set_clip_path(
+                Circle(
+                    (AV_CX, AV_CY),
+                    AV_R - 1.5,
+                    transform=ax.transData,
+                )
+            )
+            avatar_drawn = True
+        except Exception:
+            avatar_drawn = False
+
+    if not avatar_drawn:
+        ax.text(AV_CX, AV_CY, _initials(stats.contact_name),
+                ha="center", va="center",
+                color="#4A9EFF", fontsize=11, fontweight=700,
+                fontfamily=_F(700)["fontfamily"], zorder=4)
+
+    # Fine glossy crescent along the avatar rim.
+    ax.add_patch(mpatches.Arc(
+        (AV_CX, AV_CY), AV_R * 1.82, AV_R * 1.82,
+        theta1=28, theta2=142,
+        color=_rgba("#FFFFFF", 0.48),
+        linewidth=0.9,
+        transform=ax.transData,
+        zorder=5,
+    ))
 
     tx = AV_CX * 2 + 10
     name = (stats.contact_name[:34] + "…") if len(stats.contact_name) > 34 else stats.contact_name
@@ -292,10 +397,10 @@ def _draw_header(fig: plt.Figure, stats: InfoStats) -> None:
     # Badges (right side)
     badges: list[str] = []
     if stats.note_count:
-        badges.append(f"📝 {stats.note_count}")
+        badges.append(f"Заметки: {stats.note_count}")
     now_utc = dt.datetime.now(dt.timezone.utc)
     if stats.muted_until and stats.muted_until > now_utc:
-        badges.append(f"🔕 до {stats.muted_until.strftime('%d.%m')}")
+        badges.append(f"Без звука до {stats.muted_until.strftime('%d.%m')}")
     if badges:
         ax.text(tw - 14, AV_CY, "  ·  ".join(badges),
                 ha="right", va="center",

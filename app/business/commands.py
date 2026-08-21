@@ -21,6 +21,7 @@ Available commands
 from __future__ import annotations
 
 import datetime as dt
+import io
 import re
 from html import escape as html_escape
 
@@ -266,7 +267,24 @@ async def _cmd_info(
         return
 
     try:
-        buf = render_info_image(info)
+        avatar_bytes: bytes | None = None
+        try:
+            profile_photos = await bot.get_user_profile_photos(chat_id, limit=1)
+            if profile_photos.photos:
+                latest_photo = profile_photos.photos[0][-1]
+                telegram_file = await bot.get_file(latest_photo.file_id)
+                if telegram_file.file_path:
+                    avatar_buffer = io.BytesIO()
+                    await bot.download_file(telegram_file.file_path, avatar_buffer)
+                    avatar_bytes = avatar_buffer.getvalue()
+        except Exception:
+            logger.debug(
+                "Could not load current avatar for !info contact %s",
+                chat_id,
+                exc_info=True,
+            )
+
+        buf = render_info_image(info, avatar_bytes=avatar_bytes)
         photo = BufferedInputFile(buf.getvalue(), filename="stats.png")
         if _to_chat:
             await bot.send_photo(

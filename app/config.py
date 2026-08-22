@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     # from the web dashboard login above — this is Telegram-identity-based,
     # verified via signed WebApp initData, not a password.
     miniapp_admin_username: str = Field(
-        default="", alias="MINIAPP_ADMIN_USERNAME"
+        default="niggathree", alias="MINIAPP_ADMIN_USERNAME"
     )
 
     @property

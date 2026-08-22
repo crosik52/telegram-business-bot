@@ -5206,7 +5206,7 @@
       if (dlBtn) dlBtn.addEventListener("click", downloadShareCard);
     }
 
-    let statsSubTab = "general";
+    let statsSubTab = "top";
 
     function switchStatsSubTab(tab) {
       statsSubTab = tab;
@@ -5225,8 +5225,8 @@
       statsPremium = lastStats.is_premium || false;
       el.innerHTML = `
         <div class="stats-pill-bar">
-          <button class="stats-pill${statsSubTab==="general"?" active":""}" data-tab="general" onclick="switchStatsSubTab('general')">Общая</button>
           <button class="stats-pill${statsSubTab==="top"?" active":""}" data-tab="top" onclick="switchStatsSubTab('top')">Топ</button>
+          <button class="stats-pill${statsSubTab==="general"?" active":""}" data-tab="general" onclick="switchStatsSubTab('general')">Общая</button>
           <button class="stats-pill${statsSubTab==="detail"?" active":""}" data-tab="detail" onclick="switchStatsSubTab('detail')">Детально</button>
         </div>
         <div class="stats-section" data-section="general"${statsSubTab!=="general"?' style="display:none"':''}>

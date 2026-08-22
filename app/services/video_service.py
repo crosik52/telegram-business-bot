@@ -273,26 +273,47 @@ def _apply_instagram_opts(ydl_opts: dict, url: str, out_dir: str) -> None:
         logger.info("Instagram: raw Cookie header injected (%d chars)", len(raw))
 
 
+def _find_node() -> str:
+    """Return the path to a Node.js binary, or empty string if not found."""
+    import shutil as _sh
+    node = _sh.which("node") or _sh.which("nodejs")
+    if node:
+        return node
+    # Nix store fallback (Replit / NixOS environments)
+    import glob as _glob
+    candidates = _glob.glob("/nix/store/*nodejs*/bin/node")
+    return candidates[0] if candidates else ""
+
+
 def _apply_youtube_opts(ydl_opts: dict, out_dir: str) -> None:
     """Apply YouTube-specific yt-dlp options.
 
-    Strategy: use tv_embedded player client — it exposes full DASH format list
-    without requiring auth and works reliably from server IPs. Cookies are
-    applied on top if available, but are NOT required for tv_embedded to work.
+    Strategy: use the ``android`` player client — it returns H.264 AVC streams
+    without requiring a JS runtime or cookies, and works reliably from server
+    IPs including Shorts. ``tv_embedded`` was removed in yt-dlp 2026.07+.
+
+    If Node.js is available it is registered as a JS runtime so yt-dlp can
+    also resolve web-client formats when needed.
     """
     # YouTube serves DASH streams (bestvideo+bestaudio separately) — ffmpeg must
     # merge them into mp4. Not set globally to avoid forcing DASH on Instagram/TikTok.
     ydl_opts["merge_output_format"] = "mp4"
 
-    # tv_embedded: works without cookies, exposes full DASH format list,
-    # returns H.264 AVC — safe for all Telegram clients.
+    # android client: works without cookies or a JS runtime, returns H.264 AVC,
+    # supports Shorts. Falls back to web if android SABR-only experiment is active.
     ydl_opts["extractor_args"] = {
-        "youtube": {"player_client": ["tv_embedded"]}
+        "youtube": {"player_client": ["android", "web"]}
     }
+
+    # Register Node.js as JS runtime so yt-dlp can solve n-challenges for web client
+    node = _find_node()
+    if node:
+        ydl_opts["js_runtimes"] = f"nodejs:{node}"
+        logger.debug("YouTube: Node.js runtime registered at %s", node)
 
     raw = os.environ.get("YOUTUBE_COOKIES", "").strip()
     if not raw:
-        logger.info("YouTube: no YOUTUBE_COOKIES — using tv_embedded (no auth)")
+        logger.info("YouTube: no YOUTUBE_COOKIES — using android client (no auth)")
         return
 
     # ── Normalise newlines ────────────────────────────────────────────────────
@@ -501,11 +522,14 @@ def _download_sync(
         if "cookiefile" in opts_video and is_auth_error:
             logger.warning("Video: auth error with cookies (%s), retrying without auth", exc)
             opts_no_cookie = {k: v for k, v in opts_video.items() if k != "cookiefile"}
-            # Switch from cookies to tv_embedded (no auth needed, has DASH)
+            # Keep android client even without cookies
             if is_youtube:
                 opts_no_cookie["extractor_args"] = {
-                    "youtube": {"player_client": ["tv_embedded"]}
+                    "youtube": {"player_client": ["android", "web"]}
                 }
+                node = _find_node()
+                if node:
+                    opts_no_cookie["js_runtimes"] = f"nodejs:{node}"
             try:
                 _run(opts_no_cookie)
                 video_download_ok = True
@@ -566,11 +590,13 @@ def _download_sync(
     if is_instagram:
         _apply_instagram_opts(opts_photo, url, out_dir)
     if is_youtube:
-        # tv_embedded exposes full DASH format list without auth.
         opts_photo["extractor_args"] = {
-            "youtube": {"player_client": ["tv_embedded"]}
+            "youtube": {"player_client": ["android", "web"]}
         }
         opts_photo["merge_output_format"] = "mp4"
+        node = _find_node()
+        if node:
+            opts_photo["js_runtimes"] = f"nodejs:{node}"
         # Re-use cookie file if the video attempt already wrote it.
         _yt_cookies = os.path.join(out_dir, "_yt_cookies.txt")
         if os.path.exists(_yt_cookies):

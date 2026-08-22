@@ -47,23 +47,28 @@ def _app_kb(base_url: str, *, extra_rows: list[list[InlineKeyboardButton]] | Non
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _help_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="🎵 Музыка",      callback_data="help_music"),
-            InlineKeyboardButton(text="📹 Видео",        callback_data="help_video"),
-        ],
-        [
-            InlineKeyboardButton(text="🗒 Заметки",      callback_data="help_notes"),
-            InlineKeyboardButton(text="🐾 Питомец",     callback_data="help_pet"),
-        ],
-        [
-            InlineKeyboardButton(text="💞 Связи",       callback_data="help_rel"),
-            InlineKeyboardButton(text="🪙 Монеты",      callback_data="help_coins"),
-        ],
-        [InlineKeyboardButton(text="🔌 Как подключить бота", callback_data="help_connect")],
-        [InlineKeyboardButton(text="« Назад",            callback_data="help_main")],
-    ])
+_HELP_SECTION_ROWS: list[list[InlineKeyboardButton]] = [
+    [
+        InlineKeyboardButton(text="🎵 Музыка",  callback_data="help_music"),
+        InlineKeyboardButton(text="📹 Видео",    callback_data="help_video"),
+    ],
+    [
+        InlineKeyboardButton(text="🗒 Заметки", callback_data="help_notes"),
+        InlineKeyboardButton(text="🐾 Питомец", callback_data="help_pet"),
+    ],
+    [
+        InlineKeyboardButton(text="💞 Связи",   callback_data="help_rel"),
+        InlineKeyboardButton(text="🪙 Монеты",  callback_data="help_coins"),
+    ],
+    [InlineKeyboardButton(text="🔌 Как подключить бота", callback_data="help_connect")],
+]
+
+
+def _help_kb(*, show_back: bool = True) -> InlineKeyboardMarkup:
+    rows = list(_HELP_SECTION_ROWS)
+    if show_back:
+        rows = rows + [[InlineKeyboardButton(text="« Назад", callback_data="help_main")]]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 _HELP_SECTIONS: dict[str, tuple[str, str]] = {
@@ -340,7 +345,7 @@ async def on_help(message: Message) -> None:
     await message.answer(
         f"{title}\n\n{body}",
         parse_mode="HTML",
-        reply_markup=_help_kb(),
+        reply_markup=_help_kb(show_back=False),
     )
 
 
@@ -367,7 +372,8 @@ async def on_help_callback(callback: CallbackQuery) -> None:
         extra_btn = [InlineKeyboardButton(text="⚙️ Открыть настройки Telegram", url="tg://settings/edit")]
 
     # Build keyboard: section buttons + optional extra
-    kb = _help_kb()
+    # On the main help screen there's nothing to go "back" to — hide the button.
+    kb = _help_kb(show_back=(key != "help_main"))
     if extra_btn:
         kb.inline_keyboard.insert(0, [extra_btn[0]])
 

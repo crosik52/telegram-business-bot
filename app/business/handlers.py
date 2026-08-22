@@ -80,13 +80,6 @@ def _miniapp_kb(label: str = "📊 Открыть мини-приложение"
 # Global semaphore: at most 3 video downloads run concurrently across all chats.
 _download_semaphore = asyncio.Semaphore(3)
 
-# Pending YouTube quality selections.
-# key = "{chat_id}:{link_msg_id}", value = {url, conn_id, in_flight_key, quality_msg_id}
-_yt_pending: dict[str, dict] = {}
-
-# Pending TikTok / Instagram quality selections.
-# key = "{chat_id}:{link_msg_id}", value = {url, platform, conn_id, in_flight_key, quality_msg_id}
-_vq_pending: dict[str, dict] = {}
 
 # ── In-memory cache: connection_id → (owner_telegram_id, can_reply) ──────────
 # Eliminates one SELECT per incoming message — connections rarely change.
@@ -930,167 +923,36 @@ async def on_business_message(message: Message, bot: Bot) -> None:
                         ))
                     else:
                         _in_flight.add(key)
-                        _is_yt = "youtube.com" in url.lower() or "youtu.be" in url.lower()
-                        _is_tt = "tiktok.com" in url.lower()
-                        _is_ig = "instagram.com" in url.lower()
-                        _pending_key = f"{chat_id}:{message.message_id}"
-                        _conn_id     = message.business_connection_id
 
-                        if _is_yt:
-                            # ── YouTube: 720p / 480p / 360p / audio picker ────────────
-                            _yt_pending[_pending_key] = {
-                                "url":           url,
-                                "conn_id":       _conn_id,
-                                "in_flight_key": key,
-                            }
-                            _kb = InlineKeyboardMarkup(inline_keyboard=[
-                                [
-                                    InlineKeyboardButton(
-                                        text="▶️ 720p",
-                                        callback_data=f"ytq:720:{chat_id}:{message.message_id}",
-                                    ),
-                                    InlineKeyboardButton(
-                                        text="📱 480p",
-                                        callback_data=f"ytq:480:{chat_id}:{message.message_id}",
-                                    ),
-                                    InlineKeyboardButton(
-                                        text="🔍 360p",
-                                        callback_data=f"ytq:360:{chat_id}:{message.message_id}",
-                                    ),
-                                ],
-                                [
-                                    InlineKeyboardButton(
-                                        text="🎵 Только аудио",
-                                        callback_data=f"ytq:audio:{chat_id}:{message.message_id}",
-                                    ),
-                                ],
-                            ])
-                            try:
-                                _qmsg = await bot.send_message(
-                                    chat_id=chat_id,
-                                    business_connection_id=_conn_id,
-                                    text="▶️ YouTube · Выбери качество:",
-                                    reply_markup=_kb,
-                                )
-                                _yt_pending[_pending_key]["quality_msg_id"] = _qmsg.message_id
-                            except Exception as _exc:
-                                logger.warning("YT quality keyboard failed: %s", _exc)
-                                _yt_pending.pop(_pending_key, None)
-                                _in_flight.discard(key)
+                        # All platforms: auto-download at 1080p (falls back to 720p → best).
+                        # Targeting 1080p so Telegram's own compression still yields
+                        # acceptable quality on mobile.
+                        async def _guarded_download(
+                            _bot=bot,
+                            _chat_id=chat_id,
+                            _conn_id=message.business_connection_id,
+                            _url=url,
+                            _platform=platform,
+                            _key=key,
+                            _link_msg_id=message.message_id,
+                        ) -> None:
+                            async with _download_semaphore:
+                                try:
+                                    await handle_video_link(
+                                        bot=_bot,
+                                        chat_id=_chat_id,
+                                        business_connection_id=_conn_id,
+                                        url=_url,
+                                        platform=_platform,
+                                        link_message_id=_link_msg_id,
+                                        quality="1080",
+                                    )
+                                finally:
+                                    _in_flight.discard(_key)
 
-                            async def _yt_expire(
-                                _pk=_pending_key,
-                                _bot=bot,
-                                _cid=chat_id,
-                                _bid=_conn_id,
-                                _k=key,
-                            ) -> None:
-                                await asyncio.sleep(120)
-                                _p = _yt_pending.pop(_pk, None)
-                                if _p:
-                                    _in_flight.discard(_k)
-                                    _qm = _p.get("quality_msg_id")
-                                    if _qm:
-                                        try:
-                                            await _bot.delete_message(
-                                                chat_id=_cid,
-                                                message_id=_qm,
-                                                business_connection_id=_bid,
-                                            )
-                                        except Exception:
-                                            pass
-
-                            asyncio.create_task(_yt_expire())
-
-                        elif _is_tt or _is_ig:
-                            # ── TikTok / Instagram: Макс / 1080p / 720p picker ────────
-                            _plat_emoji = "🎵" if _is_tt else "📸"
-                            _plat_name  = "TikTok" if _is_tt else "Instagram"
-                            _vq_pending[_pending_key] = {
-                                "url":           url,
-                                "platform":      platform,
-                                "conn_id":       _conn_id,
-                                "in_flight_key": key,
-                            }
-                            _vkb = InlineKeyboardMarkup(inline_keyboard=[[
-                                InlineKeyboardButton(
-                                    text="🔥 Макс",
-                                    callback_data=f"vq:max:{chat_id}:{message.message_id}",
-                                ),
-                                InlineKeyboardButton(
-                                    text="📺 1080p",
-                                    callback_data=f"vq:1080:{chat_id}:{message.message_id}",
-                                ),
-                                InlineKeyboardButton(
-                                    text="📱 720p",
-                                    callback_data=f"vq:720:{chat_id}:{message.message_id}",
-                                ),
-                            ]])
-                            try:
-                                _vmsg = await bot.send_message(
-                                    chat_id=chat_id,
-                                    business_connection_id=_conn_id,
-                                    text=f"{_plat_emoji} {_plat_name} · Выбери качество:",
-                                    reply_markup=_vkb,
-                                )
-                                _vq_pending[_pending_key]["quality_msg_id"] = _vmsg.message_id
-                            except Exception as _exc:
-                                logger.warning("VQ quality keyboard failed: %s", _exc)
-                                _vq_pending.pop(_pending_key, None)
-                                _in_flight.discard(key)
-
-                            async def _vq_expire(
-                                _pk=_pending_key,
-                                _bot=bot,
-                                _cid=chat_id,
-                                _bid=_conn_id,
-                                _k=key,
-                            ) -> None:
-                                await asyncio.sleep(120)
-                                _p = _vq_pending.pop(_pk, None)
-                                if _p:
-                                    _in_flight.discard(_k)
-                                    _qm = _p.get("quality_msg_id")
-                                    if _qm:
-                                        try:
-                                            await _bot.delete_message(
-                                                chat_id=_cid,
-                                                message_id=_qm,
-                                                business_connection_id=_bid,
-                                            )
-                                        except Exception:
-                                            pass
-
-                            asyncio.create_task(_vq_expire())
-
-                        else:
-                            # ── Other platforms: download at max quality immediately ───
-                            async def _guarded_download(
-                                _bot=bot,
-                                _chat_id=chat_id,
-                                _conn_id=_conn_id,
-                                _url=url,
-                                _platform=platform,
-                                _key=key,
-                                _link_msg_id=message.message_id,
-                            ) -> None:
-                                async with _download_semaphore:
-                                    try:
-                                        await handle_video_link(
-                                            bot=_bot,
-                                            chat_id=_chat_id,
-                                            business_connection_id=_conn_id,
-                                            url=_url,
-                                            platform=_platform,
-                                            link_message_id=_link_msg_id,
-                                            quality="max",
-                                        )
-                                    finally:
-                                        _in_flight.discard(_key)
-
-                            task = asyncio.create_task(_guarded_download())
-                            _download_tasks.add(task)
-                            task.add_done_callback(_download_tasks.discard)
+                        task = asyncio.create_task(_guarded_download())
+                        _download_tasks.add(task)
+                        task.add_done_callback(_download_tasks.discard)
 
 
 # ── Edit handler ──────────────────────────────────────────────────────────────
@@ -1298,152 +1160,6 @@ async def on_deleted_business_messages(deleted: BusinessMessagesDeleted, bot: Bo
 
 
 # ── Telegram Stars payment handlers ──────────────────────────────────────────
-
-
-# ── YouTube quality selection callback ───────────────────────────────────────
-
-@router.callback_query(F.data.startswith("ytq:"))
-async def on_yt_quality(callback: CallbackQuery, bot: Bot) -> None:
-    """User picked a quality from the YouTube quality keyboard — start download."""
-    await callback.answer()
-
-    parts = (callback.data or "").split(":")
-    if len(parts) != 4:
-        return
-    _, quality, chat_id_str, link_msg_id_str = parts
-    try:
-        chat_id     = int(chat_id_str)
-        link_msg_id = int(link_msg_id_str)
-    except ValueError:
-        return
-
-    pending_key = f"{chat_id}:{link_msg_id}"
-    pending = _yt_pending.pop(pending_key, None)
-    if pending is None:
-        try:
-            await callback.message.edit_text(  # type: ignore[union-attr]
-                "⌛ Сессия истекла — отправь ссылку заново"
-            )
-        except Exception:
-            pass
-        return
-
-    url             = pending["url"]
-    conn_id         = pending["conn_id"]
-    in_flight_key   = pending["in_flight_key"]
-    quality_msg_id  = pending.get("quality_msg_id")
-
-    # Delete the quality selection message
-    if quality_msg_id:
-        try:
-            await bot.delete_message(
-                chat_id=chat_id,
-                message_id=quality_msg_id,
-                business_connection_id=conn_id,
-            )
-        except Exception:
-            pass
-
-    async def _guarded_yt_dl(
-        _bot=bot,
-        _chat_id=chat_id,
-        _conn_id=conn_id,
-        _url=url,
-        _quality=quality,
-        _link_msg_id=link_msg_id,
-        _key=in_flight_key,
-    ) -> None:
-        async with _download_semaphore:
-            try:
-                await handle_video_link(
-                    bot=_bot,
-                    chat_id=_chat_id,
-                    business_connection_id=_conn_id,
-                    url=_url,
-                    platform="youtube",
-                    link_message_id=_link_msg_id,
-                    quality=_quality,
-                )
-            finally:
-                _in_flight.discard(_key)
-
-    task = asyncio.create_task(_guarded_yt_dl())
-    _download_tasks.add(task)
-    task.add_done_callback(_download_tasks.discard)
-
-
-# ── TikTok / Instagram quality selection callback ─────────────────────────────
-
-@router.callback_query(F.data.startswith("vq:"))
-async def on_vq_quality(callback: CallbackQuery, bot: Bot) -> None:
-    """User picked a quality from the TikTok/Instagram quality keyboard — start download."""
-    await callback.answer()
-
-    parts = (callback.data or "").split(":")
-    if len(parts) != 4:
-        return
-    _, quality, chat_id_str, link_msg_id_str = parts
-    try:
-        chat_id     = int(chat_id_str)
-        link_msg_id = int(link_msg_id_str)
-    except ValueError:
-        return
-
-    pending_key = f"{chat_id}:{link_msg_id}"
-    pending = _vq_pending.pop(pending_key, None)
-    if pending is None:
-        try:
-            await callback.message.edit_text(  # type: ignore[union-attr]
-                "⌛ Сессия истекла — отправь ссылку заново"
-            )
-        except Exception:
-            pass
-        return
-
-    url           = pending["url"]
-    platform      = pending["platform"]
-    conn_id       = pending["conn_id"]
-    in_flight_key = pending["in_flight_key"]
-    quality_msg_id = pending.get("quality_msg_id")
-
-    # Delete the quality selection message
-    if quality_msg_id:
-        try:
-            await bot.delete_message(
-                chat_id=chat_id,
-                message_id=quality_msg_id,
-                business_connection_id=conn_id,
-            )
-        except Exception:
-            pass
-
-    async def _guarded_vq_dl(
-        _bot=bot,
-        _chat_id=chat_id,
-        _conn_id=conn_id,
-        _url=url,
-        _platform=platform,
-        _quality=quality,
-        _link_msg_id=link_msg_id,
-        _key=in_flight_key,
-    ) -> None:
-        async with _download_semaphore:
-            try:
-                await handle_video_link(
-                    bot=_bot,
-                    chat_id=_chat_id,
-                    business_connection_id=_conn_id,
-                    url=_url,
-                    platform=_platform,
-                    link_message_id=_link_msg_id,
-                    quality=_quality,
-                )
-            finally:
-                _in_flight.discard(_key)
-
-    task = asyncio.create_task(_guarded_vq_dl())
-    _download_tasks.add(task)
-    task.add_done_callback(_download_tasks.discard)
 
 
 # ── Music download callback ───────────────────────────────────────────────────

@@ -244,7 +244,7 @@ def _build_base_opts(out_dir: str, max_bytes: int) -> dict:
 from app.services._cookie_utils import json_cookies_to_netscape as _json_cookies_to_netscape
 
 
-def _apply_tiktok_opts(ydl_opts: dict, url: str, out_dir: str, quality: str = "max") -> None:
+def _apply_tiktok_opts(ydl_opts: dict, url: str, out_dir: str, quality: str = "1080") -> None:
     """Mutate *ydl_opts* in-place with TikTok-specific settings.
 
     Supported TIKTOK_COOKIES formats (tried in order):
@@ -323,7 +323,7 @@ def _apply_tiktok_opts(ydl_opts: dict, url: str, out_dir: str, quality: str = "m
     _apply_tiktok_ua(ydl_opts)
 
 
-def _apply_instagram_opts(ydl_opts: dict, url: str, out_dir: str, quality: str = "max") -> None:
+def _apply_instagram_opts(ydl_opts: dict, url: str, out_dir: str, quality: str = "1080") -> None:
     """Apply Instagram-specific download options.
 
     Force pre-merged mp4 selection (not DASH bestvideo+bestaudio).
@@ -524,6 +524,16 @@ def _scan_dir(out_dir: str) -> tuple[list[Path], list[Path]]:
 
 
 _QUALITY_FORMATS: dict[str, str] = {
+    # 1080p: prefer H.264 at 1080p; Telegram may compress further so targeting 1080p
+    # ensures acceptable quality after compression. Fallback chain: 1080→720→best.
+    "1080": (
+        "bestvideo[height<=1080][height>=720][vcodec^=avc]+bestaudio"
+        "/bestvideo[height<=1080][vcodec^=avc]+bestaudio"
+        "/bestvideo[height<=1080]+bestaudio"
+        "/best[height<=1080]"
+        "/best[height<=720]"
+        "/best"
+    ),
     "720": "bestvideo[height<=720]+bestaudio/best[height<=720]/bestvideo+bestaudio/best",
     "480": "bestvideo[height<=480]+bestaudio/best[height<=480]/bestvideo+bestaudio/best",
     "360": "bestvideo[height<=360]+bestaudio/best[height<=360]/bestvideo+bestaudio/best",
@@ -534,7 +544,7 @@ def _download_sync(
     url: str,
     out_dir: str,
     progress_hook: Callable | None = None,
-    quality: str = "max",
+    quality: str = "1080",
     transcode_hook: Callable | None = None,
 ) -> tuple[list[Path], str]:
     """Download *url* into *out_dir* using yt-dlp.
@@ -837,14 +847,15 @@ async def handle_video_link(
     url: str,
     platform: str,
     link_message_id: int | None = None,
-    quality: str = "max",
+    quality: str = "1080",
 ) -> None:
     """Download *url*, showing live progress, then deliver the media.
 
     If *link_message_id* is provided it is deleted from the chat after
     the media is successfully sent, so the original link disappears.
-    *quality*: "max" / "1080" / "720" for TikTok & Instagram;
-               "720" / "480" / "360" / "audio" for YouTube.
+    Fixed quality target: 1080p (falls back to 720p then best available).
+    Telegram may compress the video further, so targeting 1080p preserves
+    acceptable quality post-compression.
     """
     import shutil
 

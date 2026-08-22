@@ -340,6 +340,46 @@ def _apply_youtube_opts(ydl_opts: dict, out_dir: str) -> None:
                        "— proceeding without cookies", len(raw))
 
 
+def _ensure_faststart(path: Path) -> Path:
+    """Re-mux *path* with ``-movflags +faststart`` so the moov atom sits at the
+    front of the file.  This is required for smooth mobile playback — without it
+    the device cannot begin rendering until the whole file is buffered.
+
+    Returns the (possibly new) path.  On any ffmpeg failure the original path
+    is returned unchanged so the caller can still send the file.
+    """
+    _ff = _find_ffmpeg()
+    if not _ff:
+        return path
+    import subprocess as _sp
+    out = path.with_name(path.stem + "_fs.mp4")
+    try:
+        result = _sp.run(
+            [
+                _ff, "-y", "-i", str(path),
+                "-c", "copy",
+                "-movflags", "+faststart",
+                str(out),
+            ],
+            capture_output=True,
+            timeout=120,
+        )
+        if result.returncode == 0 and out.exists() and out.stat().st_size > 0:
+            path.unlink(missing_ok=True)
+            logger.info("Video: faststart applied → %s", out.name)
+            return out
+        logger.warning(
+            "Video: faststart failed (rc=%s): %s",
+            result.returncode,
+            (result.stderr or b"")[-200:].decode(errors="replace"),
+        )
+    except Exception as exc:
+        logger.warning("Video: faststart error: %s", exc)
+    if out.exists():
+        out.unlink(missing_ok=True)
+    return path
+
+
 def _apply_tiktok_ua(ydl_opts: dict) -> None:
     """Inject a realistic browser User-Agent (always applied for TikTok)."""
     ydl_opts.setdefault("http_headers", {})
@@ -486,18 +526,23 @@ def _download_sync(
                 import subprocess as _sp
                 result = _sp.run(
                     [_ff, "-y", "-i", str(best),
-                     "-c:v", "copy", "-c:a", "aac", str(mp4_path)],
+                     "-c:v", "copy", "-c:a", "aac",
+                     "-movflags", "+faststart",
+                     str(mp4_path)],
                     capture_output=True,
                 )
                 if result.returncode == 0 and mp4_path.exists():
                     best.unlink(missing_ok=True)
                     best = mp4_path
-                    logger.info("Video: converted %s → mp4", best.name)
+                    logger.info("Video: converted %s → mp4 (faststart)", best.name)
                 else:
                     logger.warning("Video: ffmpeg conversion failed (%s), sending original",
                                    result.stderr[-200:] if result.stderr else "no stderr")
             else:
                 logger.warning("Video: ffmpeg not available, sending original %s", best.suffix)
+        else:
+            # Already mp4 — move moov atom to front for mobile progressive playback
+            best = _ensure_faststart(best)
         if best.stat().st_size > MAX_BYTES:
             best.unlink(missing_ok=True)
             raise ValueError(f"Video too large: {best.stat().st_size // (1024*1024)} MB > 45 MB")
@@ -550,6 +595,7 @@ def _download_sync(
         videos2, images2 = _scan_dir(out_dir)
         if videos2:
             best2 = max(videos2, key=lambda p: p.stat().st_size)
+            best2 = _ensure_faststart(best2)
             if best2.stat().st_size > MAX_BYTES:
                 best2.unlink(missing_ok=True)
                 raise ValueError(

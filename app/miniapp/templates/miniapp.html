@@ -705,15 +705,6 @@
 
   /* ── Row action buttons ── */
   .row-action-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
-  .game-btn {
-    border: none; border-radius: 20px;
-    padding: 4px 10px; font-size: 11px; font-weight: 600;
-    display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; cursor: pointer;
-    background: rgba(10,132,255,0.12);
-    color: var(--link);
-  }
-  .game-btn:active { opacity: 0.72; }
-
   /* ── VIP upgrade block (shown under active Premium card) ── */
   .sub-upgrade-block {
     margin-top: 12px;
@@ -881,31 +872,6 @@
     animation: spin 0.9s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
-
-  .game-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.45);
-    display: flex; align-items: flex-end; z-index: 1000;
-  }
-  .game-sheet {
-    width: 100%; background: var(--secondary-bg);
-    border-radius: 20px 20px 0 0; padding: 18px 16px 32px;
-    animation: slideUp 0.2s ease-out;
-  }
-  @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
-  .game-sheet-title { font-size: 15px; font-weight: 700; margin-bottom: 14px; text-align: center; }
-  .game-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 14px; }
-  .game-pick {
-    border: none; border-radius: 14px; background: rgba(120,120,128,0.11);
-    padding: 14px 6px; display: flex; flex-direction: column;
-    align-items: center; gap: 5px; font-size: 12px; font-weight: 600;
-  }
-  .game-pick:active { background: rgba(120,120,128,0.2); }
-  .game-pick-emoji { font-size: 26px; }
-  .game-cancel {
-    width: 100%; border: none; border-radius: 14px; padding: 13px;
-    font-size: 14px; font-weight: 700;
-    background: rgba(120,120,128,0.11); color: var(--red);
-  }
 
   /* ── Share buttons ── */
   .share-btn {
@@ -3364,7 +3330,6 @@
   .top-contacts-wrap .row-count { font-size: 21px; font-weight: 900; }
   .top-count-lbl { font-size: 9px; font-weight: 600; color: var(--hint); text-transform: uppercase; letter-spacing: 0.3px; margin-top: 1px; display: block; }
   /* Action buttons — neutral, uniform */
-  .top-contacts-wrap .game-btn,
   .top-contacts-wrap .rel-btn,
   .top-contacts-wrap .ai-btn {
     border-radius: 10px; padding: 4px 10px;
@@ -3373,7 +3338,6 @@
     border: 0.5px solid rgba(120,120,128,0.18);
     transition: background 0.12s, opacity 0.12s;
   }
-  .top-contacts-wrap .game-btn:active,
   .top-contacts-wrap .rel-btn:active,
   .top-contacts-wrap .ai-btn:active { opacity: 0.65; }
   /* Chips */
@@ -5066,9 +5030,6 @@
           }
         }
 
-        const gameBtn = s.mutual_connected
-          ? `<button class="game-btn" data-game-chat="${s.chat_id}" data-game-name="${s.display_name}">🎮 Игра</button>`
-          : "";
         const remindBtn = "";
         const relBtn = s.mutual_connected
           ? `<button class="rel-btn" data-rel-open="${s.chat_id}" data-rel-name="${s.display_name}">❤️ Отношения</button>`
@@ -5089,7 +5050,7 @@
               </div>
               <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
               <div class="row-action-btns">
-                ${gameBtn}${remindBtn}${relBtn}${aiBtn}
+                ${remindBtn}${relBtn}${aiBtn}
               </div>
             </div>
             <div class="row-right">
@@ -5151,12 +5112,6 @@
           const chatId = parseInt(row.dataset.chatId);
           const contact = lastStats?.top_interlocutors?.find(c => c.chat_id === chatId);
           if (contact) openContactProfile(contact);
-        });
-      });
-      document.querySelectorAll(".game-btn").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          openGamePicker(btn.dataset.gameChat, btn.dataset.gameName);
         });
       });
       document.querySelectorAll(".ai-btn").forEach(btn => {
@@ -5437,31 +5392,6 @@
     }
 
     // ── Game picker ──
-    const GAMES = [
-      {emoji:"🎲",label:"Кубик"},{emoji:"🎯",label:"Дартс"},{emoji:"🏀",label:"Баскетбол"},
-      {emoji:"⚽",label:"Футбол"},{emoji:"🎳",label:"Боулинг"},{emoji:"🎰",label:"Слоты"},
-    ];
-
-    function openGamePicker(chatId, name) {
-      const overlay = document.createElement("div");
-      overlay.className = "game-overlay";
-      overlay.innerHTML = `
-        <div class="game-sheet">
-          <div class="game-sheet-title">🎮 Отправить игру — ${name}</div>
-          <div class="game-grid">
-            ${GAMES.map(g => `<button class="game-pick" data-emoji="${g.emoji}"><span class="game-pick-emoji">${g.emoji}</span><span>${g.label}</span></button>`).join("")}
-          </div>
-          <button class="game-cancel">Отмена</button>
-        </div>
-      `;
-      document.body.appendChild(overlay);
-      overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
-      overlay.querySelector(".game-cancel").addEventListener("click", () => overlay.remove());
-      overlay.querySelectorAll(".game-pick").forEach(btn => {
-        btn.addEventListener("click", async () => { overlay.remove(); await sendGame(chatId, btn.dataset.emoji); });
-      });
-    }
-
     // ── Contact Profile Card ──────────────────────────────────────────────────
     const _CP_FRAME_STYLES = {
       "none":    "linear-gradient(135deg, var(--link), #5856d6, var(--green))",
@@ -5543,7 +5473,6 @@
           </div>
           ${s.mutual_connected ? '<div class="cp-mutual"><span class="chip mutual">🤝 взаимный</span></div>' : ""}
           <div class="cp-actions">
-            ${s.mutual_connected ? `<button class="cp-action-btn" id="cpGameBtn">🎮 Игра</button>` : ""}
             ${s.mutual_connected ? `<button class="cp-action-btn" id="cpRelBtn">❤️ Отношения</button>` : ""}
             <button class="cp-action-btn" id="cpAiBtn">🤖 Анализ</button>
             ${s.username ? `<button class="cp-action-btn cp-action-tg" id="cpTgBtn">✈️ Telegram</button>` : ""}
@@ -5555,10 +5484,6 @@
 
       overlay.querySelector("#cpCloseBtn").addEventListener("click", () => overlay.remove());
 
-      overlay.querySelector("#cpGameBtn")?.addEventListener("click", e => {
-        e.stopPropagation(); overlay.remove();
-        openGamePicker(s.chat_id, s.display_name);
-      });
       overlay.querySelector("#cpRelBtn")?.addEventListener("click", e => {
         e.stopPropagation(); overlay.remove();
         openRelModal(parseInt(s.chat_id), s.display_name);
@@ -5692,21 +5617,6 @@
           avatarEl.innerHTML = ""; avatarEl.style.background = "";
           avatarEl.appendChild(img);
         }
-      }
-    }
-
-    async function sendGame(chatId, emoji) {
-      try {
-        if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred("medium");
-        const res = await fetch("/app/api/game/send", {
-          method: "POST",
-          headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({initData: currentInitData, chatId: Number(chatId), emoji}),
-        });
-        if (!res.ok) throw new Error("failed");
-        if (tg && tg.showAlert) tg.showAlert(`${emoji} Игра отправлена в чат!`);
-      } catch {
-        if (tg && tg.showAlert) tg.showAlert("Не удалось отправить игру.");
       }
     }
 

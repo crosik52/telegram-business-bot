@@ -115,9 +115,6 @@ class AdminActionLogRequest(BaseModel):
     page: int = Field(default=1)
 
 
-GAME_EMOJIS = {"🎲", "🎯", "🏀", "⚽", "🎳", "🎰"}
-
-
 # ── Avatar URL cache (file_id → CDN URL, ~55-min TTL) ────────────────────────
 # Structure: user_telegram_id -> (cdn_url, expires_ts)
 _avatar_url_cache: dict[int, tuple[str, float]] = {}
@@ -202,14 +199,6 @@ def _compute_badges(stats) -> list[dict]:
         {"emoji": e, "title": t, "description": d, "achieved": achieved}
         for e, t, d, achieved in definitions
     ]
-
-
-class GameRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    init_data: str = Field(alias="initData")
-    chat_id: int = Field(alias="chatId")
-    emoji: str
 
 
 class WalletRequest(BaseModel):
@@ -909,68 +898,6 @@ async def miniapp_digest(
         "peak_hour": peak_hour,
         "unanswered_count": unanswered_count,
     }
-
-
-@router.post("/app/api/game/send")
-async def send_game(
-    payload: GameRequest, session: AsyncSession = Depends(get_db_session)
-) -> dict:
-    settings = get_settings()
-    user = verify_init_data(payload.init_data, settings.telegram_bot_token)
-    if user is None:
-        raise HTTPException(status_code=401, detail="Invalid Telegram init data")
-
-    owner_telegram_id = int(user["id"])
-
-    if payload.emoji not in GAME_EMOJIS:
-        raise HTTPException(status_code=400, detail="Unsupported game")
-
-    result = await session.execute(
-        select(BusinessConnection).where(
-            BusinessConnection.user_telegram_id == owner_telegram_id,
-            BusinessConnection.is_blocked.is_(False),
-        )
-    )
-    connections = result.scalars().all()
-    if not connections:
-        raise HTTPException(status_code=403, detail="No active business connection")
-    connection_ids = [c.business_connection_id for c in connections]
-
-    # The counterpart must also be an active bot user (mutual connection) —
-    # otherwise there is no chat we're allowed to inject a game message into.
-    counterpart_result = await session.execute(
-        select(BusinessConnection.business_connection_id).where(
-            BusinessConnection.user_telegram_id == payload.chat_id,
-            BusinessConnection.is_blocked.is_(False),
-        )
-    )
-    if counterpart_result.first() is None:
-        raise HTTPException(status_code=403, detail="Counterpart is not connected")
-
-    stats_service = StatsService(session)
-    owns_chat = await stats_service.owner_has_chat(
-        connection_ids=connection_ids, chat_id=payload.chat_id
-    )
-    if not owns_chat:
-        raise HTTPException(status_code=403, detail="No shared chat with this user")
-
-    from app.business.dispatcher import get_bot
-
-    bot = get_bot(settings)
-    try:
-        sent = await bot.send_dice(
-            business_connection_id=connection_ids[0],
-            chat_id=payload.chat_id,
-            emoji=payload.emoji,
-        )
-    except Exception as exc:  # noqa: BLE001 - surfaced to the mini app as a generic failure
-        logger.warning(
-            "Failed to send game dice to chat_id=%s: %s", payload.chat_id, exc
-        )
-        raise HTTPException(status_code=502, detail="Failed to send game") from exc
-
-    value = sent.dice.value if sent.dice else None
-    return {"sent": True, "value": value}
 
 
 @router.post("/app/api/wallet/info")

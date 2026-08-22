@@ -256,17 +256,13 @@ def _apply_tiktok_opts(ydl_opts: dict, url: str, out_dir: str) -> None:
     # Override generic quality format with TikTok-specific one that caps at 1080p
     # and explicitly prefers H.264.  4K HEVC streams cause mobile lag.
     ydl_opts["format"] = (
-        # 1st: DASH H.264 video + any audio, ≤1080p
-        "bestvideo[height<=1080][vcodec^=avc]+bestaudio"
-        # 2nd: pre-merged H.264 mp4, ≤1080p
-        "/best[height<=1080][vcodec^=avc][ext=mp4]"
-        # 3rd: pre-merged H.264 mp4 any height
+        # 1st: DASH H.264 video (any height) + any audio
+        "bestvideo[vcodec^=avc]+bestaudio"
+        # 2nd: pre-merged H.264 mp4, any height
         "/best[vcodec^=avc][ext=mp4]"
-        # 4th: any pre-merged mp4, ≤1080p (may be HEVC — will be transcoded)
-        "/best[height<=1080][ext=mp4]"
-        # 5th: whatever yt-dlp picks, ≤1080p
-        "/best[height<=1080]"
-        # Last resort
+        # 3rd: any pre-merged mp4 (may be HEVC — will be transcoded)
+        "/best[ext=mp4]"
+        # Last resort: whatever yt-dlp picks
         "/best"
     )
     import logging as _logging
@@ -332,7 +328,7 @@ def _apply_instagram_opts(ydl_opts: dict, url: str, out_dir: str) -> None:
     DASH streams on Instagram can be HEVC or H.264 High/10-bit which
     iOS Telegram cannot play — pre-merged mp4 is always H.264 Baseline.
     """
-    ydl_opts["format"] = "best[ext=mp4][height<=720]/best[ext=mp4]/best"
+    ydl_opts["format"] = "best[ext=mp4]/bestvideo[ext=mp4]+bestaudio/best"
 
     raw = os.environ.get("INSTAGRAM_COOKIES", "").strip()
     if not raw:

@@ -14,6 +14,7 @@ HOST = "0.0.0.0"
 LOG_LEVEL = "INFO"
 PORT = "5000"
 TELETHON_ENABLED = "false"
+WEBHOOK_BASE_URL = "https://9d935c9b-cee5-4aa7-b9d1-02801d9aedb0-00-21z1a3rhfgm2u.pike.replit.dev"
 
 [workflows]
 runButton = "Project"

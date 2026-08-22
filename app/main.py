@@ -410,6 +410,9 @@ async def lifespan(app: FastAPI):
             await conn.execute(text(
                 "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS chat_whitelist JSONB"
             ))
+            await conn.execute(text(
+                "ALTER TABLE business_connections ADD COLUMN IF NOT EXISTS bot_id BIGINT"
+            ))
 
     if settings.webhook_base_url:
         from aiogram.types import MenuButtonWebApp, WebAppInfo

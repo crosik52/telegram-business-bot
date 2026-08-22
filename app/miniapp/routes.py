@@ -2983,9 +2983,17 @@ async def admin_overview(
             "status": row[4],
         })
 
+    # Derive the current bot's Telegram ID from the token so the frontend can
+    # label connections as "new bot" vs "old bot".
+    try:
+        current_bot_id = int(settings.telegram_bot_token.split(":")[0])
+    except Exception:
+        current_bot_id = None
+
     return {
         "total_users": overview.total_users,
         "active_users": overview.active_users,
+        "current_bot_id": current_bot_id,
         "users": [
             {
                 "owner_telegram_id": u.owner_telegram_id,
@@ -3007,6 +3015,7 @@ async def admin_overview(
                 "wallet_balance": u.wallet_balance,
                 "subscription_expires_at": sub_map.get(u.owner_telegram_id),
                 "referrals": ref_map.get(u.owner_telegram_id, []),
+                "bot_id": u.bot_id,
             }
             for u in overview.users
         ],

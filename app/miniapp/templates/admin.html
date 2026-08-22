@@ -1330,6 +1330,9 @@
       if (filterMode === "active")  list = list.filter(u => !u.is_blocked);
       if (filterMode === "blocked") list = list.filter(u => u.is_blocked);
       if (filterMode === "muted")   list = list.filter(u => !u.notifications_enabled);
+      const curBotId = overview.current_bot_id;
+      if (botFilter === "new") list = list.filter(u => u.bot_id != null && u.bot_id === curBotId);
+      if (botFilter === "old") list = list.filter(u => u.bot_id == null || u.bot_id !== curBotId);
       if (searchQuery) {
         list = list.filter(u =>
           displayName(u).toLowerCase().includes(searchQuery) ||
@@ -1403,6 +1406,11 @@
             }
             if (active > 0)  chips.push(`<span style="background:rgba(52,199,89,0.15);color:var(--green);border:1px solid rgba(52,199,89,0.3);border-radius:8px;padding:2px 9px;font-size:11px;font-weight:700">🔗 ${active} акт. реф.</span>`);
             if (pending > 0) chips.push(`<span style="background:rgba(120,120,128,0.12);color:var(--hint);border:1px solid rgba(120,120,128,0.2);border-radius:8px;padding:2px 9px;font-size:11px;font-weight:600">⏳ ${pending} ожид.</span>`);
+            const isNew = u.bot_id != null && u.bot_id === overview.current_bot_id;
+            chips.push(isNew
+              ? `<span style="background:rgba(52,199,89,0.12);color:var(--green);border:1px solid rgba(52,199,89,0.25);border-radius:8px;padding:2px 9px;font-size:11px;font-weight:700">🆕 Новый бот</span>`
+              : `<span style="background:rgba(120,120,128,0.10);color:var(--hint);border:1px solid rgba(120,120,128,0.18);border-radius:8px;padding:2px 9px;font-size:11px;font-weight:600">📦 Старый бот</span>`
+            );
             return chips.length ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 2px">${chips.join("")}</div>` : "";
           })()}
 
@@ -1499,13 +1507,16 @@
       const connectedCount = overview.active_users ?? overview.users.filter(u => u.is_enabled).length;
       const blockedCount   = overview.users.filter(u => u.is_blocked).length;
       const totalMessages  = overview.users.reduce((s, u) => s + u.total_messages, 0);
+      const curBotId = overview.current_bot_id;
+      const newBotCount = overview.users.filter(u => u.bot_id != null && u.bot_id === curBotId).length;
+      const oldBotCount = overview.users.filter(u => u.bot_id == null || u.bot_id !== curBotId).length;
 
       const cards = `
         <div class="cards">
           <div class="card c-users"><span class="c-icon">👥</span><div class="c-val">${overview.total_users}</div><div class="c-lbl">Всего пользователей</div></div>
           <div class="card c-active"><span class="c-icon">🔌</span><div class="c-val">${connectedCount}</div><div class="c-lbl">С подключением</div></div>
-          <div class="card c-block"><span class="c-icon">🚫</span><div class="c-val">${blockedCount}</div><div class="c-lbl">Заблокировано</div></div>
-          <div class="card c-msgs"><span class="c-icon">💬</span><div class="c-val">${totalMessages}</div><div class="c-lbl">Сообщений всего</div></div>
+          <div class="card c-active" style="cursor:pointer" onclick="botFilter='new';render()"><span class="c-icon">🆕</span><div class="c-val" style="color:var(--green)">${newBotCount}</div><div class="c-lbl">Новый бот</div></div>
+          <div class="card c-block"  style="cursor:pointer" onclick="botFilter='old';render()"><span class="c-icon">📦</span><div class="c-val">${oldBotCount}</div><div class="c-lbl">Старый бот</div></div>
         </div>
       `;
 
@@ -1532,6 +1543,11 @@
           <button data-filter="active"  class="${filterMode==="active"  ?"active":""}">Активные</button>
           <button data-filter="blocked" class="${filterMode==="blocked" ?"active":""}">Заблок.</button>
           <button data-filter="muted"   class="${filterMode==="muted"   ?"active":""}">Без увед.</button>
+        </div>
+        <div class="segmented" id="botFilterTabs">
+          <button data-bot="all" class="${botFilter==="all"?"active":""}">Все боты</button>
+          <button data-bot="new" class="${botFilter==="new"?"active":""}">🆕 Новый</button>
+          <button data-bot="old" class="${botFilter==="old"?"active":""}">📦 Старый</button>
         </div>
         <div class="sort-row" id="sortTabs">
           <button class="sort-chip ${sortMode==="messages"?"active":""}" data-sort="messages">По сообщениям</button>
@@ -1563,6 +1579,9 @@
       }
       document.querySelectorAll("#filterTabs button").forEach(btn => {
         btn.addEventListener("click", () => { filterMode = btn.dataset.filter; render(); });
+      });
+      document.querySelectorAll("#botFilterTabs button").forEach(btn => {
+        btn.addEventListener("click", () => { botFilter = btn.dataset.bot; render(); });
       });
       document.querySelectorAll("#sortTabs button").forEach(btn => {
         btn.addEventListener("click", () => { sortMode = btn.dataset.sort; render(); });

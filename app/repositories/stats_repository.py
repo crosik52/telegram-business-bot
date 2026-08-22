@@ -80,6 +80,7 @@ class AdminUserRow:
     deleted_messages: int
     last_activity_at: dt.datetime | None
     wallet_balance: int = 0
+    bot_id: int | None = None
 
 
 @dataclass
@@ -441,6 +442,10 @@ class StatsRepository:
                     if s[4] and (last_activity_at is None or s[4] > last_activity_at):
                         last_activity_at = s[4]
 
+            # Use the bot_id from the most-recently-updated connection that has one.
+            known_bot_ids = [c.bot_id for c in conns if c.bot_id is not None]
+            effective_bot_id = known_bot_ids[0] if known_bot_ids else None
+
             users.append(
                 AdminUserRow(
                     owner_telegram_id=owner_telegram_id,
@@ -458,6 +463,7 @@ class StatsRepository:
                     deleted_messages=deleted_messages,
                     last_activity_at=last_activity_at,
                     wallet_balance=wallets_by_owner.get(owner_telegram_id, 0),
+                    bot_id=effective_bot_id,
                 )
             )
 

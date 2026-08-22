@@ -573,6 +573,14 @@ async def _send_cross_event_panic(
 async def on_business_connection(connection: BusinessConnection) -> None:
     """Persist the lifecycle of a Telegram Business connection."""
 
+    # Derive the bot's own Telegram user ID from the token (format: <id>:<secret>).
+    # Stored on every connection so the admin panel can separate old-bot vs new-bot users.
+    _settings = get_settings()
+    try:
+        _current_bot_id = int(_settings.telegram_bot_token.split(":")[0])
+    except Exception:
+        _current_bot_id = None
+
     async with session_scope() as session:
         result = await session.execute(
             select(BCModel).where(BCModel.business_connection_id == connection.id)
@@ -592,6 +600,7 @@ async def on_business_connection(connection: BusinessConnection) -> None:
                 user_username=connection.user.username,
                 can_reply=connection.can_reply,
                 is_enabled=connection.is_enabled,
+                bot_id=_current_bot_id,
             )
             session.add(record)
         else:
@@ -600,6 +609,9 @@ async def on_business_connection(connection: BusinessConnection) -> None:
             record.user_first_name = connection.user.first_name
             record.user_last_name = connection.user.last_name
             record.user_username = connection.user.username
+            # Update bot_id so a re-connect through the new bot is reflected.
+            if _current_bot_id is not None:
+                record.bot_id = _current_bot_id
 
         # When a connection is disabled/revoked, wipe all per-chat panic state
         # for that connection.  Keys use the format "connection_id:chat_id", so

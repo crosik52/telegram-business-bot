@@ -10,6 +10,7 @@ import datetime as dt
 
 from sqlalchemy import BigInteger, Boolean, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
+from typing import Optional
 
 from app.database.base import Base
 
@@ -37,6 +38,11 @@ class BusinessConnection(Base):
     # edit/delete DM notifications.
     notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Telegram user ID of the bot that received this connection event.
+    # NULL means the connection was created before bot-ID tracking was added
+    # (i.e. via the old bot). Non-NULL identifies the current bot.
+    bot_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, default=None)
 
     connected_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: dt.datetime.now(dt.UTC)

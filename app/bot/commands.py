@@ -36,11 +36,12 @@ router = Router(name="commands")
 def _app_kb(base_url: str, *, extra_rows: list[list[InlineKeyboardButton]] | None = None) -> InlineKeyboardMarkup:
     """Main action keyboard for /start."""
     rows: list[list[InlineKeyboardButton]] = [
-        [InlineKeyboardButton(text="📊 Статистика и профиль", web_app=WebAppInfo(url=base_url + "/app"))],
+        [InlineKeyboardButton(text="📊 Открыть мини-приложение", web_app=WebAppInfo(url=base_url + "/app"))],
         [
-            InlineKeyboardButton(text="🔗 Пригласить друга", callback_data="share_ref"),
-            InlineKeyboardButton(text="❓ Помощь", callback_data="help_main"),
+            InlineKeyboardButton(text="🔌 Подключить бота", url="tg://settings/edit"),
+            InlineKeyboardButton(text="❓ Помощь",          callback_data="help_main"),
         ],
+        [InlineKeyboardButton(text="🔗 Пригласить друга", callback_data="share_ref")],
     ]
     if extra_rows:
         rows += extra_rows
@@ -133,24 +134,27 @@ _HELP_SECTIONS: dict[str, tuple[str, str]] = {
 
 # ── /start ─────────────────────────────────────────────────────────────────────
 
-_GREETING = (
-    "👋 Привет! Я твой умный помощник для Telegram.\n\n"
-    "Вот что я умею:\n\n"
-    '<tg-emoji emoji-id="5220070652756635426">👀</tg-emoji>'
-    " Если собеседник удалит или отредактирует сообщение — ты сразу увидишь оригинал\n"
-    '<tg-emoji emoji-id="5222472119295684375">🎶</tg-emoji>'
-    " Скачиваю треки по запросу прямо в чате с собеседником (<code>!mp3 название</code>)\n"
-    '<tg-emoji emoji-id="5219943216781995020">⚡</tg-emoji>'
-    " Скачиваю видео из TikTok, Instagram и YouTube по ссылке (beta)\n"
-    '<tg-emoji emoji-id="5244820603663296299">🐾</tg-emoji>'
-    " Питомец, монеты, квесты, уровни — всё в мини-приложении\n"
-    '<tg-emoji emoji-id="5100657930429006538">❤️</tg-emoji>'
-    " Дружба и отношения с собеседниками — стрики, подарки, открытки\n"
-    '<tg-emoji emoji-id="5310224206732996002">⭐</tg-emoji>'
-    " Premium-аналитика: топ слов, эмодзи, ии анализ диалогов\n\n"
-    "💡 <b>Все функции работают без Telegram Premium!</b>\n\n"
-    "Нажми <b>📊 Статистика</b>, чтобы открыть мини-приложение 👇"
-)
+def _greeting(first_name: str | None = None) -> str:
+    name_part = f", {first_name}" if first_name else ""
+    return (
+        f"👋 Привет{name_part}!\n\n"
+        "Я работаю в фоне твоих бизнес-чатов и делаю переписку умнее.\n\n"
+        "<b>Что умею:</b>\n"
+        '<tg-emoji emoji-id="5220070652756635426">👀</tg-emoji>'
+        " <b>Слежу за чатами</b> — вижу удалённые и отредактированные сообщения\n"
+        '<tg-emoji emoji-id="5222472119295684375">🎵</tg-emoji>'
+        " <b>Музыка</b> — скачиваю треки по <code>!mp3 название</code> прямо в чате\n"
+        '<tg-emoji emoji-id="5219943216781995020">📹</tg-emoji>'
+        " <b>Видео</b> — TikTok, Instagram и YouTube по ссылке в 1080p\n"
+        '<tg-emoji emoji-id="5310224206732996002">📊</tg-emoji>'
+        " <b>Аналитика</b> — топ слов, эмодзи, история, ИИ-анализ диалогов\n"
+        '<tg-emoji emoji-id="5244820603663296299">🐾</tg-emoji>'
+        " <b>Питомец</b> — корми, прокачивай, соревнуйся в рейтинге\n"
+        '<tg-emoji emoji-id="5100657930429006538">❤️</tg-emoji>'
+        " <b>Отношения</b> — стрики, подарки и открытки для собеседников\n\n"
+        "Работает без Telegram Premium ✨\n\n"
+        "Нажми <b>🔌 Подключить бота</b>, чтобы начать 👇"
+    )
 
 
 async def _send_welcome(message: Message, *, is_new_user: bool, user=None) -> None:
@@ -177,14 +181,8 @@ async def _send_welcome(message: Message, *, is_new_user: bool, user=None) -> No
             ])
         keyboard = _app_kb(base_url, extra_rows=extra)
 
-    await message.answer(_GREETING, parse_mode="HTML", reply_markup=keyboard)
-
-    if is_new_user:
-        _, connect_text = _HELP_SECTIONS["help_connect"]
-        connect_kb = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="⚙️ Открыть настройки Telegram", url="tg://settings/edit")
-        ]])
-        await message.answer(connect_text, parse_mode="HTML", reply_markup=connect_kb)
+    first_name = from_user.first_name if from_user else None
+    await message.answer(_greeting(first_name), parse_mode="HTML", reply_markup=keyboard)
 
     logger.info("Sent /start greeting to chat_id=%s (new=%s)", message.chat.id, is_new_user)
 

@@ -350,6 +350,15 @@ async def on_help_callback(callback: CallbackQuery) -> None:
     key = callback.data or "help_main"
     title, body = _HELP_SECTIONS.get(key, _HELP_SECTIONS["help_main"])
 
+    # Substitute dynamic bot username into body templates
+    if "{bot_username}" in body:
+        try:
+            _me = await callback.bot.get_me()  # type: ignore[union-attr]
+            _bu = _me.username or "savelog1_bot"
+        except Exception:
+            _bu = "savelog1_bot"
+        body = body.format(bot_username=_bu)
+
     settings = get_settings()
     extra_btn: list[InlineKeyboardButton] = []
 

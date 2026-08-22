@@ -265,12 +265,10 @@ def _conversation_panel(image: Image.Image, draw: ImageDraw.ImageDraw, stats: In
         incoming_angle = 360 * max(0, stats.incoming) / total
         _smooth_ring(image, (cx, cy), radius, incoming_angle)
         percent = round(stats.incoming * 100 / total)
-        _centered(draw, (cx, cy - 8), f"{percent}%", _font(25, "bold"), TEXT)
-        _centered(draw, (cx, cy + 18), "входящих", _font(13, "medium"), MUTED)
+        _centered(draw, (cx, cy), f"{percent}%", _font(25, "bold"), TEXT)
     else:
         _smooth_ring(image, (cx, cy), radius, 0)
-        _centered(draw, (cx, cy - 6), "—", _font(35, "bold"), MUTED)
-        _centered(draw, (cx, cy + 21), "нет данных", _font(13, "medium"), MUTED)
+        _centered(draw, (cx, cy), "—", _font(35, "bold"), MUTED)
     _stat_line(draw, x0 + 196, y0 + 91, INCOMING, "Входящие", stats.incoming)
     _stat_line(draw, x0 + 196, y0 + 139, OUTGOING, "Исходящие", stats.outgoing)
     draw.line((x0 + 24, y0 + 211, x1 - 24, y0 + 211), fill=(77, 92, 110), width=1)

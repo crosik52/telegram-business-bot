@@ -164,6 +164,12 @@ _PLATFORM_LABELS = {
     "youtube":   "YouTube",
 }
 
+_PLATFORM_EMOJIS = {
+    "instagram": "📸",
+    "tiktok":    "🎵",
+    "youtube":   "▶️",
+}
+
 # ── URL detection ─────────────────────────────────────────────────────────────
 
 _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
@@ -238,7 +244,7 @@ def _build_base_opts(out_dir: str, max_bytes: int) -> dict:
 from app.services._cookie_utils import json_cookies_to_netscape as _json_cookies_to_netscape
 
 
-def _apply_tiktok_opts(ydl_opts: dict, url: str, out_dir: str) -> None:
+def _apply_tiktok_opts(ydl_opts: dict, url: str, out_dir: str, quality: str = "max") -> None:
     """Mutate *ydl_opts* in-place with TikTok-specific settings.
 
     Supported TIKTOK_COOKIES formats (tried in order):
@@ -248,21 +254,17 @@ def _apply_tiktok_opts(ydl_opts: dict, url: str, out_dir: str) -> None:
       4. Raw HTTP Cookie header string  (name=val; name2=val2)
          → injected via http_headers["Cookie"]
 
-    Format strategy: prefer H.264 (AVC) at ≤1080p.  TikTok tags H.264 streams
-    as vcodec starting with "avc1".  If yt-dlp still picks HEVC/VP9 (it will
-    be caught and transcoded later), the fallback chain ensures we at least get
-    a merged mp4 rather than a raw HEVC container that Telegram can't play.
+    Format strategy: prefer H.264 (AVC). Quality parameter caps the height:
+    'max' → no cap, '1080' → ≤1080p, '720' → ≤720p.
+    HEVC/VP9 streams are caught post-download and transcoded to H.264.
     """
-    # Override generic quality format with TikTok-specific one that caps at 1080p
-    # and explicitly prefers H.264.  4K HEVC streams cause mobile lag.
+    # Height filter from quality selection
+    _H = {"max": "", "1080": "[height<=1080]", "720": "[height<=720]"}.get(quality, "")
     ydl_opts["format"] = (
-        # 1st: DASH H.264 video (any height) + any audio
-        "bestvideo[vcodec^=avc]+bestaudio"
-        # 2nd: pre-merged H.264 mp4, any height
-        "/best[vcodec^=avc][ext=mp4]"
-        # 3rd: any pre-merged mp4 (may be HEVC — will be transcoded)
-        "/best[ext=mp4]"
-        # Last resort: whatever yt-dlp picks
+        f"bestvideo{_H}[vcodec^=avc]+bestaudio"
+        f"/best{_H}[vcodec^=avc][ext=mp4]"
+        f"/best{_H}[ext=mp4]"
+        f"/best{_H}"
         "/best"
     )
     import logging as _logging
@@ -321,14 +323,16 @@ def _apply_tiktok_opts(ydl_opts: dict, url: str, out_dir: str) -> None:
     _apply_tiktok_ua(ydl_opts)
 
 
-def _apply_instagram_opts(ydl_opts: dict, url: str, out_dir: str) -> None:
+def _apply_instagram_opts(ydl_opts: dict, url: str, out_dir: str, quality: str = "max") -> None:
     """Apply Instagram-specific download options.
 
     Force pre-merged mp4 selection (not DASH bestvideo+bestaudio).
     DASH streams on Instagram can be HEVC or H.264 High/10-bit which
     iOS Telegram cannot play — pre-merged mp4 is always H.264 Baseline.
+    Quality caps: 'max' → no cap, '720' → ≤720p.
     """
-    ydl_opts["format"] = "best[ext=mp4]/bestvideo[ext=mp4]+bestaudio/best"
+    _H = {"max": "", "720": "[height<=720]"}.get(quality, "")
+    ydl_opts["format"] = f"best{_H}[ext=mp4]/bestvideo{_H}[ext=mp4]+bestaudio/best{_H}/best"
 
     raw = os.environ.get("INSTAGRAM_COOKIES", "").strip()
     if not raw:
@@ -530,7 +534,8 @@ def _download_sync(
     url: str,
     out_dir: str,
     progress_hook: Callable | None = None,
-    quality: str = "720",
+    quality: str = "max",
+    transcode_hook: Callable | None = None,
 ) -> tuple[list[Path], str]:
     """Download *url* into *out_dir* using yt-dlp.
 
@@ -538,6 +543,9 @@ def _download_sync(
     - media_type == "video": files is a list with one video Path
     - media_type == "photo": files is a list of image Paths (sorted, max 10)
     - media_type == "audio": files is a list with one audio Path
+
+    *transcode_hook* is called (no args) just before H.264 transcoding starts
+    so the caller can update a progress status message.
 
     Raises on unrecoverable failure.
     """
@@ -593,9 +601,9 @@ def _download_sync(
     if progress_hook:
         opts_video["progress_hooks"] = [progress_hook]
     if is_tiktok:
-        _apply_tiktok_opts(opts_video, url, out_dir)
+        _apply_tiktok_opts(opts_video, url, out_dir, quality=quality)
     if is_instagram:
-        _apply_instagram_opts(opts_video, url, out_dir)
+        _apply_instagram_opts(opts_video, url, out_dir, quality=quality)
     if is_youtube:
         _apply_youtube_opts(opts_video, out_dir)
 
@@ -662,6 +670,8 @@ def _download_sync(
             _MOBILE_UNSAFE = {"hevc", "vp9", "av1", "av01", "vp8"}
             if codec in _MOBILE_UNSAFE:
                 logger.info("Video: codec=%s is mobile-unsafe, transcoding to h264", codec)
+                if transcode_hook:
+                    transcode_hook()
                 best = _transcode_to_h264(best)
             else:
                 # H.264 — just move moov atom to front for progressive playback
@@ -685,9 +695,9 @@ def _download_sync(
     if progress_hook:
         opts_photo["progress_hooks"] = [progress_hook]
     if is_tiktok:
-        _apply_tiktok_opts(opts_photo, url, out_dir)
+        _apply_tiktok_opts(opts_photo, url, out_dir, quality=quality)
     if is_instagram:
-        _apply_instagram_opts(opts_photo, url, out_dir)
+        _apply_instagram_opts(opts_photo, url, out_dir, quality=quality)
     if is_youtube:
         opts_photo["extractor_args"] = {
             "youtube": {"player_client": ["android", "web"]}
@@ -827,19 +837,24 @@ async def handle_video_link(
     url: str,
     platform: str,
     link_message_id: int | None = None,
-    quality: str = "720",
+    quality: str = "max",
 ) -> None:
     """Download *url*, showing live progress, then deliver the media.
 
     If *link_message_id* is provided it is deleted from the chat after
     the media is successfully sent, so the original link disappears.
-    *quality* is one of "720", "480", "360", "audio" (YouTube only).
+    *quality*: "max" / "1080" / "720" for TikTok & Instagram;
+               "720" / "480" / "360" / "audio" for YouTube.
     """
     import shutil
 
-    label   = _PLATFORM_LABELS.get(platform, platform)
-    _QUALITY_LABELS = {"720": " 720p", "480": " 480p", "360": " 360p", "audio": " 🎵"}
-    quality_suffix  = _QUALITY_LABELS.get(quality, "")
+    emoji  = _PLATFORM_EMOJIS.get(platform, "📹")
+    label  = _PLATFORM_LABELS.get(platform, platform)
+    _QLABELS = {
+        "max": "макс", "1080": "1080p", "720": "720p",
+        "480": "480p", "360": "360p", "audio": "аудио 🎵",
+    }
+    qtag   = _QLABELS.get(quality, quality)
     tmp_dir = tempfile.mkdtemp(prefix="vidbot_")
     loop    = asyncio.get_running_loop()
 
@@ -849,14 +864,13 @@ async def handle_video_link(
         status_msg = await bot.send_message(
             chat_id=chat_id,
             business_connection_id=business_connection_id,
-            text=f"⏳ Скачиваю {label}{quality_suffix}...",
+            text=f"{emoji} {label} · {qtag}\n⏳ Подготовка…",
         )
     except Exception as exc:
         logger.warning("Could not send status message to chat_id=%s: %s", chat_id, exc)
 
     _last_edit:   list[float] = [0.0]
-    _spinner_idx: list[int]   = [0]
-    _EDIT_INTERVAL = 3.0
+    _EDIT_INTERVAL = 2.5  # slightly faster refresh
 
     async def _edit_status(text: str) -> None:
         if status_msg is None:
@@ -890,37 +904,67 @@ async def handle_video_link(
         _last_edit[0] = now
         if d["status"] != "downloading":
             return
+
         downloaded = d.get("downloaded_bytes") or 0
         total      = d.get("total_bytes") or d.get("total_bytes_estimate")
-        speed      = d.get("speed")
-        bar        = _build_progress_bar(downloaded, total)
-        speed_str  = ""
-        if speed:
-            speed_str = (
-                f" · {speed / 1024 / 1024:.1f} МБ/с" if speed >= 1_048_576
-                else f" · {speed / 1024:.0f} КБ/с"
-            )
-        _spinner_idx[0] = (_spinner_idx[0] + 1) % len(_SPINNERS)
-        icon = _SPINNERS[_spinner_idx[0]]
+        speed      = d.get("speed") or 0
+        eta        = d.get("eta")
+
+        bar = _build_progress_bar(downloaded, total, width=12)
+
+        # Speed string
+        if speed >= 1_048_576:
+            speed_str = f"{speed / 1_048_576:.1f} МБ/с"
+        elif speed > 0:
+            speed_str = f"{speed / 1024:.0f} КБ/с"
+        else:
+            speed_str = ""
+
+        # Downloaded size
+        dl_mb = downloaded / 1_048_576
+        tot_mb = (total / 1_048_576) if total else None
+        size_str = f"{dl_mb:.1f}" + (f"/{tot_mb:.0f} МБ" if tot_mb else " МБ")
+
+        # ETA
+        eta_str = f" · ~{eta}с" if eta and eta < 3600 else ""
+
+        parts = [p for p in [speed_str, eta_str.lstrip(" · ")] if p]
+        meta  = " · ".join(parts)
+
         asyncio.run_coroutine_threadsafe(
-            _edit_status(f"{icon} Скачиваю {label}{quality_suffix}...\n{bar}{speed_str}"), loop
+            _edit_status(
+                f"{emoji} {label} · {qtag}\n"
+                f"⬇️ {bar}\n"
+                f"{size_str}{(' · ' + meta) if meta else ''}"
+            ),
+            loop,
+        )
+
+    def _transcode_hook() -> None:
+        asyncio.run_coroutine_threadsafe(
+            _edit_status(
+                f"{emoji} {label} · {qtag}\n"
+                f"🔄 Конвертирую в H.264…"
+            ),
+            loop,
         )
 
     try:
-        logger.info("Downloading %s media: %s", label, url)
+        logger.info("Downloading %s media (quality=%s): %s", label, quality, url)
 
         paths, media_type = await asyncio.wait_for(
             loop.run_in_executor(
-                None, partial(_download_sync, url, tmp_dir, _progress_hook, quality)
+                None,
+                partial(_download_sync, url, tmp_dir, _progress_hook, quality, _transcode_hook),
             ),
-            timeout=300,  # 5-minute hard cap; yt-dlp can hang on merge
+            timeout=480,  # 8-minute cap covers large 4K + transcode
         )
 
         logger.info(
             "Downloaded %s file(s) as %s from %s, uploading to chat %s",
             len(paths), media_type, label, chat_id,
         )
-        await _edit_status("📤 Загружаю в Telegram...")
+        await _edit_status(f"{emoji} {label} · {qtag}\n📤 Отправляю…")
 
         if media_type == "audio":
             await _delete_status()
@@ -948,7 +992,7 @@ async def handle_video_link(
 
         else:  # video
             path = paths[0]
-            _w, _h = _video_dimensions(path)
+            _w, _h = _video_dimensions(str(path))
             _dim: dict = {}
             if _w and _h:
                 _dim = {"width": _w, "height": _h}
@@ -990,19 +1034,34 @@ async def handle_video_link(
 
     except Exception as exc:
         logger.warning("Media download/send failed for %s (%s): %s", url, label, exc)
-        # Show a user-facing error instead of silently deleting the status.
+        exc_str = str(exc).lower()
+
         if isinstance(exc, asyncio.TimeoutError):
-            err_text = "⏱ Скачивание заняло слишком много времени — попробуй позже"
-        elif isinstance(exc, ValueError) and "too large" in str(exc).lower():
-            err_text = "❌ Видео слишком большое для отправки через Telegram (лимит 45 МБ)"
-        elif isinstance(exc, ValueError) and "too long" in str(exc).lower():
-            err_text = "❌ Видео слишком длинное для скачивания"
+            err_text = (
+                f"{emoji} {label}\n"
+                "⏱ Скачивание заняло слишком много времени\n"
+                "Попробуй выбрать качество ниже или повтори позже"
+            )
+        elif isinstance(exc, ValueError) and "too large" in exc_str:
+            err_text = (
+                f"{emoji} {label}\n"
+                "❌ Видео слишком большое (лимит 45 МБ)\n"
+                "Попробуй выбрать качество ниже"
+            )
+        elif isinstance(exc, ValueError) and "too long" in exc_str:
+            err_text = f"{emoji} {label}\n❌ Видео слишком длинное (лимит 20 минут)"
         elif isinstance(exc, FileNotFoundError):
-            err_text = "❌ Не удалось скачать — видео недоступно или удалено"
+            err_text = f"{emoji} {label}\n❌ Видео недоступно или удалено"
+        elif any(k in exc_str for k in ("geo", "not available in your country", "your country")):
+            err_text = f"{emoji} {label}\n🌍 Видео недоступно в вашем регионе"
+        elif any(k in exc_str for k in ("private", "sign in", "login required")):
+            err_text = f"{emoji} {label}\n🔒 Видео приватное или требует входа"
+        elif any(k in exc_str for k in ("age", "18+", "mature")):
+            err_text = f"{emoji} {label}\n🔞 Видео доступно только для совершеннолетних"
         else:
-            err_text = "❌ Не удалось скачать видео"
+            err_text = f"{emoji} {label}\n❌ Не удалось скачать видео"
+
         await _edit_status(err_text)
-        # Auto-delete the error message after 12 seconds so it doesn't litter the chat.
         await asyncio.sleep(12)
         await _delete_status()
 

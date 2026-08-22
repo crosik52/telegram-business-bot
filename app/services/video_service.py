@@ -42,6 +42,81 @@ from app.logging_config import get_logger
 logger = get_logger(__name__)
 
 
+def _video_codec(path: str) -> str:
+    """Return codec_name of the first video stream (e.g. 'h264', 'hevc', 'vp9', 'av1').
+
+    Returns empty string on any error.
+    """
+    import json, subprocess
+    try:
+        out = subprocess.check_output(
+            [
+                "ffprobe", "-v", "quiet",
+                "-print_format", "json",
+                "-show_streams",
+                "-select_streams", "v:0",
+                path,
+            ],
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+        )
+        streams = json.loads(out).get("streams", [])
+        return streams[0].get("codec_name", "").lower() if streams else ""
+    except Exception as exc:
+        logger.debug("_video_codec: ffprobe failed for %s: %s", path, exc)
+        return ""
+
+
+def _transcode_to_h264(path: Path) -> Path:
+    """Re-encode *path* to H.264 + AAC so Telegram mobile can hardware-decode it.
+
+    Used when a download yields HEVC (H.265), VP9, AV1 or any other codec that
+    causes lag / audio drops on mobile players.  The output is a proper mp4 with
+    faststart.  On any failure the original path is returned unchanged.
+    """
+    _ff = _find_ffmpeg()
+    if not _ff:
+        logger.warning("transcode_to_h264: ffmpeg not found, skipping transcode of %s", path.name)
+        return path
+
+    import subprocess as _sp
+
+    out = path.with_name(path.stem + "_h264.mp4")
+    logger.info("transcode_to_h264: encoding %s → h264", path.name)
+    try:
+        result = _sp.run(
+            [
+                _ff, "-y", "-i", str(path),
+                "-c:v", "libx264",
+                "-preset", "fast",    # good quality/speed balance for server use
+                "-crf", "23",         # visually lossless for 1080p
+                "-pix_fmt", "yuv420p",  # broadest device compatibility
+                "-c:a", "aac",
+                "-b:a", "128k",
+                "-movflags", "+faststart",
+                str(out),
+            ],
+            capture_output=True,
+            timeout=300,
+        )
+        if result.returncode == 0 and out.exists() and out.stat().st_size > 0:
+            path.unlink(missing_ok=True)
+            logger.info("transcode_to_h264: done → %s (%s MB)",
+                        out.name, out.stat().st_size // 1024 // 1024)
+            return out
+        logger.warning(
+            "transcode_to_h264: ffmpeg failed (rc=%s): %s",
+            result.returncode,
+            (result.stderr or b"")[-300:].decode(errors="replace"),
+        )
+    except Exception as exc:
+        logger.warning("transcode_to_h264: error: %s", exc)
+
+    if out.exists():
+        out.unlink(missing_ok=True)
+    return path
+
+
 def _video_dimensions(path: str) -> tuple[int, int]:
     """Return (width, height) of a video file using ffprobe.
 
@@ -172,7 +247,28 @@ def _apply_tiktok_opts(ydl_opts: dict, url: str, out_dir: str) -> None:
       3. JSON array exported by browser extensions (Cookie Editor, EditThisCookie, …)
       4. Raw HTTP Cookie header string  (name=val; name2=val2)
          → injected via http_headers["Cookie"]
+
+    Format strategy: prefer H.264 (AVC) at ≤1080p.  TikTok tags H.264 streams
+    as vcodec starting with "avc1".  If yt-dlp still picks HEVC/VP9 (it will
+    be caught and transcoded later), the fallback chain ensures we at least get
+    a merged mp4 rather than a raw HEVC container that Telegram can't play.
     """
+    # Override generic quality format with TikTok-specific one that caps at 1080p
+    # and explicitly prefers H.264.  4K HEVC streams cause mobile lag.
+    ydl_opts["format"] = (
+        # 1st: DASH H.264 video + any audio, ≤1080p
+        "bestvideo[height<=1080][vcodec^=avc]+bestaudio"
+        # 2nd: pre-merged H.264 mp4, ≤1080p
+        "/best[height<=1080][vcodec^=avc][ext=mp4]"
+        # 3rd: pre-merged H.264 mp4 any height
+        "/best[vcodec^=avc][ext=mp4]"
+        # 4th: any pre-merged mp4, ≤1080p (may be HEVC — will be transcoded)
+        "/best[height<=1080][ext=mp4]"
+        # 5th: whatever yt-dlp picks, ≤1080p
+        "/best[height<=1080]"
+        # Last resort
+        "/best"
+    )
     import logging as _logging
     _tlog = _logging.getLogger(__name__)
 
@@ -565,8 +661,15 @@ def _download_sync(
             else:
                 logger.warning("Video: ffmpeg not available, sending original %s", best.suffix)
         else:
-            # Already mp4 — move moov atom to front for mobile progressive playback
-            best = _ensure_faststart(best)
+            # Already mp4 — check codec; transcode if not H.264 (mobile can't play HEVC/VP9/AV1)
+            codec = _video_codec(str(best))
+            _MOBILE_UNSAFE = {"hevc", "vp9", "av1", "av01", "vp8"}
+            if codec in _MOBILE_UNSAFE:
+                logger.info("Video: codec=%s is mobile-unsafe, transcoding to h264", codec)
+                best = _transcode_to_h264(best)
+            else:
+                # H.264 — just move moov atom to front for progressive playback
+                best = _ensure_faststart(best)
         if best.stat().st_size > MAX_BYTES:
             best.unlink(missing_ok=True)
             raise ValueError(f"Video too large: {best.stat().st_size // (1024*1024)} MB > 45 MB")

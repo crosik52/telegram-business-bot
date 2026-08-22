@@ -2986,7 +2986,8 @@ async def admin_overview(
     # Derive the current bot's Telegram ID from the token so the frontend can
     # label connections as "new bot" vs "old bot".
     try:
-        current_bot_id = int(settings.telegram_bot_token.split(":")[0])
+        _settings = get_settings()
+        current_bot_id = int(_settings.telegram_bot_token.split(":")[0])
     except Exception:
         current_bot_id = None
 

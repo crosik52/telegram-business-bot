@@ -1,6 +1,8 @@
 """Check whether a Telegram user is subscribed to required channels."""
 from __future__ import annotations
 
+import asyncio
+
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 
@@ -22,69 +24,68 @@ _USER_NOT_MEMBER_PHRASES = (
     "user_not_participant",
 )
 
+# Telegram can take a few seconds to propagate a new subscription.
+# We retry this many times before concluding the user isn't subscribed.
+_RETRY_ATTEMPTS = 3
+_RETRY_DELAY_S  = 2.0
 
-async def get_unsubscribed_channels(
-    bot: Bot,
-    user_id: int,
-    channels: list[RequiredChannel],
-) -> list[RequiredChannel]:
-    """Return the subset of *channels* the user is NOT subscribed to.
 
-    Error-handling policy
-    ─────────────────────
-    • User is explicitly left/kicked → block (treat as not subscribed).
-    • Bot lacks access to the channel (Forbidden / chat not found) → fail OPEN:
-      log an error so the admin can fix it, but do NOT block the user.
-      Blocking everyone because of a misconfigured channel is worse than
-      letting someone through we can't verify.
-    • Any other unexpected error → fail open + log, same reasoning.
+async def _check_one(bot: Bot, user_id: int, ch: RequiredChannel) -> bool:
+    """Return True if *user_id* is subscribed to *ch*, False if not.
+
+    Retries up to _RETRY_ATTEMPTS times to handle Telegram's propagation delay
+    (user subscribes → taps "I subscribed" before Telegram's API catches up).
     """
-    unsubscribed: list[RequiredChannel] = []
-    for ch in channels:
+    for attempt in range(_RETRY_ATTEMPTS):
         try:
             member = await bot.get_chat_member(ch.at_username, user_id)
+
+            if member.status in _SUBSCRIBED_STATUSES:
+                return True
+
             if member.status in _NOT_MEMBER_STATUSES:
-                unsubscribed.append(ch)
-            elif member.status not in _SUBSCRIBED_STATUSES:
-                # Unknown status — treat as not subscribed to be safe
-                logger.warning(
-                    "channel_gate: unknown member status %r for user %s in %s",
-                    member.status, user_id, ch.at_username,
-                )
-                unsubscribed.append(ch)
-            # else: subscribed — do nothing
+                if attempt < _RETRY_ATTEMPTS - 1:
+                    # Maybe Telegram hasn't propagated the subscription yet — retry
+                    await asyncio.sleep(_RETRY_DELAY_S)
+                    continue
+                return False
+
+            # Unknown status
+            logger.warning(
+                "channel_gate: unknown member status %r for user %s in %s",
+                member.status, user_id, ch.at_username,
+            )
+            return False
 
         except TelegramForbiddenError as exc:
-            # Bot is not in the channel or was kicked from it.
-            # This is a misconfiguration — fail OPEN so real subscribers
-            # aren't blocked. Admin must add the bot to the channel.
+            # Bot lacks access to the channel — misconfiguration, fail open.
             logger.error(
                 "channel_gate: bot has no access to %s — "
                 "add the bot as admin to enable subscription checks. "
                 "Letting user %s through. Error: %s",
                 ch.at_username, user_id, exc,
             )
+            return True  # fail open
 
         except TelegramBadRequest as exc:
             exc_msg = str(exc).lower()
             if any(phrase in exc_msg for phrase in _USER_NOT_MEMBER_PHRASES):
-                # Telegram confirmed the user is not a member
-                unsubscribed.append(ch)
-            elif "chat not found" in exc_msg or "invalid" in exc_msg:
-                # Channel doesn't exist or username is wrong — misconfiguration,
-                # fail open so users aren't blocked by a bad channel record.
+                if attempt < _RETRY_ATTEMPTS - 1:
+                    await asyncio.sleep(_RETRY_DELAY_S)
+                    continue
+                return False
+            if "chat not found" in exc_msg or "invalid" in exc_msg:
                 logger.error(
                     "channel_gate: channel %s not found or invalid — "
-                    "check that the username is correct. "
-                    "Letting user %s through. Error: %s",
+                    "check the username. Letting user %s through. Error: %s",
                     ch.at_username, user_id, exc,
                 )
-            else:
-                # Unknown bad request — fail open, log for investigation
-                logger.error(
-                    "channel_gate: unexpected TelegramBadRequest for %s / user %s: %s",
-                    ch.at_username, user_id, exc,
-                )
+                return True  # fail open — misconfiguration
+            logger.error(
+                "channel_gate: unexpected TelegramBadRequest for %s / user %s: %s",
+                ch.at_username, user_id, exc,
+            )
+            return True  # fail open
 
         except Exception as exc:  # noqa: BLE001
             logger.error(
@@ -92,5 +93,18 @@ async def get_unsubscribed_channels(
                 "letting user through: %s",
                 ch.at_username, user_id, exc,
             )
+            return True  # fail open
 
-    return unsubscribed
+    return False  # exhausted retries
+
+
+async def get_unsubscribed_channels(
+    bot: Bot,
+    user_id: int,
+    channels: list[RequiredChannel],
+) -> list[RequiredChannel]:
+    """Return the subset of *channels* the user is NOT subscribed to."""
+    results = await asyncio.gather(
+        *(_check_one(bot, user_id, ch) for ch in channels)
+    )
+    return [ch for ch, ok in zip(channels, results) if not ok]

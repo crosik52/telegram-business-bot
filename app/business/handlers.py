@@ -579,6 +579,10 @@ async def on_business_connection(connection: BusinessConnection) -> None:
         )
         record = result.scalar_one_or_none()
 
+        # Track whether this connection was previously known and active —
+        # we only send a disconnect notification in that case.
+        was_previously_active = record is not None and record.is_enabled
+
         if record is None:
             record = BCModel(
                 business_connection_id=connection.id,
@@ -613,7 +617,11 @@ async def on_business_connection(connection: BusinessConnection) -> None:
             await ai_analysis_service.invalidate_cache_for_owner(
                 session, connection.user.id
             )
-            # Notify the user that they've disconnected the bot
+            # Notify the user only if this connection was previously active.
+            # Telegram can send is_enabled=False on the very first event when
+            # the user switches bots — in that case there's nothing to notify.
+            if not was_previously_active:
+                return
             try:
                 settings = get_settings()
                 base_url = (settings.webhook_base_url or "").rstrip("/")

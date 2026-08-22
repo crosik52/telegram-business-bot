@@ -744,6 +744,109 @@ async def on_broadcast_confirm(callback: CallbackQuery) -> None:
     )
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# /refund — admin-only: refund Stars for a specific payment charge ID
+# ══════════════════════════════════════════════════════════════════════════════
+
+@router.message(Command("refund"))
+async def on_refund_cmd(message: Message) -> None:
+    """Refund Stars for a payment. Usage: /refund <user_id> <charge_id>"""
+    if not message.from_user or not _is_admin(message.from_user.username):
+        await message.answer("⛔ Нет доступа.")
+        return
+
+    # Parse args
+    args = (message.text or "").split(maxsplit=2)[1:]  # skip "/refund"
+    if len(args) < 2:
+        await message.answer(
+            "⚠️ Использование:\n"
+            "<code>/refund &lt;user_id&gt; &lt;charge_id&gt;</code>\n\n"
+            "Где:\n"
+            "• <code>user_id</code> — Telegram ID пользователя\n"
+            "• <code>charge_id</code> — ID операции (например: "
+            "<code>5678901234_1234_56789</code>)",
+            parse_mode="HTML",
+        )
+        return
+
+    raw_uid, charge_id = args[0], args[1].strip()
+    try:
+        user_id = int(raw_uid)
+    except ValueError:
+        await message.answer(f"❌ Неверный user_id: <code>{raw_uid}</code>", parse_mode="HTML")
+        return
+
+    # ── Step 1: Telegram refund ───────────────────────────────────────────────
+    processing = await message.answer("⏳ Выполняем возврат…")
+    try:
+        await message.bot.refund_star_payment(  # type: ignore[union-attr]
+            user_id=user_id,
+            telegram_payment_charge_id=charge_id,
+        )
+        tg_ok = True
+        tg_error: str | None = None
+    except Exception as exc:
+        tg_ok = False
+        tg_error = str(exc)
+        logger.warning("refund: Telegram API error uid=%s charge=%s: %s", user_id, charge_id, exc)
+
+    # ── Step 2: mark subscription as refunded in DB (best-effort) ────────────
+    db_info: str = "не найдена в БД"
+    if tg_ok:
+        try:
+            from app.models.subscription import UserSubscription  # noqa: PLC0415
+            from sqlalchemy import update as sa_update             # noqa: PLC0415
+            async with session_scope() as db:
+                result = await db.execute(
+                    select(UserSubscription).where(
+                        UserSubscription.payment_charge_id == charge_id
+                    )
+                )
+                sub = result.scalar_one_or_none()
+                if sub is not None:
+                    sub_type = sub.sub_type or "premium"
+                    stars = sub.stars_paid
+                    await db.execute(
+                        sa_update(UserSubscription)
+                        .where(UserSubscription.payment_charge_id == charge_id)
+                        .values(is_active=False, status="refunded")
+                    )
+                    db_info = (
+                        f"подписка <b>{sub_type}</b> деактивирована "
+                        f"(<b>{stars}⭐</b> → refunded)"
+                    )
+                else:
+                    db_info = "запись в БД не найдена (разовая покупка?)"
+        except Exception as exc:
+            logger.warning("refund: DB update failed charge=%s: %s", charge_id, exc)
+            db_info = f"ошибка обновления БД: {exc}"
+
+    # ── Reply ─────────────────────────────────────────────────────────────────
+    if tg_ok:
+        text = (
+            "✅ <b>Возврат выполнен</b>\n\n"
+            f"👤 User ID: <code>{user_id}</code>\n"
+            f"🔑 Charge ID: <code>{charge_id}</code>\n"
+            f"🗄 БД: {db_info}"
+        )
+    else:
+        text = (
+            "❌ <b>Ошибка возврата</b>\n\n"
+            f"👤 User ID: <code>{user_id}</code>\n"
+            f"🔑 Charge ID: <code>{charge_id}</code>\n\n"
+            f"Ответ Telegram:\n<code>{tg_error}</code>"
+        )
+
+    logger.info(
+        "Admin @%s refund uid=%s charge=%s ok=%s",
+        message.from_user.username, user_id, charge_id, tg_ok,
+    )
+    try:
+        await processing.edit_text(text, parse_mode="HTML")
+    except Exception:
+        await message.answer(text, parse_mode="HTML")
+
+
 @router.callback_query(F.data == "broadcast_cancel")
 async def on_broadcast_cancel(callback: CallbackQuery) -> None:
     await callback.answer()

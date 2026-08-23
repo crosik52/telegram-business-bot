@@ -348,6 +348,11 @@ async def lifespan(app: FastAPI):
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Drop the now-unused media_cache table on every dialect.
+        # The table was dead code: the Telegram Business API never exposes
+        # view-once media to bots, so caching bytes was never possible.
+        from sqlalchemy import text as _text
+        await conn.execute(_text("DROP TABLE IF EXISTS media_cache CASCADE"))
         # Safe column additions for tables that already exist in production
         if not settings.is_sqlite:
             from sqlalchemy import text
@@ -411,9 +416,6 @@ async def lifespan(app: FastAPI):
             await conn.execute(text(
                 "ALTER TABLE business_connections ADD COLUMN IF NOT EXISTS bot_id BIGINT"
             ))
-            # Drop the now-unused media_cache table (confirmed dead code; the
-            # Telegram Business API never exposes view-once media to bots).
-            await conn.execute(text("DROP TABLE IF EXISTS media_cache CASCADE"))
 
     if settings.webhook_base_url:
         from aiogram.types import MenuButtonWebApp, WebAppInfo

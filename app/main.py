@@ -299,17 +299,15 @@ async def _avatar_backfill() -> None:
 
 
 async def _cleanup_loop() -> None:
-    """Background task: purge old media_cache and message rows every N hours."""
+    """Background task: purge old message rows every N hours."""
     from app.database.session import get_db_session
-    from app.services.media_cache_service import purge_old_media_cache, purge_old_messages
+    from app.services.db_maintenance_service import purge_old_messages
     from app.services.ai_analysis_service import _l1_evict_expired
 
     # Wait a bit after startup before first run so the app is fully ready.
     await asyncio.sleep(60)
     while True:
         try:
-            async for session in get_db_session():
-                await purge_old_media_cache(session)
             async for session in get_db_session():
                 keep_days = int(os.environ.get("MESSAGE_RETENTION_DAYS", "90"))
                 # Keep deleted messages as long as regular ones so owners can
@@ -413,6 +411,9 @@ async def lifespan(app: FastAPI):
             await conn.execute(text(
                 "ALTER TABLE business_connections ADD COLUMN IF NOT EXISTS bot_id BIGINT"
             ))
+            # Drop the now-unused media_cache table (confirmed dead code; the
+            # Telegram Business API never exposes view-once media to bots).
+            await conn.execute(text("DROP TABLE IF EXISTS media_cache CASCADE"))
 
     if settings.webhook_base_url:
         from aiogram.types import MenuButtonWebApp, WebAppInfo

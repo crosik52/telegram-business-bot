@@ -4456,24 +4456,9 @@ async def admin_db_stats(
 ) -> dict:
     """Return per-table sizes + total DB size. PostgreSQL only."""
     _require_admin(payload.init_data)
-    from app.services.media_cache_service import get_table_sizes  # noqa: PLC0415
+    from app.services.db_maintenance_service import get_table_sizes  # noqa: PLC0415
     return await get_table_sizes(session)
 
-
-@router.post("/app/api/admin/db/cleanup")
-async def admin_db_cleanup(
-    payload: AdminDbCleanupRequest,
-    session: AsyncSession = Depends(get_db_session),
-) -> dict:
-    """Purge media cache older than TTL and run VACUUM ANALYZE."""
-    admin_user = _require_admin(payload.init_data)
-    from app.services.media_cache_service import (  # noqa: PLC0415
-        purge_old_media_cache, vacuum_tables,
-    )
-    deleted_cache = await purge_old_media_cache(session)
-    await vacuum_tables(["media_cache"])
-    logger.info("Admin @%s ran media_cache cleanup: deleted=%d", admin_user.get("username"), deleted_cache)
-    return {"ok": True, "deleted_cache": deleted_cache}
 
 
 @router.post("/app/api/admin/db/vacuum_full")
@@ -4503,24 +4488,6 @@ async def admin_vacuum_full(
     logger.info("Admin @%s ran full VACUUM on %d tables", admin_user.get("username"), len(tables))
     return {"ok": True, "tables_vacuumed": tables}
 
-
-@router.post("/app/api/admin/db/wipe_media_cache")
-async def admin_wipe_media_cache(
-    payload: AdminInitDataOnlyRequest,
-    session: AsyncSession = Depends(get_db_session),
-) -> dict:
-    """Delete ALL media_cache rows regardless of age, then VACUUM."""
-    from sqlalchemy import delete as sa_delete, text  # noqa: PLC0415
-    from app.models.media_cache import MediaCache  # noqa: PLC0415
-    from app.services.media_cache_service import vacuum_tables  # noqa: PLC0415
-
-    admin_user = _require_admin(payload.init_data)
-    result = await session.execute(sa_delete(MediaCache))
-    deleted = result.rowcount or 0
-    await session.commit()
-    await vacuum_tables(["media_cache"], full=True)
-    logger.info("Admin @%s wiped ALL media_cache: %d rows deleted", admin_user.get("username"), deleted)
-    return {"ok": True, "deleted_cache": deleted}
 
 
 # ══════════════════════════════════════════════════════════════════════════════

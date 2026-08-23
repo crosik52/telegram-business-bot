@@ -558,6 +558,7 @@ async def miniapp_stats(
             if _bot:
                 _unsub = await _guc(_bot, owner_telegram_id, _active_chs)
                 if _unsub:
+                    _sub_cache[owner_telegram_id] = (_time.monotonic(), False)
                     return {
                         "subscription_gate": True,
                         "required_channels": [
@@ -569,6 +570,9 @@ async def miniapp_stats(
                             for ch in _unsub
                         ],
                     }
+                # User IS subscribed — refresh the cache so _assert_subscribed
+                # picks up the latest decision immediately (no 60-second lag).
+                _sub_cache[owner_telegram_id] = (_time.monotonic(), True)
     except Exception:
         logger.exception(
             "channel_gate miniapp: check failed for user %s — allowing through",
@@ -1146,9 +1150,11 @@ async def wallet_mines_reveal(
     user = verify_init_data(payload.init_data, settings.telegram_bot_token)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid init data")
+    owner_id = int(user["id"])
+    await _assert_subscribed(owner_id, session)
     repo = WalletRepository(session)
     try:
-        result = await repo.mines_reveal(int(user["id"]), payload.cell_index)
+        result = await repo.mines_reveal(owner_id, payload.cell_index)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return {
@@ -1170,9 +1176,11 @@ async def wallet_mines_cashout(
     user = verify_init_data(payload.init_data, settings.telegram_bot_token)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid init data")
+    owner_id = int(user["id"])
+    await _assert_subscribed(owner_id, session)
     repo = WalletRepository(session)
     try:
-        result = await repo.mines_cashout(int(user["id"]))
+        result = await repo.mines_cashout(owner_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return {
@@ -1215,9 +1223,11 @@ async def wallet_crash_cashout(
     user = verify_init_data(payload.init_data, settings.telegram_bot_token)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid init data")
+    owner_id = int(user["id"])
+    await _assert_subscribed(owner_id, session)
     repo = WalletRepository(session)
     try:
-        result = await repo.crash_cashout(int(user["id"]), payload.multiplier)
+        result = await repo.crash_cashout(owner_id, payload.multiplier)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return {
@@ -1372,6 +1382,7 @@ async def miniapp_quest_claim(
         raise HTTPException(status_code=401, detail="Invalid Telegram init data")
 
     owner_id = int(user["id"])
+    await _assert_subscribed(owner_id, session)
     conn_ids = [
         r[0]
         for r in (
@@ -1867,6 +1878,7 @@ async def pet_battle_challenge(
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid Telegram init data")
     owner_id = int(user["id"])
+    await _assert_subscribed(owner_id, session)
     repo = PetRepository(session)
     try:
         result = await repo.battle_challenge(owner_id, payload.pet_id, payload.wager)
@@ -1903,6 +1915,7 @@ async def pet_battle_respond(
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid Telegram init data")
     owner_id = int(user["id"])
+    await _assert_subscribed(owner_id, session)
     repo = PetRepository(session)
     try:
         result = await repo.battle_respond(owner_id, payload.pet_id, payload.accept)
@@ -2289,6 +2302,7 @@ async def rel_cancel(
 ) -> dict:
     settings = get_settings()
     owner_id = _verify_rel_init(payload.init_data, settings)
+    await _assert_subscribed(owner_id, session)
     repo     = RelationshipRepository(session)
     try:
         await repo.cancel_request(owner_id, payload.partner_id)
@@ -2336,6 +2350,7 @@ async def rel_postcard(
 
     settings = get_settings()
     owner_id = _verify_rel_init(payload.init_data, settings)
+    await _assert_subscribed(owner_id, session)
     repo     = RelationshipRepository(session)
     partner_id = payload.partner_id
 
@@ -2463,6 +2478,7 @@ async def rel_quest_claim(
 ) -> dict:
     settings = get_settings()
     owner_id = _verify_rel_init(payload.init_data, settings)
+    await _assert_subscribed(owner_id, session)
     repo     = RelationshipRepository(session)
     if not payload.quest_id:
         raise HTTPException(status_code=400, detail="quest_id_required")
@@ -2546,6 +2562,7 @@ async def rel_upgrade(
 ) -> dict:
     settings = get_settings()
     owner_id = _verify_rel_init(payload.init_data, settings)
+    await _assert_subscribed(owner_id, session)
     repo     = RelationshipRepository(session)
     try:
         rel = await repo.upgrade_tier(owner_id, payload.partner_id)
@@ -2583,6 +2600,7 @@ async def rel_change_category(
 ) -> dict:
     settings = get_settings()
     owner_id = _verify_rel_init(payload.init_data, settings)
+    await _assert_subscribed(owner_id, session)
     repo     = RelationshipRepository(session)
     new_cat  = payload.new_category or ""
     if new_cat not in ("friendship", "romantic"):
@@ -2601,6 +2619,7 @@ async def rel_break(
 ) -> dict:
     settings = get_settings()
     owner_id = _verify_rel_init(payload.init_data, settings)
+    await _assert_subscribed(owner_id, session)
     repo     = RelationshipRepository(session)
     try:
         # Remember tier before breaking so we can notify if it was a marriage
@@ -3731,6 +3750,7 @@ async def shop_buy_boost(
     """Buy a timed boost (currently only double_xp)."""
     settings = get_settings()
     owner_id = _shop_auth(payload.resolved_init, settings)
+    await _assert_subscribed(owner_id, session)
     if payload.boostType != "double_xp":
         raise HTTPException(status_code=400, detail="unknown_boost_type")
     repo = ShopRepository(session)
@@ -3749,6 +3769,7 @@ async def shop_buy_theme(
     """Purchase and apply a UI theme."""
     settings = get_settings()
     owner_id = _shop_auth(payload.resolved_init, settings)
+    await _assert_subscribed(owner_id, session)
     repo = ShopRepository(session)
     try:
         result = await repo.buy_theme(owner_id, payload.theme)
@@ -3767,6 +3788,7 @@ async def shop_activate_theme(
     """Activate an already-owned theme for free."""
     settings = get_settings()
     owner_id = _shop_auth(payload.resolved_init, settings)
+    await _assert_subscribed(owner_id, session)
     repo = ShopRepository(session)
     try:
         result = await repo.activate_theme(owner_id, payload.theme)
@@ -3785,6 +3807,7 @@ async def shop_buy_frame(
     """Purchase and apply a profile frame."""
     settings = get_settings()
     owner_id = _shop_auth(payload.resolved_init, settings)
+    await _assert_subscribed(owner_id, session)
     repo = ShopRepository(session)
     try:
         result = await repo.buy_frame(owner_id, payload.frame)
@@ -3803,6 +3826,7 @@ async def shop_pin_chat(
     """Pin (or unpin) a chat. Costs PIN_CHAT_COST coins when setting/changing."""
     settings = get_settings()
     owner_id = _shop_auth(payload.resolved_init, settings)
+    await _assert_subscribed(owner_id, session)
     repo = ShopRepository(session)
     try:
         result = await repo.pin_chat(owner_id, payload.chatId)
@@ -3819,6 +3843,7 @@ async def shop_gift_coins(
     """Gift coins to another user (chat partner)."""
     settings = get_settings()
     owner_id = _shop_auth(payload.resolved_init, settings)
+    await _assert_subscribed(owner_id, session)
     repo = ShopRepository(session)
     try:
         result = await repo.gift_coins(owner_id, payload.chatId)

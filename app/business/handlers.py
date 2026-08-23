@@ -273,17 +273,13 @@ async def _handle_dot_save(
                 return
 
             # ── All tiers failed ──────────────────────────────────────────────
+            # Silent failure: the handler fires on every owner reply, so
+            # sending a DM here would spam the owner for any old/expired media.
+            # The proactive self-destructing capture (on message receipt) already
+            # notifies when a view-once file is missed — no second notification needed.
             logger.warning(
-                "dot-save: ✗ all methods failed for %s owner=%s (chat=%s msg=%s)",
+                "dot-save: ✗ all methods failed for %s owner=%s (chat=%s msg=%s) — silent",
                 ref.media_type.value, owner_id, ref.chat_id, ref.message_id,
-            )
-            await bot.send_message(
-                chat_id=owner_id,
-                text=(
-                    f"{E.WARNING} Не удалось сохранить медиа — "
-                    "файл уже недоступен (самоудалился или защищён)."
-                ),
-                parse_mode="HTML",
             )
 
     except Exception:

@@ -5,8 +5,15 @@ Covers:
 2. _is_subscribed returns True/False/None (tri-state, fail-closed)
 3. Cache: stale False is overwritten by stats endpoint writing True immediately
 4. _is_subscribed uses the short-lived cache to avoid repeated Telegram calls
-5. Middleware-level route tests: representative endpoints return 403 for an
-   unsubscribed user without any side effect occurring.
+5. Stats endpoint: fail-closed on Telegram error when channels are configured
+6. Middleware-level route tests:
+   - Unsubscribed user → 403 on mutation endpoint
+   - Unsubscribed user → 403 on read endpoint with side effects
+   - Check failure → 503 (fail-closed)
+   - Stats endpoint exempt from middleware gate
+   - GET /app/api/settings → 403 for unsubscribed
+   - Absent initData → 401 (not passed through)
+   - Avatar endpoint exempt from init_data requirement
 """
 from __future__ import annotations
 
@@ -135,7 +142,7 @@ async def test_is_subscribed_none_when_bot_unavailable_but_channels_configured()
     with (
         patch("app.repositories.channel_repository.ChannelRepository.get_active",
               new=AsyncMock(return_value=[ch])),
-        patch("app.miniapp.routes.get_bot", return_value=None),  # bot unavailable
+        patch("app.miniapp.routes.get_bot", return_value=None),
     ):
         result = await r._is_subscribed(user_id=88, session=session)
 
@@ -206,14 +213,10 @@ async def test_sub_cache_false_clears_immediately_when_stats_endpoint_writes_tru
     from app.miniapp import routes as r
 
     user_id = 66
-    # Inject stale False (simulating user was unsubscribed)
     r._sub_cache[user_id] = (time.monotonic() - 5, False)
-
-    # Stats endpoint writes True after the user subscribes
     r._sub_cache[user_id] = (time.monotonic(), True)
 
     session = _make_session()
-    # _assert_subscribed must pass without a fresh Telegram check
     with patch("app.miniapp.routes._is_subscribed", new=AsyncMock(return_value=True)):
         await r._assert_subscribed(user_id=user_id, session=session)
 
@@ -221,23 +224,6 @@ async def test_sub_cache_false_clears_immediately_when_stats_endpoint_writes_tru
 # ═══════════════════════════════════════════════════════════════════════════════
 #  Route-level integration tests via the ASGI test client
 # ═══════════════════════════════════════════════════════════════════════════════
-
-def _make_app_with_gate(subscribed: bool | None = False):
-    """Return the FastAPI app with the subscription middleware active and
-    _subscription_status patched to return *subscribed*.
-
-    subscribed=False  → user not subscribed → expect 403
-    subscribed=None   → check failed (channels configured) → expect 503
-    subscribed=True   → user subscribed → expect route to handle normally
-    """
-    import importlib, sys
-    # Fresh import of main to avoid state bleed
-    if "app.main" in sys.modules:
-        app_module = sys.modules["app.main"]
-    else:
-        app_module = importlib.import_module("app.main")
-    return app_module.app
-
 
 _VALID_INIT = "user=%7B%22id%22%3A12345%2C%22first_name%22%3A%22Test%22%7D&hash=abc"
 
@@ -325,7 +311,6 @@ async def test_middleware_passes_stats_endpoint_through():
     middleware so the frontend can discover which channels are required."""
     from app.main import app
 
-    # Even with subscription_status returning False, /app/api/stats passes through.
     with patch(
         "app.miniapp.subscription_middleware._subscription_status",
         new=AsyncMock(return_value=False),
@@ -336,13 +321,12 @@ async def test_middleware_passes_stats_endpoint_through():
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
-            # Stats will fail (no real DB) but it must NOT return 403 from middleware
             resp = await client.post(
                 "/app/api/stats",
                 content=_body(initData=_VALID_INIT),
                 headers={"content-type": "application/json"},
             )
-        # Must not be a gate 403 — any other response code is acceptable
+        # Must not be a gate 403 from the middleware
         if resp.status_code == 403:
             assert resp.json().get("detail", {}).get("subscription_gate") is not True
 
@@ -367,3 +351,76 @@ async def test_middleware_blocks_get_settings_for_unsubscribed_user():
                 params={"initData": _VALID_INIT},
             )
         assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_middleware_returns_401_when_init_data_absent():
+    """A POST to a gated /app/api/* endpoint without initData gets 401,
+    not a pass-through to the route (which could behave differently)."""
+    from app.main import app
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        resp = await client.post(
+            "/app/api/wallet/claim-daily",
+            content=_body(foo="bar"),  # no initData
+            headers={"content-type": "application/json"},
+        )
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_middleware_avatar_endpoint_exempt_from_init_data_requirement():
+    """GET /app/api/avatar/{uid} is a public image proxy and must NOT require
+    initData (it has no subscription gate)."""
+    from app.main import app
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        resp = await client.get("/app/api/avatar/99999")
+    # Any status except 401 is acceptable (will likely be 404 in test env)
+    assert resp.status_code != 401
+
+
+@pytest.mark.asyncio
+async def test_stats_endpoint_returns_503_on_telegram_failure_with_channels_configured():
+    """When Telegram raises during the stats gate check AND channels are configured,
+    the stats endpoint must return 503 (fail-closed), NOT return user stats."""
+    from app.main import app
+
+    ch = _make_channel("required_chan")
+
+    async def boom(*_a, **_kw):
+        raise RuntimeError("Telegram timeout")
+
+    with (
+        patch("app.miniapp.routes.verify_init_data",
+              return_value={"id": "12345", "first_name": "Test"}),
+        patch("app.repositories.channel_repository.ChannelRepository.get_active",
+              new=AsyncMock(return_value=[ch])),
+        patch("app.miniapp.routes.get_bot", return_value=MagicMock()),
+        patch(
+            "app.services.channel_subscription_service.get_unsubscribed_channels",
+            new=boom,
+        ),
+        # Middleware passes stats through; the route-level check fires
+        patch(
+            "app.miniapp.subscription_middleware._subscription_status",
+            new=AsyncMock(return_value=True),
+        ),
+        # Middleware also calls verify_init_data on its own path
+        patch("app.miniapp.auth.verify_init_data",
+              return_value={"id": "12345", "first_name": "Test"}),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.post(
+                "/app/api/stats",
+                content=_body(initData=_VALID_INIT),
+                headers={"content-type": "application/json"},
+            )
+        assert resp.status_code == 503
+        assert "subscription_check_unavailable" in resp.json().get("detail", "")

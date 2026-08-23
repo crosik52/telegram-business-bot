@@ -571,35 +571,54 @@ async def miniapp_stats(
     owner_telegram_id = int(user["id"])
 
     # ── Channel subscription gate ─────────────────────────────────────────────
+    # Step 1: load configured channels (fail open only if this DB query fails).
     try:
         from app.repositories.channel_repository import ChannelRepository as _CR  # noqa: PLC0415
-        from app.services.channel_subscription_service import get_unsubscribed_channels as _guc  # noqa: PLC0415
         _active_chs = await _CR(session).get_active()
-        if _active_chs:
-            _bot = get_bot(get_settings())
-            if _bot:
-                _unsub = await _guc(_bot, owner_telegram_id, _active_chs)
-                if _unsub:
-                    _sub_cache[owner_telegram_id] = (_time.monotonic(), False)
-                    return {
-                        "subscription_gate": True,
-                        "required_channels": [
-                            {
-                                "title": ch.display_title,
-                                "username": ch.channel_username,
-                                "url": ch.join_url,
-                            }
-                            for ch in _unsub
-                        ],
-                    }
-                # User IS subscribed — refresh the cache so _assert_subscribed
-                # picks up the latest decision immediately (no 60-second lag).
-                _sub_cache[owner_telegram_id] = (_time.monotonic(), True)
     except Exception:
         logger.exception(
-            "channel_gate miniapp: check failed for user %s — allowing through",
+            "channel_gate stats: failed to load channels for user %s — allowing through",
             owner_telegram_id,
         )
+        _active_chs = []
+
+    # Step 2: if channels are configured, verify membership — fail closed on error.
+    if _active_chs:
+        from app.services.channel_subscription_service import get_unsubscribed_channels as _guc  # noqa: PLC0415
+        _bot = get_bot(get_settings())
+        if not _bot:
+            raise HTTPException(
+                status_code=503,
+                detail="subscription_check_unavailable",
+            )
+        try:
+            _unsub = await _guc(_bot, owner_telegram_id, _active_chs)
+        except Exception:
+            logger.exception(
+                "channel_gate stats: Telegram check failed for user %s — failing closed",
+                owner_telegram_id,
+            )
+            raise HTTPException(
+                status_code=503,
+                detail="subscription_check_unavailable",
+            )
+
+        if _unsub:
+            _sub_cache[owner_telegram_id] = (_time.monotonic(), False)
+            return {
+                "subscription_gate": True,
+                "required_channels": [
+                    {
+                        "title": ch.display_title,
+                        "username": ch.channel_username,
+                        "url": ch.join_url,
+                    }
+                    for ch in _unsub
+                ],
+            }
+        # User IS subscribed — refresh the cache so _assert_subscribed
+        # picks up the latest decision immediately (no 60-second lag).
+        _sub_cache[owner_telegram_id] = (_time.monotonic(), True)
 
     result = await session.execute(
         select(BusinessConnection.business_connection_id).where(
@@ -4757,9 +4776,13 @@ async def admin_channels_delete(
     return {"ok": True}
 
 
-@router.post("/app/api/ai/ping")
+@router.post("/app/api/admin/ai/ping")
 async def ai_ping(payload: dict, session: AsyncSession = Depends(get_db_session)) -> dict:
-    """Quick Gemini connectivity test (admin/debug only)."""
+    """Quick Gemini connectivity test (admin/debug only).
+
+    Moved under /admin/ so it inherits the admin-auth middleware exclusion and
+    the subscription gate no longer needs to cover it as an anonymous endpoint.
+    """
     import asyncio  # noqa: PLC0415
     import os       # noqa: PLC0415
     try:

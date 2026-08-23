@@ -49,8 +49,9 @@ _EXCLUDED_EXACT: frozenset[str] = frozenset(
 )
 
 _EXCLUDED_PREFIXES: tuple[str, ...] = (
-    "/app/api/admin/",   # admin endpoints have separate auth
-    "/app/api/payments", # Telegram Stars webhook callbacks (no user init_data)
+    "/app/api/admin/",    # admin endpoints have their own auth layer
+    "/app/api/payments",  # Telegram Stars webhook callbacks (no user init_data)
+    "/app/api/avatar/",   # public image proxy; no Telegram init_data present
 )
 
 # ── Tri-state check result ─────────────────────────────────────────────────────
@@ -136,8 +137,13 @@ class SubscriptionGateMiddleware(BaseHTTPMiddleware):
         # ── Extract init_data ─────────────────────────────────────────────
         init_data = await _extract_init_data(request)
         if not init_data:
-            # No init_data found; the route's own auth will handle the error.
-            return await call_next(request)
+            # init_data absent on a gated route → block immediately.
+            # All genuinely public or webhook routes are in the exclusion lists
+            # above; anything reaching this point must be an authenticated call.
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Missing Telegram init_data"},
+            )
 
         # ── Verify Telegram signature → get user_id ───────────────────────
         from app.config import get_settings as _gs  # noqa: PLC0415

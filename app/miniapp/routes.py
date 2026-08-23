@@ -137,6 +137,52 @@ async def _get_cached_bot_username(settings) -> str:
     return _bot_username_cache or ""
 
 
+# ── Subscription gate: short-lived per-user cache ────────────────────────────
+# Maps user_id → (timestamp, is_subscribed).  Cleared automatically after TTL.
+_sub_cache: dict[int, tuple[float, bool]] = {}
+_SUB_CACHE_TTL = 60.0  # seconds
+
+
+async def _is_subscribed(user_id: int, session: AsyncSession) -> bool:
+    """Return True if *user_id* passes the channel gate (or no gate is active).
+
+    Results are cached for _SUB_CACHE_TTL seconds to avoid a Telegram API call
+    on every mini-app action.  Fails open on transient errors.
+    """
+    now = _time.monotonic()
+    cached = _sub_cache.get(user_id)
+    if cached and (now - cached[0]) < _SUB_CACHE_TTL:
+        return cached[1]
+
+    try:
+        from app.repositories.channel_repository import ChannelRepository as _CR  # noqa: PLC0415
+        from app.services.channel_subscription_service import get_unsubscribed_channels as _guc  # noqa: PLC0415
+        active = await _CR(session).get_active()
+        if not active:
+            _sub_cache[user_id] = (now, True)
+            return True
+        _bot = get_bot(get_settings())
+        if not _bot:
+            _sub_cache[user_id] = (now, True)
+            return True
+        unsub = await _guc(_bot, user_id, active)
+        ok = len(unsub) == 0
+        _sub_cache[user_id] = (now, ok)
+        return ok
+    except Exception:
+        return True  # fail open on transient errors
+
+
+async def _assert_subscribed(user_id: int, session: AsyncSession) -> None:
+    """Raise HTTP 403 if *user_id* hasn't subscribed to all required channels."""
+    if not await _is_subscribed(user_id, session):
+        raise HTTPException(
+            status_code=403,
+            detail={"subscription_gate": True,
+                    "message": "Subscribe to required channels to use this feature"},
+        )
+
+
 @router.get("/app/api/avatar/{user_id}")
 async def get_avatar(user_id: int, session: AsyncSession = Depends(get_db_session)):
     """Proxy Telegram profile photo for a user. Returns 404 when no photo stored."""
@@ -960,6 +1006,7 @@ async def wallet_claim_daily(
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid init data")
     owner_id = int(user["id"])
+    await _assert_subscribed(owner_id, session)
 
     # Derive streak server-side — never trust client-supplied values for reward math.
     streak_days = 0
@@ -1023,6 +1070,7 @@ async def wallet_slots(
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid init data")
     owner_id = int(user["id"])
+    await _assert_subscribed(owner_id, session)
     repo = WalletRepository(session)
     try:
         result = await repo.spin_slots(owner_id, payload.bet, first_name=user.get("first_name", "Игрок"))
@@ -1049,6 +1097,7 @@ async def wallet_flip(
     if payload.choice not in ("heads", "tails"):
         raise HTTPException(status_code=400, detail="choice must be heads or tails")
     owner_id = int(user["id"])
+    await _assert_subscribed(owner_id, session)
     repo = WalletRepository(session)
     try:
         result = await repo.flip_coin(owner_id, payload.bet, payload.choice, first_name=user.get("first_name", "Игрок"))
@@ -1072,10 +1121,12 @@ async def wallet_mines_start(
     user = verify_init_data(payload.init_data, settings.telegram_bot_token)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid init data")
+    owner_id = int(user["id"])
+    await _assert_subscribed(owner_id, session)
     repo = WalletRepository(session)
     try:
         result = await repo.mines_start(
-            int(user["id"]), payload.bet, payload.mines_count,
+            owner_id, payload.bet, payload.mines_count,
             first_name=user.get("first_name", "Игрок"),
         )
     except ValueError as e:
@@ -1143,10 +1194,12 @@ async def wallet_crash_start(
     user = verify_init_data(payload.init_data, settings.telegram_bot_token)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid init data")
+    owner_id = int(user["id"])
+    await _assert_subscribed(owner_id, session)
     repo = WalletRepository(session)
     try:
         result = await repo.crash_start(
-            int(user["id"]), payload.bet,
+            owner_id, payload.bet,
             first_name=user.get("first_name", "Игрок"),
         )
     except ValueError as e:
@@ -1522,6 +1575,7 @@ async def miniapp_pet_adopt(
         raise HTTPException(status_code=401, detail="Invalid Telegram init data")
 
     owner_id = int(user["id"])
+    await _assert_subscribed(owner_id, session)
     pet_name = (payload.pet_name or "").strip()[:30]
 
     repo = PetRepository(session)
@@ -1593,6 +1647,7 @@ async def miniapp_pet_feed(
         raise HTTPException(status_code=401, detail="Invalid Telegram init data")
 
     owner_id = int(user["id"])
+    await _assert_subscribed(owner_id, session)
     benefits = await _get_pet_sub_benefits(session, owner_id)
     repo = PetRepository(session)
     try:
@@ -1622,6 +1677,7 @@ async def miniapp_pet_play(
         raise HTTPException(status_code=401, detail="Invalid Telegram init data")
 
     owner_id = int(user["id"])
+    await _assert_subscribed(owner_id, session)
     benefits = await _get_pet_sub_benefits(session, owner_id)
     repo = PetRepository(session)
     try:
@@ -1646,6 +1702,7 @@ async def miniapp_pet_cuddle(
         raise HTTPException(status_code=401, detail="Invalid Telegram init data")
 
     owner_id = int(user["id"])
+    await _assert_subscribed(owner_id, session)
     benefits = await _get_pet_sub_benefits(session, owner_id)
     repo = PetRepository(session)
     try:
@@ -1670,6 +1727,7 @@ async def miniapp_pet_rename(
         raise HTTPException(status_code=401, detail="Invalid Telegram init data")
 
     owner_id = int(user["id"])
+    await _assert_subscribed(owner_id, session)
     repo = PetRepository(session)
     try:
         result = await repo.rename(owner_id, payload.pet_id, payload.new_name)
@@ -1691,6 +1749,7 @@ async def miniapp_pet_upgrade(
         raise HTTPException(status_code=401, detail="Invalid Telegram init data")
 
     owner_id = int(user["id"])
+    await _assert_subscribed(owner_id, session)
     repo = PetRepository(session)
     try:
         result = await repo.buy_upgrade(owner_id, payload.pet_id, payload.skill)
@@ -2032,6 +2091,7 @@ async def rel_request(
 ) -> dict:
     settings = get_settings()
     owner_id = _verify_rel_init(payload.init_data, settings)
+    await _assert_subscribed(owner_id, session)
     repo     = RelationshipRepository(session)
     try:
         rel = await repo.send_request(
@@ -2192,6 +2252,7 @@ async def rel_respond(
 ) -> dict:
     settings = get_settings()
     owner_id = _verify_rel_init(payload.init_data, settings)
+    await _assert_subscribed(owner_id, session)
     repo     = RelationshipRepository(session)
     try:
         rel = await repo.respond(owner_id, payload.partner_id, payload.accept)
@@ -2243,6 +2304,7 @@ async def rel_gift(
 ) -> dict:
     settings = get_settings()
     owner_id = _verify_rel_init(payload.init_data, settings)
+    await _assert_subscribed(owner_id, session)
     repo     = RelationshipRepository(session)
     try:
         result = await repo.gift(

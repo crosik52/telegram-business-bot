@@ -4246,6 +4246,7 @@
     let walletData = null;
     let _userCardSettings = { theme: "default", frame: "none" }; // eagerly loaded; used by openMyCard before shopData is ready
     let casinoLoaded = false;
+    let isGated = false;   // true while channel subscription gate is active
     let questsLoaded = false;
     let interactLoaded = false;
     let questData    = null;
@@ -5706,22 +5707,62 @@
     applyUserAvatar();
     document.getElementById("headerRing")?.addEventListener("click", openMyCard);
 
+    // ── Channel gate helpers ─────────────────────────────────────────────────
+    // showChannelGate renders a fixed full-screen overlay that covers all tabs,
+    // so the user cannot interact with any part of the app while gated.
+    // clearChannelGate removes it once the subscription check passes.
+
+    function showChannelGate(channels) {
+      isGated = true;
+      const overlay = document.getElementById('chGateOverlay');
+      if (!overlay) return;
+      const chList = channels.map(ch => {
+        const label = esc(ch.title || ('@' + ch.username));
+        return `<a href="${esc(ch.url)}" target="_blank"
+          style="display:flex;align-items:center;gap:10px;padding:13px 16px;background:var(--secondary-bg);border-radius:14px;text-decoration:none;color:var(--text);font-size:14px;font-weight:600">
+          <span style="font-size:20px;flex-shrink:0">📢</span>
+          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${label}</span>
+          <span style="font-size:12px;color:var(--link);flex-shrink:0">Открыть ↗</span>
+        </a>`;
+      }).join('');
+      overlay.innerHTML = `
+        <div style="padding:52px 20px 36px;text-align:center;max-width:420px;margin:0 auto">
+          <div style="font-size:56px;margin-bottom:20px">🔒</div>
+          <div style="font-size:20px;font-weight:700;margin-bottom:10px">Доступ закрыт</div>
+          <div style="font-size:14px;color:var(--hint);line-height:1.6;margin-bottom:28px">
+            Подпишись на ${channels.length === 1 ? 'канал' : 'все каналы'} ниже,<br>затем нажми кнопку
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:28px;text-align:left">
+            ${chList}
+          </div>
+          <button id="chGateCheckBtn"
+            style="width:100%;padding:14px;border:none;border-radius:14px;background:var(--link);color:#fff;font-size:15px;font-weight:700;cursor:pointer;transition:opacity 0.15s">
+            ✅ Я подписался
+          </button>
+        </div>`;
+      overlay.style.display = '';
+      const btn = document.getElementById('chGateCheckBtn');
+      if (btn) {
+        btn.addEventListener('click', () => {
+          btn.disabled = true; btn.style.opacity = '0.5'; btn.textContent = 'Проверяем…';
+          loadStats(true);
+        });
+      }
+    }
+
+    function clearChannelGate() {
+      if (!isGated) return;
+      isGated = false;
+      const overlay = document.getElementById('chGateOverlay');
+      if (overlay) overlay.style.display = 'none';
+    }
+
     // ── Load data ──
     async function loadStats(isRefresh) {
       const initData = tg ? tg.initData : "";
       currentInitData = initData;
-      // Silently fetch wallet in background so the header balance pill
-      // appears even before the user ever visits the Games tab
-      if (!walletData) {
-        fetch("/app/api/wallet/info", {
-          method: "POST", headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({initData}),
-        }).then(r => r.ok ? r.json() : null)
-          .then(data => { if (data) { walletData = data; updateHeaderWalletPill(); } })
-          .catch(() => {});
-      } else {
-        updateHeaderWalletPill();
-      }
+      // Wallet prefetch is deferred until after the subscription gate check
+      // to avoid leaking data to users who haven't met the gate requirement.
       const subtitle = document.getElementById("subtitle");
       const content  = document.getElementById("content");
       const _fab     = document.getElementById("refreshBtn"); // kept for compat, hidden via CSS
@@ -5777,39 +5818,20 @@
 
         // ── Channel subscription gate ─────────────────────────────────────
         if (stats.subscription_gate && Array.isArray(stats.required_channels) && stats.required_channels.length) {
-          subtitle.textContent = "Требуется подписка";
-          const chList = stats.required_channels.map(ch => {
-            const label = esc(ch.title || ('@' + ch.username));
-            return `<a href="${esc(ch.url)}" target="_blank" style="display:flex;align-items:center;gap:10px;padding:13px 16px;background:var(--secondary-bg);border-radius:14px;text-decoration:none;color:var(--text);font-size:14px;font-weight:600">
-              <span style="font-size:22px">📢</span>
-              <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${label}</span>
-              <span style="font-size:12px;color:var(--link);flex-shrink:0">Подписаться ↗</span>
-            </a>`;
-          }).join('');
-          content.innerHTML = `
-            <div style="padding:32px 20px 24px;text-align:center">
-              <div style="font-size:52px;margin-bottom:16px">🔒</div>
-              <div style="font-size:18px;font-weight:700;margin-bottom:8px">Доступ закрыт</div>
-              <div style="font-size:14px;color:var(--hint);line-height:1.5;margin-bottom:24px">
-                Подпишись на ${stats.required_channels.length === 1 ? 'канал' : 'каналы'} ниже,<br>затем нажми кнопку
-              </div>
-              <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:24px;text-align:left">
-                ${chList}
-              </div>
-              <button id="chGateCheckBtn" style="width:100%;padding:14px;border:none;border-radius:14px;background:var(--link);color:#fff;font-size:15px;font-weight:700;cursor:pointer;transition:opacity 0.15s">
-                ✅ Я подписался
-              </button>
-            </div>`;
-          const gateBtn = document.getElementById('chGateCheckBtn');
-          if (gateBtn) {
-            gateBtn.addEventListener('click', () => {
-              gateBtn.disabled = true;
-              gateBtn.style.opacity = '0.5';
-              gateBtn.textContent = 'Проверяем…';
-              loadStats(true);
-            });
-          }
+          showChannelGate(stats.required_channels);
           return;
+        }
+        // Gate cleared (or was never active) — now safe to start wallet prefetch
+        clearChannelGate();
+        if (!walletData) {
+          fetch("/app/api/wallet/info", {
+            method: "POST", headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({initData}),
+          }).then(r => r.ok ? r.json() : null)
+            .then(data => { if (data) { walletData = data; updateHeaderWalletPill(); } })
+            .catch(() => {});
+        } else {
+          updateHeaderWalletPill();
         }
         // ─────────────────────────────────────────────────────────────────
 
@@ -9695,7 +9717,7 @@
       // Deep-link: open a specific tab when the WebApp URL contains ?tab=...
       // (used by the bot keyboard buttons for Питомец, Связи, Premium)
       const _startTab = new URLSearchParams(window.location.search).get("tab");
-      if (_startTab && _startTab !== "stats" && currentInitData) {
+      if (_startTab && _startTab !== "stats" && currentInitData && !isGated) {
         switchMainTab(_startTab);
       }
     });
@@ -11991,5 +12013,8 @@
     </div>
   </div>
 
+  <!-- Channel subscription gate — full-screen overlay; shown before app loads when gate is active -->
+  <div id="chGateOverlay"
+       style="display:none;position:fixed;inset:0;z-index:9999;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
 </body>
 </html>

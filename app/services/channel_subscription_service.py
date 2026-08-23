@@ -98,6 +98,38 @@ async def _check_one(bot: Bot, user_id: int, ch: RequiredChannel) -> bool:
     return False  # exhausted retries
 
 
+async def check_bot_access(bot: Bot, ch: RequiredChannel, *, bot_id: int | None = None) -> bool:
+    """Return True if the bot can call getChatMember on *ch*.
+
+    Uses the bot's own Telegram user ID as a test subject.  If the bot is an
+    admin in the channel the call succeeds (or raises a user-not-found
+    TelegramBadRequest, which still proves the bot has the required rights).
+    If the bot has no admin rights the call raises TelegramForbiddenError —
+    the same error that makes the subscription gate silently fail open.
+
+    Pass *bot_id* to avoid an extra get_me() round-trip when checking multiple
+    channels from the same context.
+    """
+    try:
+        probe_id = bot_id or (await bot.get_me()).id
+        await bot.get_chat_member(ch.at_username, probe_id)
+        return True
+    except TelegramForbiddenError:
+        return False
+    except TelegramBadRequest as exc:
+        exc_msg = str(exc).lower()
+        if "chat not found" in exc_msg or "invalid" in exc_msg:
+            return False
+        # Other TelegramBadRequest (e.g. "user not found") means the bot IS an
+        # admin — it just isn't itself a member of the channel.
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "check_bot_access: unexpected error for %s: %s", ch.at_username, exc
+        )
+        return True  # fail open — don't show spurious warnings on transient errors
+
+
 async def get_unsubscribed_channels(
     bot: Bot,
     user_id: int,

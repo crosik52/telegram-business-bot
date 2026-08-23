@@ -4551,22 +4551,40 @@ def _giveaway_cfg_dict(cfg) -> dict:
 async def admin_channels_list(
     payload: StatsRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
-    """Return all required channels (active and inactive)."""
+    """Return all required channels (active and inactive) with live bot-access status."""
     _require_admin(payload.init_data)
     from app.repositories.channel_repository import ChannelRepository  # noqa: PLC0415
+    from app.services.channel_subscription_service import check_bot_access  # noqa: PLC0415
     repo = ChannelRepository(session)
     channels = await repo.get_all()
+
+    # Probe bot access for all channels concurrently.
+    # get_me() is called once and reused so we pay one round-trip, not N.
+    _settings = get_settings()
+    _bot = get_bot(_settings)
+    try:
+        _bot_me = await _bot.get_me()
+        _bot_id: int | None = _bot_me.id
+    except Exception:
+        _bot_id = None
+
+    access_results = await asyncio.gather(
+        *(check_bot_access(_bot, ch, bot_id=_bot_id) for ch in channels),
+        return_exceptions=True,
+    )
+
     return {
         "channels": [
             {
-                "id":         ch.id,
-                "username":   ch.channel_username,
-                "title":      ch.display_title,
-                "join_url":   ch.join_url,
-                "is_active":  ch.is_active,
-                "created_at": ch.created_at.isoformat(),
+                "id":             ch.id,
+                "username":       ch.channel_username,
+                "title":          ch.display_title,
+                "join_url":       ch.join_url,
+                "is_active":      ch.is_active,
+                "created_at":     ch.created_at.isoformat(),
+                "bot_has_access": bool(acc) if not isinstance(acc, Exception) else True,
             }
-            for ch in channels
+            for ch, acc in zip(channels, access_results)
         ]
     }
 

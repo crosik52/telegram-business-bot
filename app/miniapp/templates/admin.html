@@ -1121,6 +1121,13 @@
   .channel-row-title { font-weight: 400; color: var(--hint); font-size: 13px; }
   .channel-row-link { font-size: 12px; color: var(--accent); text-decoration: none; }
   .channel-row-actions { display: flex; gap: 7px; align-items: center; flex-shrink: 0; }
+  .ch-no-access {
+    font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 8px;
+    background: rgba(255,59,48,0.15); color: #ff3b30; white-space: nowrap;
+  }
+  .ch-no-access-hint {
+    font-size: 11px; color: #ff3b30; margin-top: 4px; line-height: 1.4;
+  }
   .ch-toggle-btn {
     font-size: 12px; font-weight: 700; padding: 6px 11px; border: none;
     border-radius: 10px; cursor: pointer; transition: background 0.15s, opacity 0.15s;
@@ -3751,13 +3758,23 @@
 
     function renderChannelsTab(channels) {
       const rows = channels.length
-        ? channels.map(ch => `
+        ? channels.map(ch => {
+            const noAccess = ch.bot_has_access === false;
+            const accessBadge = noAccess
+              ? `<span class="ch-no-access">⚠️ Нет доступа</span>`
+              : '';
+            const accessHint = noAccess
+              ? `<div class="ch-no-access-hint">Добавьте бота администратором канала</div>`
+              : '';
+            return `
           <div class="channel-row" data-id="${ch.id}">
             <div class="channel-row-left">
               <div class="channel-row-name">@${esc(ch.username)}${ch.title !== '@' + ch.username ? ` <span class="channel-row-title">${esc(ch.title)}</span>` : ''}</div>
               <a href="${esc(ch.join_url)}" target="_blank" class="channel-row-link">Открыть канал ↗</a>
+              ${accessHint}
             </div>
             <div class="channel-row-actions">
+              ${accessBadge}
               <button class="ch-toggle-btn ${ch.is_active ? 'active' : 'inactive'}"
                       data-id="${ch.id}" data-active="${ch.is_active}"
                       title="${ch.is_active ? 'Деактивировать' : 'Активировать'}">
@@ -3765,7 +3782,8 @@
               </button>
               <button class="ch-del-btn" data-id="${ch.id}" title="Удалить">🗑</button>
             </div>
-          </div>`).join("")
+          </div>`;
+          }).join("")
         : `<div class="empty" style="padding:32px 0;text-align:center;opacity:0.6">Нет каналов — гейт не активен</div>`;
 
       return `

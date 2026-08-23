@@ -38,7 +38,7 @@ import tempfile
 
 from aiogram import Bot, F, Router
 from aiogram.types import (
-    BufferedInputFile, BusinessConnection, BusinessMessagesDeleted,
+    BusinessConnection, BusinessMessagesDeleted,
     CallbackQuery, ChosenInlineResult, FSInputFile, InlineQuery,
     InlineKeyboardButton, InlineKeyboardMarkup,
     InlineQueryResultAudio, InlineQueryResultCachedAudio,
@@ -46,7 +46,6 @@ from aiogram.types import (
     Message, PreCheckoutQuery, WebAppInfo,
 )
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot import emoji as E
 from app.business import commands
@@ -59,7 +58,7 @@ from app.models.message import MediaType, Message as DBMessage
 from app.repositories.chat_settings_repository import ChatSettingsRepository
 from app.repositories.subscription_repository import SubscriptionRepository
 from app.business import permissions
-from app.services import audio_service, media_cache_service
+from app.services import audio_service
 from app.services import ai_analysis_service
 from app.services.message_service import MessageService
 from app.services.video_service import extract_video_url, handle_video_link
@@ -161,69 +160,6 @@ _NO_FILE_TYPES = (
 )
 
 
-async def _cache_media_in_background(
-    bot: Bot,
-    file_id: str,
-    file_unique_id: str,
-    media_type_str: str,
-    *,
-    owner_id: int | None = None,
-    is_self_destructing: bool = False,
-    partner_name: str = "собеседника",
-) -> None:
-    """Background task: download and cache media bytes immediately after receipt.
-
-    Self-destructing media file_ids expire within seconds of the message
-    disappearing.  By caching here — synchronously with message ingestion —
-    the bytes are always available when a delete notification fires later.
-
-    When *is_self_destructing* is True (message.has_media_spoiler or detected
-    at receipt time) the task also proactively notifies the owner:
-      • Success → forwards the cached file to the owner's DM.
-      • Failure → tells the owner the file could not be captured.
-    """
-    try:
-        async with session_scope() as session:
-            cached = await media_cache_service.download_and_cache(
-                bot, session, file_id, file_unique_id, media_type_str
-            )
-            if cached:
-                await session.commit()
-                if is_self_destructing and owner_id:
-                    # Proactively deliver the captured file to the owner's DM
-                    # so they don't have to use dot-save and can't miss it.
-                    media_type_enum = MediaType(media_type_str)
-                    sent = await _try_send_media(
-                        bot, owner_id, media_type_enum, file_id,
-                        file_unique_id=file_unique_id,
-                        session=session,
-                        caption=f"📥 Самоудаляющееся медиа от {partner_name}",
-                    )
-                    if not sent:
-                        logger.warning(
-                            "Captured self-destructing %s but failed to forward "
-                            "to owner=%s", media_type_str, owner_id,
-                        )
-            elif is_self_destructing and owner_id:
-                # File was already gone / protected before we could cache it.
-                try:
-                    await bot.send_message(
-                        owner_id,
-                        f"🚫 <b>Самоудаляющееся медиа</b> от {partner_name} — "
-                        f"файл исчез до того, как бот успел его сохранить.",
-                        parse_mode="HTML",
-                    )
-                except Exception as _notify_exc:
-                    logger.warning(
-                        "Could not notify owner=%s about missed self-destructing media: %s",
-                        owner_id, _notify_exc,
-                    )
-    except Exception:
-        logger.warning(
-            "Background media cache task failed for file_unique_id=%s", file_unique_id
-        )
-
-
 def _counterpart_label(chat: object, owner_telegram_id: int) -> str:
     """Human-readable label for the other side of the chat."""
     if getattr(chat, "id", None) == owner_telegram_id:
@@ -243,65 +179,44 @@ async def _try_send_media(
     media_type: MediaType,
     file_id: str | None,
     *,
-    file_unique_id: str | None = None,
-    session: AsyncSession | None = None,
     caption: str | None = None,
 ) -> bool:
-    """Resend a Telegram media file to *chat_id*.
-
-    Strategy (in order):
-    1. Use cached bytes from DB (works even after file_id expiry — self-destructing media).
-    2. Fall back to the stored file_id if no cache entry exists.
+    """Resend a Telegram media file to *chat_id* using its file_id.
 
     Returns True on success, False on failure.
-    Callers should fall back gracefully — the text notification has already
-    been sent.
     """
+    if not file_id:
+        return False
     kw: dict = {"chat_id": chat_id}
     if caption:
         kw["caption"] = caption
     kw_no_caption: dict = {"chat_id": chat_id}
 
-    # ── 1. Try cached bytes ───────────────────────────────────────────────────
-    cached_bytes: bytes | None = None
-    if session is not None and file_unique_id:
-        cached_bytes = await media_cache_service.get_cached_bytes(session, file_unique_id)
-
-    def _media(type_str: str) -> "BufferedInputFile | str":
-        if cached_bytes is not None:
-            return media_cache_service.make_input_file(cached_bytes, type_str)
-        return file_id or ""
-
-    # ── 2. Send ───────────────────────────────────────────────────────────────
     try:
         match media_type:
             case MediaType.PHOTO:
-                await bot.send_photo(photo=_media("photo"), **kw)
+                await bot.send_photo(photo=file_id, **kw)
             case MediaType.VIDEO:
-                await bot.send_video(video=_media("video"), **kw)
+                await bot.send_video(video=file_id, **kw)
             case MediaType.VOICE:
-                await bot.send_voice(voice=_media("voice"), **kw)
+                await bot.send_voice(voice=file_id, **kw)
             case MediaType.VIDEO_NOTE:
-                await bot.send_video_note(video_note=_media("video_note"), **kw_no_caption)
+                await bot.send_video_note(video_note=file_id, **kw_no_caption)
             case MediaType.AUDIO:
-                await bot.send_audio(audio=_media("audio"), **kw)
+                await bot.send_audio(audio=file_id, **kw)
             case MediaType.DOCUMENT:
-                await bot.send_document(document=_media("document"), **kw)
+                await bot.send_document(document=file_id, **kw)
             case MediaType.STICKER:
-                await bot.send_sticker(sticker=_media("sticker"), **kw_no_caption)
+                await bot.send_sticker(sticker=file_id, **kw_no_caption)
             case MediaType.ANIMATION:
-                await bot.send_animation(animation=_media("animation"), **kw)
+                await bot.send_animation(animation=file_id, **kw)
             case _:
-                # CONTACT, LOCATION, POLL etc. have no file_id; skip silently.
                 return False
         return True
     except Exception:
         logger.warning(
-            "Failed to resend media type=%s to chat_id=%s (cached=%s, file_id=%s)",
-            media_type.value,
-            chat_id,
-            cached_bytes is not None,
-            bool(file_id),
+            "Failed to resend media type=%s to chat_id=%s file_id=%s",
+            media_type.value, chat_id, bool(file_id),
         )
         return False
 
@@ -344,16 +259,10 @@ async def _send_single_delete_notification(
         if not has_media:
             return
 
-        async with session_scope() as session:
-            # ── Tier 1: cached bytes (downloaded at arrival time) ─────────────
-            sent = await _try_send_media(
-                bot, owner_id, removed.media_type, removed.file_id,
-                file_unique_id=removed.file_unique_id,
-                session=session,
-                caption=text_part or None,
-            )
-            if sent:
-                return
+        await _try_send_media(
+            bot, owner_id, removed.media_type, removed.file_id,
+            caption=text_part or None,
+        )
 
 
     except Exception:
@@ -399,15 +308,8 @@ async def _send_panic_bulk(
         await bot.send_message(
             chat_id=owner_id, text="\n".join(lines), parse_mode="HTML"
         )
-        if media_to_resend:
-            async with session_scope() as session:
-                for media_type, file_id, caption, file_uq_id in media_to_resend:
-                    await _try_send_media(
-                        bot, owner_id, media_type, file_id,
-                        file_unique_id=file_uq_id,
-                        session=session,
-                        caption=caption,
-                    )
+        for media_type, file_id, caption, _ in media_to_resend:
+            await _try_send_media(bot, owner_id, media_type, file_id, caption=caption)
     except Exception:
         logger.exception(
             "Failed to send panic-bulk notification to owner %s", owner_id

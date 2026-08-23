@@ -98,36 +98,43 @@ async def _check_one(bot: Bot, user_id: int, ch: RequiredChannel) -> bool:
     return False  # exhausted retries
 
 
+_ADMIN_STATUSES = {"administrator", "creator"}
+
+
 async def check_bot_access(bot: Bot, ch: RequiredChannel, *, bot_id: int | None = None) -> bool:
-    """Return True if the bot can call getChatMember on *ch*.
+    """Return True if the bot has *administrator* rights in *ch*.
 
-    Uses the bot's own Telegram user ID as a test subject.  If the bot is an
-    admin in the channel the call succeeds (or raises a user-not-found
-    TelegramBadRequest, which still proves the bot has the required rights).
-    If the bot has no admin rights the call raises TelegramForbiddenError —
-    the same error that makes the subscription gate silently fail open.
+    Only ``administrator`` or ``creator`` membership grants the right to call
+    ``getChatMember`` for arbitrary users.  Any lesser status — member,
+    restricted, left, kicked — means subscription checks will silently fail
+    open, so we correctly report those as *no access*.
 
-    Pass *bot_id* to avoid an extra get_me() round-trip when checking multiple
-    channels from the same context.
+    Error classification:
+    - ``TelegramForbiddenError``        → bot has no access at all → False
+    - ``TelegramBadRequest``            → channel not found, bot not a member,
+                                          or any other definite API rejection → False
+    - Any other exception (network …)  → transient; fail open → True
+                                          (avoids spurious red badges on hiccups)
+
+    Pass *bot_id* to avoid an extra ``get_me()`` round-trip when checking
+    multiple channels from the same context.
     """
     try:
         probe_id = bot_id or (await bot.get_me()).id
-        await bot.get_chat_member(ch.at_username, probe_id)
-        return True
+        member = await bot.get_chat_member(ch.at_username, probe_id)
+        return member.status in _ADMIN_STATUSES
     except TelegramForbiddenError:
         return False
-    except TelegramBadRequest as exc:
-        exc_msg = str(exc).lower()
-        if "chat not found" in exc_msg or "invalid" in exc_msg:
-            return False
-        # Other TelegramBadRequest (e.g. "user not found") means the bot IS an
-        # admin — it just isn't itself a member of the channel.
-        return True
+    except TelegramBadRequest:
+        # Covers: chat not found, user not found, participant_id_invalid, etc.
+        # All are definitive failures — the bot does not have admin rights.
+        return False
     except Exception as exc:  # noqa: BLE001
         logger.warning(
-            "check_bot_access: unexpected error for %s: %s", ch.at_username, exc
+            "check_bot_access: transient error for %s — treating as accessible: %s",
+            ch.at_username, exc,
         )
-        return True  # fail open — don't show spurious warnings on transient errors
+        return True  # fail open only for genuine transient errors
 
 
 async def get_unsubscribed_channels(

@@ -66,6 +66,10 @@ from app.services.video_service import extract_video_url, handle_video_link
 # Strong references to background download tasks — prevents GC before completion.
 _download_tasks: set[asyncio.Task] = set()
 
+# Active !mp3 download tasks keyed by (business_chat_id, message_id).
+# Used by the ❌ Отмена button to cancel an in-progress download.
+_active_mp3_downloads: dict[tuple[int, int], asyncio.Task] = {}
+
 
 def _miniapp_kb(label: str = "📊 Открыть мини-приложение", path: str = "/app") -> InlineKeyboardMarkup | None:
     """Return a one-button keyboard that opens the mini-app, or None if no URL is configured."""
@@ -1033,19 +1037,26 @@ async def on_mp3_callback(callback: CallbackQuery, bot: Bot) -> None:
     dur_str    = audio_service.fmt_duration(result.duration)
     artist_str = f"\n👤 {html_escape(result.uploader)}" if result.uploader else ""
     dur_label  = f"  ·  {dur_str}" if dur_str != "?:??" else ""
+    cancel_kb  = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="❌ Отмена", callback_data=f"mp3_cancel:{chat_id}:{msg_id}"),
+    ]])
     await _edit_text(
         f"⏳ <b>Загружаю…</b>\n"
         f"🎵 {html_escape(result.title)}"
-        f"{artist_str}{dur_label}"
+        f"{artist_str}{dur_label}",
+        markup=cancel_kb,
     )
 
+    download_key = (chat_id, msg_id)
     tmp_dir = tempfile.mkdtemp(prefix="audbot_")
     try:
-        path, title, uploader, duration = await audio_service.download(
+        _dl_task = asyncio.create_task(audio_service.download(
             result.url, tmp_dir,
             fallback_title=result.title,
             fallback_uploader=result.uploader,
-        )
+        ))
+        _active_mp3_downloads[download_key] = _dl_task
+        path, title, uploader, duration = await _dl_task
 
         await bot.edit_message_media(
             business_connection_id=bc_id,
@@ -1059,6 +1070,25 @@ async def on_mp3_callback(callback: CallbackQuery, bot: Bot) -> None:
             ),
         )
         logger.info("mp3: sent '%s' to chat_id=%s", title, chat_id)
+
+    except asyncio.CancelledError:
+        # User tapped ❌ Отмена — restore the search keyboard.
+        logger.info("mp3: download cancelled by user for chat_id=%s msg_id=%s", chat_id, msg_id)
+        session = audio_service.get_session(result.session_key) if result.session_key else None
+        if session:
+            entries     = session.entries
+            total_pages = (len(entries) + audio_service.PAGE_SIZE - 1) // audio_service.PAGE_SIZE
+            markup      = commands.build_page_markup(entries, result.session_key, page=0)
+            header      = commands._page_header(session.query, 0, total_pages, total=len(entries))
+            await _edit_text(
+                f"❌ <b>Загрузка отменена</b> — выберите другой трек:\n\n{header}",
+                markup=markup,
+            )
+        else:
+            await _edit_text(
+                "❌ <b>Загрузка отменена.</b>\n\n"
+                "Выполните поиск снова: <code>!mp3 название</code>"
+            )
 
     except Exception as exc:
         logger.warning("mp3: download/send failed for %s: %s", result.url, exc)
@@ -1081,7 +1111,30 @@ async def on_mp3_callback(callback: CallbackQuery, bot: Bot) -> None:
             )
 
     finally:
+        _active_mp3_downloads.pop(download_key, None)
         shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+@router.callback_query(F.data.startswith("mp3_cancel:"))
+async def on_mp3_cancel(callback: CallbackQuery) -> None:
+    """User tapped ❌ Отмена during an active !mp3 download."""
+    parts = (callback.data or "").split(":")
+    if len(parts) != 3:
+        await callback.answer()
+        return
+    try:
+        cancel_chat_id = int(parts[1])
+        cancel_msg_id  = int(parts[2])
+    except ValueError:
+        await callback.answer()
+        return
+
+    task = _active_mp3_downloads.get((cancel_chat_id, cancel_msg_id))
+    if task and not task.done():
+        task.cancel()
+        await callback.answer("❌ Загрузка отменена")
+    else:
+        await callback.answer("Загрузка уже завершена")
 
 
 @router.callback_query(F.data == "mp3_close")

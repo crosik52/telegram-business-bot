@@ -1817,6 +1817,7 @@ async def miniapp_pet_revive_invoice(
         raise HTTPException(status_code=401, detail="Invalid Telegram init data")
 
     owner_id = int(user["id"])
+    await _assert_subscribed(owner_id, session)
 
     # Validate eligibility without locking (read-only pre-check)
     from app.repositories.pet_repository import PetRepository
@@ -4142,6 +4143,7 @@ async def ai_relationship_analysis(
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid init data")
     owner_id = int(user["id"])
+    await _assert_subscribed(owner_id, session)
 
     sub_repo = SubscriptionRepository(session)
     vip_sub  = await sub_repo.get_active_vip_subscription(owner_id)
@@ -4254,7 +4256,8 @@ async def contact_streak_mute(
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid init data")
 
-    owner_id = user["id"]
+    owner_id = int(user["id"])
+    await _assert_subscribed(owner_id, session)
 
     from app.models.user_settings import UserSettings as _US  # noqa: PLC0415
     us = (await session.execute(
@@ -4342,7 +4345,8 @@ async def update_user_setting(
     if payload.key not in _ALLOWED_SETTING_KEYS:
         raise HTTPException(status_code=400, detail=f"Unknown setting: {payload.key}")
 
-    owner_id = user["id"]
+    owner_id = int(user["id"])
+    await _assert_subscribed(owner_id, session)
     from app.models.user_settings import UserSettings as _US  # noqa: PLC0415
     us = (await session.execute(
         select(_US).where(_US.owner_telegram_id == owner_id)

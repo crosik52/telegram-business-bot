@@ -143,11 +143,16 @@ _sub_cache: dict[int, tuple[float, bool]] = {}
 _SUB_CACHE_TTL = 60.0  # seconds
 
 
-async def _is_subscribed(user_id: int, session: AsyncSession) -> bool:
-    """Return True if *user_id* passes the channel gate (or no gate is active).
+async def _is_subscribed(user_id: int, session: AsyncSession) -> bool | None:
+    """Return the tri-state subscription result for *user_id*.
+
+    Returns:
+        True  – subscribed, or no gate is active
+        False – user has not joined at least one required channel
+        None  – check failed while channels ARE configured → caller must fail closed
 
     Results are cached for _SUB_CACHE_TTL seconds to avoid a Telegram API call
-    on every mini-app action.  Fails open on transient errors.
+    on every mini-app action.
     """
     now = _time.monotonic()
     cached = _sub_cache.get(user_id)
@@ -163,23 +168,40 @@ async def _is_subscribed(user_id: int, session: AsyncSession) -> bool:
             return True
         _bot = get_bot(get_settings())
         if not _bot:
-            _sub_cache[user_id] = (now, True)
-            return True
+            # Bot unavailable while channels are configured → fail closed.
+            logger.warning(
+                "channel_gate: bot unavailable for user %s — failing closed", user_id
+            )
+            return None
         unsub = await _guc(_bot, user_id, active)
         ok = len(unsub) == 0
         _sub_cache[user_id] = (now, ok)
         return ok
     except Exception:
-        return True  # fail open on transient errors
+        logger.exception(
+            "channel_gate: check failed for user %s — failing closed", user_id
+        )
+        # Do NOT cache the error so the next request retries immediately.
+        return None
 
 
 async def _assert_subscribed(user_id: int, session: AsyncSession) -> None:
-    """Raise HTTP 403 if *user_id* hasn't subscribed to all required channels."""
-    if not await _is_subscribed(user_id, session):
+    """Raise HTTP 403/503 if *user_id* hasn't subscribed to all required channels.
+
+    This is a defence-in-depth layer; the SubscriptionGateMiddleware is the
+    primary enforcement point and covers every route automatically.
+    """
+    status = await _is_subscribed(user_id, session)
+    if status is False:
         raise HTTPException(
             status_code=403,
             detail={"subscription_gate": True,
                     "message": "Subscribe to required channels to use this feature"},
+        )
+    if status is None:
+        raise HTTPException(
+            status_code=503,
+            detail="subscription_check_unavailable",
         )
 
 

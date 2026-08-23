@@ -516,6 +516,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Telegram Business Bot", lifespan=lifespan)
 
 app.add_middleware(RequestLoggingMiddleware)
+from app.miniapp.subscription_middleware import SubscriptionGateMiddleware  # noqa: E402
+app.add_middleware(SubscriptionGateMiddleware)
 
 app.include_router(health.router)
 app.include_router(mockup_proxy.router)

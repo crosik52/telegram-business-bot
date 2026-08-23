@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import os
 import tempfile
+import threading
 import time
 from functools import partial
 from pathlib import Path
@@ -24,6 +25,14 @@ from uuid import uuid4
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
+
+
+class CancelledByUser(RuntimeError):
+    """Raised inside _download_sync when the cancel_flag threading.Event is set.
+
+    Propagates through run_in_executor back to the awaiting coroutine so the
+    caller can distinguish a user-initiated cancel from a real download error.
+    """
 
 
 # ── YouTube cookie helpers ────────────────────────────────────────────────────
@@ -547,6 +556,7 @@ def _download_sync(
     *,
     fallback_title: str | None = None,
     fallback_uploader: str | None = None,
+    cancel_flag: threading.Event | None = None,
 ) -> tuple[Path, str, str, int]:
     """Download audio into *out_dir*. Returns (path, title, uploader, dur).
 
@@ -562,13 +572,23 @@ def _download_sync(
 
     ffmpeg_ok = _shutil.which("ffmpeg") is not None
 
+    # ── Cancel hook ───────────────────────────────────────────────────────────
+    # yt-dlp calls progress hooks during download.  If the cancel_flag is set
+    # we raise CancelledByUser, which propagates out of extract_info and back
+    # through run_in_executor to the awaiting coroutine — cleanly stopping the
+    # actual yt-dlp work rather than just abandoning a future.
+    def _check_cancel(d: dict) -> None:  # noqa: ANN001
+        if cancel_flag is not None and cancel_flag.is_set():
+            raise CancelledByUser("Download cancelled by user")
+
     def _base_opts(out_dir_: str) -> dict:
         o: dict = {
-            "quiet":       True,
-            "no_warnings": True,
-            "format":      "bestaudio[ext=m4a]/bestaudio/best",
-            "outtmpl":     os.path.join(out_dir_, "%(title)s.%(ext)s"),
-            "noplaylist":  True,
+            "quiet":          True,
+            "no_warnings":    True,
+            "format":         "bestaudio[ext=m4a]/bestaudio/best",
+            "outtmpl":        os.path.join(out_dir_, "%(title)s.%(ext)s"),
+            "noplaylist":     True,
+            "progress_hooks": [_check_cancel],
         }
         if ffmpeg_ok:
             o["postprocessors"] = [{
@@ -586,6 +606,9 @@ def _download_sync(
     yt_error: Exception | None = None
     info: dict | None = None
     for _client in _yt_clients:
+        # Check before trying each client so a cancel between retries is instant.
+        if cancel_flag is not None and cancel_flag.is_set():
+            raise CancelledByUser("Download cancelled by user")
         yt_opts = _base_opts(out_dir)
         yt_opts["extractor_args"] = {"youtube": {"player_client": [_client]}}
         yt_opts["retries"] = 2
@@ -596,6 +619,8 @@ def _download_sync(
             yt_error = None
             logger.debug("mp3: YouTube download succeeded with client=%s", _client)
             break
+        except CancelledByUser:
+            raise  # don't swallow the cancel signal
         except Exception as exc:
             yt_error = exc
             logger.debug("mp3: client=%s failed: %s", _client, exc)
@@ -613,9 +638,13 @@ def _download_sync(
         if not fallback_title:
             raise yt_error  # nothing to search with
 
+        # Check before SoundCloud attempt too.
+        if cancel_flag is not None and cancel_flag.is_set():
+            raise CancelledByUser("Download cancelled by user")
+
         query_parts = [p for p in [fallback_uploader, fallback_title] if p]
         sc_query    = "scsearch1:" + " ".join(query_parts)
-        sc_opts     = _base_opts(out_dir)
+        sc_opts     = _base_opts(out_dir)  # already includes _check_cancel hook
 
         try:
             with yt_dlp.YoutubeDL(sc_opts) as ydl:
@@ -629,6 +658,8 @@ def _download_sync(
             uploader = info.get("uploader") or info.get("channel") or fallback_uploader or ""
             duration = int(info.get("duration") or 0)
             logger.info("mp3: SoundCloud fallback succeeded for %r", fallback_title)
+        except CancelledByUser:
+            raise  # don't swallow the cancel signal
         except Exception as sc_exc:
             logger.warning("mp3: SoundCloud fallback also failed: %s", sc_exc)
             raise yt_error from sc_exc  # raise original YouTube error
@@ -657,11 +688,20 @@ async def download(
     *,
     fallback_title: str | None = None,
     fallback_uploader: str | None = None,
+    cancel_flag: threading.Event | None = None,
 ) -> tuple[Path, str, str, int]:
+    """Download *url* to *out_dir* as an audio file.
+
+    Pass *cancel_flag* (a ``threading.Event``) to support cooperative
+    cancellation: the yt-dlp progress hook checks the flag and raises
+    ``CancelledByUser`` when it is set, stopping the actual subprocess
+    rather than just abandoning a future.
+    """
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
         None,
         partial(_download_sync, url, out_dir,
                 fallback_title=fallback_title,
-                fallback_uploader=fallback_uploader),
+                fallback_uploader=fallback_uploader,
+                cancel_flag=cancel_flag),
     )

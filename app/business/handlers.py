@@ -35,6 +35,7 @@ from html import escape as html_escape
 
 import shutil
 import tempfile
+import threading
 
 from aiogram import Bot, F, Router
 from aiogram.types import (
@@ -66,9 +67,9 @@ from app.services.video_service import extract_video_url, handle_video_link
 # Strong references to background download tasks — prevents GC before completion.
 _download_tasks: set[asyncio.Task] = set()
 
-# Active !mp3 download tasks keyed by (business_chat_id, message_id).
-# Used by the ❌ Отмена button to cancel an in-progress download.
-_active_mp3_downloads: dict[tuple[int, int], asyncio.Task] = {}
+# Active !mp3 download cancel flags keyed by (business_chat_id, message_id).
+# Setting the event tells _download_sync to stop via its progress hook.
+_active_mp3_downloads: dict[tuple[int, int], threading.Event] = {}
 
 
 def _miniapp_kb(label: str = "📊 Открыть мини-приложение", path: str = "/app") -> InlineKeyboardMarkup | None:
@@ -1048,15 +1049,18 @@ async def on_mp3_callback(callback: CallbackQuery, bot: Bot) -> None:
     )
 
     download_key = (chat_id, msg_id)
+    cancel_flag  = threading.Event()
     tmp_dir = tempfile.mkdtemp(prefix="audbot_")
     try:
-        _dl_task = asyncio.create_task(audio_service.download(
+        _active_mp3_downloads[download_key] = cancel_flag
+        path, title, uploader, duration = await audio_service.download(
             result.url, tmp_dir,
             fallback_title=result.title,
             fallback_uploader=result.uploader,
-        ))
-        _active_mp3_downloads[download_key] = _dl_task
-        path, title, uploader, duration = await _dl_task
+            cancel_flag=cancel_flag,
+        )
+        # Download finished — remove cancel target so any late tap is a no-op.
+        _active_mp3_downloads.pop(download_key, None)
 
         await bot.edit_message_media(
             business_connection_id=bc_id,
@@ -1071,8 +1075,8 @@ async def on_mp3_callback(callback: CallbackQuery, bot: Bot) -> None:
         )
         logger.info("mp3: sent '%s' to chat_id=%s", title, chat_id)
 
-    except asyncio.CancelledError:
-        # User tapped ❌ Отмена — restore the search keyboard.
+    except audio_service.CancelledByUser:
+        # User tapped ❌ Отмена — yt-dlp stopped via progress hook, thread exited.
         logger.info("mp3: download cancelled by user for chat_id=%s msg_id=%s", chat_id, msg_id)
         session = audio_service.get_session(result.session_key) if result.session_key else None
         if session:
@@ -1129,9 +1133,9 @@ async def on_mp3_cancel(callback: CallbackQuery) -> None:
         await callback.answer()
         return
 
-    task = _active_mp3_downloads.get((cancel_chat_id, cancel_msg_id))
-    if task and not task.done():
-        task.cancel()
+    cancel_flag = _active_mp3_downloads.get((cancel_chat_id, cancel_msg_id))
+    if cancel_flag is not None and not cancel_flag.is_set():
+        cancel_flag.set()
         await callback.answer("❌ Загрузка отменена")
     else:
         await callback.answer("Загрузка уже завершена")

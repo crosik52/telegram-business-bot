@@ -29,7 +29,7 @@ def verify_init_data(
 ) -> dict | None:
     """Validate `initData` and return the embedded Telegram user dict, or None."""
 
-    if not init_data:
+    if not init_data or not bot_token.strip():
         return None
 
     try:
@@ -40,14 +40,15 @@ def verify_init_data(
 
     parsed = dict(pairs)
     received_hash = parsed.pop("hash", None)
-    if not received_hash:
+    if not received_hash or not received_hash.isascii():
         return None
 
-    data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(parsed.items()))
+    try:
+        data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(parsed.items())).encode("utf-8")
+    except UnicodeEncodeError:
+        return None
     secret_key = hmac.new(b"WebAppData", bot_token.encode("utf-8"), hashlib.sha256).digest()
-    computed_hash = hmac.new(
-        secret_key, data_check_string.encode("utf-8"), hashlib.sha256
-    ).hexdigest()
+    computed_hash = hmac.new(secret_key, data_check_string, hashlib.sha256).hexdigest()
 
     if not hmac.compare_digest(computed_hash, received_hash):
         logger.warning("initData signature verification failed")

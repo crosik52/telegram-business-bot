@@ -173,9 +173,7 @@ async def _send_welcome(message: Message, *, is_new_user: bool, user=None) -> No
             InlineKeyboardButton(text="📜 Соглашение",         web_app=WebAppInfo(url=base_url + "/terms")),
             InlineKeyboardButton(text="🔒 Конфиденциальность", web_app=WebAppInfo(url=base_url + "/privacy")),
         ])
-        username    = (from_user.username or "").lstrip("@").lower() if from_user else ""
-        admin_uname = settings.miniapp_admin_username.lstrip("@").lower()
-        if admin_uname and username == admin_uname:
+        if from_user and settings.is_miniapp_admin(from_user.id):
             extra.append([
                 InlineKeyboardButton(text="🛠 Админ-панель", web_app=WebAppInfo(url=base_url + "/app/admin"))
             ])
@@ -620,11 +618,10 @@ async def on_me(message: Message) -> None:
 _pending_broadcast: dict[int, dict | None] = {}
 
 
-def _is_admin(username: str | None) -> bool:
-    if not username:
-        return False
+def _is_admin(user_id: int) -> bool:
     settings = get_settings()
-    return username.lstrip("@").lower() == settings.miniapp_admin_username.lstrip("@").lower()
+    # Without the webhook secret anyone can submit updates with a claimed user ID.
+    return bool(settings.telegram_webhook_secret.strip()) and settings.is_miniapp_admin(user_id)
 
 
 def _broadcast_confirm_kb(count: int) -> InlineKeyboardMarkup:
@@ -637,7 +634,7 @@ def _broadcast_confirm_kb(count: int) -> InlineKeyboardMarkup:
 @router.message(Command("broadcast"))
 async def on_broadcast_cmd(message: Message) -> None:
     """Start broadcast session — admin only."""
-    if not message.from_user or not _is_admin(message.from_user.username):
+    if not message.from_user or not _is_admin(message.from_user.id):
         await message.answer("⛔ Нет доступа.")
         return
 
@@ -658,7 +655,7 @@ async def on_broadcast_cmd(message: Message) -> None:
 @router.message(F.func(lambda m: m.from_user and m.from_user.id in _pending_broadcast and _pending_broadcast.get(m.from_user.id) is None))
 async def on_broadcast_message(message: Message) -> None:
     """Capture the message the admin wants to broadcast."""
-    if not message.from_user:
+    if not message.from_user or not _is_admin(message.from_user.id):
         return
 
     admin_id = message.from_user.id
@@ -697,7 +694,7 @@ async def on_broadcast_message(message: Message) -> None:
 @router.callback_query(F.data == "broadcast_confirm")
 async def on_broadcast_confirm(callback: CallbackQuery) -> None:
     await callback.answer()
-    if not callback.from_user or not _is_admin(callback.from_user.username):
+    if not callback.from_user or not _is_admin(callback.from_user.id):
         await callback.answer("⛔ Нет доступа.", show_alert=True)
         return
 
@@ -764,7 +761,7 @@ async def on_broadcast_confirm(callback: CallbackQuery) -> None:
 @router.message(Command("refund"))
 async def on_refund_cmd(message: Message) -> None:
     """Refund Stars for a payment. Usage: /refund <user_id> <charge_id>"""
-    if not message.from_user or not _is_admin(message.from_user.username):
+    if not message.from_user or not _is_admin(message.from_user.id):
         await message.answer("⛔ Нет доступа.")
         return
 

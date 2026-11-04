@@ -1,4 +1,4 @@
-"""Routes for the personal Telegram Mini App (no admin login required)."""
+"""Routes for the Telegram Mini App and its administrative API."""
 
 from __future__ import annotations
 
@@ -6,12 +6,13 @@ import asyncio
 import collections as _collections
 import datetime as dt
 import hashlib
+import io
 import re as _re
 
 import time as _time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import and_, func, or_, select, text
@@ -115,11 +116,6 @@ class AdminActionLogRequest(BaseModel):
     page: int = Field(default=1)
 
 
-# ── Avatar URL cache (file_id → CDN URL, ~55-min TTL) ────────────────────────
-# Structure: user_telegram_id -> (cdn_url, expires_ts)
-_avatar_url_cache: dict[int, tuple[str, float]] = {}
-
-
 # ── Bot username cache (avoid get_me() on every referral request) ─────────────
 _bot_username_cache: str | None = None
 
@@ -206,13 +202,11 @@ async def _assert_subscribed(user_id: int, session: AsyncSession) -> None:
 
 
 @router.get("/app/api/avatar/{user_id}")
-async def get_avatar(user_id: int, session: AsyncSession = Depends(get_db_session)):
-    """Proxy Telegram profile photo for a user. Returns 404 when no photo stored."""
+async def get_avatar(
+    user_id: int, session: AsyncSession = Depends(get_db_session)
+) -> Response:
+    """Serve the profile photo without exposing the bot's file download URL."""
     from app.models.user import TelegramUser as _TU
-
-    cached = _avatar_url_cache.get(user_id)
-    if cached and cached[1] > _time.monotonic():
-        return RedirectResponse(url=cached[0], status_code=302)
 
     user_row = (
         await session.execute(select(_TU).where(_TU.telegram_user_id == user_id))
@@ -226,13 +220,16 @@ async def get_avatar(user_id: int, session: AsyncSession = Depends(get_db_sessio
         bot = get_bot(settings)
         if bot is None:
             raise HTTPException(status_code=503, detail="Bot unavailable")
-        tg_file = await bot.get_file(user_row.photo_file_id)
-        cdn_url = (
-            f"https://api.telegram.org/file/bot{settings.telegram_bot_token}"
-            f"/{tg_file.file_path}"
+        photo = io.BytesIO()
+        await bot.download(user_row.photo_file_id, destination=photo, timeout=10)
+        content = photo.getvalue()
+        if not content:
+            raise HTTPException(status_code=404, detail="Avatar unavailable")
+        return Response(
+            content=content,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=3300"},
         )
-        _avatar_url_cache[user_id] = (cdn_url, _time.monotonic() + 3300)  # 55 min
-        return RedirectResponse(url=cdn_url, status_code=302)
     except HTTPException:
         raise
     except Exception:
@@ -516,21 +513,28 @@ def _sub_status_dict(sub, config, vip_config=None) -> dict:
     }
 
 
-def _require_admin(init_data: str) -> dict:
-    """Verify initData and ensure the caller's Telegram @username matches the
-    configured mini app super-admin. Returns the verified user dict."""
-
+async def _require_admin(request: Request) -> dict:
+    """Authenticate signed Telegram initData and authorize the configured user ID."""
     settings = get_settings()
+    try:
+        body = await request.json()
+    except ValueError:
+        body = None
+    init_data = body.get("initData", body.get("init_data")) if isinstance(body, dict) else None
+    if not isinstance(init_data, str):
+        raise HTTPException(status_code=401, detail="Invalid Telegram init data")
+
     user = verify_init_data(init_data, settings.telegram_bot_token)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid Telegram init data")
 
-    username = (user.get("username") or "").lstrip("@").lower()
-    admin_username = settings.miniapp_admin_username.lstrip("@").lower()
-    if not admin_username or username != admin_username:
+    if not settings.is_miniapp_admin(user.get("id")):
         raise HTTPException(status_code=403, detail="Not authorized")
 
     return user
+
+
+admin_router = APIRouter(prefix="/app/api/admin", dependencies=[Depends(_require_admin)])
 
 
 @router.get("/app", response_model=None)
@@ -554,7 +558,7 @@ async def privacy_page(request: Request) -> HTMLResponse:
 @router.get("/app/admin", response_model=None)
 async def admin_page(request: Request) -> HTMLResponse:
     # The page itself is static HTML; the real auth check happens on every
-    # API call below via signed initData, so an unauthorized user only ever
+    # admin API call via signed initData, so an unauthorized user only ever
     # sees an "access denied" message rendered client-side.
     return templates.TemplateResponse(request, "admin.html", {})
 
@@ -2871,12 +2875,11 @@ async def vip_subscription_invoice(
 # ── Admin subscription endpoints ──────────────────────────────────────────────
 
 
-@router.post("/app/api/admin/subscription/config")
+@admin_router.post("/subscription/config")
 async def admin_subscription_config(
     payload: StatsRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
     """Get the current subscription config."""
-    _require_admin(payload.init_data)
     sub_repo = SubscriptionRepository(session)
     config   = await sub_repo.get_config()
     return {
@@ -2890,12 +2893,11 @@ async def admin_subscription_config(
     }
 
 
-@router.post("/app/api/admin/subscription/update")
+@admin_router.post("/subscription/update")
 async def admin_subscription_update(
     payload: AdminSubUpdateRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
     """Update subscription config (partial update — only provided fields change)."""
-    _require_admin(payload.init_data)
     fields: dict = {}
     if payload.is_enabled is not None:
         fields["is_enabled"] = payload.is_enabled
@@ -2927,7 +2929,7 @@ async def admin_subscription_update(
     }
 
 
-@router.post("/app/api/admin/subscription/subscribers")
+@admin_router.post("/subscription/subscribers")
 async def admin_subscription_subscribers(
     payload: AdminSubSubscribersRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
@@ -2937,7 +2939,6 @@ async def admin_subscription_subscribers(
     otherwise all rows (active + cancelled + refunded) are returned so the
     admin can see the full history.
     """
-    _require_admin(payload.init_data)
     # Validate the status filter to prevent arbitrary column values.
     valid_statuses = {"active", "paused", "cancelled", "refunded"}
     status_filter = payload.status_filter if payload.status_filter in valid_statuses else None
@@ -2945,12 +2946,11 @@ async def admin_subscription_subscribers(
     return await sub_repo.list_subscribers(page=payload.page, status_filter=status_filter)
 
 
-@router.post("/app/api/admin/subscription/grant")
+@admin_router.post("/subscription/grant")
 async def admin_subscription_grant(
     payload: AdminSubGrantRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
     """Manually grant a subscription to a user."""
-    _require_admin(payload.init_data)
     sub_type = payload.sub_type if payload.sub_type in ("premium", "vip") else "premium"
     sub_repo = SubscriptionRepository(session)
     sub = await sub_repo.grant(payload.owner_telegram_id, payload.duration_days, sub_type=sub_type)
@@ -2991,12 +2991,11 @@ async def admin_subscription_grant(
     }
 
 
-@router.post("/app/api/admin/subscription/revoke")
+@admin_router.post("/subscription/revoke")
 async def admin_subscription_revoke(
     payload: AdminSubRevokeRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
     """Revoke a user's active subscription."""
-    _require_admin(payload.init_data)
     sub_repo = SubscriptionRepository(session)
     await sub_repo.revoke(payload.owner_telegram_id)
     await session.commit()
@@ -3032,22 +3031,20 @@ class AdminShopUpdateRequest(BaseModel):
     items: dict
 
 
-@router.post("/app/api/admin/shop/config")
+@admin_router.post("/shop/config")
 async def admin_shop_config(
     payload: AdminShopConfigRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
     """Get full shop config for admin."""
-    _require_admin(payload.init_data)
     shop_repo = ShopRepository(session)
     return {"ok": True, "items": await shop_repo.get_shop_config_admin()}
 
 
-@router.post("/app/api/admin/shop/update")
+@admin_router.post("/shop/update")
 async def admin_shop_update(
     payload: AdminShopUpdateRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
     """Admin: overwrite shop config items dict."""
-    _require_admin(payload.init_data)
     if not isinstance(payload.items, dict):
         raise HTTPException(status_code=422, detail="items must be a dict")
     shop_repo = ShopRepository(session)
@@ -3056,11 +3053,10 @@ async def admin_shop_update(
     return {"ok": True, "items": new_cfg}
 
 
-@router.post("/app/api/admin/overview")
+@admin_router.post("/overview")
 async def admin_overview(
     payload: StatsRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
-    _require_admin(payload.init_data)
 
     stats_service = StatsService(session)
     overview = await stats_service.get_admin_overview()
@@ -3146,11 +3142,10 @@ async def admin_overview(
     }
 
 
-@router.post("/app/api/admin/user_stats")
+@admin_router.post("/user_stats")
 async def admin_user_stats(
     payload: AdminUserStatsRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
-    _require_admin(payload.init_data)
 
     result = await session.execute(
         select(BusinessConnection.business_connection_id).where(
@@ -3201,12 +3196,12 @@ async def admin_user_stats(
         raise HTTPException(status_code=500, detail="Failed to load user stats") from None
 
 
-@router.post("/app/api/admin/settings")
+@admin_router.post("/settings")
 async def admin_settings(
-    payload: AdminSettingsRequest, session: AsyncSession = Depends(get_db_session)
+    payload: AdminSettingsRequest,
+    session: AsyncSession = Depends(get_db_session),
+    admin_user: dict = Depends(_require_admin),
 ) -> dict:
-    admin_user = _require_admin(payload.init_data)
-
     if payload.notifications_enabled is None and payload.is_blocked is None:
         raise HTTPException(status_code=400, detail="No settings provided")
 
@@ -3240,23 +3235,21 @@ async def admin_settings(
     return {"updated_connections": updated}
 
 
-@router.post("/app/api/admin/growth")
+@admin_router.post("/growth")
 async def admin_growth(
     payload: StatsRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
-    _require_admin(payload.init_data)
 
     stats_service = StatsService(session)
     growth = await stats_service.get_admin_growth(days=30)
     return {"days": 30, **growth}
 
 
-@router.post("/app/api/admin/dashboard_stats")
+@admin_router.post("/dashboard_stats")
 async def admin_dashboard_stats(
     payload: StatsRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
     """Global aggregate stats for the admin analytics tab."""
-    _require_admin(payload.init_data)
 
     stats_service = StatsService(session)
     stats = await stats_service.get_dashboard_stats()
@@ -3274,12 +3267,13 @@ async def admin_dashboard_stats(
     }
 
 
-@router.post("/app/api/admin/wallet/set")
+@admin_router.post("/wallet/set")
 async def admin_wallet_set(
-    payload: AdminWalletSetRequest, session: AsyncSession = Depends(get_db_session)
+    payload: AdminWalletSetRequest,
+    session: AsyncSession = Depends(get_db_session),
+    admin_user: dict = Depends(_require_admin),
 ) -> dict:
     """Admin: directly set a user's coin balance."""
-    admin_user = _require_admin(payload.init_data)
     repo = WalletRepository(session)
     new_balance = await repo.admin_set_balance(payload.owner_telegram_id, payload.new_balance)
     session.add(AdminActionLog(
@@ -3312,12 +3306,13 @@ async def admin_wallet_set(
     return {"ok": True, "new_balance": new_balance}
 
 
-@router.post("/app/api/admin/wallet/adjust")
+@admin_router.post("/wallet/adjust")
 async def admin_wallet_adjust(
-    payload: AdminWalletAdjustRequest, session: AsyncSession = Depends(get_db_session)
+    payload: AdminWalletAdjustRequest,
+    session: AsyncSession = Depends(get_db_session),
+    admin_user: dict = Depends(_require_admin),
 ) -> dict:
     """Admin: add or subtract coins from a user's balance."""
-    admin_user = _require_admin(payload.init_data)
     repo = WalletRepository(session)
     new_balance = await repo.admin_adjust_balance(payload.owner_telegram_id, payload.delta)
     sign = "+" if payload.delta >= 0 else ""
@@ -3357,11 +3352,10 @@ async def admin_wallet_adjust(
     return {"ok": True, "new_balance": new_balance, "delta": payload.delta}
 
 
-@router.post("/app/api/admin/messages")
+@admin_router.post("/messages")
 async def admin_messages(
     payload: AdminMessagesRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
-    _require_admin(payload.init_data)
 
     result = await session.execute(
         select(BusinessConnection.business_connection_id).where(
@@ -3414,11 +3408,10 @@ async def admin_messages(
         raise HTTPException(status_code=500, detail="Failed to load messages") from None
 
 
-@router.post("/app/api/admin/search_chats")
+@admin_router.post("/search_chats")
 async def admin_search_chats(
     payload: AdminSearchChatsRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
-    _require_admin(payload.init_data)
 
     query = payload.query.strip()
     if len(query) < 2:
@@ -3492,12 +3485,12 @@ async def admin_search_chats(
         raise HTTPException(status_code=500, detail="Search failed") from None
 
 
-@router.post("/app/api/admin/broadcast")
+@admin_router.post("/broadcast")
 async def admin_broadcast(
-    payload: AdminBroadcastRequest, session: AsyncSession = Depends(get_db_session)
+    payload: AdminBroadcastRequest,
+    session: AsyncSession = Depends(get_db_session),
+    admin_user: dict = Depends(_require_admin),
 ) -> dict:
-    admin_user = _require_admin(payload.init_data)
-
     text = payload.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="Empty broadcast text")
@@ -3564,11 +3557,10 @@ async def admin_broadcast(
     return {"sent": sent, "failed": failed, "total_recipients": len(owner_ids)}
 
 
-@router.post("/app/api/admin/action_log")
+@admin_router.post("/action_log")
 async def admin_action_log(
     payload: AdminActionLogRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
-    _require_admin(payload.init_data)
 
     page_size = 30
     from sqlalchemy import func as sa_func
@@ -3603,13 +3595,12 @@ async def admin_action_log(
     }
 
 
-@router.post("/app/api/admin/infographic")
+@admin_router.post("/infographic")
 async def admin_infographic(
     payload: StatsRequest,
     session: AsyncSession = Depends(get_db_session),
 ) -> StreamingResponse:
     """Generate and return the admin overview infographic as a PNG image."""
-    _require_admin(payload.init_data)
 
     svc    = StatsService(session)
     overview  = await svc.get_admin_overview()
@@ -3966,22 +3957,20 @@ async def referral_info(
     return stats
 
 
-@router.post("/app/api/admin/referral/stats")
+@admin_router.post("/referral/stats")
 async def admin_referral_stats(
     payload: AdminReferralConfigRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
     settings = get_settings()
-    _require_admin(payload.init_data)
     repo = ReferralRepository(session)
     return await repo.admin_stats()
 
 
-@router.post("/app/api/admin/referral/list")
+@admin_router.post("/referral/list")
 async def admin_referral_list(
     payload: AdminReferralListRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
     settings = get_settings()
-    _require_admin(payload.init_data)
     repo = ReferralRepository(session)
     return await repo.admin_list(
         page=payload.page,
@@ -3990,12 +3979,11 @@ async def admin_referral_list(
     )
 
 
-@router.post("/app/api/admin/referral/config")
+@admin_router.post("/referral/config")
 async def admin_referral_config(
     payload: AdminReferralConfigRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
     settings = get_settings()
-    _require_admin(payload.init_data)
     repo = ReferralRepository(session)
     cfg = await repo.get_config()
     return {
@@ -4009,12 +3997,11 @@ async def admin_referral_config(
     }
 
 
-@router.post("/app/api/admin/referral/config/update")
+@admin_router.post("/referral/config/update")
 async def admin_referral_config_update(
     payload: AdminReferralConfigUpdateRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
     settings = get_settings()
-    _require_admin(payload.init_data)
     repo = ReferralRepository(session)
     updates: dict = {}
     if payload.is_enabled is not None:
@@ -4045,12 +4032,11 @@ async def admin_referral_config_update(
     }
 
 
-@router.post("/app/api/admin/referral/adjust")
+@admin_router.post("/referral/adjust")
 async def admin_referral_adjust(
     payload: AdminReferralAdjustRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
     settings = get_settings()
-    _require_admin(payload.init_data)
     if payload.status not in ("active", "pending", "fraud"):
         raise HTTPException(status_code=400, detail="Invalid status")
     repo = ReferralRepository(session)
@@ -4097,12 +4083,11 @@ async def admin_referral_adjust(
     return {"ok": True}
 
 
-@router.post("/app/api/admin/referral/grant")
+@admin_router.post("/referral/grant")
 async def admin_referral_grant(
     payload: AdminReferralGrantRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
     settings = get_settings()
-    _require_admin(payload.init_data)
     repo = ReferralRepository(session)
     result = await repo.admin_grant_bonus(
         user_telegram_id=payload.user_telegram_id,
@@ -4114,9 +4099,11 @@ async def admin_referral_grant(
     return result
 
 
-@router.post("/app/api/admin/relationships/cancel-pending")
+@admin_router.post("/relationships/cancel-pending")
 async def admin_cancel_pending_relationships(
-    payload: AdminInitDataOnlyRequest, session: AsyncSession = Depends(get_db_session)
+    payload: AdminInitDataOnlyRequest,
+    session: AsyncSession = Depends(get_db_session),
+    admin_user: dict = Depends(_require_admin),
 ) -> dict:
     """Admin one-shot: mark all stuck 'pending' relationship rows as 'broken'.
 
@@ -4124,8 +4111,6 @@ async def admin_cancel_pending_relationships(
     never reached the partner (e.g. due to the reply_markup/business-chat bug).
     After this call users can send fresh friend requests to the same people.
     """
-    admin_user = _require_admin(payload.init_data)
-
     result = await session.execute(
         text(
             "UPDATE relationships SET status = 'broken' "
@@ -4415,10 +4400,11 @@ class AiCacheInvalidateRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-@router.post("/app/api/admin/ai/invalidate_cache")
+@admin_router.post("/ai/invalidate_cache")
 async def admin_ai_invalidate_cache(
     payload: AiCacheInvalidateRequest,
     session: AsyncSession = Depends(get_db_session),
+    admin_user: dict = Depends(_require_admin),
 ) -> dict:
     """Manually invalidate a cached AI analysis (admin only).
 
@@ -4428,8 +4414,6 @@ async def admin_ai_invalidate_cache(
     from app.services.ai_analysis_service import (  # noqa: PLC0415
         invalidate_cache, invalidate_cache_for_owner,
     )
-
-    admin_user = _require_admin(payload.init_data)
 
     if payload.chat_id is not None:
         await invalidate_cache(session, payload.owner_id, payload.chat_id)
@@ -4449,28 +4433,27 @@ async def admin_ai_invalidate_cache(
 
 # ── DB stats / cleanup (admin) ────────────────────────────────────────────────
 
-@router.post("/app/api/admin/db/stats")
+@admin_router.post("/db/stats")
 async def admin_db_stats(
     payload: AdminInitDataOnlyRequest,
     session: AsyncSession = Depends(get_db_session),
 ) -> dict:
     """Return per-table sizes + total DB size. PostgreSQL only."""
-    _require_admin(payload.init_data)
     from app.services.db_maintenance_service import get_table_sizes  # noqa: PLC0415
     return await get_table_sizes(session)
 
 
 
-@router.post("/app/api/admin/db/vacuum_full")
+@admin_router.post("/db/vacuum_full")
 async def admin_vacuum_full(
     payload: AdminInitDataOnlyRequest,
     session: AsyncSession = Depends(get_db_session),
+    admin_user: dict = Depends(_require_admin),
 ) -> dict:
     """Run VACUUM FULL ANALYZE on all user tables + CHECKPOINT to reclaim OS disk space."""
     from sqlalchemy import text  # noqa: PLC0415
     from app.database.session import get_engine  # noqa: PLC0415
 
-    admin_user = _require_admin(payload.init_data)
     engine = get_engine()
     async with engine.execution_options(isolation_level="AUTOCOMMIT").connect() as conn:
         # CHECKPOINT flushes WAL and helps release WAL segment files
@@ -4529,8 +4512,7 @@ async def giveaway_info(
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid init data")
 
-    username = (user.get("username") or "").lower().lstrip("@")
-    is_admin = username == settings.miniapp_admin_username.lower()
+    is_admin = settings.is_miniapp_admin(user.get("id"))
 
     repo = GiveawayRepository(session)
     cfg  = await repo.get_config()
@@ -4562,22 +4544,20 @@ async def giveaway_info(
     }
 
 
-@router.post("/app/api/admin/giveaway/config")
+@admin_router.post("/giveaway/config")
 async def admin_giveaway_config(
     payload: GiveawayRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
-    _require_admin(payload.init_data)
     repo = GiveawayRepository(session)
     cfg  = await repo.get_config()
     top  = await repo.get_top_referrers(limit=3)
     return {**_giveaway_cfg_dict(cfg), "top": top}
 
 
-@router.post("/app/api/admin/giveaway/update")
+@admin_router.post("/giveaway/update")
 async def admin_giveaway_update(
     payload: GiveawayUpdateRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
-    _require_admin(payload.init_data)
     updates: dict = {}
     if payload.is_active is not None:
         updates["is_active"] = payload.is_active
@@ -4646,12 +4626,11 @@ def _giveaway_cfg_dict(cfg) -> dict:
 # Admin — channel subscription gate management
 # ══════════════════════════════════════════════════════════════════════════════
 
-@router.post("/app/api/admin/channels")
+@admin_router.post("/channels")
 async def admin_channels_list(
     payload: StatsRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
     """Return all required channels (active and inactive) with live bot-access status."""
-    _require_admin(payload.init_data)
     from app.repositories.channel_repository import ChannelRepository  # noqa: PLC0415
     from app.services.channel_subscription_service import check_bot_access  # noqa: PLC0415
     repo = ChannelRepository(session)
@@ -4688,12 +4667,11 @@ async def admin_channels_list(
     }
 
 
-@router.post("/app/api/admin/channels/add")
+@admin_router.post("/channels/add")
 async def admin_channels_add(
     payload: AdminChannelAddRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
     """Add a new required channel."""
-    _require_admin(payload.init_data)
     from app.repositories.channel_repository import ChannelRepository  # noqa: PLC0415
     username = payload.username.lstrip("@").strip()
     if not username:
@@ -4713,12 +4691,11 @@ async def admin_channels_add(
     }
 
 
-@router.post("/app/api/admin/channels/toggle")
+@admin_router.post("/channels/toggle")
 async def admin_channels_toggle(
     payload: AdminChannelActionRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
     """Toggle a channel active / inactive."""
-    _require_admin(payload.init_data)
     from app.repositories.channel_repository import ChannelRepository  # noqa: PLC0415
     repo = ChannelRepository(session)
     ch = await repo.toggle(payload.channel_id)
@@ -4728,12 +4705,11 @@ async def admin_channels_toggle(
     return {"ok": True, "is_active": ch.is_active}
 
 
-@router.post("/app/api/admin/channels/delete")
+@admin_router.post("/channels/delete")
 async def admin_channels_delete(
     payload: AdminChannelActionRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
     """Delete a required channel."""
-    _require_admin(payload.init_data)
     from app.repositories.channel_repository import ChannelRepository  # noqa: PLC0415
     repo = ChannelRepository(session)
     ok = await repo.delete(payload.channel_id)
@@ -4743,14 +4719,9 @@ async def admin_channels_delete(
     return {"ok": True}
 
 
-@router.post("/app/api/admin/ai/ping")
-async def ai_ping(payload: dict, session: AsyncSession = Depends(get_db_session)) -> dict:
-    """Quick Gemini connectivity test (admin/debug only).
-
-    Moved under /admin/ so it inherits the admin-auth middleware exclusion and
-    the subscription gate no longer needs to cover it as an anonymous endpoint.
-    """
-    import asyncio  # noqa: PLC0415
+@admin_router.post("/ai/ping")
+async def ai_ping(payload: AdminInitDataOnlyRequest) -> dict:
+    """Quick Gemini connectivity test (admin only)."""
     import os       # noqa: PLC0415
     try:
         from google import genai  # noqa: PLC0415
@@ -4769,3 +4740,6 @@ async def ai_ping(payload: dict, session: AsyncSession = Depends(get_db_session)
         return {"ok": True, "response": resp.text[:100]}
     except Exception as exc:
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+router.include_router(admin_router)

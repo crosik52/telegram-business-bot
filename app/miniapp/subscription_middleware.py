@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 
 # The stats endpoint is the gate-discovery response: it tells the frontend
 # WHICH channels are required (and is the mechanism that triggers the overlay).
-# Admin routes handle their own auth entirely.
+# The admin router has its own mandatory authorization dependency.
 _EXCLUDED_EXACT: frozenset[str] = frozenset(
     {
         "/app/api/stats",  # gate-discovery; returns subscription_gate payload

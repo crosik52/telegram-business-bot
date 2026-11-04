@@ -92,6 +92,12 @@ Copy `.env.example` to `.env` and fill in the values:
 | `DATABASE_URL` | `sqlite+aiosqlite:///./data/bot.db` by default; use a `postgres://...` URL for Postgres |
 | `DASHBOARD_ADMIN_USERNAME` / `DASHBOARD_ADMIN_PASSWORD` | Dashboard login credentials |
 | `SESSION_SECRET` | Long random string used to sign dashboard session cookies |
+| `MINIAPP_ADMIN_TELEGRAM_ID` | Positive numeric Telegram user ID for the Mini App admin API. Missing or invalid values disable access. |
+
+Replace `MINIAPP_ADMIN_USERNAME` in existing configurations with
+`MINIAPP_ADMIN_TELEGRAM_ID` and set it to the administrator's Telegram user ID.
+Set `TELEGRAM_WEBHOOK_SECRET` to enable the privileged `/broadcast` and `/refund`
+bot commands. The Mini App admin API verifies Telegram-signed `initData`.
 
 Generate secrets with:
 

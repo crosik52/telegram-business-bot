@@ -20,7 +20,7 @@
 | `TELEGRAM_BOT_TOKEN` | Токен нового бота от @BotFather |
 | `WEBHOOK_BASE_URL` | URL деплоя (если переезжаешь на новый хост) |
 | `TELEGRAM_WEBHOOK_SECRET` | Сгенерируй новую строку: `python -c "import secrets; print(secrets.token_hex(32))"` |
-| `MINIAPP_ADMIN_USERNAME` | Telegram-username нового администратора (без @) |
+| `MINIAPP_ADMIN_TELEGRAM_ID` | Числовой Telegram ID администратора. Если ID не задан или некорректен, доступ отключён. |
 | `SESSION_SECRET` | Можно оставить старый если БД переезжает целиком, иначе сгенерируй новый |
 | `DATABASE_URL` | Только если переезжаешь на новую БД |
 
@@ -66,7 +66,7 @@ DELETE FROM business_connections;
 
 ```
 1. Остановить текущий инстанс
-2. Обновить переменные окружения (токен, секреты, admin username)
+2. Обновить переменные окружения (токен, секреты, Telegram ID администратора)
 3. Запустить приложение
 4. Убедиться что webhook зарегистрировался (логи: "Telegram webhook set to ...")
 5. Написать боту /start — проверить что отвечает
@@ -98,6 +98,6 @@ DELETE FROM business_connections;
 - [ ] /help → «Как подключить» показывает правильный username нового бота
 - [ ] Business-подключение работает (проверь на своём аккаунте)
 - [ ] Мини-приложение открывается
-- [ ] Админ-панель доступна под новым MINIAPP_ADMIN_USERNAME
+- [ ] Админ-панель доступна аккаунту с ID из `MINIAPP_ADMIN_TELEGRAM_ID`
 - [ ] Скачивание видео/музыки работает
 - [ ] Webhook Info: pending_update_count == 0

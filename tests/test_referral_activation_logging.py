@@ -153,7 +153,6 @@ async def test_referral_activation_db_error_logs_at_warning_or_above(caplog):
             "app.miniapp.routes.get_settings",
             return_value=MagicMock(
                 telegram_bot_token="token",
-                miniapp_admin_username="admin",
             ),
         ),
         patch("app.miniapp.routes.ReferralRepository", return_value=ref_repo_mock),
@@ -234,7 +233,6 @@ async def test_referral_activation_log_does_not_expose_sensitive_data(caplog):
             "app.miniapp.routes.get_settings",
             return_value=MagicMock(
                 telegram_bot_token="token",
-                miniapp_admin_username="admin",
             ),
         ),
         patch("app.miniapp.routes.ReferralRepository", return_value=ref_repo_mock),

@@ -10,7 +10,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -50,13 +50,26 @@ class Settings(BaseSettings):
     )
 
     # --- Mini App super-admin ----------------------------------------------
-    # The Telegram @username (without "@") that is allowed to open the
-    # /app/admin mini app panel and manage every connected user. Distinct
-    # from the web dashboard login above — this is Telegram-identity-based,
-    # verified via signed WebApp initData, not a password.
-    miniapp_admin_username: str = Field(
-        default="niggathree", alias="MINIAPP_ADMIN_USERNAME"
+    # The Telegram user ID allowed to manage the bot. Unset disables access.
+    miniapp_admin_telegram_id: int | None = Field(
+        default=None, alias="MINIAPP_ADMIN_TELEGRAM_ID"
     )
+
+    @field_validator("miniapp_admin_telegram_id", mode="before")
+    @classmethod
+    def _parse_miniapp_admin_telegram_id(cls, value: object) -> int | None:
+        if isinstance(value, str):
+            value = value.strip()
+            if not (value.isascii() and value.isdecimal() and len(value) <= 16):
+                return None
+            value = int(value)
+        # Telegram user IDs are positive integers with at most 52 significant bits.
+        if type(value) is int and 0 < value < 2**52:
+            return value
+        return None
+
+    def is_miniapp_admin(self, user_id: object) -> bool:
+        return type(user_id) is int and user_id == self.miniapp_admin_telegram_id
 
     @property
     def normalized_database_url(self) -> str:

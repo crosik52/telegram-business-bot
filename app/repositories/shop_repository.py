@@ -32,14 +32,16 @@ FRAME_COST     = 150
 GIFT_COST      = 30
 GIFT_AMOUNT    = 50
 
-VALID_THEMES = {
-    "default", "dark_forest", "ocean", "sunset", "lavender",
-    "frost", "ember", "violet_dream",
-}
-VALID_FRAMES = {"none", "stars", "flowers", "fire", "neon"}
+# Compatibility exports for existing route imports; these products are retired.
+VALID_THEMES: set[str] = set()
+VALID_FRAMES: set[str] = set()
 
-# Themes that are free for everyone (always in owned list)
-FREE_THEMES = {"default"}
+
+def _active_shop_config(items: dict) -> dict:
+    return {
+        k: copy.deepcopy(v) for k, v in items.items()
+        if k not in ("theme", "frame") and not k.startswith("_")
+    }
 
 
 class ShopRepository:
@@ -49,63 +51,63 @@ class ShopRepository:
     # ── Shop config (singleton) ───────────────────────────────────────────────
 
     async def _get_shop_cfg(self) -> dict:
-        """Load shop config from DB, forward-merged with DEFAULT_SHOP_CONFIG.
-
-        The merge ensures that any new themes / prices added to the codebase
-        default are always visible, even when the DB row was created before
-        they existed.  DB values win on conflicts (admin overrides preserved).
-        """
-        result = await self._session.execute(select(ShopConfig).limit(1))
+        """Read the active catalog without changing historical configuration."""
+        result = await self._session.execute(select(ShopConfig).where(ShopConfig.id == 1))
         cfg_row = result.scalar_one_or_none()
-        if cfg_row is None:
-            return copy.deepcopy(DEFAULT_SHOP_CONFIG)
-
-        stored = copy.deepcopy(cfg_row.items or DEFAULT_SHOP_CONFIG)
-
-        # ── Forward-merge theme section ───────────────────────────────────────
-        default_theme = DEFAULT_SHOP_CONFIG.get("theme", {})
-        theme_section = stored.setdefault("theme", {})
-
-        # Union options list: add any default themes not yet in DB options
-        existing_opts = theme_section.get("options")
-        if existing_opts is not None:
-            opts_set = set(existing_opts)
-            for opt in default_theme.get("options", []):
-                if opt not in opts_set:
-                    existing_opts.append(opt)
-                    opts_set.add(opt)
-
-        # Merge per-theme prices: DB wins; only fill in missing entries
-        default_prices = default_theme.get("theme_prices", {})
-        theme_prices = theme_section.setdefault("theme_prices", {})
-        for t, price in default_prices.items():
-            if t not in theme_prices:
-                theme_prices[t] = price
-
-        return stored
+        stored = cfg_row.items if cfg_row else DEFAULT_SHOP_CONFIG
+        return _active_shop_config(stored or DEFAULT_SHOP_CONFIG)
 
     async def get_shop_config_admin(self) -> dict:
         """Admin: return full shop config dict."""
-        result = await self._session.execute(select(ShopConfig).limit(1))
+        result = await self._session.execute(select(ShopConfig).where(ShopConfig.id == 1))
         cfg = result.scalar_one_or_none()
         if cfg is None:
             # Create the singleton row with defaults
             cfg = ShopConfig(id=1, items=copy.deepcopy(DEFAULT_SHOP_CONFIG))
             self._session.add(cfg)
             await self._session.flush()
-        return cfg.items or copy.deepcopy(DEFAULT_SHOP_CONFIG)
+        return _active_shop_config(cfg.items or DEFAULT_SHOP_CONFIG)
 
     async def update_shop_config(self, items: dict) -> dict:
-        """Admin: overwrite shop config. Returns new config."""
-        result = await self._session.execute(select(ShopConfig).limit(1))
+        """Update active products while retaining archived customization data."""
+        result = await self._session.execute(
+            select(ShopConfig).where(ShopConfig.id == 1).with_for_update()
+        )
         cfg = result.scalar_one_or_none()
+        active = _active_shop_config(items)
         if cfg is None:
-            cfg = ShopConfig(id=1, items=items)
+            cfg = ShopConfig(id=1, items=active)
             self._session.add(cfg)
         else:
-            cfg.items = items
+            archived = {
+                k: copy.deepcopy(v) for k, v in (cfg.items or {}).items()
+                if k in ("theme", "frame") or k.startswith("_")
+            }
+            cfg.items = {**active, **archived}
         await self._session.flush()
-        return cfg.items
+        return _active_shop_config(cfg.items)
+
+    async def get_navigation(self) -> dict[str, bool]:
+        """Read navigation without creating a row or changing the shop catalog."""
+        result = await self._session.execute(select(ShopConfig).where(ShopConfig.id == 1))
+        cfg = result.scalar_one_or_none()
+        navigation = (cfg.items or {}).get("_navigation", {}) if cfg else {}
+        return {"giveaway_tab_visible": navigation.get("giveaway_tab_visible") is True}
+
+    async def set_giveaway_tab_visible(self, visible: bool) -> dict[str, bool]:
+        # Serialize with catalog writes so neither setting can overwrite the other.
+        result = await self._session.execute(
+            select(ShopConfig).where(ShopConfig.id == 1).with_for_update()
+        )
+        cfg = result.scalar_one_or_none()
+        if cfg is None:
+            cfg = ShopConfig(id=1, items=copy.deepcopy(DEFAULT_SHOP_CONFIG))
+            self._session.add(cfg)
+        items = copy.deepcopy(cfg.items or DEFAULT_SHOP_CONFIG)
+        items["_navigation"] = {**items.get("_navigation", {}), "giveaway_tab_visible": visible}
+        cfg.items = items
+        await self._session.flush()
+        return {"giveaway_tab_visible": visible}
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -158,23 +160,16 @@ class ShopRepository:
         ]
 
     async def get_settings(self, owner_id: int) -> dict:
+        from app.repositories.chat_list_repository import preferences
         settings = await self._get_or_create_settings(owner_id)
-        owned = list(settings.owned_themes or [])
-        # "default" is always owned
-        if "default" not in owned:
-            owned.insert(0, "default")
-        return {
-            "theme":        settings.theme,
-            "frame":        settings.frame,
-            "pinned_chat_id": settings.pinned_chat_id,
-            "owned_themes": owned,
-        }
+        prefs = preferences(settings)
+        return {"pinned_chat_id": prefs.pinned[0] if prefs.pinned else None}
 
     async def get_prices_version(self) -> str:
         """Return a short hash of the price-relevant shop config.
         Changes whenever an admin updates prices, so clients can detect staleness cheaply."""
         cfg = await self._get_shop_cfg()
-        price_keys = ("double_xp", "pin_chat", "theme", "frame", "gift")
+        price_keys = ("double_xp", "pin_chat", "gift")
         price_slice = {k: cfg.get(k) for k in price_keys}
         raw = json.dumps(price_slice, sort_keys=True, default=str)
         return hashlib.sha256(raw.encode()).hexdigest()[:12]
@@ -187,17 +182,8 @@ class ShopRepository:
         def _p(key: str, field: str, default: int) -> int:
             return int(cfg.get(key, {}).get(field, default))
 
-        theme_prices_raw = cfg.get("theme", {}).get("theme_prices", {})
-        default_theme_cost = _p("theme", "cost", THEME_COST)
-        theme_prices = {
-            t: int(theme_prices_raw.get(t, default_theme_cost))
-            for t in cfg.get("theme", {}).get("options", list(VALID_THEMES))
-        }
-        # Always free for default
-        theme_prices["default"] = 0
-
         # Version hash so clients can detect price changes without a full re-fetch.
-        price_keys = ("double_xp", "pin_chat", "theme", "frame", "gift")
+        price_keys = ("double_xp", "pin_chat", "gift")
         price_slice = {k: cfg.get(k) for k in price_keys}
         prices_version = hashlib.sha256(
             json.dumps(price_slice, sort_keys=True, default=str).encode()
@@ -208,16 +194,9 @@ class ShopRepository:
             "settings": settings,
             "prices": {
                 "double_xp":   _p("double_xp", "cost",   BOOST_DOUBLE_XP_COST),
-                "pin_chat":    _p("pin_chat",  "cost",   PIN_CHAT_COST),
-                "theme":       default_theme_cost,
-                "theme_prices": theme_prices,
-                "frame":       _p("frame",     "cost",   FRAME_COST),
+                "pin_chat":    0,
                 "gift":       _p("gift",      "cost",   GIFT_COST),
                 "gift_amount":_p("gift",      "amount", GIFT_AMOUNT),
-            },
-            "available": {
-                "themes": cfg.get("theme", {}).get("options", list(VALID_THEMES)),
-                "frames": cfg.get("frame", {}).get("options", list(VALID_FRAMES)),
             },
             "prices_version": prices_version,
         }
@@ -261,92 +240,22 @@ class ShopRepository:
         return {"new_balance": new_balance, "expires_at": expires_at.isoformat()}
 
     async def buy_theme(self, owner_id: int, theme: str) -> dict:
-        """Purchase a new theme (charges coins) or activate a free/owned one."""
-        cfg   = await self._get_shop_cfg()
-        valid = set(cfg.get("theme", {}).get("options", list(VALID_THEMES)))
-
-        if not cfg.get("theme", {}).get("enabled", True):
-            raise ValueError("item_disabled")
-        if theme not in valid:
-            raise ValueError("invalid_theme")
-
-        settings = await self._get_or_create_settings(owner_id)
-        owned = list(settings.owned_themes or [])
-        if "default" not in owned:
-            owned.insert(0, "default")
-
-        # Already owned — just activate, no charge
-        if theme in owned or theme in FREE_THEMES:
-            settings.theme = theme
-            settings.owned_themes = owned
-            await self._session.flush()
-            return {"new_balance": None, "theme": theme, "already_owned": True}
-
-        # Per-theme price override, then category cost, then module default
-        theme_prices = cfg.get("theme", {}).get("theme_prices", {})
-        cost = int(theme_prices.get(theme, cfg.get("theme", {}).get("cost", THEME_COST)))
-
-        new_balance = await self._deduct(owner_id, cost)
-        owned.append(theme)
-        settings.owned_themes = owned
-        settings.theme = theme
-        await self._session.flush()
-        return {"new_balance": new_balance, "theme": theme, "already_owned": False}
+        raise ValueError("item_disabled")
 
     async def activate_theme(self, owner_id: int, theme: str) -> dict:
-        """Activate an already-owned theme — free, no coin deduction."""
-        cfg   = await self._get_shop_cfg()
-        valid = set(cfg.get("theme", {}).get("options", list(VALID_THEMES)))
-
-        if theme not in valid:
-            raise ValueError("invalid_theme")
-
-        settings = await self._get_or_create_settings(owner_id)
-        owned = list(settings.owned_themes or [])
-        if "default" not in owned:
-            owned.insert(0, "default")
-
-        if theme not in owned and theme not in FREE_THEMES:
-            raise ValueError("not_owned")
-
-        settings.theme = theme
-        settings.owned_themes = owned
-        await self._session.flush()
-        return {"theme": theme}
+        raise ValueError("item_disabled")
 
     async def buy_frame(self, owner_id: int, frame: str) -> dict:
-        cfg  = await self._get_shop_cfg()
-        cost = int(cfg.get("frame", {}).get("cost", FRAME_COST))
-        valid = set(cfg.get("frame", {}).get("options", list(VALID_FRAMES)))
-
-        if not cfg.get("frame", {}).get("enabled", True):
-            raise ValueError("item_disabled")
-        if frame not in valid:
-            raise ValueError("invalid_frame")
-
-        new_balance = await self._deduct(owner_id, cost)
-        settings = await self._get_or_create_settings(owner_id)
-        settings.frame = frame
-        await self._session.flush()
-        return {"new_balance": new_balance, "frame": frame}
+        raise ValueError("item_disabled")
 
     async def pin_chat(self, owner_id: int, chat_id: int | None) -> dict:
-        cfg  = await self._get_shop_cfg()
-        cost = int(cfg.get("pin_chat", {}).get("cost", PIN_CHAT_COST))
-
-        settings = await self._get_or_create_settings(owner_id)
-        if settings.pinned_chat_id == chat_id:
-            return {"new_balance": None, "pinned_chat_id": chat_id}
-
-        new_balance: int | None = None
-        if chat_id is not None:
-            if not cfg.get("pin_chat", {}).get("enabled", True):
-                raise ValueError("item_disabled")
-            new_balance = await self._deduct(owner_id, cost)
-
-        settings.pinned_chat_id = chat_id
-        await self._session.flush()
-        return {"new_balance": new_balance, "pinned_chat_id": chat_id}
+        from app.repositories.chat_list_repository import ChatListRepository
+        prefs = await ChatListRepository(self._session).change(
+            owner_id, "pin" if chat_id is not None else "unpin_all", chat_id)
+        balance = await self._session.scalar(select(UserWallet.balance)
+            .where(UserWallet.owner_telegram_id == owner_id))
+        return {"new_balance": balance or 0, "pinned_chat_id": prefs.pinned[0] if prefs.pinned else None,
+                "pinned_chat_ids": list(prefs.pinned)}
 
     async def gift_coins(self, owner_id: int, recipient_id: int) -> dict:
         cfg    = await self._get_shop_cfg()

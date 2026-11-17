@@ -29,7 +29,7 @@ def verify_init_data(
 ) -> dict | None:
     """Validate `initData` and return the embedded Telegram user dict, or None."""
 
-    if not init_data:
+    if not init_data or len(init_data) > 16384:
         return None
 
     try:
@@ -39,8 +39,10 @@ def verify_init_data(
         return None
 
     parsed = dict(pairs)
+    if len(parsed) != len(pairs):
+        return None
     received_hash = parsed.pop("hash", None)
-    if not received_hash:
+    if not received_hash or len(received_hash) != 64 or not received_hash.isascii():
         return None
 
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(parsed.items()))
@@ -53,14 +55,12 @@ def verify_init_data(
         logger.warning("initData signature verification failed")
         return None
 
-    auth_date = parsed.get("auth_date")
-    if auth_date is not None:
-        try:
-            if time.time() - int(auth_date) > max_age_seconds:
-                logger.warning("initData is stale (auth_date too old)")
-                return None
-        except ValueError:
-            pass
+    auth_date = parsed.get("auth_date", "")
+    if len(auth_date) > 12 or not auth_date.isascii() or not auth_date.isdecimal():
+        return None
+    age = time.time() - int(auth_date)
+    if age < 0 or age > max_age_seconds:
+        return None
 
     user_raw = parsed.get("user")
     if not user_raw:
@@ -72,7 +72,10 @@ def verify_init_data(
         logger.warning("initData 'user' field was not valid JSON")
         return None
 
-    if not isinstance(user, dict) or "id" not in user:
+    if not isinstance(user, dict):
+        return None
+    user_id = user.get("id")
+    if type(user_id) is not int or not 0 < user_id < 2**52:
         return None
 
     return user

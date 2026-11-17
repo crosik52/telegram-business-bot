@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import json as _json
 import logging
-import time as _time
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -51,7 +50,7 @@ _EXCLUDED_EXACT: frozenset[str] = frozenset(
 _EXCLUDED_PREFIXES: tuple[str, ...] = (
     "/app/api/admin/",    # admin endpoints have their own auth layer
     "/app/api/payments",  # Telegram Stars webhook callbacks (no user init_data)
-    "/app/api/avatar/",   # public image proxy; no Telegram init_data present
+    "/app/api/avatar/",   # image route verifies its auth header and ownership
 )
 
 # ── Tri-state check result ─────────────────────────────────────────────────────
@@ -60,62 +59,18 @@ _EXCLUDED_PREFIXES: tuple[str, ...] = (
 # None  → check failed while channels are configured → fail closed
 _SUBSCRIBED = True
 _NOT_SUBSCRIBED = False
-_CHECK_FAILED = None  # type: ignore[assignment]
+_CHECK_FAILED = None
 
 
-async def _subscription_status(
-    user_id: int,
-) -> bool | None:
-    """Return the tri-state subscription result for *user_id*.
-
-    Opens its own short-lived DB session so the middleware does not share the
-    session with the route handler (avoids transaction ordering surprises).
-
-    Returns:
-        True   – subscribed or no gate active
-        False  – not subscribed
-        None   – error AND channels are configured (caller should return 503)
-    """
-    from app.database.session import get_session_factory as _sf  # noqa: PLC0415
-    from app.repositories.channel_repository import ChannelRepository  # noqa: PLC0415
-    from app.services.channel_subscription_service import (  # noqa: PLC0415
-        get_unsubscribed_channels,
-    )
-    from app.business.dispatcher import get_bot  # noqa: PLC0415
-    from app.config import get_settings  # noqa: PLC0415
-    from app.miniapp.routes import _sub_cache, _SUB_CACHE_TTL  # noqa: PLC0415
-
-    now = _time.monotonic()
-    cached = _sub_cache.get(user_id)
-    if cached and (now - cached[0]) < _SUB_CACHE_TTL:
-        return cached[1]
-
-    factory = _sf()
-    async with factory() as session:
-        try:
-            active = await ChannelRepository(session).get_active()
-            if not active:
-                _sub_cache[user_id] = (now, True)
-                return True
-
-            bot = get_bot(get_settings())
-            if bot is None:
-                # Bot unavailable → if channels are configured, fail closed.
-                return None
-
-            unsub = await get_unsubscribed_channels(bot, user_id, active)
-            ok = len(unsub) == 0
-            _sub_cache[user_id] = (now, ok)
-            return ok
-
-        except Exception:
-            logger.exception(
-                "subscription_gate middleware: check failed for user %s — failing closed",
-                user_id,
-            )
-            # We attempted the check while channels may be configured.
-            # Fail closed rather than silently granting access.
-            return None
+async def _subscription_status(user_id: int, *, is_premium: bool = False) -> bool | None:
+    from app.database.session import get_session_factory
+    from app.miniapp.routes import _is_subscribed
+    try:
+        async with get_session_factory()() as session:
+            return await _is_subscribed(user_id, session, is_premium=is_premium)
+    except Exception as exc:
+        logger.warning("channel_gate middleware unavailable error_type=%s", type(exc).__name__)
+        return None
 
 
 class SubscriptionGateMiddleware(BaseHTTPMiddleware):
@@ -156,13 +111,12 @@ class SubscriptionGateMiddleware(BaseHTTPMiddleware):
             user = None
 
         if user is None:
-            # Invalid signature; let the route handle it (returns 401).
-            return await call_next(request)
+            return JSONResponse(status_code=401, content={"detail": "Invalid Telegram init_data"})
 
         user_id = int(user["id"])
 
         # ── Check subscription ────────────────────────────────────────────
-        status = await _subscription_status(user_id)
+        status = await _subscription_status(user_id, is_premium=user.get("is_premium") is True)
 
         if status is False:
             return JSONResponse(

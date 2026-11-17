@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -27,13 +28,15 @@ def get_engine() -> AsyncEngine:
             connect_args["check_same_thread"] = False
         elif settings.is_postgres and settings.requires_ssl:
             connect_args["ssl"] = True
+        pool_options: dict[str, Any] = {}
+        if settings.is_postgres:
+            pool_options = {"pool_size": settings.database_pool_size,
+                            "max_overflow": settings.database_max_overflow, "pool_timeout": 30}
         _engine = create_async_engine(
             settings.normalized_database_url,
             echo=False,
             pool_pre_ping=True,
-            pool_size=15,
-            max_overflow=10,
-            pool_timeout=30,
+            **pool_options,
             connect_args=connect_args,
         )
     return _engine
@@ -78,7 +81,8 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def dispose_engine() -> None:
-    global _engine
+    global _engine, _session_factory
+    _session_factory = None
     if _engine is not None:
         await _engine.dispose()
         _engine = None

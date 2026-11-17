@@ -31,36 +31,43 @@ having captured each message via ``business_message`` first.
 from __future__ import annotations
 
 import asyncio
-from html import escape as html_escape
-
 import shutil
 import tempfile
 import threading
+from html import escape as html_escape
 
 from aiogram import Bot, F, Router
 from aiogram.types import (
-    BusinessConnection, BusinessMessagesDeleted,
-    CallbackQuery, ChosenInlineResult, FSInputFile, InlineQuery,
-    InlineKeyboardButton, InlineKeyboardMarkup,
-    InlineQueryResultAudio, InlineQueryResultCachedAudio,
-    InputMediaAudio, InputTextMessageContent,
-    Message, PreCheckoutQuery, WebAppInfo,
+    BusinessConnection,
+    BusinessMessagesDeleted,
+    CallbackQuery,
+    ChosenInlineResult,
+    FSInputFile,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    InlineQuery,
+    InlineQueryResultAudio,
+    InlineQueryResultCachedAudio,
+    InputMediaAudio,
+    Message,
+    PreCheckoutQuery,
+    Update,
+    WebAppInfo,
 )
 from sqlalchemy import select
 
 from app.bot import emoji as E
-from app.business import commands
+from app.business import commands, permissions
 from app.business.panic_tracker import PanicTracker
 from app.config import get_settings
 from app.database.session import session_scope
 from app.logging_config import get_logger
 from app.models.business_connection import BusinessConnection as BCModel
-from app.models.message import MediaType, Message as DBMessage
+from app.models.message import MediaType
+from app.models.message import Message as DBMessage
 from app.repositories.chat_settings_repository import ChatSettingsRepository
 from app.repositories.subscription_repository import SubscriptionRepository
-from app.business import permissions
-from app.services import audio_service
-from app.services import ai_analysis_service
+from app.services import ai_analysis_service, audio_service
 from app.services.message_service import MessageService
 from app.services.video_service import extract_video_url, handle_video_link
 
@@ -654,8 +661,8 @@ async def on_business_message(message: Message, bot: Bot) -> None:
             video_match = extract_video_url(text_to_scan)
             # If link was sent by contact, check per-scenario setting
             if video_match and _is_incoming:
-                from app.models.user_settings import UserSettings as _US          # noqa: PLC0415
                 from app.models.business_connection import BusinessConnection as _BC  # noqa: PLC0415
+                from app.models.user_settings import UserSettings as _US  # noqa: PLC0415
                 _us_v = (await session.execute(
                     select(_US).where(_US.owner_telegram_id == owner_telegram_id)
                 )).scalar_one_or_none()
@@ -706,9 +713,19 @@ async def on_business_message(message: Message, bot: Bot) -> None:
                             _platform=platform,
                             _key=key,
                             _link_msg_id=message.message_id,
+                            _owner_id=owner_telegram_id,
                         ) -> None:
                             async with _download_semaphore:
                                 try:
+                                    # Optional downloads check access independently of the
+                                    # ingestion transaction; failures never roll back messages.
+                                    try:
+                                        from app.bot.commands import _check_channel_gate
+                                        if await _check_channel_gate(_bot, _owner_id):
+                                            return
+                                    except Exception as exc:
+                                        logger.warning("channel_gate video unavailable owner_id=%s error_type=%s", _owner_id, type(exc).__name__)
+                                        return
                                     await handle_video_link(
                                         bot=_bot,
                                         chat_id=_chat_id,
@@ -729,7 +746,9 @@ async def on_business_message(message: Message, bot: Bot) -> None:
 # ── Edit handler ──────────────────────────────────────────────────────────────
 
 @router.edited_business_message()
-async def on_edited_business_message(message: Message, bot: Bot) -> None:
+async def on_edited_business_message(
+    message: Message, bot: Bot, event_update: Update | None = None,
+) -> None:
     """Preserve the original version, append the edited version, notify owner."""
 
     if not message.business_connection_id:
@@ -742,20 +761,25 @@ async def on_edited_business_message(message: Message, bot: Bot) -> None:
     is_muted = False
 
     async with session_scope() as session:
-        service = MessageService(session)
-        outcome = await service.ingest_edited_message(
-            message, business_connection_id=message.business_connection_id
-        )
-
-        if outcome.is_first_capture:
-            return
-
         result = await session.execute(
-            select(BCModel).where(
-                BCModel.business_connection_id == message.business_connection_id
-            )
+            select(BCModel).where(BCModel.business_connection_id == message.business_connection_id)
         )
         connection = result.scalar_one_or_none()
+        if connection is not None:
+            from app.models.user_settings import UserSettings as _US
+            user_settings = await session.scalar(
+                select(_US).where(_US.owner_telegram_id == connection.user_telegram_id)
+            )
+            if user_settings and message.chat.id in (user_settings.chat_whitelist or []):
+                return  # An edit must not bypass the owner's message exclusion.
+        service = MessageService(session)
+        outcome = await service.ingest_edited_message(
+            message, business_connection_id=message.business_connection_id,
+            source_update_id=event_update.update_id if event_update else None,
+        )
+
+        if outcome.is_first_capture or outcome.is_duplicate:
+            return
 
         if connection is None:
             logger.warning(
@@ -1073,7 +1097,7 @@ async def on_mp3_callback(callback: CallbackQuery, bot: Bot) -> None:
                 duration=duration or None,
             ),
         )
-        logger.info("mp3: sent '%s' to chat_id=%s", title, chat_id)
+        logger.info("mp3: audio delivered to chat_id=%s", chat_id)
 
     except audio_service.CancelledByUser:
         # User tapped ❌ Отмена — yt-dlp stopped via progress hook, thread exited.
@@ -1095,7 +1119,7 @@ async def on_mp3_callback(callback: CallbackQuery, bot: Bot) -> None:
             )
 
     except Exception as exc:
-        logger.warning("mp3: download/send failed for %s: %s", result.url, exc)
+        logger.warning("mp3: download/send failed error_type=%s", type(exc).__name__)
         # Restore the search keyboard so the user can pick another track
         session   = audio_service.get_session(result.session_key) if result.session_key else None
         if session:
@@ -1216,7 +1240,7 @@ async def on_inline_query(query: InlineQuery, bot: Bot) -> None:
     try:
         results = await audio_service.search(q, n=audio_service.SEARCH_N)
     except Exception as exc:
-        logger.warning("inline_query: search failed for %r: %s", q, exc)
+        logger.warning("inline_query: search failed error_type=%s", type(exc).__name__)
         results = []
 
     base_url = get_settings().webhook_base_url.rstrip("/")
@@ -1287,7 +1311,7 @@ async def on_note_remind(callback: CallbackQuery, bot: Bot) -> None:
 
     # Create the reminder row
     import datetime as _dt  # noqa: PLC0415
-    event_at = _dt.datetime.fromtimestamp(unix_ts, tz=_dt.timezone.utc) if unix_ts else None
+    event_at = _dt.datetime.fromtimestamp(unix_ts, tz=_dt.UTC) if unix_ts else None
 
     # Load note text directly from the DB — avoids lstrip-on-charset bugs
     # when trying to parse it back out of the formatted DM message.
@@ -1372,8 +1396,8 @@ async def on_rel_friend_respond(callback: CallbackQuery, bot: Bot) -> None:
 
     responder_id = callback.from_user.id
 
-    from app.repositories.relationship_repository import RelationshipRepository
     from app.models.user import TelegramUser
+    from app.repositories.relationship_repository import RelationshipRepository
 
     async with session_scope() as session:
         repo = RelationshipRepository(session)
@@ -1458,7 +1482,7 @@ async def on_chosen_inline_result(result: ChosenInlineResult, bot: Bot) -> None:
     key     = result.result_id
     user_id = result.from_user.id
     audio_service.add_to_history(user_id, key)
-    logger.info("chosen_inline_result: key=%s user=%s", key, user_id)
+    logger.info("chosen_inline_result: selected by user=%s", user_id)
 
 
 @router.pre_checkout_query()
@@ -1563,7 +1587,7 @@ async def on_successful_payment(message: Message, bot: Bot) -> None:
                 f"{bonus_line}"
                 f"<b>+{pkg['coins']:,}".replace(",", " ") + f" монет</b> добавлено на баланс.\n"
                 f"Баланс: <b>{new_balance:,}".replace(",", " ") + " 🪙</b>\n\n"
-                f"Открой мини-приложение, чтобы потратить!"
+                "Открой мини-приложение, чтобы потратить!"
             )
         else:
             text = "🪙 Монеты зачислены! Открой мини-приложение."

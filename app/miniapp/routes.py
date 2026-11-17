@@ -9,9 +9,10 @@ import hashlib
 import re as _re
 
 import time as _time
+from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import and_, func, or_, select, text
@@ -26,6 +27,11 @@ from app.models.admin_action_log import AdminActionLog
 from app.models.business_connection import BusinessConnection
 from app.models.message import MediaType, Message
 from app.models.relationship import MARRIAGE_DAILY_BONUS
+from app.repositories.media_save_settings_repository import (
+    MediaSaveSettingsRepository,
+    RevisionConflictError,
+    validate_limits,
+)
 from app.repositories.message_repository import MessageFilters, MessageRepository
 from app.repositories.pet_repository import FEED_COST, RENAME_COST, SPECIES as PET_SPECIES_CATALOGUE, PetRepository
 from app.repositories.shop_repository import (
@@ -41,6 +47,14 @@ from app.repositories.relationship_repository import RelationshipRepository
 from app.repositories.subscription_repository import SubscriptionRepository
 from app.repositories.wallet_repository import WalletRepository
 from app.services.admin_chart_service import AdminStats, render_admin_image
+from app.services.media_reply_save import (
+    CONSENT_DEDUP_LIMIT,
+    CONSENT_OWNER_LIMIT,
+)
+from app.services.media_reply_save import (
+    get_state as get_media_reply_save_state,
+)
+from app.services.media_save_policy_service import policy_service
 from app.services.stats_service import StatsService
 
 logger = get_logger(__name__)
@@ -61,6 +75,20 @@ class AdminSettingsRequest(BaseModel):
     owner_telegram_id: int = Field(alias="ownerTelegramId")
     notifications_enabled: bool | None = Field(default=None, alias="notificationsEnabled")
     is_blocked: bool | None = Field(default=None, alias="isBlocked")
+
+
+class AdminMediaSaveUpdateRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    init_data: str = Field(alias="initData")
+    expected_revision: int = Field(alias="expectedRevision", ge=0, strict=True)
+    owner_telegram_id: int | None = Field(
+        alias="ownerTelegramId", gt=1, lt=2**52, strict=True,
+    )
+    enabled: bool = Field(strict=True)
+    max_bytes: int = Field(alias="maxBytes", strict=True)
+    attempts_per_hour: int = Field(alias="attemptsPerHour", strict=True)
+    cooldown_seconds: int = Field(alias="cooldownSeconds", strict=True)
 
 
 class AdminUserStatsRequest(BaseModel):
@@ -115,9 +143,7 @@ class AdminActionLogRequest(BaseModel):
     page: int = Field(default=1)
 
 
-# ── Avatar URL cache (file_id → CDN URL, ~55-min TTL) ────────────────────────
-# Structure: user_telegram_id -> (cdn_url, expires_ts)
-_avatar_url_cache: dict[int, tuple[str, float]] = {}
+_ai_ping_next_allowed = 0.0
 
 
 # ── Bot username cache (avoid get_me() on every referral request) ─────────────
@@ -137,106 +163,112 @@ async def _get_cached_bot_username(settings) -> str:
     return _bot_username_cache or ""
 
 
-# ── Subscription gate: short-lived per-user cache ────────────────────────────
-# Maps user_id → (timestamp, is_subscribed).  Cleared automatically after TTL.
-_sub_cache: dict[int, tuple[float, bool]] = {}
-_SUB_CACHE_TTL = 60.0  # seconds
+# ── Subscription gate: bounded cache keyed by user and channel config ──
+_sub_cache: dict[tuple, tuple[float, bool]] = {}
+_SUB_CACHE_TTL = 15.0
+_SUB_CACHE_MAX = 2048
 
 
-async def _is_subscribed(user_id: int, session: AsyncSession) -> bool | None:
-    """Return the tri-state subscription result for *user_id*.
+def _channel_cache_key(user_id: int, channels: list) -> tuple:
+    return (user_id, tuple(
+        (ch.id, ch.channel_username, ch.require_premium_boost, ch.channel_join_url)
+        for ch in channels))
 
-    Returns:
-        True  – subscribed, or no gate is active
-        False – user has not joined at least one required channel
-        None  – check failed while channels ARE configured → caller must fail closed
 
-    Results are cached for _SUB_CACHE_TTL seconds to avoid a Telegram API call
-    on every mini-app action.
-    """
-    now = _time.monotonic()
-    cached = _sub_cache.get(user_id)
-    if cached and (now - cached[0]) < _SUB_CACHE_TTL:
-        return cached[1]
+def _cache_subscription(key: tuple, ok: bool) -> None:
+    if len(_sub_cache) >= _SUB_CACHE_MAX:
+        _sub_cache.pop(next(iter(_sub_cache)))
+    _sub_cache[key] = (_time.monotonic(), ok)
+
+
+async def _is_subscribed(user_id: int, session: AsyncSession, *, is_premium: bool = False) -> bool | None:
+    from app.repositories.channel_repository import ChannelRepository
+    from app.services.channel_subscription_service import get_unsubscribed_channels
 
     try:
-        from app.repositories.channel_repository import ChannelRepository as _CR  # noqa: PLC0415
-        from app.services.channel_subscription_service import get_unsubscribed_channels as _guc  # noqa: PLC0415
-        active = await _CR(session).get_active()
+        # Read config before cache lookup. A config change also changes the key,
+        # so an in-flight old check cannot restore a stale grant after admin edits.
+        active = await ChannelRepository(session).get_active()
         if not active:
-            _sub_cache[user_id] = (now, True)
             return True
-        _bot = get_bot(get_settings())
-        if not _bot:
-            # Bot unavailable while channels are configured → fail closed.
-            logger.warning(
-                "channel_gate: bot unavailable for user %s — failing closed", user_id
-            )
+        key = _channel_cache_key(user_id, active)
+        cached = _sub_cache.get(key)
+        if cached and _time.monotonic() - cached[0] < _SUB_CACHE_TTL:
+            return cached[1]
+        bot = get_bot(get_settings())
+        if bot is None:
             return None
-        unsub = await _guc(_bot, user_id, active)
-        ok = len(unsub) == 0
-        _sub_cache[user_id] = (now, ok)
+        missing = await get_unsubscribed_channels(bot, user_id, active, is_premium=is_premium)
+        ok = not missing
+        _cache_subscription(key, ok)
         return ok
-    except Exception:
-        logger.exception(
-            "channel_gate: check failed for user %s — failing closed", user_id
-        )
-        # Do NOT cache the error so the next request retries immediately.
+    except Exception as exc:
+        logger.warning("channel_gate unavailable user_id=%s error_type=%s", user_id, type(exc).__name__)
         return None
 
 
 async def _assert_subscribed(user_id: int, session: AsyncSession) -> None:
-    """Raise HTTP 403/503 if *user_id* hasn't subscribed to all required channels.
-
-    This is a defence-in-depth layer; the SubscriptionGateMiddleware is the
-    primary enforcement point and covers every route automatically.
-    """
     status = await _is_subscribed(user_id, session)
     if status is False:
-        raise HTTPException(
-            status_code=403,
-            detail={"subscription_gate": True,
-                    "message": "Subscribe to required channels to use this feature"},
-        )
+        raise HTTPException(status_code=403, detail={"subscription_gate": True,
+                            "message": "Выполните условия доступа в главном экране"})
     if status is None:
-        raise HTTPException(
-            status_code=503,
-            detail="subscription_check_unavailable",
-        )
+        raise HTTPException(status_code=503, detail="subscription_check_unavailable")
+
+
+async def _assert_owned_contact(
+    session: AsyncSession, caller_id: int, contact_id: int, admin_id: int | None,
+) -> None:
+    if contact_id <= 0:
+        raise HTTPException(status_code=404, detail="Not found")
+    if caller_id == contact_id or caller_id == admin_id:
+        return
+    contact = await session.scalar(
+        select(Message.id)
+        .join(BusinessConnection,
+              BusinessConnection.business_connection_id == Message.business_connection_id)
+        .where(BusinessConnection.user_telegram_id == caller_id,
+               BusinessConnection.is_blocked.is_(False), Message.chat_id == contact_id)
+        .limit(1)
+    )
+    if contact is None:
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 @router.get("/app/api/avatar/{user_id}")
-async def get_avatar(user_id: int, session: AsyncSession = Depends(get_db_session)):
-    """Proxy Telegram profile photo for a user. Returns 404 when no photo stored."""
+async def get_avatar(
+    user_id: int,
+    x_telegram_init_data: str = Header(default=""),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Return image bytes; Telegram file URLs and credentials stay server-side."""
     from app.models.user import TelegramUser as _TU
+    from app.services.avatar_service import admit_avatar_request, download_avatar
 
-    cached = _avatar_url_cache.get(user_id)
-    if cached and cached[1] > _time.monotonic():
-        return RedirectResponse(url=cached[0], status_code=302)
-
+    settings = get_settings()
+    caller = verify_init_data(x_telegram_init_data, settings.telegram_bot_token)
+    if caller is None:
+        raise HTTPException(status_code=401, detail="Invalid Telegram init data")
+    admit_avatar_request()
+    await _assert_owned_contact(session, caller["id"], user_id, settings.miniapp_admin_id)
     user_row = (
         await session.execute(select(_TU).where(_TU.telegram_user_id == user_id))
     ).scalar_one_or_none()
-
     if not user_row or not user_row.photo_file_id:
         raise HTTPException(status_code=404, detail="No avatar")
-
     try:
-        settings = get_settings()
-        bot = get_bot(settings)
+        bot = get_bot(get_settings())
         if bot is None:
             raise HTTPException(status_code=503, detail="Bot unavailable")
-        tg_file = await bot.get_file(user_row.photo_file_id)
-        cdn_url = (
-            f"https://api.telegram.org/file/bot{settings.telegram_bot_token}"
-            f"/{tg_file.file_path}"
-        )
-        _avatar_url_cache[user_id] = (cdn_url, _time.monotonic() + 3300)  # 55 min
-        return RedirectResponse(url=cdn_url, status_code=302)
+        data = await download_avatar(bot, user_row.photo_file_id)
+        return Response(data, media_type="image/jpeg", headers={
+            "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
+        })
     except HTTPException:
         raise
     except Exception:
-        raise HTTPException(status_code=404, detail="Avatar unavailable")
+        # Telegram exceptions can contain token-bearing URLs; never expose/log them.
+        raise HTTPException(status_code=404, detail="Avatar unavailable") from None
 
 
 def _compute_badges(stats) -> list[dict]:
@@ -471,16 +503,23 @@ class AdminSubRevokeRequest(BaseModel):
 
 
 class AdminChannelAddRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
     init_data: str = Field(alias="initData")
-    username: str
-    title: str | None = None
+    username: str = Field(min_length=1, max_length=128)
+    title: str | None = Field(default=None, max_length=255)
+    join_url: str | None = Field(default=None, alias="joinUrl", max_length=512)
+    require_premium_boost: bool = Field(default=False, alias="requirePremiumBoost", strict=True)
+    is_active: bool = Field(default=True, alias="isActive", strict=True)
+
+
+class AdminChannelUpdateRequest(AdminChannelAddRequest):
+    channel_id: int = Field(alias="channelId", gt=0)
 
 
 class AdminChannelActionRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
     init_data: str = Field(alias="initData")
-    channel_id: int = Field(alias="channelId")
+    channel_id: int = Field(alias="channelId", gt=0)
 
 
 def _sub_status_dict(sub, config, vip_config=None) -> dict:
@@ -517,17 +556,14 @@ def _sub_status_dict(sub, config, vip_config=None) -> dict:
 
 
 def _require_admin(init_data: str) -> dict:
-    """Verify initData and ensure the caller's Telegram @username matches the
-    configured mini app super-admin. Returns the verified user dict."""
+    """Require a signed Telegram identity matching the configured numeric ID."""
 
     settings = get_settings()
     user = verify_init_data(init_data, settings.telegram_bot_token)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid Telegram init data")
 
-    username = (user.get("username") or "").lstrip("@").lower()
-    admin_username = settings.miniapp_admin_username.lstrip("@").lower()
-    if not admin_username or username != admin_username:
+    if settings.miniapp_admin_id is None or user["id"] != settings.miniapp_admin_id:
         raise HTTPException(status_code=403, detail="Not authorized")
 
     return user
@@ -570,55 +606,27 @@ async def miniapp_stats(
 
     owner_telegram_id = int(user["id"])
 
-    # ── Channel subscription gate ─────────────────────────────────────────────
-    # Step 1: load configured channels (fail open only if this DB query fails).
+    # Discovery always rechecks Telegram so the retry button has no stale deny.
     try:
-        from app.repositories.channel_repository import ChannelRepository as _CR  # noqa: PLC0415
-        _active_chs = await _CR(session).get_active()
-    except Exception:
-        logger.exception(
-            "channel_gate stats: failed to load channels for user %s — allowing through",
-            owner_telegram_id,
-        )
-        _active_chs = []
-
-    # Step 2: if channels are configured, verify membership — fail closed on error.
-    if _active_chs:
-        from app.services.channel_subscription_service import get_unsubscribed_channels as _guc  # noqa: PLC0415
-        _bot = get_bot(get_settings())
-        if not _bot:
-            raise HTTPException(
-                status_code=503,
-                detail="subscription_check_unavailable",
-            )
-        try:
-            _unsub = await _guc(_bot, owner_telegram_id, _active_chs)
-        except Exception:
-            logger.exception(
-                "channel_gate stats: Telegram check failed for user %s — failing closed",
-                owner_telegram_id,
-            )
-            raise HTTPException(
-                status_code=503,
-                detail="subscription_check_unavailable",
-            )
-
-        if _unsub:
-            _sub_cache[owner_telegram_id] = (_time.monotonic(), False)
-            return {
-                "subscription_gate": True,
-                "required_channels": [
-                    {
-                        "title": ch.display_title,
-                        "username": ch.channel_username,
-                        "url": ch.join_url,
-                    }
-                    for ch in _unsub
-                ],
-            }
-        # User IS subscribed — refresh the cache so _assert_subscribed
-        # picks up the latest decision immediately (no 60-second lag).
-        _sub_cache[owner_telegram_id] = (_time.monotonic(), True)
+        from app.repositories.channel_repository import ChannelRepository
+        from app.services.channel_subscription_service import get_unsubscribed_channels
+        active_channels = await ChannelRepository(session).get_active()
+        if active_channels:
+            bot = get_bot(settings)
+            if bot is None:
+                raise RuntimeError("Bot unavailable")
+            premium = user.get("is_premium") is True
+            missing = await get_unsubscribed_channels(
+                bot, owner_telegram_id, active_channels, is_premium=premium, force=True)
+            key = _channel_cache_key(owner_telegram_id, active_channels)
+            _cache_subscription(key, not missing)
+            if missing:
+                return {"subscription_gate": True,
+                        "required_channels": [requirement.as_dict() for requirement in missing]}
+    except Exception as exc:
+        logger.warning("channel_gate stats unavailable user_id=%s error_type=%s",
+                       owner_telegram_id, type(exc).__name__)
+        raise HTTPException(503, "subscription_check_unavailable") from None
 
     result = await session.execute(
         select(BusinessConnection.business_connection_id).where(
@@ -626,11 +634,6 @@ async def miniapp_stats(
         )
     )
     connection_ids = [row[0] for row in result.all()]
-
-    _sub_repo   = SubscriptionRepository(session)
-    _sub_config = await _sub_repo.get_config()
-    _active_sub = await _sub_repo.get_active_subscription(owner_telegram_id)
-    is_premium  = _active_sub is not None and _sub_config.is_enabled
 
     _sub_repo   = SubscriptionRepository(session)
     _sub_config = await _sub_repo.get_config()
@@ -723,9 +726,10 @@ async def miniapp_stats(
                             )
 
                 asyncio.create_task(_send_referral_notifications())
-        except Exception:
-            logger.exception(
-                "Referral activation check failed for user %s", owner_telegram_id
+        except Exception as exc:
+            logger.warning(
+                "Referral activation check failed for user %s error_type=%s",
+                owner_telegram_id, type(exc).__name__,
             )
 
     if not connection_ids:
@@ -788,6 +792,97 @@ async def miniapp_stats(
             "Failed to build owner stats for owner_telegram_id=%s", owner_telegram_id
         )
         raise HTTPException(status_code=500, detail="Failed to load stats") from None
+
+
+class ChatListRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+    init_data: str = Field(alias="initData", max_length=16384)
+    view: str = Field(default="active", pattern="^(active|archived)$")
+    sort: str = Field(default="messages", pattern="^(messages|recent|streaks|edited)$")
+    query: str = Field(default="", max_length=100)
+    display_limit: str = Field(default="15", alias="displayLimit", pattern="^(15|25|all)$")
+    offset: int = Field(default=0, ge=0, le=100000, strict=True)
+    limit: int = Field(default=50, ge=1, le=50, strict=True)
+
+
+
+class ChatListChangeRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+    init_data: str = Field(alias="initData", max_length=16384)
+    action: str = Field(pattern="^(pin|unpin|archive|restore|restore_all)$")
+    chat_id: int | None = Field(default=None, alias="chatId", gt=0, lt=2**52, strict=True)
+
+
+
+async def _chat_list_auth(init_data: str, session: AsyncSession, operation: str) -> int:
+    from app.services.chat_list_service import admit_chat_list
+    owner_id = _shop_auth(init_data, get_settings())
+    if not admit_chat_list(owner_id, operation):
+        raise HTTPException(status_code=429, detail="chat_list_rate_limit", headers={"Retry-After": "60"})
+    await _assert_subscribed(owner_id, session)
+    return owner_id
+
+
+
+@router.post("/app/api/chat-list")
+async def miniapp_chat_list(payload: ChatListRequest, session: AsyncSession = Depends(get_db_session)) -> dict:
+    from app.repositories.chat_list_repository import ChatListRepository
+    from app.services.chat_list_service import chat_list_page
+    owner_id = await _chat_list_auth(payload.init_data, session, "list")
+    try:
+        async with asyncio.timeout(10):
+            connections = (await session.execute(select(BusinessConnection.business_connection_id)
+                .where(BusinessConnection.user_telegram_id == owner_id,
+                       BusinessConnection.is_blocked.is_(False)))).scalars().all()
+            prefs = await ChatListRepository(session).get(owner_id)
+            subscriptions = SubscriptionRepository(session)
+            subscription_config = await subscriptions.get_config()
+            is_premium = subscription_config.is_enabled and await subscriptions.get_active_subscription(owner_id) is not None
+            display_limit = payload.display_limit if is_premium else "15"
+            cap = None if display_limit == "all" else int(display_limit)
+            stats = await StatsService(session).get_owner_stats(connection_ids=list(connections),
+                owner_telegram_id=owner_id, top_n=None)
+            page = chat_list_page(stats.top_interlocutors, prefs, view=payload.view,
+                sort=payload.sort if is_premium else "messages", query=payload.query,
+                offset=payload.offset, limit=payload.limit, free_limit=cap)
+            rows = await _enrich_interlocutors(session, owner_id, page.rows)
+            for row in rows:
+                row["is_pinned"] = row["chat_id"] in prefs.pinned
+            return {"chats": rows, "total": page.total, "archive_count": page.archive_count,
+                    "missing_archive_count": page.missing_archive_count,
+                    "offset": payload.offset, "display_limit": display_limit,
+                    "display_total": page.total if cap is None else min(page.total, cap),
+                    "has_more": bool(is_premium and payload.offset + len(rows) < (page.total if cap is None else min(page.total, cap)))}
+    except Exception:
+        logger.warning("Chat list read unavailable")
+        raise HTTPException(status_code=503, detail="chat_list_unavailable") from None
+
+
+
+@router.post("/app/api/chat-list/change")
+async def miniapp_chat_list_change(payload: ChatListChangeRequest, session: AsyncSession = Depends(get_db_session)) -> dict:
+    from app.repositories.chat_list_repository import ChatListRepository
+    owner_id = await _chat_list_auth(payload.init_data, session, "change")
+    try:
+        async with asyncio.timeout(10):
+            prefs = await ChatListRepository(session).change(owner_id, payload.action, payload.chat_id)
+            await session.commit()
+    except LookupError:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail="chat_not_found") from None
+    except ValueError as error:
+        await session.rollback()
+        code = str(error)
+        if code in {"invalid_action", "invalid_chat", "restore_first", "pin_limit", "archive_limit"}:
+            raise HTTPException(status_code=400, detail=code) from None
+        logger.warning("Chat list change unavailable")
+        raise HTTPException(status_code=503, detail="chat_list_unavailable") from None
+    except Exception:
+        await session.rollback()
+        logger.warning("Chat list change unavailable")
+        raise HTTPException(status_code=503, detail="chat_list_unavailable") from None
+    return {"ok": True, "pinned_chat_ids": list(prefs.pinned), "archive_count": len(prefs.archived)}
+
 
 
 @router.post("/app/api/activity")
@@ -915,6 +1010,55 @@ async def miniapp_words(
         "top_emojis":  [{"emoji": e, "count": c} for e, c in emoji_counts.most_common(15)],
         "total_analyzed": total,
     }
+
+
+# BEGIN CONVERSATION_STATS (metadata only; independent of the Gemini/VIP API)
+
+
+class ConversationStatsRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+    init_data: str = Field(alias="initData", max_length=16384)
+    chat_id: int = Field(alias="chatId", gt=0, lt=2**52, strict=True)
+    period_days: Literal[7, 30] = Field(default=30, alias="periodDays")
+
+
+@router.post("/app/api/stats/conversation")
+async def miniapp_conversation_stats(
+    payload: ConversationStatsRequest, response: Response,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    from app.repositories.conversation_stats_repository import ConversationStatsRepository
+    from app.services.conversation_stats_service import ConversationBusy, conversation_reads
+
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        async with asyncio.timeout(5):
+            owner_id = _shop_auth(payload.init_data, get_settings())
+            if not conversation_reads.admit(owner_id):
+                raise HTTPException(status_code=429, detail="conversation_rate_limit", headers={"Retry-After": "60"})
+            await _assert_subscribed(owner_id, session)
+            if payload.chat_id == owner_id:
+                raise HTTPException(status_code=400, detail="private_chat_required")
+            repo = ConversationStatsRepository(session)
+            connections = await repo.prepare(owner_id, payload.chat_id)
+            if not connections:
+                raise HTTPException(status_code=404, detail="chat_unavailable")
+            # Fresh authorization is required even for cached/coalesced reads.
+            key = (owner_id, payload.chat_id, payload.period_days, connections)
+
+            async def load() -> dict:
+                return await repo.read(owner_id=owner_id, chat_id=payload.chat_id,
+                                       connections=connections, days=payload.period_days)
+
+            return await conversation_reads.read(key, load)
+    except HTTPException:
+        raise
+    except (TimeoutError, ConversationBusy):
+        raise HTTPException(status_code=503, detail="conversation_unavailable") from None
+    except Exception:
+        logger.warning("Conversation metadata read unavailable")
+        raise HTTPException(status_code=503, detail="conversation_unavailable") from None
+# END CONVERSATION_STATS
 
 
 # ── Daily digest (premium) ───────────────────────────────────────────────────
@@ -3021,6 +3165,168 @@ async def admin_subscription_revoke(
 
 # ── Shop admin ────────────────────────────────────────────────────────────────
 
+def _media_limits_payload(limits) -> dict:
+    return {
+        "maxBytes": limits.max_bytes,
+        "attemptsPerHour": limits.attempts_per_hour,
+        "cooldownSeconds": limits.cooldown_seconds,
+    }
+
+
+def _current_bot_id() -> int:
+    try:
+        value = int(get_settings().telegram_bot_token.split(":", 1)[0])
+    except (AttributeError, TypeError, ValueError):
+        raise HTTPException(status_code=503, detail="Bot identity unavailable") from None
+    if not 0 < value < 2**52:
+        raise HTTPException(status_code=503, detail="Bot identity unavailable")
+    return value
+
+
+@router.post("/app/api/admin/media-save/overview")
+async def admin_media_save_overview(
+    payload: StatsRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    _require_admin(payload.init_data)
+    bot_id = _current_bot_id()
+    repository = MediaSaveSettingsRepository(session)
+    policy_generation = policy_service.generation(bot_id)
+    try:
+        persisted = await repository.read(bot_id)
+        owners = await repository.connected_owners(bot_id)
+    except Exception:
+        raise HTTPException(status_code=503, detail="media_policy_unavailable") from None
+    runtime_policy = policy_service.apply(
+        persisted, expected_generation=policy_generation,
+    )
+    state = get_media_reply_save_state()
+    runtime = state.runtime_snapshot()
+    config = state.config
+    mode = (
+        "all_connected" if config is not None and config.all_connected_owners
+        else "single_owner" if config is not None else "disabled"
+    )
+    now_mono = _time.monotonic()
+
+    users = []
+    for connected in owners:
+        configured = persisted.owners.get(connected.owner_id)
+        configured_enabled = configured.enabled if configured else True
+        configured_limits = configured.limits if configured else persisted.defaults
+        effective = persisted.effective(connected.owner_id)
+        owner_runtime = runtime["owners"].get(connected.owner_id)
+        cooldown_remaining = 0
+        last_attempt_at = None
+        if owner_runtime:
+            last_started = owner_runtime["last_started"]
+            if last_started is not None:
+                cooldown_remaining = max(
+                    0, effective.limits.cooldown_seconds - int(now_mono - last_started)
+                )
+            timestamp = owner_runtime["last_attempt_at"]
+            if timestamp is not None:
+                last_attempt_at = dt.datetime.fromtimestamp(timestamp, dt.timezone.utc).isoformat()
+        users.append({
+            "ownerTelegramId": connected.owner_id,
+            "displayName": connected.display_name,
+            "username": connected.username,
+            "connectionCount": connected.connection_count,
+            "connectionEnabled": connected.is_enabled,
+            "canReply": connected.can_reply,
+            "isBlocked": connected.is_blocked,
+            "connectionUpdatedAt": connected.updated_at.isoformat(),
+            "configured": {"enabled": configured_enabled, **_media_limits_payload(configured_limits)},
+            "effective": {"enabled": effective.enabled, **_media_limits_payload(effective.limits)},
+            "runtime": {
+                "seen": owner_runtime is not None,
+                "attemptsInWindow": owner_runtime["attempts_in_window"] if owner_runtime else 0,
+                "cooldownRemainingSeconds": cooldown_remaining,
+                "lastAttemptAt": last_attempt_at,
+                "lastResult": owner_runtime["last_result"] if owner_runtime else None,
+                "successesSinceRestart": owner_runtime["successes"] if owner_runtime else 0,
+            },
+        })
+    applied_revision = runtime_policy.revision if runtime_policy else None
+    return {
+        "ok": True,
+        "botId": bot_id,
+        "persistedRevision": persisted.revision,
+        "runtimeAppliedRevision": applied_revision,
+        "runtimeInSync": applied_revision == persisted.revision,
+        "global": {"enabled": persisted.enabled, "defaults": _media_limits_payload(persisted.defaults)},
+        "runtime": {
+            "available": config is not None,
+            "mode": mode,
+            "busy": runtime["busy"],
+            "dedupUsed": runtime["dedup_used"],
+            "dedupLimit": CONSENT_DEDUP_LIMIT,
+            "ownersLoaded": runtime["owners_loaded"],
+            "ownerLimit": CONSENT_OWNER_LIMIT,
+            "uptimeSeconds": max(0, int(now_mono - state.started_at)),
+        },
+        "users": users,
+    }
+
+
+@router.post("/app/api/admin/media-save/update", response_model=None)
+async def admin_media_save_update(
+    payload: AdminMediaSaveUpdateRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict | JSONResponse:
+    _require_admin(payload.init_data)
+    bot_id = _current_bot_id()
+    try:
+        limits = validate_limits(
+            payload.max_bytes, payload.attempts_per_hour, payload.cooldown_seconds
+        )
+        snapshot = await MediaSaveSettingsRepository(session).update(
+            bot_id=bot_id,
+            expected_revision=payload.expected_revision,
+            owner_id=payload.owner_telegram_id,
+            enabled=payload.enabled,
+            limits=limits,
+        )
+        await session.commit()
+    except RevisionConflictError as exc:
+        await session.rollback()
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "revision_conflict", "currentRevision": exc.current_revision},
+        )
+    except LookupError:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail="owner_not_connected_to_current_bot") from None
+    except ValueError as exc:
+        await session.rollback()
+        if str(exc) == "invalid_media_policy":
+            raise HTTPException(status_code=503, detail="media_policy_unavailable") from None
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    try:
+        applied = policy_service.apply(snapshot)
+        if applied is None:
+            raise RuntimeError("policy snapshot not applied")
+    except Exception:
+        applied = policy_service.snapshot(bot_id)
+        return JSONResponse(status_code=503, content={
+            "detail": "runtime_apply_failed",
+            "persistedRevision": snapshot.revision,
+            "runtimeAppliedRevision": applied.revision if applied else None,
+        })
+    effective = snapshot.effective(payload.owner_telegram_id) if payload.owner_telegram_id else None
+    configured = snapshot.owners.get(payload.owner_telegram_id) if payload.owner_telegram_id else None
+    limits_result = configured.limits if configured else snapshot.defaults
+    enabled_result = configured.enabled if configured else snapshot.enabled
+    return {
+        "ok": True,
+        "persistedRevision": snapshot.revision,
+        "runtimeAppliedRevision": applied.revision,
+        "runtimeInSync": applied.revision == snapshot.revision,
+        "configured": {"enabled": enabled_result, **_media_limits_payload(limits_result)},
+        "effective": {
+            "enabled": effective.enabled if effective else snapshot.enabled,
+            **_media_limits_payload(effective.limits if effective else snapshot.defaults),
+        },
+    }
+
 class AdminShopConfigRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     init_data: str = Field(alias="initData")
@@ -3229,6 +3535,18 @@ async def admin_settings(
         )
     )
     await session.commit()
+
+    try:
+        bot_id = _current_bot_id()
+        policy_generation = policy_service.generation(bot_id)
+        policy_service.apply(
+            await MediaSaveSettingsRepository(session).read(bot_id),
+            allow_same_revision=True,
+            expected_generation=policy_generation,
+        )
+    except Exception:
+        if "bot_id" in locals():
+            policy_service.invalidate(bot_id)
 
     logger.info(
         "Admin @%s updated settings for owner_telegram_id=%s (rows=%s)",
@@ -3731,7 +4049,7 @@ class ShopFrameRequest(BaseModel):
 class ShopPinChatRequest(BaseModel):
     initData: str = Field(alias="initData", default="")
     init_data: str = ""
-    chatId: int | None = Field(alias="chatId", default=None)
+    chatId: int | None = Field(alias="chatId", default=None, gt=0, lt=2**52, strict=True)
 
     @property
     def resolved_init(self) -> str:
@@ -3865,16 +4183,27 @@ async def shop_buy_frame(
 async def shop_pin_chat(
     payload: ShopPinChatRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict:
-    """Pin (or unpin) a chat. Costs PIN_CHAT_COST coins when setting/changing."""
-    settings = get_settings()
-    owner_id = _shop_auth(payload.resolved_init, settings)
-    await _assert_subscribed(owner_id, session)
+    """Compatibility: free add-pin; null clears all owner pins."""
+    owner_id = await _chat_list_auth(payload.resolved_init, session, "change")
     repo = ShopRepository(session)
     try:
-        result = await repo.pin_chat(owner_id, payload.chatId)
+        async with asyncio.timeout(10):
+            result = await repo.pin_chat(owner_id, payload.chatId)
+            await session.commit()
+    except LookupError:
+        await session.rollback()
+        raise HTTPException(status_code=404, detail="chat_not_found") from None
     except ValueError as exc:
-        raise HTTPException(status_code=402, detail=str(exc)) from exc
-    await session.commit()
+        await session.rollback()
+        code = str(exc)
+        if code in {"invalid_chat", "restore_first", "pin_limit", "archive_limit"}:
+            raise HTTPException(status_code=400, detail=code) from None
+        logger.warning("Chat pin compatibility change unavailable")
+        raise HTTPException(status_code=503, detail="chat_list_unavailable") from None
+    except Exception:
+        await session.rollback()
+        logger.warning("Chat pin compatibility change unavailable")
+        raise HTTPException(status_code=503, detail="chat_list_unavailable") from None
     return {"ok": True, **result}
 
 
@@ -4251,6 +4580,7 @@ async def contact_profile_info(
         raise HTTPException(status_code=401, detail="Invalid init data")
 
     owner_id = user["id"]
+    await _assert_owned_contact(session, owner_id, payload.chat_id, settings.miniapp_admin_id)
 
     sub_repo = SubscriptionRepository(session)
     sub      = await sub_repo.get_active_subscription(payload.chat_id)
@@ -4513,6 +4843,7 @@ class GiveawayUpdateRequest(BaseModel):
     description: str | None = Field(default=None)
     is_visible_to_all: bool | None = Field(default=None, alias="isVisibleToAll")
     is_active: bool | None = Field(default=None, alias="isActive")
+    giveaway_tab_visible: bool | None = Field(default=None, alias="giveawayTabVisible")
 
 
 @router.post("/app/api/giveaway")
@@ -4529,8 +4860,7 @@ async def giveaway_info(
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid init data")
 
-    username = (user.get("username") or "").lower().lstrip("@")
-    is_admin = username == settings.miniapp_admin_username.lower()
+    is_admin = user["id"] == settings.miniapp_admin_id
 
     repo = GiveawayRepository(session)
     cfg  = await repo.get_config()
@@ -4562,6 +4892,16 @@ async def giveaway_info(
     }
 
 
+@router.post("/app/api/navigation")
+async def miniapp_navigation(
+    payload: GiveawayRequest, session: AsyncSession = Depends(get_db_session)
+) -> dict:
+    settings = get_settings()
+    if verify_init_data(payload.init_data, settings.telegram_bot_token) is None:
+        raise HTTPException(status_code=401, detail="Invalid init data")
+    return await ShopRepository(session).get_navigation()
+
+
 @router.post("/app/api/admin/giveaway/config")
 async def admin_giveaway_config(
     payload: GiveawayRequest, session: AsyncSession = Depends(get_db_session)
@@ -4570,7 +4910,8 @@ async def admin_giveaway_config(
     repo = GiveawayRepository(session)
     cfg  = await repo.get_config()
     top  = await repo.get_top_referrers(limit=3)
-    return {**_giveaway_cfg_dict(cfg), "top": top}
+    navigation = await ShopRepository(session).get_navigation()
+    return {**_giveaway_cfg_dict(cfg), **navigation, "top": top}
 
 
 @router.post("/app/api/admin/giveaway/update")
@@ -4620,9 +4961,14 @@ async def admin_giveaway_update(
 
     repo = GiveawayRepository(session)
     cfg  = await repo.update_config(**updates)
+    shop_repo = ShopRepository(session)
+    if payload.giveaway_tab_visible is not None:
+        navigation = await shop_repo.set_giveaway_tab_visible(payload.giveaway_tab_visible)
+    else:
+        navigation = await shop_repo.get_navigation()
     await session.commit()
     top  = await repo.get_top_referrers(limit=3)
-    return {"ok": True, **_giveaway_cfg_dict(cfg), "top": top}
+    return {"ok": True, **_giveaway_cfg_dict(cfg), **navigation, "top": top}
 
 
 def _giveaway_cfg_dict(cfg) -> dict:
@@ -4646,126 +4992,158 @@ def _giveaway_cfg_dict(cfg) -> dict:
 # Admin — channel subscription gate management
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _channel_admin_dict(ch, access: bool | None = None) -> dict:
+    return {"id": ch.id, "username": ch.channel_username, "title": ch.display_title,
+            "join_url": ch.join_url, "boost_url": ch.boost_url, "is_active": ch.is_active,
+            "require_premium_boost": ch.require_premium_boost,
+            "created_at": ch.created_at.isoformat() if ch.created_at else None,
+            "bot_has_access": access,
+            "access_status": "ready" if access is True else "no_access" if access is False else "unavailable"}
+
+
 @router.post("/app/api/admin/channels")
-async def admin_channels_list(
-    payload: StatsRequest, session: AsyncSession = Depends(get_db_session)
-) -> dict:
-    """Return all required channels (active and inactive) with live bot-access status."""
+async def admin_channels_list(payload: StatsRequest, session: AsyncSession = Depends(get_db_session)) -> dict:
     _require_admin(payload.init_data)
-    from app.repositories.channel_repository import ChannelRepository  # noqa: PLC0415
-    from app.services.channel_subscription_service import check_bot_access  # noqa: PLC0415
-    repo = ChannelRepository(session)
-    channels = await repo.get_all()
+    from app.repositories.channel_repository import ChannelRepository
+    from app.services.channel_subscription_service import check_bot_access
+    channels = await ChannelRepository(session).get_all()
+    bot = get_bot(get_settings())
+    access = await asyncio.gather(*(check_bot_access(bot, ch) for ch in channels[:50]))
+    return {"channels": [_channel_admin_dict(ch, access[index] if index < len(access) else None)
+                         for index, ch in enumerate(channels)], "max_active_channels": 10}
 
-    # Probe bot access for all channels concurrently.
-    # get_me() is called once and reused so we pay one round-trip, not N.
-    _settings = get_settings()
-    _bot = get_bot(_settings)
-    try:
-        _bot_me = await _bot.get_me()
-        _bot_id: int | None = _bot_me.id
-    except Exception:
-        _bot_id = None
 
-    access_results = await asyncio.gather(
-        *(check_bot_access(_bot, ch, bot_id=_bot_id) for ch in channels),
-        return_exceptions=True,
+async def _prepare_channel(payload: AdminChannelAddRequest, session: AsyncSession, *, channel_id: int | None = None):
+    from app.models.required_channel import RequiredChannel
+    from app.repositories.channel_repository import ChannelRepository
+    from app.services.channel_subscription_service import (
+        MAX_REQUIRED_CHANNELS,
+        check_bot_access,
+        normalize_channel,
+        normalize_join_url,
     )
-
-    return {
-        "channels": [
-            {
-                "id":             ch.id,
-                "username":       ch.channel_username,
-                "title":          ch.display_title,
-                "join_url":       ch.join_url,
-                "is_active":      ch.is_active,
-                "created_at":     ch.created_at.isoformat(),
-                "bot_has_access": bool(acc) if not isinstance(acc, Exception) else True,
-            }
-            for ch, acc in zip(channels, access_results)
-        ]
-    }
+    try:
+        username = normalize_channel(payload.username)
+        join_url = normalize_join_url(payload.join_url, username)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+    channels = await ChannelRepository(session).get_all()
+    if any(ch.id != channel_id and ch.channel_username.lstrip("@").lower() == username for ch in channels):
+        raise HTTPException(409, "Этот канал уже добавлен")
+    if payload.is_active and sum(ch.is_active for ch in channels if ch.id != channel_id) >= MAX_REQUIRED_CHANNELS:
+        raise HTTPException(400, "Можно включить не более 10 каналов")
+    ch = RequiredChannel(channel_username=username, channel_title=(payload.title or "").strip() or None,
+                         channel_join_url=join_url, require_premium_boost=payload.require_premium_boost,
+                         is_active=payload.is_active)
+    if payload.is_active:
+        bot = get_bot(get_settings())
+        access = await check_bot_access(bot, ch)
+        if access is False:
+            raise HTTPException(400, "Добавьте бота администратором канала или сохраните канал выключенным")
+        if access is None:
+            raise HTTPException(503, "Не удалось проверить права бота. Повторите позже")
+        try:
+            from app.services.channel_subscription_service import CHECK_TIMEOUT
+            async with asyncio.timeout(CHECK_TIMEOUT):
+                chat = await bot.get_chat(ch.at_username)
+            if chat.type != "channel":
+                raise HTTPException(400, "Укажите именно Telegram-канал")
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(503, "Не удалось проверить канал. Повторите позже") from None
+    return ch
 
 
 @router.post("/app/api/admin/channels/add")
-async def admin_channels_add(
-    payload: AdminChannelAddRequest, session: AsyncSession = Depends(get_db_session)
-) -> dict:
-    """Add a new required channel."""
+async def admin_channels_add(payload: AdminChannelAddRequest, session: AsyncSession = Depends(get_db_session)) -> dict:
     _require_admin(payload.init_data)
-    from app.repositories.channel_repository import ChannelRepository  # noqa: PLC0415
-    username = payload.username.lstrip("@").strip()
-    if not username:
-        raise HTTPException(status_code=400, detail="username is required")
-    repo = ChannelRepository(session)
-    ch = await repo.add(username, payload.title or None)
+    ch = await _prepare_channel(payload, session)
+    session.add(ch)
     await session.commit()
-    return {
-        "ok": True,
-        "channel": {
-            "id":        ch.id,
-            "username":  ch.channel_username,
-            "title":     ch.display_title,
-            "join_url":  ch.join_url,
-            "is_active": ch.is_active,
-        },
-    }
+    _sub_cache.clear()
+    from app.services.channel_subscription_service import clear_gate_cache
+    clear_gate_cache()
+    return {"ok": True, "channel": _channel_admin_dict(ch)}
+
+
+@router.post("/app/api/admin/channels/update")
+async def admin_channels_update(payload: AdminChannelUpdateRequest, session: AsyncSession = Depends(get_db_session)) -> dict:
+    _require_admin(payload.init_data)
+    from app.models.required_channel import RequiredChannel
+    existing = await session.get(RequiredChannel, payload.channel_id)
+    if existing is None:
+        raise HTTPException(404, "Канал не найден")
+    candidate = await _prepare_channel(payload, session, channel_id=existing.id)
+    for name in ("channel_username", "channel_title", "channel_join_url", "require_premium_boost", "is_active"):
+        setattr(existing, name, getattr(candidate, name))
+    await session.commit()
+    _sub_cache.clear()
+    from app.services.channel_subscription_service import clear_gate_cache
+    clear_gate_cache()
+    return {"ok": True, "channel": _channel_admin_dict(existing)}
 
 
 @router.post("/app/api/admin/channels/toggle")
-async def admin_channels_toggle(
-    payload: AdminChannelActionRequest, session: AsyncSession = Depends(get_db_session)
-) -> dict:
-    """Toggle a channel active / inactive."""
+async def admin_channels_toggle(payload: AdminChannelActionRequest, session: AsyncSession = Depends(get_db_session)) -> dict:
     _require_admin(payload.init_data)
-    from app.repositories.channel_repository import ChannelRepository  # noqa: PLC0415
-    repo = ChannelRepository(session)
-    ch = await repo.toggle(payload.channel_id)
-    if not ch:
-        raise HTTPException(status_code=404, detail="Channel not found")
+    from app.models.required_channel import RequiredChannel
+    ch = await session.get(RequiredChannel, payload.channel_id)
+    if ch is None:
+        raise HTTPException(404, "Канал не найден")
+    if ch.is_active:
+        # Always let a trusted administrator disable a broken legacy entry,
+        # including private IDs whose invitation link has never been configured.
+        ch.is_active = False
+    else:
+        candidate = AdminChannelAddRequest(initData=payload.init_data, username=ch.channel_username,
+                                          title=ch.channel_title, joinUrl=ch.channel_join_url,
+                                          requirePremiumBoost=ch.require_premium_boost, isActive=True)
+        await _prepare_channel(candidate, session, channel_id=ch.id)
+        ch.is_active = True
     await session.commit()
+    _sub_cache.clear()
+    from app.services.channel_subscription_service import clear_gate_cache
+    clear_gate_cache()
     return {"ok": True, "is_active": ch.is_active}
 
 
 @router.post("/app/api/admin/channels/delete")
-async def admin_channels_delete(
-    payload: AdminChannelActionRequest, session: AsyncSession = Depends(get_db_session)
-) -> dict:
-    """Delete a required channel."""
+async def admin_channels_delete(payload: AdminChannelActionRequest, session: AsyncSession = Depends(get_db_session)) -> dict:
     _require_admin(payload.init_data)
-    from app.repositories.channel_repository import ChannelRepository  # noqa: PLC0415
-    repo = ChannelRepository(session)
-    ok = await repo.delete(payload.channel_id)
-    if not ok:
-        raise HTTPException(status_code=404, detail="Channel not found")
+    from app.repositories.channel_repository import ChannelRepository
+    if not await ChannelRepository(session).delete(payload.channel_id):
+        raise HTTPException(404, "Канал не найден")
     await session.commit()
+    _sub_cache.clear()
+    from app.services.channel_subscription_service import clear_gate_cache
+    clear_gate_cache()
     return {"ok": True}
 
 
 @router.post("/app/api/admin/ai/ping")
-async def ai_ping(payload: dict, session: AsyncSession = Depends(get_db_session)) -> dict:
-    """Quick Gemini connectivity test (admin/debug only).
-
-    Moved under /admin/ so it inherits the admin-auth middleware exclusion and
-    the subscription gate no longer needs to cover it as an anonymous endpoint.
-    """
-    import asyncio  # noqa: PLC0415
-    import os       # noqa: PLC0415
-    try:
-        from google import genai  # noqa: PLC0415
-    except ImportError as exc:
-        return {"ok": False, "error": f"ImportError: {exc}"}
+async def ai_ping(payload: AdminInitDataOnlyRequest) -> dict:
+    """Authenticated connectivity test, at most once per minute per process."""
+    global _ai_ping_next_allowed
+    _require_admin(payload.init_data)
+    import os  # noqa: PLC0415
 
     api_key = os.environ.get("GEMINI_API_KEY", "")
     if not api_key:
-        return {"ok": False, "error": "GEMINI_API_KEY not set"}
-
+        return {"ok": False, "error": "AI service is not configured"}
+    now = _time.monotonic()
+    if now < _ai_ping_next_allowed:
+        raise HTTPException(429, "AI ping limit reached", headers={"Retry-After": "60"})
+    _ai_ping_next_allowed = now + 60
     try:
-        client = genai.Client(api_key=api_key)
-        resp = await asyncio.to_thread(
-            client.models.generate_content, model="gemini-flash-latest", contents="Say OK"
-        )
-        return {"ok": True, "response": resp.text[:100]}
-    except Exception as exc:
-        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+        from google import genai  # noqa: PLC0415
+
+        async with asyncio.timeout(12):
+            async with genai.Client(api_key=api_key, http_options={"timeout": 10000}).aio as client:
+                resp = await client.models.generate_content(
+                    model="gemini-flash-latest", contents="Say OK",
+                )
+        return {"ok": True, "response": (resp.text or "")[:100]}
+    except Exception:
+        # Provider exception messages may include credentials and internal URLs.
+        return {"ok": False, "error": "AI connectivity check failed"}

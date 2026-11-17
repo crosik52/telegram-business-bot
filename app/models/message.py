@@ -22,6 +22,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -53,9 +54,11 @@ class Message(Base):
 
     __tablename__ = "messages"
     __table_args__ = (
+        UniqueConstraint("business_connection_id", "chat_id", "message_id", name="uq_messages_telegram_identity"),
         Index("ix_messages_chat_sent", "chat_id", "sent_at"),
         Index("ix_messages_conn_sent", "business_connection_id", "sent_at"),
         Index("ix_messages_search_text", "text"),
+
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -77,6 +80,8 @@ class Message(Base):
     sender_last_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_outgoing: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    is_placeholder: Mapped[bool] = mapped_column(Boolean, default=False)
+
     # Current (possibly edited) content
     text: Mapped[str | None] = mapped_column(Text, nullable=True)
     caption: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -84,6 +89,11 @@ class Message(Base):
     # Original content, preserved forever regardless of edits
     original_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     original_caption: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Initial media is preserved when current media changes during an edit.
+    original_file_id: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    original_file_unique_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    original_media_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     # Media
     media_type: Mapped[MediaType] = mapped_column(
@@ -95,6 +105,7 @@ class Message(Base):
     # Lifecycle
     sent_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     is_edited: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_edit_update_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     last_edited_at: Mapped[dt.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

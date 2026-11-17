@@ -1,0 +1,12 @@
+**
+!requirements.txt
+!app/
+!app/**
+!deploy/
+!deploy/vps/
+!deploy/vps/preflight.py
+!alembic-clean.ini
+!alembic_clean/
+!alembic_clean/**
+**/__pycache__/
+**/*.pyc

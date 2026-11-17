@@ -7,6 +7,11 @@ bot itself (e.g. /start, /help, /me). They are separate from
 
 from __future__ import annotations
 
+import asyncio
+from app.models.business_connection import BusinessConnection
+
+from html import escape as html_escape
+
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import (
@@ -33,22 +38,26 @@ router = Router(name="commands")
 
 # ── Shared keyboard helpers ────────────────────────────────────────────────────
 
-def _app_kb(base_url: str, *, extra_rows: list[list[InlineKeyboardButton]] | None = None) -> InlineKeyboardMarkup:
+def _app_kb(base_url: str = "", *, extra_rows: list[list[InlineKeyboardButton]] | None = None) -> InlineKeyboardMarkup:
     """Main action keyboard for /start."""
     rows: list[list[InlineKeyboardButton]] = [
-        [InlineKeyboardButton(text="📊 Открыть мини-приложение", web_app=WebAppInfo(url=base_url + "/app"))],
-        [
-            InlineKeyboardButton(text="🔌 Подключить бота", url="tg://settings/edit"),
-            InlineKeyboardButton(text="❓ Помощь",          callback_data="help_main"),
-        ],
+        [InlineKeyboardButton(text="🔌 Подключить бота", callback_data="help_connect", style="success")],
+        [InlineKeyboardButton(text="↻ Обновить статус", callback_data="menu_status")],
+        [InlineKeyboardButton(text="📖 Возможности и помощь", callback_data="help_main")],
         [InlineKeyboardButton(text="🔗 Пригласить друга", callback_data="share_ref")],
     ]
+    if base_url:
+        rows.insert(0, [InlineKeyboardButton(
+            text="📊 Открыть мини-приложение", web_app=WebAppInfo(url=base_url + "/app"),
+            style="primary",
+        )])
     if extra_rows:
         rows += extra_rows
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 _HELP_SECTION_ROWS: list[list[InlineKeyboardButton]] = [
+    [InlineKeyboardButton(text="💬 Сохранение сообщений", callback_data="help_messages")],
     [
         InlineKeyboardButton(text="🎵 Музыка",  callback_data="help_music"),
         InlineKeyboardButton(text="📹 Видео",    callback_data="help_video"),
@@ -65,28 +74,46 @@ _HELP_SECTION_ROWS: list[list[InlineKeyboardButton]] = [
 ]
 
 
-def _help_kb(*, show_back: bool = True) -> InlineKeyboardMarkup:
-    rows = list(_HELP_SECTION_ROWS)
-    if show_back:
-        rows = rows + [[InlineKeyboardButton(text="« Назад", callback_data="help_main")]]
+def _help_kb(section: str = "help_main", *, base_url: str = "") -> InlineKeyboardMarkup:
+    rows = [list(row) for row in _HELP_SECTION_ROWS] if section == "help_main" else []
+    if section == "help_connect":
+        rows.append([InlineKeyboardButton(
+            text="⚙️ Открыть настройки Telegram", url="tg://settings/edit", style="success",
+        )])
+    if base_url:
+        rows.append([InlineKeyboardButton(
+            text="📊 Открыть мини-приложение", web_app=WebAppInfo(url=base_url + "/app"),
+            style="primary",
+        )])
+    if section != "help_main":
+        rows.append([InlineKeyboardButton(text="‹ К разделам", callback_data="help_main")])
+    rows.append([InlineKeyboardButton(text="⌂ В главное меню", callback_data="menu_main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 _HELP_SECTIONS: dict[str, tuple[str, str]] = {
     "help_main": (
-        "❓ <b>Помощь</b>",
-        "Выбери раздел, о котором хочешь узнать подробнее 👇",
+        "📖 <b>Возможности Save Log</b>",
+        "Всё о работе бота — по разделам. Выбери, что хочешь узнать.",
+    ),
+    "help_messages": (
+        "💬 <b>Сохранение сообщений</b>",
+        "После подключения бот сохраняет сообщения и изменения, которые Telegram передаёт из выбранных чатов.\n\n"
+        "Удаление и правки можно показать, только если сообщение было сохранено заранее. "
+        "Содержимое, которое Telegram не передал боту, восстановить нельзя.\n\n"
+        "История и статистика доступны в мини-приложении.",
     ),
     "help_music": (
         "🎵 <b>Музыка</b>",
-        "• Инлайн-поиск: напиши <code>@botname песня</code> в любом чате\n"
+        "{inline_search}\n\n"
         "• В бизнес-чате: <code>!mp3 название</code> / <code>!мп3</code> — скачать и отправить трек\n"
         "• Поддерживается пагинация результатов и история прослушиваний",
     ),
     "help_video": (
         "📹 <b>Видео по ссылке</b>",
-        "Брось ссылку на видео из TikTok, Instagram или YouTube прямо в чат с собеседником — бот скачает и отправит видео.\n\n"
-        "Для YouTube можно выбрать качество: 720p, 480p, 360p или только аудио.",
+        "Отправь ссылку на видео из TikTok, Instagram или YouTube в подключённом чате.\n\n"
+        "Бот попробует скачать и отправить доступное видео. Результат зависит от доступа к ролику "
+        "и ограничений платформы.",
     ),
     "help_notes": (
         "🗒 <b>Заметки и напоминания</b>",
@@ -99,10 +126,10 @@ _HELP_SECTIONS: dict[str, tuple[str, str]] = {
     "help_pet": (
         "🐾 <b>Питомец</b>",
         "В мини-приложении можно завести питомца и ухаживать за ним:\n"
-        "• Корми, играй, обнимай — питомец растёт и набирает уровень\n"
-        "• Прокачивай навыки: бонус XP, устойчивость к голоду и настроению\n"
-        "• Рейтинг питомцев среди всех пользователей\n\n"
-        "Питомец зависит от твоей активности в чатах 📈",
+        "• Корми, играй и обнимай\n"
+        "• Следи за голодом, настроением и уровнем\n"
+        "• Смотри рейтинг питомцев\n\n"
+        "Все доступные действия — в разделе питомца.",
     ),
     "help_rel": (
         "💞 <b>Связи</b>",
@@ -116,18 +143,15 @@ _HELP_SECTIONS: dict[str, tuple[str, str]] = {
     ),
     "help_coins": (
         "🪙 <b>Монеты и Premium</b>",
-        "• Монеты начисляются за активность в бизнес-чатах\n"
-        "• Трать в магазине: бусты XP, темы, рамки и питомцы\n"
-        "• Ежедневный бонус — заходи каждый день\n"
-        "• Квесты и достижения дают дополнительные награды\n\n"
-        "⭐ <b>Premium</b> — расширенная аналитика слов и эмодзи, история сообщений, бонусные монеты и множители XP.",
+        "Баланс, доступные покупки и условия Premium — в магазине мини-приложения.\n\n"
+        "Открой магазин, чтобы посмотреть актуальные предложения и условия.",
     ),
     "help_connect": (
         "🔌 <b>Как подключить бота</b>",
-        "Чтобы бот начал работать:\n\n"
-        "1️⃣ Нажми на tg://settings/edit → пролистай до «автоматизации чатов»\n\n"
-        "2️⃣ Вставь туда <code>@{bot_username}</code>\n\n"
-        "3️⃣ Готово! Теперь бот работает и показывает статистику с момента подключения.",
+        "1. Открой настройки Telegram → «Автоматизация чатов».\n\n"
+        "2. Добавь бота: {bot_username}.\n\n"
+        "3. Выбери чаты и разрешения, затем сохрани подключение.\n\n"
+        "Сохранение сообщений начнётся после подключения — для событий, которые Telegram передаст боту.",
     ),
 }
 
@@ -135,26 +159,86 @@ _HELP_SECTIONS: dict[str, tuple[str, str]] = {
 # ── /start ─────────────────────────────────────────────────────────────────────
 
 def _greeting(first_name: str | None = None) -> str:
-    name_part = f", {first_name}" if first_name else ""
+    name_part = f", {html_escape(first_name)}" if first_name else ""
     return (
         f"👋 Привет{name_part}!\n\n"
-        "Я работаю в фоне твоих бизнес-чатов и делаю переписку умнее.\n\n"
-        "<b>Что умею:</b>\n"
-        '<tg-emoji emoji-id="5220070652756635426">👀</tg-emoji>'
-        " <b>Слежу за чатами</b> — вижу удалённые и отредактированные сообщения\n"
-        '<tg-emoji emoji-id="5222472119295684375">🎵</tg-emoji>'
-        " <b>Музыка</b> — скачиваю треки по <code>!mp3 название</code> прямо в чате\n"
-        '<tg-emoji emoji-id="5219943216781995020">📹</tg-emoji>'
-        " <b>Видео</b> — TikTok, Instagram и YouTube по ссылке в 1080p\n"
-        '<tg-emoji emoji-id="5310224206732996002">📊</tg-emoji>'
-        " <b>Аналитика</b> — топ слов, эмодзи, история, ИИ-анализ диалогов\n"
-        '<tg-emoji emoji-id="5244820603663296299">🐾</tg-emoji>'
-        " <b>Питомец</b> — корми, прокачивай, соревнуйся в рейтинге\n"
-        '<tg-emoji emoji-id="5100657930429006538">❤️</tg-emoji>'
-        " <b>Отношения</b> — стрики, подарки и открытки для собеседников\n\n"
-        "Работает без Telegram Premium ✨\n\n"
-        "Нажми <b>🔌 Подключить бота</b>, чтобы начать 👇"
+        "Это <b>Save Log</b> — помощник для твоих чатов.\n\n"
+        "💬 Сохраняю сообщения и их изменения, которые Telegram передаёт после подключения.\n"
+        "🎵 Помогаю с музыкой и видео по ссылке.\n"
+        "📊 Статистика, питомец и связи — в мини-приложении.\n\n"
+        "Начни с подключения или выбери раздел ниже."
     )
+
+
+def _main_menu_kb(user) -> InlineKeyboardMarkup:
+    settings = get_settings()
+    base_url = settings.webhook_base_url.rstrip("/")
+    extra: list[list[InlineKeyboardButton]] = []
+    if base_url:
+        extra.append([
+            InlineKeyboardButton(text="📜 Соглашение", web_app=WebAppInfo(url=base_url + "/terms")),
+            InlineKeyboardButton(text="🔒 Конфиденциальность", web_app=WebAppInfo(url=base_url + "/privacy")),
+        ])
+        if user and user.id == settings.miniapp_admin_id:
+            extra.append([
+                InlineKeyboardButton(text="🛠 Админ-панель", web_app=WebAppInfo(url=base_url + "/app/admin"))
+            ])
+    return _app_kb(base_url, extra_rows=extra)
+
+
+_CONNECTION_STATUS_TIMEOUT_SECONDS = 2.0
+
+
+_CONNECTION_STATUS_UNAVAILABLE = "⚪ Статус временно недоступен"
+
+
+async def _connection_status(owner_id: int | None, bot_id: int | None) -> str:
+    """Read the latest stored lifecycle flags for this owner and this bot only."""
+    if type(owner_id) is not int or owner_id <= 0 or type(bot_id) is not int or bot_id <= 0:
+        return _CONNECTION_STATUS_UNAVAILABLE
+    try:
+        async with asyncio.timeout(_CONNECTION_STATUS_TIMEOUT_SECONDS):
+            async with session_scope() as session:
+                result = await session.execute(
+                    select(
+                        BusinessConnection.is_enabled,
+                        BusinessConnection.is_blocked,
+                        BusinessConnection.can_reply,
+                    )
+                    .where(
+                        BusinessConnection.user_telegram_id == owner_id,
+                        BusinessConnection.bot_id == bot_id,
+                    )
+                    .order_by(BusinessConnection.updated_at.desc(), BusinessConnection.id.desc())
+                    .limit(1)
+                )
+                row = result.one_or_none()
+        if row is None:
+            return "⚪ Бот пока не подключён"
+        enabled, blocked, can_reply = row
+        if not all(type(flag) is bool for flag in (enabled, blocked, can_reply)):
+            return _CONNECTION_STATUS_UNAVAILABLE
+        if blocked:
+            return "⛔ Доступ к боту ограничен"
+        if not enabled:
+            return "🔴 Бот отключён"
+        if not can_reply:
+            return "🟡 Подключён · ответы недоступны"
+        return "🟢 Бот подключён"
+    except Exception as exc:
+        logger.warning("Menu connection status unavailable error_type=%s", type(exc).__name__)
+        return _CONNECTION_STATUS_UNAVAILABLE
+
+
+async def _main_menu_text(message: Message, user, bot) -> str:
+    first_name = user.first_name if user else None
+    if message.chat.type != "private" or user and message.chat.id != user.id:
+        status = "Статус подключения доступен в личном чате с ботом"
+    elif not user or getattr(user, "is_bot", True):
+        status = _CONNECTION_STATUS_UNAVAILABLE
+    else:
+        status = await _connection_status(user.id, getattr(bot, "id", None))
+    return f"{_greeting(first_name)}\n\n{status}\n<i>По последним данным бота.</i>"
 
 
 async def _send_welcome(message: Message, *, is_new_user: bool, user=None) -> None:
@@ -164,54 +248,47 @@ async def _send_welcome(message: Message, *, is_new_user: bool, user=None) -> No
     (where message.from_user would be the bot, not the human).
     """
     from_user = user or message.from_user
-    settings = get_settings()
-    keyboard = None
-    if settings.webhook_base_url:
-        base_url = settings.webhook_base_url.rstrip("/")
-        extra: list[list[InlineKeyboardButton]] = []
-        extra.append([
-            InlineKeyboardButton(text="📜 Соглашение",         web_app=WebAppInfo(url=base_url + "/terms")),
-            InlineKeyboardButton(text="🔒 Конфиденциальность", web_app=WebAppInfo(url=base_url + "/privacy")),
-        ])
-        username    = (from_user.username or "").lstrip("@").lower() if from_user else ""
-        admin_uname = settings.miniapp_admin_username.lstrip("@").lower()
-        if admin_uname and username == admin_uname:
-            extra.append([
-                InlineKeyboardButton(text="🛠 Админ-панель", web_app=WebAppInfo(url=base_url + "/app/admin"))
-            ])
-        keyboard = _app_kb(base_url, extra_rows=extra)
-
-    first_name = from_user.first_name if from_user else None
-    await message.answer(_greeting(first_name), parse_mode="HTML", reply_markup=keyboard)
+    text = await _main_menu_text(message, from_user, message.bot)
+    await message.answer(text, parse_mode="HTML", reply_markup=_main_menu_kb(from_user))
 
     logger.info("Sent /start greeting to chat_id=%s (new=%s)", message.chat.id, is_new_user)
 
 
-async def _check_channel_gate(
-    bot,
-    user_id: int,
-) -> list:
-    """Return list of unsubscribed required channels (empty = all good)."""
-    try:
-        from app.repositories.channel_repository import ChannelRepository          # noqa: PLC0415
-        from app.services.channel_subscription_service import get_unsubscribed_channels  # noqa: PLC0415
-        async with session_scope() as db:
-            active = await ChannelRepository(db).get_active()
-        if not active:
-            return []
-        return await get_unsubscribed_channels(bot, user_id, active)
-    except Exception as exc:
-        logger.warning("channel_gate check failed for user %s — allowing through: %s", user_id, exc)
+async def _check_channel_gate(bot, user_id: int, *, is_premium: bool = False, force: bool = False) -> list:
+    from app.repositories.channel_repository import ChannelRepository
+    from app.services.channel_subscription_service import get_unsubscribed_channels
+    async with session_scope() as db:
+        active = await ChannelRepository(db).get_active()
+    if not active:
         return []
+    return await get_unsubscribed_channels(bot, user_id, active, is_premium=is_premium, force=force)
 
 
-def _gate_keyboard(unsub_channels: list) -> InlineKeyboardMarkup:
-    rows = [
-        [InlineKeyboardButton(text=f"📢 {ch.display_title}", url=ch.join_url)]
-        for ch in unsub_channels
-    ]
-    rows.append([InlineKeyboardButton(text="✅ Я подписался", callback_data="check_sub")])
+def _gate_keyboard(requirements: list) -> InlineKeyboardMarkup:
+    rows = []
+    for requirement in requirements:
+        if getattr(requirement, "needs_subscription", True) and requirement.join_url:
+            rows.append([InlineKeyboardButton(text=f"📢 {requirement.display_title}"[:64], url=requirement.join_url)])
+        if getattr(requirement, "needs_boost", False) is True:
+            rows.append([InlineKeyboardButton(text=f"🚀 Буст: {requirement.display_title}"[:64], url=requirement.boost_url)])
+    rows.append([InlineKeyboardButton(text="✅ Проверить доступ", callback_data="check_sub")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _gate_text(requirements: list) -> str:
+    lines = []
+    for requirement in requirements:
+        conditions = []
+        if getattr(requirement, "needs_subscription", True):
+            conditions.append("подписка")
+        if getattr(requirement, "needs_boost", False) is True:
+            conditions.append("1 буст канала")
+        lines.append(f"• {html_escape(requirement.display_title)}: {', '.join(conditions)}")
+    return ("🔒 <b>Выполните условия доступа:</b>\n\n" + "\n".join(lines)
+            + "\n\nБуст требуется только пользователям Telegram Premium. После выполнения нажмите «Проверить доступ».")
+
+
+_GATE_UNAVAILABLE_TEXT = "Не удалось проверить подписку и буст. Попробуйте ещё раз чуть позже."
 
 
 @router.message(CommandStart())
@@ -277,16 +354,14 @@ async def on_start(message: Message) -> None:
         logger.debug("First-time user check failed: %s", exc)
 
     # ── Channel subscription gate ─────────────────────────────────────────────
-    unsub = await _check_channel_gate(message.bot, user_id)
+    try:
+        unsub = await _check_channel_gate(message.bot, user_id, is_premium=getattr(message.from_user, "is_premium", False) is True)
+    except Exception as exc:
+        logger.warning("channel_gate bot unavailable user_id=%s error_type=%s", user_id, type(exc).__name__)
+        await message.answer(_GATE_UNAVAILABLE_TEXT, reply_markup=_gate_keyboard([]))
+        return
     if unsub:
-        titles = "\n".join(f"• {ch.display_title}" for ch in unsub)
-        await message.answer(
-            f"👋 Привет! Чтобы получить доступ к боту — подпишись на {'канал' if len(unsub) == 1 else 'каналы'}:\n\n"
-            f"{titles}\n\n"
-            f"После подписки нажми кнопку ниже 👇",
-            parse_mode="HTML",
-            reply_markup=_gate_keyboard(unsub),
-        )
+        await message.answer(_gate_text(unsub), parse_mode="HTML", reply_markup=_gate_keyboard(unsub))
         return
 
     await _send_welcome(message, is_new_user=is_new_user)
@@ -297,23 +372,20 @@ async def on_start(message: Message) -> None:
 @router.callback_query(F.data == "check_sub")
 async def on_check_sub(callback: CallbackQuery) -> None:
     await callback.answer()
-    if not callback.from_user or not callback.message:
+    if not callback.from_user or not isinstance(callback.message, Message):
         return
-
     user_id = callback.from_user.id
-    unsub = await _check_channel_gate(callback.bot, user_id)
-
+    try:
+        unsub = await _check_channel_gate(callback.bot, user_id, is_premium=getattr(callback.from_user, "is_premium", False) is True, force=True)
+    except Exception as exc:
+        logger.warning("channel_gate retry unavailable user_id=%s error_type=%s", user_id, type(exc).__name__)
+        await callback.message.answer(_GATE_UNAVAILABLE_TEXT, reply_markup=_gate_keyboard([]))
+        return
     if unsub:
-        # Still not subscribed — update the message with fresh button list
         try:
-            titles = "\n".join(f"• {ch.display_title}" for ch in unsub)
-            await callback.message.edit_text(
-                f"❌ Ты ещё не подписан{'а' if False else ''}. Подпишись и нажми кнопку снова:\n\n{titles}",
-                parse_mode="HTML",
-                reply_markup=_gate_keyboard(unsub),
-            )
+            await callback.message.edit_text(_gate_text(unsub), parse_mode="HTML", reply_markup=_gate_keyboard(unsub))
         except Exception:
-            await callback.answer("Подпишись на каналы и попробуй снова.", show_alert=True)
+            await callback.message.answer(_gate_text(unsub), parse_mode="HTML", reply_markup=_gate_keyboard(unsub))
         return
 
     # Gate passed — delete gate message, detect new-user, send welcome
@@ -337,56 +409,74 @@ async def on_check_sub(callback: CallbackQuery) -> None:
 
 # ── /help ──────────────────────────────────────────────────────────────────────
 
+def _help_text(section: str, *, bot_username: str | None = None) -> str:
+    title, body = _HELP_SECTIONS[section]
+    if section == "help_connect":
+        username = (
+            f"<code>@{html_escape(bot_username)}</code>" if bot_username
+            else "скопируй @username из профиля этого бота"
+        )
+        body = body.format(bot_username=username)
+    elif section == "help_music":
+        inline_search = (
+            f"Для инлайн-поиска напиши <code>@{html_escape(bot_username)} песня</code> в любом чате."
+            if bot_username else
+            "Для инлайн-поиска скопируй @username из профиля этого бота и напиши его с названием песни в любом чате."
+        )
+        body = body.format(inline_search=inline_search)
+    return f"{title}\n\n{body}"
+
+
+async def _help_card(bot, section: str) -> tuple[str, InlineKeyboardMarkup]:
+    username = None
+    if section in {"help_connect", "help_music"}:
+        try:
+            username = (await bot.get_me()).username
+        except Exception as exc:
+            logger.warning("Menu bot username unavailable error_type=%s", type(exc).__name__)
+    base_url = get_settings().webhook_base_url.rstrip("/")
+    return _help_text(section, bot_username=username), _help_kb(section, base_url=base_url)
+
+
+async def _edit_menu_message(message: Message, text: str, keyboard: InlineKeyboardMarkup) -> None:
+    try:
+        await message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+    except TelegramBadRequest as exc:
+        reason = exc.message.lower()
+        if "message is not modified" in reason:
+            return
+        if "message can't be edited" not in reason and "message to edit not found" not in reason:
+            raise
+        logger.info("Menu message cannot be edited; sending a fresh card")
+        await message.answer(text, parse_mode="HTML", reply_markup=keyboard)
+
+
 @router.message(Command("help"))
 async def on_help(message: Message) -> None:
-    title, body = _HELP_SECTIONS["help_main"]
-    await message.answer(
-        f"{title}\n\n{body}",
-        parse_mode="HTML",
-        reply_markup=_help_kb(show_back=False),
-    )
+    text, keyboard = await _help_card(message.bot, "help_main")
+    await message.answer(text, parse_mode="HTML", reply_markup=keyboard)
+
+
+@router.callback_query(F.data.in_({"menu_main", "menu_status"}))
+async def on_menu_main(callback: CallbackQuery) -> None:
+    await callback.answer()
+    if not isinstance(callback.message, Message):
+        return
+    user = callback.from_user
+    text = await _main_menu_text(callback.message, user, callback.bot)
+    await _edit_menu_message(callback.message, text, _main_menu_kb(user))
 
 
 @router.callback_query(F.data.startswith("help_"))
 async def on_help_callback(callback: CallbackQuery) -> None:
     await callback.answer()
+    if not isinstance(callback.message, Message):
+        return
     key = callback.data or "help_main"
-    title, body = _HELP_SECTIONS.get(key, _HELP_SECTIONS["help_main"])
-
-    # Substitute dynamic bot username into body templates
-    if "{bot_username}" in body:
-        try:
-            _me = await callback.bot.get_me()  # type: ignore[union-attr]
-            _bu = _me.username or "savelog1_bot"
-        except Exception:
-            _bu = "savelog1_bot"
-        body = body.format(bot_username=_bu)
-
-    settings = get_settings()
-    extra_btn: list[InlineKeyboardButton] = []
-
-    # For the connect section add a deep-link button
-    if key == "help_connect":
-        extra_btn = [InlineKeyboardButton(text="⚙️ Открыть настройки Telegram", url="tg://settings/edit")]
-
-    # Build keyboard: section buttons + optional extra
-    # On the main help screen there's nothing to go "back" to — hide the button.
-    kb = _help_kb(show_back=(key != "help_main"))
-    if extra_btn:
-        kb.inline_keyboard.insert(0, [extra_btn[0]])
-
-    # Add mini-app button on main help screen
-    if key == "help_main" and settings.webhook_base_url:
-        base_url = settings.webhook_base_url.rstrip("/")
-        kb.inline_keyboard.insert(0, [
-            InlineKeyboardButton(text="📊 Открыть мини-приложение", web_app=WebAppInfo(url=base_url + "/app"))
-        ])
-
-    text = f"{title}\n\n{body}"
-    try:
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)  # type: ignore[union-attr]
-    except Exception:
-        await callback.message.answer(text, parse_mode="HTML", reply_markup=kb)  # type: ignore[union-attr]
+    if key not in _HELP_SECTIONS:
+        key = "help_main"
+    text, keyboard = await _help_card(callback.bot, key)
+    await _edit_menu_message(callback.message, text, keyboard)
 
 
 # ── share_ref callback ─────────────────────────────────────────────────────────
@@ -620,11 +710,8 @@ async def on_me(message: Message) -> None:
 _pending_broadcast: dict[int, dict | None] = {}
 
 
-def _is_admin(username: str | None) -> bool:
-    if not username:
-        return False
-    settings = get_settings()
-    return username.lstrip("@").lower() == settings.miniapp_admin_username.lstrip("@").lower()
+def _is_admin(user_id: int | None) -> bool:
+    return user_id is not None and user_id == get_settings().miniapp_admin_id
 
 
 def _broadcast_confirm_kb(count: int) -> InlineKeyboardMarkup:
@@ -637,7 +724,7 @@ def _broadcast_confirm_kb(count: int) -> InlineKeyboardMarkup:
 @router.message(Command("broadcast"))
 async def on_broadcast_cmd(message: Message) -> None:
     """Start broadcast session — admin only."""
-    if not message.from_user or not _is_admin(message.from_user.username):
+    if not message.from_user or not _is_admin(message.from_user.id):
         await message.answer("⛔ Нет доступа.")
         return
 
@@ -697,7 +784,7 @@ async def on_broadcast_message(message: Message) -> None:
 @router.callback_query(F.data == "broadcast_confirm")
 async def on_broadcast_confirm(callback: CallbackQuery) -> None:
     await callback.answer()
-    if not callback.from_user or not _is_admin(callback.from_user.username):
+    if not callback.from_user or not _is_admin(callback.from_user.id):
         await callback.answer("⛔ Нет доступа.", show_alert=True)
         return
 
@@ -764,7 +851,7 @@ async def on_broadcast_confirm(callback: CallbackQuery) -> None:
 @router.message(Command("refund"))
 async def on_refund_cmd(message: Message) -> None:
     """Refund Stars for a payment. Usage: /refund <user_id> <charge_id>"""
-    if not message.from_user or not _is_admin(message.from_user.username):
+    if not message.from_user or not _is_admin(message.from_user.id):
         await message.answer("⛔ Нет доступа.")
         return
 

@@ -4,9 +4,10 @@ from __future__ import annotations
 import datetime as dt
 import logging
 
-from sqlalchemy import case, func, select, update, and_
+from sqlalchemy import case, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.referral import (
     DEFAULT_LEVELS,
@@ -74,7 +75,7 @@ class ReferralRepository:
         for k, v in fields.items():
             if k in allowed:
                 setattr(cfg, k, v)
-        cfg.updated_at = dt.datetime.now(dt.timezone.utc)
+        cfg.updated_at = dt.datetime.now(dt.UTC)
         await self._db.flush()
         return cfg
 
@@ -123,7 +124,7 @@ class ReferralRepository:
             return None, "circular"
 
         # Daily cap for referrer
-        today_start = dt.datetime.now(dt.timezone.utc).replace(
+        today_start = dt.datetime.now(dt.UTC).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
         daily_count = await self._db.execute(
@@ -170,7 +171,7 @@ class ReferralRepository:
         if not has_business_connection:
             return None, []
 
-        now = dt.datetime.now(dt.timezone.utc)
+        now = dt.datetime.now(dt.UTC)
 
         # Atomic claim: only one concurrent transaction can flip status from
         # "pending" → "active"; the other will get rowcount == 0 and bail out.
@@ -346,7 +347,7 @@ class ReferralRepository:
             .order_by(Referral.id)
             .limit(limit)
         )
-        return result.all()
+        return [(row[0], row[1]) for row in result.all()]
 
     async def increment_evaluation_failures(self, referral_id: int) -> None:
         """Atomically increment the failure counter for a referral.
@@ -523,7 +524,7 @@ class ReferralRepository:
     async def admin_stats(self) -> dict:
         """Aggregated stats for admin analytics."""
         cfg = await self.get_config()
-        now = dt.datetime.now(dt.timezone.utc)
+        now = dt.datetime.now(dt.UTC)
 
         total_q = await self._db.execute(
             select(func.count()).select_from(Referral).where(Referral.status != "fraud")
@@ -583,7 +584,7 @@ class ReferralRepository:
 
     async def admin_set_status(
         self, referral_id: int, status: str, reason: str = ""
-    ) -> tuple[bool, "Referral | None"]:
+    ) -> tuple[bool, Referral | None]:
         """Set status of a referral to 'active', 'pending', or 'fraud'.
 
         Returns ``(True, referral)`` on success or ``(False, None)`` when the
@@ -601,12 +602,12 @@ class ReferralRepository:
         if status == "fraud":
             ref.fraud_reason = reason or "admin"
         elif status == "active" and ref.activated_at is None:
-            ref.activated_at = dt.datetime.now(dt.timezone.utc)
+            ref.activated_at = dt.datetime.now(dt.UTC)
         await self._db.flush()
         return True, ref
 
     async def admin_grant_per_activation_rewards(
-        self, ref: "Referral"
+        self, ref: Referral
     ) -> list[dict]:
         """Grant per-activation (referrer) and welcome (referee) rewards for an
         admin-activated referral.
@@ -725,8 +726,31 @@ class ReferralRepository:
             * SQLite  : ``datetime(expires_at, '+N days')``
             * Others  : ``expires_at + timedelta(days=N)``   (PostgreSQL native)
         """
-        now = dt.datetime.now(dt.timezone.utc)
+        dialect_name = self._db.sync_session.get_bind().dialect.name
+        if dialect_name == "postgresql":
+            # Transaction-scoped user lock also protects the first INSERT,
+            # where no row exists yet for SELECT FOR UPDATE to lock.
+            await self._db.execute(select(func.pg_advisory_xact_lock(
+                func.hashtextextended(f"savelog-subscription:{user_telegram_id}", 0))))
+        elif dialect_name == "sqlite":
+            # Acquire the SQLite write reservation BEFORE reading active rows.
+            # This no-op also locks when the user has no subscription yet.
+            await self._db.execute(update(UserSubscription).where(
+                UserSubscription.user_telegram_id == user_telegram_id
+            ).values(id=UserSubscription.id).execution_options(synchronize_session=False))
+        now = dt.datetime.now(dt.UTC)
         delta = dt.timedelta(days=days)
+        # Lifecycle status is authoritative. Repair stale compatibility flags
+        # without reactivating or relabelling paused/cancelled/refunded periods.
+        await self._db.execute(update(UserSubscription).where(
+            UserSubscription.user_telegram_id == user_telegram_id,
+            UserSubscription.is_active.is_(True), UserSubscription.status != "active",
+        ).values(is_active=False).execution_options(synchronize_session=False))
+        await self._db.execute(update(UserSubscription).where(
+            UserSubscription.user_telegram_id == user_telegram_id,
+            UserSubscription.is_active.is_(True), UserSubscription.status == "active",
+            UserSubscription.expires_at <= now,
+        ).values(is_active=False, status="cancelled").execution_options(synchronize_session=False))
 
         # Find the ID of the most-future active subscription to extend.
         # Filter on BOTH is_active=True AND status='active' so that a paused
@@ -748,7 +772,7 @@ class ReferralRepository:
             # will have its change included rather than overwritten.
             dialect_name = self._db.sync_session.get_bind().dialect.name
             if dialect_name == "sqlite":
-                new_expires = func.datetime(
+                new_expires: ColumnElement[dt.datetime] = func.datetime(
                     UserSubscription.expires_at, f"+{days} days"
                 )
             else:

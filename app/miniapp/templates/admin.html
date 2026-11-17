@@ -908,30 +908,6 @@
     box-sizing: border-box;
   }
   .shop-field input:focus { border-color: var(--accent); }
-  .shop-options-wrap { margin-top: 4px; }
-  .shop-options-label { font-size: 12px; color: var(--hint); font-weight: 600; margin-bottom: 7px; }
-  .shop-options-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-  .shop-option-tag {
-    display: inline-flex; align-items: center; gap: 5px;
-    background: rgba(36,129,204,.12); color: var(--link);
-    border-radius: 10px; padding: 5px 10px; font-size: 12px; font-weight: 700;
-  }
-  .shop-option-del {
-    border: none; background: none; color: var(--link);
-    font-size: 13px; font-weight: 700; padding: 0; cursor: pointer; line-height: 1;
-  }
-  .shop-add-option-row { display: flex; gap: 7px; }
-  .shop-add-option-row input {
-    flex: 1; border: 1.5px solid rgba(255,255,255,.12);
-    border-radius: 10px; padding: 7px 11px; font-size: 13px;
-    background: rgba(255,255,255,0.05); color: var(--text); outline: none;
-  }
-  .shop-add-option-btn {
-    border: none; border-radius: 10px; padding: 7px 14px;
-    font-size: 13px; font-weight: 700;
-    background: rgba(52,199,89,.13); color: var(--green);
-    touch-action: manipulation; white-space: nowrap;
-  }
 
   /* ── Giveaway Preview Modal ─────────────────────────────────────────────── */
   .gv-preview-overlay {
@@ -1141,6 +1117,67 @@
     transition: background 0.15s;
   }
   .ch-del-btn:active { background: rgba(255,64,64,0.22); }
+  .ch-field { display:flex; flex-direction:column; gap:7px; font-size:13px; color:var(--hint); }
+  .ch-check { display:flex; gap:10px; align-items:center; min-height:44px; font-size:13px; line-height:1.5; }
+  .ch-check input { width:20px; height:20px; flex-shrink:0; }
+  .channel-row-name, .channel-row-title { overflow-wrap:anywhere; }
+  .channel-row-actions { flex-wrap:wrap; }
+  .channel-row-actions button, .ch-add-form button, #chRefreshBtn { min-height:44px; }
+  .ch-input { min-height:44px; font-size:16px; }
+  @media (max-width:600px) {
+    .channel-row { align-items:stretch; flex-direction:column; }
+    .channel-row-actions { justify-content:flex-start; }
+    .ch-header-row { flex-direction:column; }
+    #chRefreshBtn { align-self:flex-start; }
+  }
+  /* Account-scoped media controls, using the existing admin palette. */
+  .media-ctl-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; margin:18px 0 14px; }
+  .media-ctl-head h2 { margin:0 0 7px; font-size:23px; letter-spacing:-.5px; }
+  .media-ctl-note { color:var(--hint); font-size:12px; line-height:1.6; margin:0; overflow-wrap:anywhere; }
+  .media-ctl-refresh { flex:0 0 auto; min-height:44px; padding:10px 14px; }
+  .media-ctl-banner { border:1px solid var(--card-border); border-radius:20px; padding:18px; margin-bottom:14px; background:var(--card-bg); }
+  .media-ctl-banner-top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; }
+  .media-ctl-banner strong { display:block; font-size:16px; margin-bottom:7px; }
+  .media-ctl-pill { display:inline-flex; align-items:center; gap:5px; border-radius:9px; padding:5px 9px; font-size:11px; font-weight:700; line-height:1.45; max-width:100%; overflow-wrap:anywhere; }
+  .media-ctl-pill.ready { color:#90b5ff; background:rgba(69,170,242,.13); }
+  .media-ctl-pill.success { color:var(--green); background:rgba(48,209,88,.12); }
+  .media-ctl-pill.warning { color:var(--orange); background:rgba(255,159,10,.12); }
+  .media-ctl-pill.off { color:var(--hint); background:rgba(128,128,140,.12); }
+  .media-ctl-limits { display:flex; flex-wrap:wrap; gap:7px; margin:13px 0; font-size:12px; }
+  .media-ctl-limits span { padding:6px 9px; background:rgba(128,128,140,.10); border-radius:8px; }
+  .media-ctl-health { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:14px 0; }
+  .media-ctl-health div { padding:11px 12px; border-radius:12px; background:rgba(128,128,140,.07); min-width:0; }
+  .media-ctl-health strong { display:block; font-size:17px; margin:0 0 4px; }
+  .media-ctl-health small { color:var(--hint); font-size:11px; line-height:1.4; }
+  .media-ctl-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr)); gap:12px; margin-bottom:20px; }
+  .media-ctl-account { background:var(--card-bg); border:1px solid var(--card-border); border-radius:16px; padding:16px; min-width:0; }
+  .media-ctl-account h3 { margin:0 0 5px; font-size:16px; overflow-wrap:anywhere; }
+  .media-ctl-account .media-ctl-pill { margin-top:12px; }
+  .media-ctl-account .actions { margin-top:14px; }
+  .media-ctl-account .action-btn { min-height:44px; font-size:12px; }
+  .media-ctl-error { border:1px solid rgba(255,159,10,.35); border-radius:12px; padding:12px; color:var(--orange); font-size:13px; line-height:1.55; margin:12px 0; }
+  .media-ctl-overlay { position:fixed; inset:0; background:rgba(0,0,0,.65); z-index:220; display:flex; align-items:center; justify-content:center; padding:16px; }
+  .media-ctl-dialog { width:min(100%,480px); max-height:calc(100dvh - 32px); overflow-y:auto; overscroll-behavior:contain; background:var(--secondary-bg); border:1px solid var(--card-border); border-radius:22px; padding:22px; box-shadow:0 20px 80px rgba(0,0,0,.45); }
+  .media-ctl-dialog h2 { margin:0 0 7px; font-size:21px; overflow-wrap:anywhere; }
+  .media-ctl-field { display:flex; flex-direction:column; gap:7px; margin:18px 0; font-size:13px; font-weight:600; }
+  .media-ctl-field input[type=number] { width:100%; min-height:46px; border:1px solid var(--card-border); border-radius:10px; background:var(--bg); color:var(--text); padding:11px 12px; font-size:16px; }
+  .media-ctl-field small { color:var(--hint); font-size:11px; font-weight:400; line-height:1.5; }
+  .media-ctl-switch { flex-direction:row; align-items:center; justify-content:space-between; min-height:44px; }
+  .media-ctl-switch input { width:23px; height:23px; accent-color:var(--accent); }
+  .media-ctl-dialog .actions .action-btn { min-height:46px; font-size:13px; }
+  .media-ctl-dialog .media-ctl-save { background:var(--button); color:var(--button-text); }
+  .media-ctl-refresh:focus-visible, .media-ctl-dialog :focus-visible, .media-ctl-account button:focus-visible { outline:2px solid var(--link); outline-offset:3px; }
+  .status-dot.inactive { background:#85858e; }
+  .status-dot.limited { background:var(--orange); }
+  .user-badge.inactive { color:var(--hint); background:rgba(128,128,140,.14); }
+  .user-badge.limited { color:var(--orange); background:rgba(255,159,10,.14); }
+  @media(max-width:430px) {
+    .media-ctl-head { gap:8px; }
+    .media-ctl-head h2 { font-size:21px; }
+    .media-ctl-refresh { padding:10px; }
+    .media-ctl-dialog { padding:18px; }
+    .user-sub { overflow-wrap:anywhere; }
+  }
 </style>
 </head>
 <body>
@@ -1164,6 +1201,7 @@
   <!-- Hidden tab-row kept for JS compatibility — visual nav is .bottom-nav -->
   <div class="tab-row" id="mainTabs" style="display:none">
     <button class="tab-chip active" data-tab="users">Пользователи</button>
+    <button class="tab-chip" data-tab="media-save">Сохранение медиа</button>
     <button class="tab-chip" data-tab="growth">Аналитика</button>
     <button class="tab-chip" data-tab="broadcast">Рассылка</button>
     <button class="tab-chip" data-tab="log">Журнал</button>
@@ -1216,6 +1254,7 @@
     <div class="sheet-header"><h2>Дополнительно</h2></div>
     <div class="sheet-divider"></div>
     <div class="sheet-body" style="display:flex;flex-direction:column;gap:8px">
+      <button class="action-btn" style="text-align:left;padding:14px" onclick="switchTab('media-save');closeMoreMenu()">📎 Сохранение медиа</button>
       <button class="action-btn" style="text-align:left;padding:13px 16px;font-size:14px;border-radius:14px" onclick="switchTab('subscription');closeMoreMenu()">⭐ Подписка</button>
       <button class="action-btn" style="text-align:left;padding:13px 16px;font-size:14px;border-radius:14px" onclick="switchTab('shop');closeMoreMenu()">🛒 Магазин</button>
       <button class="action-btn" style="text-align:left;padding:13px 16px;font-size:14px;border-radius:14px" onclick="switchTab('referral');closeMoreMenu()">🔗 Рефералы</button>
@@ -1260,6 +1299,7 @@
     let overview = null;
     let searchQuery = "";
     let filterMode = "all";
+    let botFilter = "all";
     let sortMode = "messages";
     const expandedIds = new Set();
     let currentTab = "users";
@@ -1269,6 +1309,11 @@
     let currentSheetUser = null;
     let messagesPage = 1;
     let currentChatId = null;
+    let mediaSaveData = null;
+    let mediaSaveSearch = "";
+    let mediaSaveBusy = false;
+    let mediaSaveRequestId = 0;
+    let mediaSaveLoadedAt = null;
 
     // Escape HTML to prevent XSS when injecting untrusted user/message data via innerHTML
     function esc(str) {
@@ -1334,7 +1379,7 @@
 
     function getFilteredSorted() {
       let list = overview.users.slice();
-      if (filterMode === "active")  list = list.filter(u => !u.is_blocked);
+      if (filterMode === "active")  list = list.filter(u => u.is_enabled && u.can_reply && !u.is_blocked);
       if (filterMode === "blocked") list = list.filter(u => u.is_blocked);
       if (filterMode === "muted")   list = list.filter(u => !u.notifications_enabled);
       const curBotId = overview.current_bot_id;
@@ -1358,11 +1403,15 @@
 
     function userStatusClass(u) {
       if (u.is_blocked) return "blocked";
+      if (!u.is_enabled) return "inactive";
+      if (!u.can_reply) return "limited";
       if (!u.notifications_enabled) return "muted";
       return "active";
     }
     function userStatusLabel(u) {
       if (u.is_blocked) return "🚫 Заблок.";
+      if (!u.is_enabled) return "Отключён";
+      if (!u.can_reply) return "Нет права ответа";
       if (!u.notifications_enabled) return "🔕 Без увед.";
       return "✓ Активен";
     }
@@ -1387,7 +1436,7 @@
               </div>
             </div>
             <div class="user-last">
-              <div style="font-size:11px;color:var(--hint)">активен</div>
+              <div style="font-size:11px;color:var(--hint)">активность</div>
               <div style="font-size:12px;font-weight:600">${esc(timeAgo(u.last_activity_at))}</div>
             </div>
           </div>
@@ -1431,6 +1480,7 @@
           </div>
           <div class="actions" style="margin-top:7px">
             <button class="action-btn" data-action="chats">💬 Чаты</button>
+            ${u.bot_id === overview.current_bot_id ? `<button class="action-btn" data-action="media-control">📎 Медиа</button>` : ""}
             ${u.username ? `<button class="action-btn" data-action="message" data-username="${esc(u.username)}">✉️ Написать</button>` : ""}
             <button class="action-btn" data-action="copy-id" data-copy="${esc(u.owner_telegram_id)}">📋 ID</button>
             <button class="action-btn" data-action="edit-balance" data-owner-id="${esc(u.owner_telegram_id)}" data-balance="${u.wallet_balance ?? 0}">💰 Баланс</button>
@@ -1472,6 +1522,241 @@
       `;
     }
 
+    function mediaControlNumber(value, fallback = 0) {
+      return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+    }
+
+    function mediaControlSize(bytes) {
+      return (mediaControlNumber(bytes) / 1048576).toLocaleString("ru-RU", {maximumFractionDigits:4}) + " МБ";
+    }
+
+    function mediaControlLimits(settings) {
+      return `<div class="media-ctl-limits"><span>До ${esc(mediaControlSize(settings.maxBytes))}</span><span>${esc(settings.attemptsPerHour)} / час</span><span>Пауза ${esc(settings.cooldownSeconds)} с</span></div>`;
+    }
+
+    function mediaControlError(error) {
+      if (error.status === 401 || error.status === 403) return "Нет доступа. Откройте админпанель заново через Telegram.";
+      if (error.code === "revision_conflict" || error.status === 409) return "Настройки уже изменились. Обновите данные перед повторным сохранением; введённые значения пока остаются в форме.";
+      if (error.status === 404) return "У этого аккаунта нет подключения к текущему боту. Обновите список.";
+      if (error.status === 422) return "Проверьте лимиты: от 0,0625 до 8 МБ, от 1 до 20 передач в час, пауза от 35 до 3600 секунд.";
+      if (error.code === "runtime_not_applied") return "Настройки сохранены, но применение не подтверждено. Обновите состояние; повторно сохранять пока не нужно.";
+      if (error.name === "AbortError") return "Не получено подтверждение за 12 секунд. Обновите состояние перед повторной попыткой.";
+      return "Не удалось подтвердить операцию. Обновите состояние и попробуйте ещё раз.";
+    }
+
+    async function mediaControlPost(path, body) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      try {
+        const response = await fetch(path, {method:"POST", headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({...body, initData}), signal:controller.signal});
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const error = new Error("media_control_request_failed");
+          error.status = response.status;
+          error.code = typeof data.detail === "string" ? data.detail : "request_failed";
+          if (data.persistedRevision != null && data.runtimeAppliedRevision !== data.persistedRevision) error.code = "runtime_not_applied";
+          throw error;
+        }
+        return data;
+      } finally { clearTimeout(timeout); }
+    }
+
+    function mediaControlUserStatus(user) {
+      const runtime = user.runtime || {};
+      if (user.isBlocked) return ["off", "Аккаунт заблокирован"];
+      if (!user.connectionEnabled) return ["off", "Подключение отключено"];
+      if (!user.canReply) return ["warning", "Нет права ответа"];
+      if (!user.effective.enabled) return ["off", "Сохранение выключено"];
+      if (!mediaSaveData.runtime.available) return ["warning", "Сервис отключён в окружении"];
+      if (mediaSaveData.runtime.mode !== "all_connected") return ["warning", "Режим управления аккаунтами не активирован"];
+      if (!mediaSaveData.runtimeInSync) return ["warning", "Ожидает применения настроек"];
+      const errors = {connection_unverified:"Подключение не подтверждено", policy_denied:"Попытка отменена настройками",
+        policy_unavailable:"Настройки временно недоступны", too_large:"Файл превысил лимит", get_file_denied:"Telegram не предоставил файл",
+        api_denied:"Telegram отклонил отправку", unknown_delivery:"Доставка не подтверждена", timeout:"Истёк срок операции",
+        unavailable:"Последняя попытка не завершена", format_mismatch:"Неподдерживаемый формат", owner_capacity:"Достигнут предел аккаунтов",
+        dedup_saturated:"Достигнут предел защиты от повторов", bad_reply:"Некорректный ответ на медиа",
+        bad_path:"Файл не прошёл проверку", download_denied:"Загрузка отклонена", empty:"Получен пустой файл",
+        size_mismatch:"Размер файла не совпал", connection_unavailable:"Подключение недоступно"};
+      if (errors[runtime.lastResult]) return ["warning", errors[runtime.lastResult]];
+      if (mediaControlNumber(runtime.cooldownRemainingSeconds) > 0) return ["warning", `Пауза ещё ${Math.ceil(runtime.cooldownRemainingSeconds)} с`];
+      if (mediaControlNumber(runtime.attemptsInWindow) >= user.effective.attemptsPerHour) return ["warning", "Лимит текущего часа"];
+      if (runtime.lastResult === "api_accepted") return ["success", "Последняя копия принята Telegram"];
+      if (runtime.lastResult && !["quota","cooldown","busy","duplicate"].includes(runtime.lastResult)) return ["warning", "Состояние последней попытки не подтверждено"];
+      return ["ready", runtime.seen ? "Готов к следующей попытке" : "Готов · попыток ещё не было"];
+    }
+
+    async function loadMediaSaveTab() {
+      if (mediaSaveBusy || currentTab !== "media-save") return;
+      const requestId = ++mediaSaveRequestId;
+      document.getElementById("content").innerHTML = `<div class="media-ctl-head"><h2>Сохранение медиа</h2></div><p class="media-ctl-note" role="status">Загружаем настройки и состояние…</p>`;
+      try {
+        const data = await mediaControlPost("/app/api/admin/media-save/overview", {});
+        if (!data.ok || !Array.isArray(data.users) || !data.global?.defaults || !data.runtime || !Number.isSafeInteger(data.persistedRevision)) throw new Error("invalid_media_overview");
+        if (requestId !== mediaSaveRequestId || currentTab !== "media-save") return;
+        mediaSaveData = data;
+        mediaSaveLoadedAt = new Date().toISOString();
+        renderMediaSaveTab();
+      } catch (error) {
+        if (requestId !== mediaSaveRequestId || currentTab !== "media-save") return;
+        document.getElementById("content").innerHTML = `<div class="media-ctl-head"><h2>Сохранение медиа</h2></div><div class="media-ctl-error" role="alert">${esc(mediaControlError(error))}</div><button class="action-btn media-ctl-refresh" id="mediaRetry">Повторить загрузку</button>`;
+        document.getElementById("mediaRetry").onclick = loadMediaSaveTab;
+      }
+    }
+
+    function renderMediaSaveTab() {
+      if (currentTab !== "media-save" || !mediaSaveData) return;
+      const data = mediaSaveData;
+      const runtime = data.runtime;
+      const banner = !data.global.enabled ? ["off","Выключено для всех аккаунтов"]
+        : !runtime.available ? ["warning","Сервис отключён в окружении"]
+        : runtime.mode !== "all_connected" ? ["warning","Режим управления аккаунтами не активирован"]
+        : !data.runtimeInSync ? ["warning","Настройки ожидают применения"]
+        : ["ready","Настройки применены"];
+      document.getElementById("content").innerHTML = `
+        <div class="media-ctl-head"><div><h2>Сохранение медиа</h2><p class="media-ctl-note">Каждый владелец получает копии только в свою личку с ботом.</p></div><button class="action-btn media-ctl-refresh" id="mediaRefresh">↻ Обновить</button></div>
+        <section class="media-ctl-banner" aria-label="Общие настройки сохранения">
+          <div class="media-ctl-banner-top"><div><strong>Общие настройки</strong><p class="media-ctl-note">Лимиты по умолчанию. Индивидуальные лимиты аккаунтов сохраняются.</p></div><span class="media-ctl-pill ${banner[0]}">${banner[1]}</span></div>
+          ${mediaControlLimits(data.global.defaults)}
+          <p class="media-ctl-note">Сохранено: версия ${esc(data.persistedRevision)} · В процессе: ${data.runtimeAppliedRevision == null ? "ещё не загружено" : "версия " + esc(data.runtimeAppliedRevision)}</p>
+          <div class="actions"><button class="action-btn" id="mediaGlobalEdit">Настроить для всех</button><button class="action-btn ${data.global.enabled ? "danger" : "on"}" id="mediaGlobalToggle">${data.global.enabled ? "Выключить для всех" : "Включить для всех"}</button></div>
+        </section>
+        <div class="media-ctl-health" aria-label="Состояние текущего процесса"><div><strong>${runtime.busy ? "Передача выполняется" : "Нет активной передачи"}</strong><small>Одна операция одновременно на весь бот</small></div><div><strong>${esc(mediaControlNumber(runtime.ownersLoaded))} / ${esc(runtime.ownerLimit)}</strong><small>Аккаунтов в памяти · после перезапуска счётчики обнуляются</small></div></div>
+        <p class="media-ctl-note" style="margin-bottom:16px">Подключения показаны по сохранённым данным. Перед каждой передачей бот проверяет их в Telegram. Статистика ниже — с момента запуска процесса. Обновлено: ${esc(fmtDate(mediaSaveLoadedAt))}.</p>
+        <div class="search-box"><span aria-hidden="true">🔍</span><input id="mediaAccountSearch" type="search" aria-label="Поиск подключённого аккаунта" placeholder="Имя, username или ID аккаунта" value="${esc(mediaSaveSearch)}"></div>
+        <div id="mediaOwnersCount" class="section-title"></div><div id="mediaOwnersList" class="media-ctl-list"></div>`;
+      document.getElementById("mediaRefresh").onclick = loadMediaSaveTab;
+      document.getElementById("mediaGlobalEdit").onclick = () => openMediaControlEditor(null);
+      document.getElementById("mediaGlobalToggle").onclick = async () => {
+        if (mediaSaveBusy) return;
+        if (data.global.enabled && !await confirmAction("Выключить сохранение медиа для всех подключённых аккаунтов? Уже начатая отправка может завершиться.")) return;
+        quickMediaControlUpdate(null, {...data.global.defaults, enabled:!data.global.enabled}, document.getElementById("mediaGlobalToggle"));
+      };
+      document.getElementById("mediaAccountSearch").oninput = event => {
+        mediaSaveSearch = event.target.value;
+        renderMediaSaveOwners();
+      };
+      renderMediaSaveOwners();
+    }
+
+    function renderMediaSaveOwners() {
+      const container = document.getElementById("mediaOwnersList");
+      if (!container || !mediaSaveData) return;
+      const query = mediaSaveSearch.trim().toLowerCase();
+      const users = mediaSaveData.users.filter(user => [user.displayName, user.username, user.ownerTelegramId].some(value => String(value ?? "").toLowerCase().includes(query)));
+      document.getElementById("mediaOwnersCount").textContent = `Аккаунты · ${users.length} из ${mediaSaveData.users.length}`;
+      container.innerHTML = users.length ? users.map(user => {
+        const status = mediaControlUserStatus(user);
+        const state = user.runtime || {};
+        return `<article class="media-ctl-account" data-media-owner="${esc(user.ownerTelegramId)}"><h3>${esc(user.displayName || "Аккаунт")}</h3>
+          <p class="media-ctl-note">${user.username ? "@" + esc(user.username) + " · " : ""}ID ${esc(user.ownerTelegramId)}</p>
+          <span class="media-ctl-pill ${status[0]}">${esc(status[1])}</span>
+          ${mediaControlLimits(user.effective)}
+          <p class="media-ctl-note">В этом часу: ${esc(mediaControlNumber(state.attemptsInWindow))} · Принято Telegram: ${esc(mediaControlNumber(state.successesSinceRestart))}</p>
+          <p class="media-ctl-note">Последняя попытка: ${state.lastAttemptAt ? esc(fmtDate(state.lastAttemptAt)) : "ещё не было"}</p>
+          <div class="actions"><button class="action-btn" data-media-edit>Настроить</button><button class="action-btn ${user.configured.enabled ? "danger" : "on"}" data-media-toggle aria-pressed="${user.configured.enabled ? "true" : "false"}">${user.configured.enabled ? "Выключить" : "Включить"}</button></div>
+          ${user.configured.enabled && !mediaSaveData.global.enabled ? `<p class="media-ctl-note" style="margin-top:9px">Для аккаунта разрешено, но общий переключатель выключен.</p>` : ""}</article>`;
+      }).join("") : `<p class="media-ctl-note">${query ? "Подходящие аккаунты не найдены." : "У текущего бота пока нет подключённых аккаунтов. Подключения других ботов здесь не показываются."}</p>`;
+      container.querySelectorAll("[data-media-edit]").forEach(button => button.onclick = () => openMediaControlEditor(Number(button.closest("[data-media-owner]").dataset.mediaOwner)));
+      container.querySelectorAll("[data-media-toggle]").forEach(button => button.onclick = () => {
+        const owner = Number(button.closest("[data-media-owner]").dataset.mediaOwner);
+        const user = mediaSaveData.users.find(item => item.ownerTelegramId === owner);
+        if (user) quickMediaControlUpdate(owner, {...user.configured, enabled:!user.configured.enabled}, button);
+      });
+    }
+
+    async function persistMediaControl(owner, settings) {
+      if (mediaSaveBusy || !mediaSaveData) throw new Error("media_save_busy");
+      mediaSaveBusy = true;
+      try {
+        const result = await mediaControlPost("/app/api/admin/media-save/update", {expectedRevision:mediaSaveData.persistedRevision,
+          ownerTelegramId:owner, enabled:settings.enabled, maxBytes:settings.maxBytes,
+          attemptsPerHour:settings.attemptsPerHour, cooldownSeconds:settings.cooldownSeconds});
+        if (!result.ok || !result.runtimeInSync || result.runtimeAppliedRevision !== result.persistedRevision) {
+          const error = new Error("runtime_not_applied"); error.code = "runtime_not_applied"; throw error;
+        }
+        return result;
+      } finally { mediaSaveBusy = false; }
+    }
+
+    async function quickMediaControlUpdate(owner, settings, button) {
+      if (mediaSaveBusy) return;
+      button.disabled = true;
+      const original = button.textContent;
+      button.textContent = "Сохраняем…";
+      try {
+        await persistMediaControl(owner, settings);
+        showToast("Настройки сохранены и применены");
+        await loadMediaSaveTab();
+      } catch (error) {
+        button.disabled = false; button.textContent = original;
+        const card = button.closest(".media-ctl-account, .media-ctl-banner");
+        card.querySelector(".media-ctl-error")?.remove();
+        const message = document.createElement("div");
+        message.className = "media-ctl-error"; message.setAttribute("role","alert"); message.textContent = mediaControlError(error);
+        card.appendChild(message);
+      }
+    }
+
+    function openMediaControlEditor(owner) {
+      if (mediaSaveBusy || !mediaSaveData || document.getElementById("mediaControlOverlay")) return;
+      const user = owner === null ? null : mediaSaveData.users.find(item => item.ownerTelegramId === owner);
+      if (owner !== null && !user) return;
+      const settings = user ? user.configured : {...mediaSaveData.global.defaults, enabled:mediaSaveData.global.enabled};
+      const previousFocus = document.activeElement;
+      const overlay = document.createElement("div");
+      overlay.id = "mediaControlOverlay"; overlay.className = "media-ctl-overlay";
+      overlay.innerHTML = `<section class="media-ctl-dialog" role="dialog" aria-modal="true" aria-labelledby="mediaEditorTitle"><h2 id="mediaEditorTitle">${user ? esc(user.displayName || "Аккаунт") : "Общие настройки"}</h2>
+        <p class="media-ctl-note">${user ? "Настройки только этого аккаунта." : "Переключатель действует для всех. Лимиты — по умолчанию, индивидуальные лимиты аккаунтов сохраняются."} Уже начавшаяся отправка может завершиться.</p>
+        <form id="mediaEditorForm"><label class="media-ctl-field media-ctl-switch">Сохранение включено<input type="checkbox" name="enabled" role="switch" ${settings.enabled ? "checked" : ""}></label>
+        <label class="media-ctl-field">Размер файла, МБ<input type="number" name="maxMiB" min="0.0625" max="8" step="any" required inputmode="decimal" value="${mediaControlNumber(settings.maxBytes) / 1048576}"><small>От 0,0625 до 8 МБ. Настройки не могут повысить защитный предел бота.</small></label>
+        <label class="media-ctl-field">Передач в час<input type="number" name="attempts" min="1" max="20" step="1" required inputmode="numeric" value="${mediaControlNumber(settings.attemptsPerHour)}"><small>Скользящий час; квота отдельная для каждого владельца.</small></label>
+        <label class="media-ctl-field">Пауза между передачами, секунд<input type="number" name="cooldown" min="35" max="3600" step="1" required inputmode="numeric" value="${mediaControlNumber(settings.cooldownSeconds)}"></label>
+        <div id="mediaEditorError" role="alert" tabindex="-1"></div><div class="actions"><button type="button" class="action-btn" id="mediaEditorCancel">Отмена</button><button type="submit" class="action-btn media-ctl-save">Сохранить</button></div></form></section>`;
+      document.body.appendChild(overlay);
+      const form = overlay.querySelector("form");
+      function close() {
+        if (mediaSaveBusy) return;
+        overlay.remove();
+        if (previousFocus?.isConnected) previousFocus.focus();
+      }
+      overlay.onclick = event => { if (event.target === overlay) close(); };
+      overlay.querySelector("#mediaEditorCancel").onclick = close;
+      overlay.onkeydown = event => {
+        if (event.key === "Escape") { event.preventDefault(); close(); }
+        if (event.key === "Tab") {
+          const inputs = Array.from(overlay.querySelectorAll("input:not(:disabled),button:not(:disabled)"));
+          if (!inputs.length) { event.preventDefault(); return; }
+          if (event.shiftKey && document.activeElement === inputs[0]) { event.preventDefault(); inputs[inputs.length-1].focus(); }
+          else if (!event.shiftKey && document.activeElement === inputs[inputs.length-1]) { event.preventDefault(); inputs[0].focus(); }
+        }
+      };
+      form.onsubmit = async event => {
+        event.preventDefault();
+        if (mediaSaveBusy || !form.reportValidity()) return;
+        const maxBytes = Math.round(Number(form.elements.maxMiB.value) * 1048576);
+        const attemptsPerHour = Number(form.elements.attempts.value);
+        const cooldownSeconds = Number(form.elements.cooldown.value);
+        const errorBox = overlay.querySelector("#mediaEditorError");
+        if (!Number.isSafeInteger(maxBytes) || maxBytes < 65536 || maxBytes > 8388608 || !Number.isInteger(attemptsPerHour) || attemptsPerHour < 1 || attemptsPerHour > 20 || !Number.isInteger(cooldownSeconds) || cooldownSeconds < 35 || cooldownSeconds > 3600) {
+          errorBox.className = "media-ctl-error"; errorBox.textContent = "Проверьте числовые значения и допустимые пределы."; return;
+        }
+        const next = {enabled:form.elements.enabled.checked, maxBytes, attemptsPerHour, cooldownSeconds};
+        const controls = Array.from(form.querySelectorAll("input,button")); controls.forEach(item => item.disabled = true);
+        errorBox.textContent = ""; errorBox.className = "";
+        try {
+          await persistMediaControl(owner, next);
+          close(); showToast("Настройки сохранены и применены"); await loadMediaSaveTab();
+        } catch (error) {
+          controls.forEach(item => item.disabled = false);
+          errorBox.className = "media-ctl-error"; errorBox.textContent = mediaControlError(error);
+          const reload = document.createElement("button"); reload.type = "button"; reload.className = "action-btn media-ctl-refresh"; reload.textContent = "Закрыть форму и обновить данные";
+          reload.onclick = () => { close(); loadMediaSaveTab(); }; errorBox.appendChild(reload); errorBox.focus();
+        }
+      };
+      form.elements.enabled.focus();
+    }
+
     function closeMoreMenu() {
       document.getElementById("moreMenuSheet").classList.remove("show");
       document.getElementById("moreMenuOverlay").classList.remove("show");
@@ -1493,6 +1778,7 @@
         }
       });
       if (tab === "users")          render();
+      else if (tab === "media-save") loadMediaSaveTab();
       else if (tab === "growth")    loadGrowth();
       else if (tab === "broadcast") renderBroadcastTab();
       else if (tab === "log")       loadActionLog(1);
@@ -1543,7 +1829,7 @@
       const controls = `
         <div class="search-box">
           <span>🔍</span>
-          <input id="searchInput" type="text" placeholder="Поиск по имени, юзернейму, ID…" value="${searchQuery}" />
+          <input id="searchInput" type="text" placeholder="Поиск по имени, юзернейму, ID…" value="${esc(searchQuery)}" />
         </div>
         <div class="segmented" id="filterTabs">
           <button data-filter="all"     class="${filterMode==="all"     ?"active":""}">Все</button>
@@ -1574,6 +1860,12 @@
     }
 
     function attachHandlers() {
+      document.querySelectorAll("[data-action='media-control']").forEach(btn => {
+        btn.addEventListener("click", () => {
+          mediaSaveSearch = btn.closest(".user-card").dataset.owner;
+          switchTab("media-save");
+        });
+      });
       const input = document.getElementById("searchInput");
       if (input) {
         input.addEventListener("input", (e) => {
@@ -3102,27 +3394,8 @@
         </div>`;
     }
 
-    function shopOptionsList(prefix, options) {
-      const tags = (options || []).map(o => `
-        <span class="shop-option-tag" data-val="${esc(o)}">
-          ${esc(o)}
-          <button class="shop-option-del" data-prefix="${prefix}" data-val="${esc(o)}" title="Удалить">✕</button>
-        </span>`).join("");
-      return `
-        <div class="shop-options-wrap">
-          <div class="shop-options-label">Доступные варианты:</div>
-          <div class="shop-options-list" id="${prefix}-options">${tags}</div>
-          <div class="shop-add-option-row">
-            <input type="text" id="${prefix}-new-option" placeholder="Новый вариант…">
-            <button class="shop-add-option-btn" data-prefix="${prefix}">+ Добавить</button>
-          </div>
-        </div>`;
-    }
-
     function renderShopAdminTab(items) {
       const dx  = items.double_xp || {};
-      const th  = items.theme     || {};
-      const fr  = items.frame     || {};
       const pc  = items.pin_chat  || {};
       const gi  = items.gift      || {};
 
@@ -3135,26 +3408,6 @@
           </div>
           ${shopField("sh-dx-cost",  "Цена (монеты)",       dx.cost  ?? 200, {min:0})}
           ${shopField("sh-dx-hours", "Длительность (часов)", dx.hours ?? 24,  {min:1, max:720})}
-        </div>
-
-        <!-- Themes -->
-        <div class="shop-item-card">
-          <div class="shop-item-header">
-            <div class="shop-item-title">🎨 Темы оформления</div>
-            ${shopToggle("sh-th-enabled", "Включено", th.enabled !== false)}
-          </div>
-          ${shopField("sh-th-cost", "Цена (монеты)", th.cost ?? 100, {min:0})}
-          ${shopOptionsList("sh-th", th.options || [])}
-        </div>
-
-        <!-- Frames -->
-        <div class="shop-item-card">
-          <div class="shop-item-header">
-            <div class="shop-item-title">🖼 Рамки профиля</div>
-            ${shopToggle("sh-fr-enabled", "Включено", fr.enabled !== false)}
-          </div>
-          ${shopField("sh-fr-cost", "Цена (монеты)", fr.cost ?? 150, {min:0})}
-          ${shopOptionsList("sh-fr", fr.options || [])}
         </div>
 
         <!-- Pin chat -->
@@ -3180,39 +3433,6 @@
     }
 
     function attachShopAdminHandlers() {
-      // Option delete buttons
-      document.querySelectorAll(".shop-option-del").forEach(btn => {
-        btn.addEventListener("click", () => {
-          btn.closest(".shop-option-tag").remove();
-        });
-      });
-
-      // Option add buttons
-      document.querySelectorAll(".shop-add-option-btn").forEach(btn => {
-        btn.addEventListener("click", () => {
-          const prefix = btn.dataset.prefix;
-          const inp = document.getElementById(`${prefix}-new-option`);
-          const val = inp.value.trim();
-          if (!val) return;
-          const list = document.getElementById(`${prefix}-options`);
-          // Duplicate check
-          if ([...list.querySelectorAll(".shop-option-tag")].some(t => t.dataset.val === val)) {
-            showToast("⚠️ Такой вариант уже есть"); return;
-          }
-          const tag = document.createElement("span");
-          tag.className = "shop-option-tag"; tag.dataset.val = val;
-          tag.innerHTML = `${esc(val)} <button class="shop-option-del" title="Удалить">✕</button>`;
-          tag.querySelector(".shop-option-del").addEventListener("click", () => tag.remove());
-          list.appendChild(tag);
-          inp.value = "";
-        });
-      });
-
-      // Collect options helper
-      function getOptions(prefix) {
-        return [...document.querySelectorAll(`#${prefix}-options .shop-option-tag`)].map(t => t.dataset.val);
-      }
-
       // Save shop config
       document.getElementById("shopSaveBtn")?.addEventListener("click", async (e) => {
         const btn = e.currentTarget;
@@ -3225,18 +3445,6 @@
               enabled: document.getElementById("sh-dx-enabled").checked,
               cost:    parseInt(document.getElementById("sh-dx-cost").value)  || 200,
               hours:   parseInt(document.getElementById("sh-dx-hours").value) || 24,
-            },
-            theme: {
-              label:   "Тема оформления",
-              enabled: document.getElementById("sh-th-enabled").checked,
-              cost:    parseInt(document.getElementById("sh-th-cost").value) || 100,
-              options: getOptions("sh-th"),
-            },
-            frame: {
-              label:   "Рамка профиля",
-              enabled: document.getElementById("sh-fr-enabled").checked,
-              cost:    parseInt(document.getElementById("sh-fr-cost").value) || 150,
-              options: getOptions("sh-fr"),
             },
             pin_chat: {
               label:   "Закрепить чат",
@@ -3686,148 +3894,112 @@
     // ══════════════════════════════════════════════════════════════════════
     let _giveawayCfg = null;
 
-    // ══ Channels (subscription gate) ══════════════════════════════════════════
+    // ══ Channel access: subscription for everyone, one boost for Telegram Premium ══
+    let channelRows = [];
     async function loadChannelsTab() {
-      const content  = document.getElementById("content");
-      const subtitle = document.getElementById("subtitle");
-      subtitle.textContent = "📢 Каналы — гейт подписки";
-      content.innerHTML = `<div class="empty skeleton" style="padding:40px 0;text-align:center"><span style="font-size:36px">📢</span><br>Загружаем…</div>`;
+      const content = document.getElementById("content");
+      document.getElementById("subtitle").textContent = "Каналы — условия доступа";
       content.style.display = "";
-
+      content.innerHTML = '<div class="empty" style="padding:32px">Проверяем каналы и права бота…</div>';
       try {
-        const res = await fetch("/app/api/admin/channels", {
-          method: "POST", headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({initData}),
-        });
-        if (!res.ok) throw new Error("api");
-        const data = await res.json();
-        content.innerHTML = renderChannelsTab(data.channels || []);
+        const res = await fetch("/app/api/admin/channels", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({initData})});
+        if (!res.ok) throw new Error("Не удалось загрузить каналы");
+        channelRows = (await res.json()).channels || [];
+        content.innerHTML = renderChannelsTab(channelRows);
         attachChannelHandlers();
-      } catch(e) {
-        content.innerHTML = `<div class="error" style="padding:24px;text-align:center">❌ Ошибка загрузки</div>`;
+      } catch (e) {
+        content.innerHTML = '<div class="error">Не удалось загрузить каналы. <button class="action-btn" onclick="loadChannelsTab()">Повторить</button></div>';
       }
     }
 
     function renderChannelsTab(channels) {
-      const rows = channels.length
-        ? channels.map(ch => {
-            const noAccess = ch.bot_has_access === false;
-            const accessBadge = noAccess
-              ? `<span class="ch-no-access">⚠️ Нет доступа</span>`
-              : '';
-            const accessHint = noAccess
-              ? `<div class="ch-no-access-hint">Добавьте бота администратором канала</div>`
-              : '';
-            return `
-          <div class="channel-row" data-id="${ch.id}">
-            <div class="channel-row-left">
-              <div class="channel-row-name">@${esc(ch.username)}${ch.title !== '@' + ch.username ? ` <span class="channel-row-title">${esc(ch.title)}</span>` : ''}</div>
-              <a href="${esc(ch.join_url)}" target="_blank" class="channel-row-link">Открыть канал ↗</a>
-              ${accessHint}
-            </div>
-            <div class="channel-row-actions">
-              ${accessBadge}
-              <button class="ch-toggle-btn ${ch.is_active ? 'active' : 'inactive'}"
-                      data-id="${ch.id}" data-active="${ch.is_active}"
-                      title="${ch.is_active ? 'Деактивировать' : 'Активировать'}">
-                ${ch.is_active ? '✅ Вкл' : '⏸ Выкл'}
-              </button>
-              <button class="ch-del-btn" data-id="${ch.id}" title="Удалить">🗑</button>
-            </div>
-          </div>`;
-          }).join("")
-        : `<div class="empty" style="padding:32px 0;text-align:center;opacity:0.6">Нет каналов — гейт не активен</div>`;
-
-      return `
-        <div class="ch-header-row">
-          <div style="font-size:13px;color:var(--hint);line-height:1.5">
-            Пользователи должны подписаться на все <b>активные</b> каналы, чтобы открыть мини-приложение.
-            Неактивные каналы не проверяются, но сохраняются в списке.
+      const rows = channels.map(ch => {
+        const access = ch.bot_has_access === true ? 'Бот — администратор' : ch.bot_has_access === false ? 'Нет прав администратора' : 'Проверка прав недоступна';
+        return `<div class="channel-row" data-id="${ch.id}">
+          <div class="channel-row-left">
+            <div class="channel-row-name">${esc(ch.title || ch.username)}</div>
+            <div class="channel-row-title">${esc(ch.username.startsWith('-') ? ch.username : '@' + ch.username)} · ${ch.require_premium_boost ? 'Подписка + 1 буст для Telegram Premium' : 'Только подписка'}</div>
+            <div class="ch-no-access-hint" style="color:${ch.bot_has_access === true ? 'var(--green)' : 'var(--orange)'}">${access}</div>
+            ${ch.join_url ? `<a href="${esc(ch.join_url)}" target="_blank" rel="noopener" class="channel-row-link">Открыть канал ↗</a>` : '<div class="ch-no-access-hint">Добавьте ссылку приглашения</div>'}
           </div>
+          <div class="channel-row-actions">
+            <button class="ch-toggle-btn ${ch.is_active ? 'active' : 'inactive'}" data-id="${ch.id}">${ch.is_active ? 'Включён' : 'Выключен'}</button>
+            <button class="ch-edit-btn action-btn" data-id="${ch.id}">Изменить</button>
+            <button class="ch-del-btn" data-id="${ch.id}" aria-label="Удалить канал">Удалить</button>
+          </div>
+        </div>`;
+      }).join('');
+      return `<div class="ch-header-row" style="display:flex;gap:12px;align-items:flex-start">
+          <p style="font-size:13px;color:var(--hint);line-height:1.6;flex:1;margin:0">Подписка обязательна для всех пользователей. Если включить буст, пользователю <b>Telegram Premium</b> потребуется один действующий буст этого же канала. Без Telegram Premium буст не требуется. Максимум 10 активных каналов.</p>
+          <button class="action-btn" id="chRefreshBtn">Проверить права</button>
         </div>
-
         <div class="ch-add-form">
-          <div class="ch-add-title">➕ Добавить канал</div>
+          <div class="ch-add-title" id="chFormTitle">Добавить канал</div>
+          <input type="hidden" id="chEditId" value="">
           <div class="ch-add-fields">
-            <input id="chUsername" class="ch-input" type="text" placeholder="username без @" autocomplete="off">
-            <input id="chTitle"    class="ch-input" type="text" placeholder="Название (необязательно)">
+            <label class="ch-field">Канал<input id="chUsername" class="ch-input" type="text" placeholder="@username, https://t.me/username или -100…" maxlength="128" autocomplete="off"></label>
+            <label class="ch-field">Название<input id="chTitle" class="ch-input" type="text" placeholder="Необязательно" maxlength="255"></label>
+            <label class="ch-field">Ссылка для подписки<input id="chJoinUrl" class="ch-input" type="url" placeholder="https://t.me/+… — для закрытого канала" maxlength="512"></label>
+            <label class="ch-check"><input id="chRequireBoost" type="checkbox"> Требовать 1 буст у пользователей Telegram Premium</label>
+            <label class="ch-check"><input id="chActive" type="checkbox" checked> Канал включён — проверять условия доступа</label>
           </div>
-          <button id="chAddBtn" class="action-btn" style="width:100%;margin-top:10px">Добавить</button>
+          <p style="font-size:12px;line-height:1.6;color:var(--hint)">Добавьте бота администратором канала. Без этих прав Telegram не позволяет надёжно проверять подписку и бусты. Выключенный канал можно сохранить без проверки.</p>
+          <div id="chFormError" role="alert" class="ch-no-access-hint" style="margin:10px 0"></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap"><button id="chSaveBtn" class="action-btn">Добавить канал</button><button id="chCancelBtn" class="action-btn" hidden>Отменить редактирование</button></div>
         </div>
+        <div class="ch-list" id="chList">${rows || '<div class="empty" style="padding:24px">Каналов нет. Условия доступа выключены.</div>'}</div>`;
+    }
 
-        <div class="ch-list" id="chList">${rows}</div>`;
+    async function channelMutation(url, payload) {
+      const res = await fetch(url, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({initData,...payload})});
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Проверьте поля и попробуйте снова');
+      return data;
     }
 
     function attachChannelHandlers() {
-      // Add
-      document.getElementById("chAddBtn")?.addEventListener("click", async () => {
-        const btn      = document.getElementById("chAddBtn");
-        const username = document.getElementById("chUsername")?.value.trim().replace(/^@/, "");
-        const title    = document.getElementById("chTitle")?.value.trim() || null;
-        if (!username) { showToast("Введите username канала"); return; }
-        btn.disabled = true; btn.textContent = "Добавляем…";
+      document.getElementById('chRefreshBtn').onclick = loadChannelsTab;
+      document.getElementById('chCancelBtn').onclick = loadChannelsTab;
+      document.getElementById('chSaveBtn').onclick = async () => {
+        const btn = document.getElementById('chSaveBtn');
+        const error = document.getElementById('chFormError');
+        const editId = Number(document.getElementById('chEditId').value);
+        const payload = {username:document.getElementById('chUsername').value.trim(),title:document.getElementById('chTitle').value.trim() || null,
+          joinUrl:document.getElementById('chJoinUrl').value.trim() || null,
+          requirePremiumBoost:document.getElementById('chRequireBoost').checked,isActive:document.getElementById('chActive').checked};
+        if (!payload.username) { error.textContent = 'Укажите канал'; return; }
+        if (editId) payload.channelId = editId;
+        btn.disabled = true; error.textContent = '';
         try {
-          const res = await fetch("/app/api/admin/channels/add", {
-            method: "POST", headers: {"Content-Type":"application/json"},
-            body: JSON.stringify({initData, username, title}),
-          });
-          if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            throw new Error(err.detail || res.status);
-          }
-          showToast("Канал добавлен ✅");
-          loadChannelsTab();
-        } catch(e) {
-          showToast("Ошибка: " + e.message);
-          btn.disabled = false; btn.textContent = "Добавить";
-        }
+          await channelMutation('/app/api/admin/channels/' + (editId ? 'update' : 'add'), payload);
+          showToast('Настройки канала сохранены'); await loadChannelsTab();
+        } catch (e) { error.textContent = e.message; btn.disabled = false; }
+      };
+      document.querySelectorAll('.ch-edit-btn').forEach(btn => btn.onclick = () => {
+        const ch = channelRows.find(row => row.id === Number(btn.dataset.id));
+        if (!ch) return;
+        document.getElementById('chEditId').value = ch.id;
+        document.getElementById('chUsername').value = ch.username;
+        document.getElementById('chTitle').value = ch.title || '';
+        document.getElementById('chJoinUrl').value = ch.join_url || '';
+        document.getElementById('chRequireBoost').checked = ch.require_premium_boost;
+        document.getElementById('chActive').checked = ch.is_active;
+        document.getElementById('chFormTitle').textContent = 'Изменить канал';
+        document.getElementById('chSaveBtn').textContent = 'Сохранить изменения';
+        document.getElementById('chCancelBtn').hidden = false;
+        document.getElementById('chFormError').textContent = '';
+        document.getElementById('chUsername').focus();
       });
-
-      // Toggle active
-      document.querySelectorAll(".ch-toggle-btn").forEach(btn => {
-        btn.addEventListener("click", async () => {
-          const id = parseInt(btn.dataset.id);
-          btn.disabled = true;
-          try {
-            const res = await fetch("/app/api/admin/channels/toggle", {
-              method: "POST", headers: {"Content-Type":"application/json"},
-              body: JSON.stringify({initData, channelId: id}),
-            });
-            if (!res.ok) throw new Error(res.status);
-            const data = await res.json();
-            btn.dataset.active = String(data.is_active);
-            btn.classList.toggle("active",   data.is_active);
-            btn.classList.toggle("inactive", !data.is_active);
-            btn.textContent = data.is_active ? "✅ Вкл" : "⏸ Выкл";
-          } catch(e) {
-            showToast("Ошибка переключения");
-          } finally {
-            btn.disabled = false;
-          }
-        });
+      document.querySelectorAll('.ch-toggle-btn').forEach(btn => btn.onclick = async () => {
+        btn.disabled = true;
+        try { await channelMutation('/app/api/admin/channels/toggle', {channelId:Number(btn.dataset.id)}); await loadChannelsTab(); }
+        catch (e) { showToast(e.message); btn.disabled = false; }
       });
-
-      // Delete
-      document.querySelectorAll(".ch-del-btn").forEach(btn => {
-        btn.addEventListener("click", async () => {
-          if (!confirm("Удалить канал из списка?")) return;
-          const id = parseInt(btn.dataset.id);
-          try {
-            const res = await fetch("/app/api/admin/channels/delete", {
-              method: "POST", headers: {"Content-Type":"application/json"},
-              body: JSON.stringify({initData, channelId: id}),
-            });
-            if (!res.ok) throw new Error(res.status);
-            showToast("Канал удалён");
-            btn.closest(".channel-row")?.remove();
-            if (!document.querySelector(".channel-row")) {
-              document.getElementById("chList").innerHTML =
-                `<div class="empty" style="padding:32px 0;text-align:center;opacity:0.6">Нет каналов — гейт не активен</div>`;
-            }
-          } catch(e) {
-            showToast("Ошибка удаления");
-          }
-        });
+      document.querySelectorAll('.ch-del-btn').forEach(btn => btn.onclick = async () => {
+        if (!confirm('Удалить канал из условий доступа?')) return;
+        btn.disabled = true;
+        try { await channelMutation('/app/api/admin/channels/delete', {channelId:Number(btn.dataset.id)}); await loadChannelsTab(); }
+        catch (e) { showToast(e.message); btn.disabled = false; }
       });
     }
 
@@ -3914,6 +4086,12 @@
           <!-- Settings form -->
           <div style="background:var(--card-bg,#fff);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px;box-shadow:0 1px 4px rgba(0,0,0,0.07)">
             <div style="font-weight:800;font-size:15px">⚙️ Настройки</div>
+
+            <label style="display:flex;align-items:center;gap:10px;min-height:44px;cursor:pointer">
+              <input type="checkbox" id="gvTabVisible" ${d.giveaway_tab_visible === true ? "checked" : ""} style="width:18px;height:18px;flex-shrink:0">
+              <span style="font-size:14px">Показывать «Конкурс» в нижней панели</span>
+            </label>
+            <div style="font-size:12px;color:var(--hint);line-height:1.4">После сохранения вкладка обновится при открытии или обновлении приложения.</div>
 
             <label style="display:flex;flex-direction:column;gap:4px">
               <span style="font-size:12px;font-weight:600;opacity:0.6">ДЕДЛАЙН (UTC)</span>
@@ -4427,6 +4605,7 @@
           prize2Image: document.getElementById("gv_prize_2_image").value.trim() || null,
           prize3Image: document.getElementById("gv_prize_3_image").value.trim() || null,
           description: document.getElementById("gvDesc").value.trim() || null,
+          giveawayTabVisible: document.getElementById("gvTabVisible").checked,
           isActive: document.getElementById("gvActive").checked,
           isVisibleToAll: document.getElementById("gvVisible").checked,
         };

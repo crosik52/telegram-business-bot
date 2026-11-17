@@ -1,20 +1,22 @@
 from app.models.admin_action_log import AdminActionLog
-from app.models.casino_win import CasinoWin
 from app.models.ai_analysis_daily_count import AiAnalysisDailyCount
 from app.models.analysis_result import AnalysisResult
 from app.models.boost import UserBoost
 from app.models.business_connection import BusinessConnection
+from app.models.casino_win import CasinoWin
 from app.models.message import Message, MessageEditHistory
 from app.models.pet import ChatPet
 from app.models.quest import DailyQuestCompletion
 from app.models.referral import Referral, ReferralConfig, ReferralRewardLog
 from app.models.relationship import Relationship
 from app.models.shop_config import ShopConfig
+from app.models.telegram_update import TelegramUpdate
 from app.models.user import TelegramUser
 from app.models.user_settings import UserSettings
 from app.models.wallet import UserWallet
 
 __all__ = [
+    "TelegramUpdate",
     "AdminActionLog",
     "CasinoWin",
     "AiAnalysisDailyCount",

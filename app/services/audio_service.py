@@ -1,191 +1,111 @@
-"""Audio search & download service for the !mp3 command.
-
-Flow
-----
-1. Owner types ``!mp3 название`` in a business chat.
-2. Bot searches YouTube (top-5) and shows an inline-keyboard with results.
-3. Owner taps a result → callback handler downloads the MP3 and replaces the
-   search message with the audio file via edit_message_media.
-
-Search results are held in a lightweight in-memory dict with a 10-minute TTL.
-Each entry is keyed by an 8-char hex token used in callback_data.
-"""
+"""Bounded audio search/inline adapter; all network work uses DownloadService."""
 
 from __future__ import annotations
 
 import asyncio
-import os
-import tempfile
+import re
 import threading
 import time
-from functools import partial
 from pathlib import Path
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from app.logging_config import get_logger
+from app.services.download_service import DownloadError, get_download_service, validate_video_url
 
 logger = get_logger(__name__)
+MAX_BYTES = 20 * 1024 * 1024
+MAX_DURATION_SECS = 15 * 60
+_CACHE_TTL = 600
+PAGE_SIZE = 5
+SEARCH_N = 15
+MAX_RESULTS = 512
+MAX_SESSIONS = 64
+MAX_HISTORY_USERS = 256
+MAX_FILE_IDS = 512
+MAX_PRELOAD_BYTES = 32 * 1024 * 1024
+MAX_PRELOAD_TASKS = 3
 
 
 class CancelledByUser(RuntimeError):
-    """Raised inside _download_sync when the cancel_flag threading.Event is set.
-
-    Propagates through run_in_executor back to the awaiting coroutine so the
-    caller can distinguish a user-initiated cancel from a real download error.
-    """
+    """Shared subprocess/context cancellation has completed."""
 
 
-# ── YouTube cookie helpers ────────────────────────────────────────────────────
-
-from app.services._cookie_utils import json_cookies_to_netscape as _yt_json_cookies_to_netscape
-
-
-def _apply_youtube_cookies(ydl_opts: dict, out_dir: str) -> None:
-    """Inject YOUTUBE_COOKIES into *ydl_opts* if the env var is set.
-
-    Accepted formats (same as TIKTOK_COOKIES):
-      1. Netscape cookie file (7 tab-separated columns)
-      2. Netscape with ``\\n`` escapes instead of real newlines
-      3. JSON array from 'Cookie Editor' / 'EditThisCookie' browser extension
-      4. Raw HTTP Cookie header string  (name=val; name2=val2)
-    """
-    raw = os.environ.get("YOUTUBE_COOKIES", "").strip()
-    if not raw:
-        logger.warning(
-            "YOUTUBE_COOKIES is not set — YouTube may block server-side downloads. "
-            "Export cookies from your browser and add them as the YOUTUBE_COOKIES secret."
-        )
-        return
-
-    # Normalise escaped newlines (env var may collapse real newlines)
-    if "\n" not in raw and "\\n" in raw:
-        raw = raw.replace("\\n", "\n")
-
-    # If a Netscape file was pasted with spaces replacing tabs + newlines,
-    # reconstruct it: find every cookie record via the 7-column pattern.
-    if "\n" not in raw and raw.lstrip().startswith("#"):
-        import re as _re
-        # Each cookie record: domain TRUE|FALSE /path TRUE|FALSE expiry name value
-        # Values rarely contain spaces in YouTube cookies so this covers ≥95% of cases.
-        pattern = _re.compile(
-            r'(\.[^\s]+)'           # domain
-            r'\s+(TRUE|FALSE)'      # include_subdomain
-            r'\s+(/[^\s]*)'         # path
-            r'\s+(TRUE|FALSE)'      # secure
-            r'\s+(\d{5,11})'        # expiry (unix ts)
-            r'\s+(\S+)'             # name
-            r'\s+(\S+)'             # value (no-space heuristic)
-        )
-        reconstructed = ["# Netscape HTTP Cookie File"]
-        for m in pattern.finditer(raw):
-            reconstructed.append("\t".join(m.groups()))
-        if len(reconstructed) > 1:
-            raw = "\n".join(reconstructed)
-            logger.info("YouTube: reconstructed %d cookies from space-collapsed Netscape file",
-                        len(reconstructed) - 1)
-
-    # 1. Netscape file
-    data_lines = [l for l in raw.splitlines() if l.strip() and not l.strip().startswith("#")]
-    if [l for l in data_lines if len(l.split("\t")) == 7]:
-        cookie_path = os.path.join(out_dir, "_yt_cookies.txt")
-        with open(cookie_path, "w", encoding="utf-8") as fh:
-            fh.write(raw)
-        ydl_opts["cookiefile"] = cookie_path
-        logger.info("YouTube: Netscape cookiefile applied")
-        return
-
-    # 2. JSON array
-    if raw.lstrip().startswith("["):
-        ns = _yt_json_cookies_to_netscape(raw)
-        if ns:
-            cookie_path = os.path.join(out_dir, "_yt_cookies.txt")
-            with open(cookie_path, "w", encoding="utf-8") as fh:
-                fh.write(ns)
-            ydl_opts["cookiefile"] = cookie_path
-            logger.info("YouTube: JSON→Netscape cookiefile applied")
-            return
-        logger.warning("YouTube: YOUTUBE_COOKIES looks like JSON but failed to parse")
-
-    # 3. Raw Cookie header string
-    if "=" in raw and "\n" not in raw and "\t" not in raw:
-        ydl_opts.setdefault("http_headers", {})
-        ydl_opts["http_headers"]["Cookie"] = raw
-        logger.info("YouTube: raw Cookie header injected")
-        return
-
-    logger.warning(
-        "YouTube: YOUTUBE_COOKIES present (%d bytes) but format not recognised "
-        "(expected Netscape / JSON / Cookie header).", len(raw)
-    )
-
-MAX_BYTES         = 48 * 1024 * 1024   # 48 MB — Telegram audio cap
-MAX_DURATION_SECS = 15 * 60            # 15 minutes — skip albums / long mixes
-_CACHE_TTL        = 600                # 10 minutes
-
-PAGE_SIZE  = 5    # results per page shown in inline keyboard
-SEARCH_N   = 15   # total results fetched from YouTube
-
-
-# ── Persistent file_id cache (youtube url → telegram file_id) ────────────────
-# After a track is uploaded to Telegram once, the file_id is valid forever.
-# Using it in InlineQueryResultCachedAudio lets Telegram send audio instantly
-# when user selects the result — no placeholder, no button needed.
-
-_file_id_cache: dict[str, str] = {}   # url → telegram file_id
-
-
-# ── Pre-download cache for inline mode ───────────────────────────────────────
-# When inline search results are shown, we immediately start downloading all
-# tracks in the background.  By the time the user taps a result (5-15 sec),
-# the audio is usually ready — so Telegram can fetch /audio/{key} in under 1 s.
-
-_predownload_cache: dict[str, tuple[bytes, str, float]] = {}  # key → (bytes, filename, ts)
-_predownload_tasks: set[asyncio.Task] = set()  # prevent GC
+_file_id_cache: dict[str, str] = {}
+_predownload_cache: dict[str, tuple[bytes, str, float]] = {}
+_predownload_tasks: set[asyncio.Task] = set()
+_predownload_by_key: dict[str, asyncio.Task] = {}
 
 
 def get_predownloaded(key: str) -> tuple[bytes, str] | None:
-    """Return (audio_bytes, filename) if pre-download finished, else None."""
     entry = _predownload_cache.get(key)
     if entry is None:
         return None
-    data, filename, ts = entry
-    # Expire entries older than 15 minutes
-    if time.monotonic() - ts > 900:
-        del _predownload_cache[key]
+    data, filename, timestamp = entry
+    if time.monotonic() - timestamp > _CACHE_TTL or get(key) is None:
+        _predownload_cache.pop(key, None)
         return None
     return data, filename
 
 
 def _store_predownloaded(key: str, data: bytes, filename: str) -> None:
-    # Evict expired entries to keep memory bounded
-    cutoff = time.monotonic() - 900
-    stale = [k for k, v in _predownload_cache.items() if v[2] < cutoff]
-    for k in stale:
-        del _predownload_cache[k]
+    if len(data) > MAX_BYTES or len(data) > MAX_PRELOAD_BYTES or get(key) is None:
+        return
+    cutoff = time.monotonic() - _CACHE_TTL
+    for stale in list(_predownload_cache):
+        if _predownload_cache[stale][2] < cutoff or get(stale) is None:
+            _predownload_cache.pop(stale, None)
+    _predownload_cache.pop(key, None)
+    while (
+        _predownload_cache
+        and sum(len(entry[0]) for entry in _predownload_cache.values()) + len(data)
+        > MAX_PRELOAD_BYTES
+    ):
+        _predownload_cache.pop(next(iter(_predownload_cache)))
     _predownload_cache[key] = (data, filename, time.monotonic())
 
 
 def start_predownload(key: str, url: str) -> None:
-    """Fire-and-forget: download *url* to RAM in the background.
+    result = get(key)
+    if (
+        result is None
+        or result.url != url
+        or key in _predownload_by_key
+        or get_predownloaded(key) is not None
+    ):
+        return
+    if len(_predownload_tasks) >= MAX_PRELOAD_TASKS:
+        return
 
-    Safe to call from an async context.  The result is retrievable via
-    ``get_predownloaded(key)`` once the task completes.
-    """
-    async def _run() -> None:
+    async def run() -> None:
         try:
             data, filename = await stream_to_bytes(url)
             _store_predownloaded(key, data, filename)
-            logger.debug("predownload done: key=%s size=%dKB", key, len(data) // 1024)
-        except Exception as exc:
-            logger.debug("predownload failed: key=%s: %s", key, exc)
+        except Exception as error:
+            logger.debug("Audio preload failed error_type=%s", type(error).__name__)
 
     try:
-        loop = asyncio.get_running_loop()
+        task = asyncio.get_running_loop().create_task(run())
     except RuntimeError:
-        return  # not in async context — skip
-    task = loop.create_task(_run())
+        return
     _predownload_tasks.add(task)
-    task.add_done_callback(_predownload_tasks.discard)
+    _predownload_by_key[key] = task
+
+    def finished(done: asyncio.Task) -> None:
+        _predownload_tasks.discard(done)
+        _predownload_by_key.pop(key, None)
+
+    task.add_done_callback(finished)
+
+
+async def shutdown_predownloads() -> None:
+    tasks = list(_predownload_tasks)
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+    _predownload_tasks.clear()
+    _predownload_by_key.clear()
+    _predownload_cache.clear()
 
 
 def get_cached_file_id(url: str) -> str | None:
@@ -193,19 +113,22 @@ def get_cached_file_id(url: str) -> str | None:
 
 
 def cache_file_id(url: str, file_id: str) -> None:
+    validate_video_url(url, audio=True)
+    if len(file_id) > 512:
+        return
+    if url not in _file_id_cache and len(_file_id_cache) >= MAX_FILE_IDS:
+        _file_id_cache.pop(next(iter(_file_id_cache)))
     _file_id_cache[url] = file_id
 
 
-# ── Per-user inline history (user_id → [key, ...]) ───────────────────────────
-# Stores the last HISTORY_SIZE track keys chosen by each user via inline mode.
-# Shown when the user opens @bot without typing a query.
-
 HISTORY_SIZE = 7
-_user_history: dict[int, list[str]] = {}   # user_id → ordered list of keys (newest first)
+_user_history: dict[int, list[str]] = {}  # user_id в†’ ordered list of keys (newest first)
 
 
 def add_to_history(user_id: int, key: str) -> None:
     """Prepend key to user's history, evicting the oldest entry past HISTORY_SIZE."""
+    if user_id not in _user_history and len(_user_history) >= MAX_HISTORY_USERS:
+        _user_history.pop(next(iter(_user_history)))
     history = _user_history.setdefault(user_id, [])
     # Remove duplicate if present so the track bubbles to the top
     try:
@@ -221,20 +144,22 @@ def get_history(user_id: int) -> list[str]:
     return list(_user_history.get(user_id, []))
 
 
-# ── In-memory result cache ────────────────────────────────────────────────────
+# в”Ђв”Ђ In-memory result cache в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+
 
 class _Result:
     __slots__ = ("url", "title", "uploader", "duration", "bc_id", "chat_id", "ts", "session_key")
 
-    def __init__(self, url: str, title: str, uploader: str, duration: int,
-                 bc_id: str, chat_id: int) -> None:
-        self.url         = url
-        self.title       = title
-        self.uploader    = uploader
-        self.duration    = duration
-        self.bc_id       = bc_id
-        self.chat_id     = chat_id
-        self.ts          = time.monotonic()
+    def __init__(
+        self, url: str, title: str, uploader: str, duration: int, bc_id: str, chat_id: int
+    ) -> None:
+        self.url = url
+        self.title = title
+        self.uploader = uploader
+        self.duration = duration
+        self.bc_id = bc_id
+        self.chat_id = chat_id
+        self.ts = time.monotonic()
         self.session_key = ""  # set after session is created
 
 
@@ -248,16 +173,22 @@ def _evict() -> None:
         del _cache[k]
 
 
-def store(url: str, title: str, uploader: str, duration: int,
-          bc_id: str, chat_id: int) -> str:
-    """Persist a single result and return its 8-char key."""
+def store(url: str, title: str, uploader: str, duration: int, bc_id: str, chat_id: int) -> str:
+    """Persist a single result and return its 128-bit capability key."""
     _evict()
-    key = uuid4().hex[:8]
+    validate_video_url(url, audio=True)
+    if len(_cache) >= MAX_RESULTS:
+        _cache.pop(next(iter(_cache)))
+    title, uploader = title[:256], uploader[:128]
+    key = uuid4().hex
     _cache[key] = _Result(url, title, uploader, duration, bc_id, chat_id)
     return key
 
 
 def get(key: str) -> _Result | None:
+    _evict()
+    if not re.fullmatch(r"[a-f0-9]{32}", key):
+        return None
     return _cache.get(key)
 
 
@@ -268,22 +199,24 @@ def set_session_key(key: str, sk: str) -> None:
         r.session_key = sk
 
 
-# ── Search-session cache (for pagination) ─────────────────────────────────────
+# в”Ђв”Ђ Search-session cache (for pagination) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 # A session holds the ordered list of result-keys for an entire search query.
 # Navigation callbacks reference the session key + page number.
 
+
 class _Session:
-    """Full results list for one !mp3 search — used for page navigation.
+    """Full results list for one !mp3 search вЂ” used for page navigation.
 
     Each entry: {"key": str, "title": str, "uploader": str, "duration": int}
     ``key`` maps into ``_cache`` for the actual download URL.
     """
+
     __slots__ = ("entries", "query", "ts")
 
     def __init__(self, entries: list[dict], query: str) -> None:
-        self.entries = entries   # [{key, title, uploader, duration}, …]
-        self.query   = query
-        self.ts      = time.monotonic()
+        self.entries = entries  # [{key, title, uploader, duration}, вЂ¦]
+        self.query = query
+        self.ts = time.monotonic()
 
 
 _sessions: dict[str, _Session] = {}
@@ -297,18 +230,23 @@ def _evict_sessions() -> None:
 
 
 def store_session(entries: list[dict], query: str) -> str:
-    """Persist a search session and return its 8-char session key."""
+    """Persist a search session and return its 128-bit session key."""
     _evict_sessions()
-    sk = uuid4().hex[:8]
+    if len(_sessions) >= MAX_SESSIONS:
+        _sessions.pop(next(iter(_sessions)))
+    entries, query = entries[:SEARCH_N], query[:200]
+    sk = uuid4().hex
     _sessions[sk] = _Session(entries, query)
     return sk
 
 
 def get_session(sk: str) -> _Session | None:
+    _evict_sessions()
     return _sessions.get(sk)
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# в”Ђв”Ђ Helpers в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+
 
 def fmt_duration(secs: int | None) -> str:
     if not secs:
@@ -318,25 +256,44 @@ def fmt_duration(secs: int | None) -> str:
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
 
-# ── Non-music keyword filter ──────────────────────────────────────────────────
+# в”Ђв”Ђ Non-music keyword filter в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 # Titles containing any of these substrings (case-insensitive) are almost
-# never the track itself — they're reactions, reviews, covers analysis, etc.
+# never the track itself вЂ” they're reactions, reviews, covers analysis, etc.
 # Used as a last-resort filter when we fall back to plain ytsearch.
 
-_NON_MUSIC_KEYWORDS: frozenset[str] = frozenset({
-    "реакция", "reaction", "реакт", "react ",
-    "обзор", "review ", "разбор", "разборка",
-    "слушаю впервые", "слушаем впервые",
-    "история создания", "история песни", "история трека",
-    "объяснение", "explanation",
-    "трибьют", "tribute",
-    "подборка", "compilation",
-    "#shorts",
-    "podcast", "подкаст",
-    "стрим", "stream", "live stream",
-    "интервью", "interview",
-    "топ лучших", "топ песен",
-})
+_NON_MUSIC_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "СЂРµР°РєС†РёСЏ",
+        "reaction",
+        "СЂРµР°РєС‚",
+        "react ",
+        "РѕР±Р·РѕСЂ",
+        "review ",
+        "СЂР°Р·Р±РѕСЂ",
+        "СЂР°Р·Р±РѕСЂРєР°",
+        "СЃР»СѓС€Р°СЋ РІРїРµСЂРІС‹Рµ",
+        "СЃР»СѓС€Р°РµРј РІРїРµСЂРІС‹Рµ",
+        "РёСЃС‚РѕСЂРёСЏ СЃРѕР·РґР°РЅРёСЏ",
+        "РёСЃС‚РѕСЂРёСЏ РїРµСЃРЅРё",
+        "РёСЃС‚РѕСЂРёСЏ С‚СЂРµРєР°",
+        "РѕР±СЉСЏСЃРЅРµРЅРёРµ",
+        "explanation",
+        "С‚СЂРёР±СЊСЋС‚",
+        "tribute",
+        "РїРѕРґР±РѕСЂРєР°",
+        "compilation",
+        "#shorts",
+        "podcast",
+        "РїРѕРґРєР°СЃС‚",
+        "СЃС‚СЂРёРј",
+        "stream",
+        "live stream",
+        "РёРЅС‚РµСЂРІСЊСЋ",
+        "interview",
+        "С‚РѕРї Р»СѓС‡С€РёС…",
+        "С‚РѕРї РїРµСЃРµРЅ",
+    }
+)
 
 
 def _is_music(title: str) -> bool:
@@ -345,341 +302,27 @@ def _is_music(title: str) -> bool:
     return not any(kw in t for kw in _NON_MUSIC_KEYWORDS)
 
 
-# ── Search (sync, runs in executor) ──────────────────────────────────────────
-
-def _run_search(search_url: str, opts: dict) -> list:
-    """Run one yt-dlp search and return raw entries list."""
-    import yt_dlp  # noqa: PLC0415
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(search_url, download=False)
-    return (info or {}).get("entries") or []
-
-
-def _parse_entries(raw: list, n: int, *, filter_non_music: bool = False) -> list[dict]:
-    """Convert raw yt-dlp entries to our result dicts."""
-    out = []
-    for e in raw:
-        if not e:
-            continue
-        dur    = e.get("duration") or 0
-        vid_id = e.get("id") or ""
-        if not vid_id:
-            continue
-        if dur and dur > MAX_DURATION_SECS:
-            continue
-        title = e.get("title") or "Без названия"
-        if filter_non_music and not _is_music(title):
-            continue
-        thumb = e.get("thumbnail") or ""
-        if not thumb:
-            thumbs = e.get("thumbnails") or []
-            if thumbs:
-                thumb = thumbs[-1].get("url", "")
-        out.append({
-            "url":       f"https://www.youtube.com/watch?v={vid_id}",
-            "title":     title,
-            "uploader":  e.get("uploader") or e.get("channel") or "",
-            "duration":  dur,
-            "thumbnail": thumb,
-        })
-        if len(out) >= n:
-            break
-    return out
-
-
-def _search_sync(query: str, n: int = 5) -> list[dict]:
-    """Search YouTube Music first; fall back to filtered YouTube search."""
-    import yt_dlp  # noqa: PLC0415
-
-    base_opts: dict = {
-        "quiet":        True,
-        "no_warnings":  True,
-        "extract_flat": "in_playlist",
-        "noplaylist":   False,
-        "extractor_args": {
-            "youtube": {"player_client": ["android"]},
-        },
-    }
-
-    want = n or SEARCH_N
-    # Fetch more than needed so the filter still leaves enough results
-    fetch = want * 3
-
-    # ── 1. YouTube Music (music-only index) ───────────────────────────────────
-    ym_results: list[dict] = []
-    try:
-        raw = _run_search(f"ytsearchmusic{fetch}:{query}", base_opts)
-        ym_results = _parse_entries(raw, want)
-        logger.debug("mp3 ytsearchmusic: got %d results", len(ym_results))
-    except Exception as exc:
-        logger.debug("mp3 ytsearchmusic failed: %s", exc)
-
-    if len(ym_results) >= max(3, want // 2):
-        return ym_results[:want]
-
-    # ── 2. Fall back to regular ytsearch with non-music filter ────────────────
-    logger.debug("mp3: ytsearchmusic returned only %d — falling back to ytsearch", len(ym_results))
-    try:
-        raw = _run_search(f"ytsearch{fetch}:{query}", base_opts)
-        yt_results = _parse_entries(raw, want, filter_non_music=True)
-        logger.debug("mp3 ytsearch fallback: got %d after filter", len(yt_results))
-    except Exception as exc:
-        logger.warning("mp3 ytsearch fallback failed: %s", exc)
-        yt_results = []
-
-    # Merge: prefer ytmusic entries, fill gaps with filtered yt results
-    seen_ids: set[str] = {r["url"] for r in ym_results}
-    merged = list(ym_results)
-    for r in yt_results:
-        if r["url"] not in seen_ids:
-            merged.append(r)
-            seen_ids.add(r["url"])
-        if len(merged) >= want:
-            break
-
-    return merged[:want]
+# в”Ђв”Ђ Search (sync, runs in executor) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 
 async def search(query: str, n: int = SEARCH_N) -> list[dict]:
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, partial(_search_sync, query, n))
+    if not isinstance(query, str) or not query.strip() or len(query) > 200:
+        raise DownloadError("invalid_search")
+    if not 1 <= n <= SEARCH_N:
+        raise DownloadError("invalid_search_count")
+    return await get_download_service().search(query.strip(), n=n)
 
-
-# ── Stream directly to memory (no disk) ──────────────────────────────────────
 
 async def stream_to_bytes(url: str) -> tuple[bytes, str]:
-    """Pipe yt-dlp → ffmpeg → RAM.  Returns (audio_bytes, filename).
-
-    No temporary files are created.  The pipeline is:
-      yt-dlp -o -  →  ffmpeg -i pipe:0 -f mp3 pipe:1   (if ffmpeg present)
-      yt-dlp -o -                                        (raw m4a fallback)
-    """
-    import shutil as _shutil  # noqa: PLC0415
-
-    has_ffmpeg = bool(_shutil.which("ffmpeg"))
-
-    # Use the same format + client as _download_sync (known to work),
-    # only replacing the output path with "-" for stdout piping.
-    # Write cookies to a temp file so we can pass --cookies to the subprocess.
-    import tempfile as _tempfile  # noqa: PLC0415
-    _cookie_tmp = _tempfile.mkdtemp(prefix="ytcook_")
-    _cookie_opts: dict = {}
-    _apply_youtube_cookies(_cookie_opts, _cookie_tmp)
-    _cookies_arg: list[str] = []
-    if "cookiefile" in _cookie_opts:
-        _cookies_arg = ["--cookies", _cookie_opts["cookiefile"]]
-    elif "http_headers" in _cookie_opts and "Cookie" in _cookie_opts["http_headers"]:
-        _cookies_arg = ["--add-header", f"Cookie:{_cookie_opts['http_headers']['Cookie']}"]
-
-    # Try multiple player clients in order.
-    # ios/mweb work best on datacenter IPs (no po_token required).
-    # tv_embedded is a reliable secondary; android/web are last resorts.
-    _player_clients = ["ios", "mweb", "tv_embedded", "android", "web"]
-    raw_bytes: bytes = b""
-    last_err = ""
-
-    for _client in _player_clients:
-        ytdlp_args = [
-            "yt-dlp",
-            "--no-playlist",
-            "--extractor-args", f"youtube:player_client={_client}",
-            "--max-filesize", "48m",
-            "--no-part",
-            "--no-warnings",
-            "--retries", "2",
-            "-f", "bestaudio[ext=m4a]/bestaudio/best",
-            *_cookies_arg,
-            "-o", "-",
-            url,
-        ]
-        try:
-            ytdlp_proc = await asyncio.create_subprocess_exec(
-                *ytdlp_args,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            raw_bytes, ytdlp_stderr = await asyncio.wait_for(
-                ytdlp_proc.communicate(), timeout=90
-            )
-        except asyncio.TimeoutError:
-            logger.debug("stream_to_bytes: client=%s timed out, trying next", _client)
-            try:
-                ytdlp_proc.kill()
-            except Exception:
-                pass
-            raw_bytes = b""
-            last_err = "timeout"
-            continue
-        if raw_bytes:
-            logger.debug("stream_to_bytes: client=%s succeeded", _client)
-            break
-        last_err = ytdlp_stderr.decode(errors="replace").strip()
-        logger.debug("stream_to_bytes: client=%s failed, trying next. err=%s", _client, last_err[:200])
-
-    if not raw_bytes:
-        raise RuntimeError(f"yt-dlp produced no output: {last_err}")
-
-    if has_ffmpeg:
-        # Step 2: raw bytes → ffmpeg stdin → mp3 bytes
-        ffmpeg_proc = await asyncio.create_subprocess_exec(
-            "ffmpeg",
-            "-i", "pipe:0",
-            "-vn", "-acodec", "libmp3lame", "-q:a", "2",
-            "-f", "mp3", "pipe:1",
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-        audio_bytes, _ = await ffmpeg_proc.communicate(input=raw_bytes)
-        del raw_bytes   # free memory immediately
-        filename = "track.mp3"
-    else:
-        audio_bytes = raw_bytes
-        filename = "track.m4a"
-
-    if not audio_bytes:
-        raise RuntimeError("yt-dlp pipeline produced no output")
-    if len(audio_bytes) > MAX_BYTES:
-        raise ValueError(f"Audio too large: {len(audio_bytes) // (1024*1024)} MB")
-
-    return audio_bytes, filename
-
-
-# ── Download (sync, runs in executor) ────────────────────────────────────────
-
-_AUDIO_EXTS = {".mp3", ".m4a", ".ogg", ".opus", ".webm", ".aac", ".flac", ".wav"}
-
-
-def _download_sync(
-    url: str,
-    out_dir: str,
-    *,
-    fallback_title: str | None = None,
-    fallback_uploader: str | None = None,
-    cancel_flag: threading.Event | None = None,
-) -> tuple[Path, str, str, int]:
-    """Download audio into *out_dir*. Returns (path, title, uploader, dur).
-
-    Primary source: YouTube URL supplied by the caller.
-    Fallback: SoundCloud search using ``fallback_title`` + ``fallback_uploader``
-    when YouTube blocks the download (datacenter IP / po_token requirement).
-
-    Tries MP3 conversion via FFmpeg first; falls back to the raw bestaudio
-    format (m4a/opus/webm) so it works even without FFmpeg on the server.
-    """
-    import shutil as _shutil  # noqa: PLC0415
-    import yt_dlp             # noqa: PLC0415
-
-    ffmpeg_ok = _shutil.which("ffmpeg") is not None
-
-    # ── Cancel hook ───────────────────────────────────────────────────────────
-    # yt-dlp calls progress hooks during download.  If the cancel_flag is set
-    # we raise CancelledByUser, which propagates out of extract_info and back
-    # through run_in_executor to the awaiting coroutine — cleanly stopping the
-    # actual yt-dlp work rather than just abandoning a future.
-    def _check_cancel(d: dict) -> None:  # noqa: ANN001
-        if cancel_flag is not None and cancel_flag.is_set():
-            raise CancelledByUser("Download cancelled by user")
-
-    def _base_opts(out_dir_: str) -> dict:
-        o: dict = {
-            "quiet":          True,
-            "no_warnings":    True,
-            "format":         "bestaudio[ext=m4a]/bestaudio/best",
-            "outtmpl":        os.path.join(out_dir_, "%(title)s.%(ext)s"),
-            "noplaylist":     True,
-            "progress_hooks": [_check_cancel],
-        }
-        if ffmpeg_ok:
-            o["postprocessors"] = [{
-                "key":              "FFmpegExtractAudio",
-                "preferredcodec":   "mp3",
-                "preferredquality": "192",
-            }]
-        return o
-
-    # ── 1. Try YouTube with multiple player clients ───────────────────────────
-    # ios/mweb work best on datacenter IPs (no po_token required).
-    # tv_embedded is reliable secondary; android/web are last resorts.
-    _yt_clients = ["ios", "mweb", "tv_embedded", "android", "web"]
-
-    yt_error: Exception | None = None
-    info: dict | None = None
-    for _client in _yt_clients:
-        # Check before trying each client so a cancel between retries is instant.
-        if cancel_flag is not None and cancel_flag.is_set():
-            raise CancelledByUser("Download cancelled by user")
-        yt_opts = _base_opts(out_dir)
-        yt_opts["extractor_args"] = {"youtube": {"player_client": [_client]}}
-        yt_opts["retries"] = 2
-        _apply_youtube_cookies(yt_opts, out_dir)
-        try:
-            with yt_dlp.YoutubeDL(yt_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-            yt_error = None
-            logger.debug("mp3: YouTube download succeeded with client=%s", _client)
-            break
-        except CancelledByUser:
-            raise  # don't swallow the cancel signal
-        except Exception as exc:
-            yt_error = exc
-            logger.debug("mp3: client=%s failed: %s", _client, exc)
-
-    if yt_error is not None:
-        logger.warning("mp3: all YouTube clients failed, trying SoundCloud fallback. last=%s", yt_error)
-
-    if yt_error is None and info is not None:
-        # YouTube succeeded — collect file below
-        title    = info.get("title")    or "Unknown"
-        uploader = info.get("uploader") or info.get("channel") or ""
-        duration = int(info.get("duration") or 0)
-    else:
-        # ── 2. SoundCloud fallback ────────────────────────────────────────────
-        if not fallback_title:
-            raise yt_error  # nothing to search with
-
-        # Check before SoundCloud attempt too.
-        if cancel_flag is not None and cancel_flag.is_set():
-            raise CancelledByUser("Download cancelled by user")
-
-        query_parts = [p for p in [fallback_uploader, fallback_title] if p]
-        sc_query    = "scsearch1:" + " ".join(query_parts)
-        sc_opts     = _base_opts(out_dir)  # already includes _check_cancel hook
-
-        try:
-            with yt_dlp.YoutubeDL(sc_opts) as ydl:
-                info = ydl.extract_info(sc_query, download=True)
-                # scsearch returns a playlist wrapper — unwrap it
-                if info and "entries" in info:
-                    entries = [e for e in (info.get("entries") or []) if e]
-                    info = entries[0] if entries else info
-
-            title    = info.get("title")    or fallback_title
-            uploader = info.get("uploader") or info.get("channel") or fallback_uploader or ""
-            duration = int(info.get("duration") or 0)
-            logger.info("mp3: SoundCloud fallback succeeded for %r", fallback_title)
-        except CancelledByUser:
-            raise  # don't swallow the cancel signal
-        except Exception as sc_exc:
-            logger.warning("mp3: SoundCloud fallback also failed: %s", sc_exc)
-            raise yt_error from sc_exc  # raise original YouTube error
-
-    # Find the downloaded file (any audio extension)
-    files = [p for p in Path(out_dir).iterdir()
-             if p.is_file() and p.suffix.lower() in _AUDIO_EXTS
-             and not p.name.startswith("_")]
-    if not files:
-        files = [p for p in Path(out_dir).iterdir() if p.is_file() and not p.name.startswith("_")]
-    if not files:
-        raise FileNotFoundError("yt-dlp produced no output file")
-
-    path = files[0]
-    size = path.stat().st_size
-    if size > MAX_BYTES:
-        path.unlink(missing_ok=True)
-        raise ValueError(f"Audio too large: {size // (1024 * 1024)} MB > 48 MB limit")
-
-    return path, title, uploader, duration
+    async with get_download_service().media(url, mode="audio") as artifact:
+        path = artifact.paths[0]
+        if path.is_symlink() or not 0 < path.stat().st_size <= MAX_BYTES:
+            raise DownloadError("audio_too_large")
+        with path.open("rb") as source:
+            data = source.read(MAX_BYTES + 1)
+        if len(data) > MAX_BYTES:
+            raise DownloadError("audio_too_large")
+        return data, "audio.mp3"
 
 
 async def download(
@@ -690,18 +333,68 @@ async def download(
     fallback_uploader: str | None = None,
     cancel_flag: threading.Event | None = None,
 ) -> tuple[Path, str, str, int]:
-    """Download *url* to *out_dir* as an audio file.
+    validate_video_url(url, audio=True)
+    if cancel_flag is not None and cancel_flag.is_set():
+        raise CancelledByUser
+    destination = Path(out_dir)
+    if not destination.is_dir() or destination.is_symlink():
+        raise DownloadError("unsafe_output")
+    output = destination / ("audio-" + uuid4().hex + ".mp3")
 
-    Pass *cancel_flag* (a ``threading.Event``) to support cooperative
-    cancellation: the yt-dlp progress hook checks the flag and raises
-    ``CancelledByUser`` when it is set, stopping the actual subprocess
-    rather than just abandoning a future.
-    """
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(
-        None,
-        partial(_download_sync, url, out_dir,
-                fallback_title=fallback_title,
-                fallback_uploader=fallback_uploader,
-                cancel_flag=cancel_flag),
-    )
+    async def copy(source_url: str) -> tuple[Path, str, str, int]:
+        async with get_download_service().media(source_url, mode="audio") as artifact:
+            source_path = artifact.paths[0]
+            if source_path.is_symlink() or not 0 < source_path.stat().st_size <= MAX_BYTES:
+                raise DownloadError("audio_too_large")
+            copied = 0
+            with source_path.open("rb") as source, output.open("xb") as target:
+                while chunk := source.read(256 * 1024):
+                    copied += len(chunk)
+                    if copied > MAX_BYTES:
+                        raise DownloadError("audio_too_large")
+                    target.write(chunk)
+                    await asyncio.sleep(0)
+            return (
+                output,
+                (artifact.title or fallback_title or "Audio")[:256],
+                (artifact.uploader or fallback_uploader or "")[:128],
+                artifact.duration,
+            )
+
+    async def run() -> tuple[Path, str, str, int]:
+        async with asyncio.timeout(150):
+            try:
+                return await copy(url)
+            except DownloadError as error:
+                if not fallback_title or str(error) not in {
+                    "download_failed",
+                    "audio_download_failed",
+                    "audio_unavailable",
+                    "extractor_failed",
+                    "unsupported_media",
+                }:
+                    raise
+                query = " ".join(filter(None, [fallback_uploader, fallback_title]))[:200]
+                candidates = await search(query, n=5)
+                for candidate in candidates:
+                    if urlsplit(candidate["url"]).hostname in {
+                        "soundcloud.com",
+                        "www.soundcloud.com",
+                    }:
+                        return await copy(candidate["url"])
+                raise DownloadError("audio_download_failed") from None
+
+    job = asyncio.create_task(run())
+    try:
+        while not job.done():
+            if cancel_flag is not None and cancel_flag.is_set():
+                job.cancel()
+                await asyncio.gather(job, return_exceptions=True)
+                raise CancelledByUser
+            await asyncio.wait({job}, timeout=0.1)
+        return await job
+    except BaseException:
+        job.cancel()
+        await asyncio.gather(job, return_exceptions=True)
+        output.unlink(missing_ok=True)
+        raise

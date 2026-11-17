@@ -6,6 +6,7 @@ import datetime as dt
 from dataclasses import dataclass
 
 from sqlalchemy import Select, and_, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -109,9 +110,18 @@ class MessageRepository:
         return result.scalar_one_or_none()
 
     async def create(self, message: Message) -> Message:
-        self._session.add(message)
-        await self._session.flush()
-        return message
+        try:
+            async with self._session.begin_nested():
+                self._session.add(message)
+                await self._session.flush()
+            return message
+        except IntegrityError:
+            existing = await self.get_by_telegram_ids(
+                message.business_connection_id, message.chat_id, message.message_id
+            )
+            if existing is None:
+                raise
+            return existing
 
     async def record_edit(
         self,

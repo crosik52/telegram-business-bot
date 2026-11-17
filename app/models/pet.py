@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String
+from sqlalchemy import BigInteger, Boolean, DateTime, Index, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.base import Base
@@ -12,6 +12,12 @@ from app.database.base import Base
 
 class ChatPet(Base):
     __tablename__ = "chat_pets"
+    __table_args__ = (
+        Index("uq_chat_pets_alive", "owner_telegram_id", "chat_id", unique=True,
+              postgresql_where=text("is_alive = true")).ddl_if(dialect="postgresql"),
+        Index("uq_chat_pets_pair_alive", "user_a_id", "user_b_id", unique=True,
+              postgresql_where=text("is_alive = true")).ddl_if(dialect="postgresql"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     owner_telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
@@ -22,7 +28,7 @@ class ChatPet(Base):
     is_alive: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     born_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False,
-        default=lambda: dt.datetime.now(dt.timezone.utc),
+        default=lambda: dt.datetime.now(dt.UTC),
     )
     last_fed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     died_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

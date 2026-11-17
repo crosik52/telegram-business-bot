@@ -14,26 +14,6 @@ DEFAULT_SHOP_CONFIG: dict = {
         "hours":   24,
         "enabled": True,
     },
-    "theme": {
-        "label":   "Тема оформления",
-        "cost":    100,
-        "enabled": True,
-        "options": ["default", "dark_forest", "ocean", "sunset", "lavender",
-                    "frost", "ember", "violet_dream"],
-        # Per-theme price overrides (if absent, falls back to "cost")
-        "theme_prices": {
-            "default":      0,
-            "frost":        500,
-            "ember":        500,
-            "violet_dream": 750,
-        },
-    },
-    "frame": {
-        "label":   "Рамка профиля",
-        "cost":    150,
-        "enabled": True,
-        "options": ["none", "stars", "flowers", "fire", "neon"],
-    },
     "pin_chat": {
         "label":   "Закрепить чат",
         "cost":    75,

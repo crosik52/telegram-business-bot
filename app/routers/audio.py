@@ -1,49 +1,73 @@
-"""Audio streaming endpoint for inline bot results.
-
-GET /audio/{key}  — streams an audio track by its cache key.
-Telegram downloads this URL when the user picks an inline result,
-so the audio lands directly in the chat (no DM needed).
-"""
+"""Bounded short-lived capability URLs for Telegram inline audio fetches."""
 
 from __future__ import annotations
 
-import logging
+import time
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
+from starlette.types import Receive, Scope, Send
 
 from app.services import audio_service
+from app.services.download_service import DownloadError
 
-logger = logging.getLogger(__name__)
 router = APIRouter(tags=["audio"])
+MAX_ACTIVE = 2
+MAX_REQUESTS_PER_MINUTE = 120
+_active = 0
+_window = 0.0
+_requests = 0
+
+
+class LeasedAudioResponse(Response):
+    """Retain admission until ASGI completes or cancels body transmission."""
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        global _active
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            _active -= 1
 
 
 @router.get("/audio/{key}")
 async def stream_audio(key: str) -> Response:
+    global _active, _window, _requests
+    now = time.monotonic()
+    if now - _window >= 60:
+        _window, _requests = now, 0
+    if _requests >= MAX_REQUESTS_PER_MINUTE:
+        raise HTTPException(429, "Audio request limit reached", headers={"Retry-After": "60"})
+    _requests += 1
     cached = audio_service.get(key)
     if cached is None:
-        raise HTTPException(status_code=404, detail="Track not found or session expired")
-
-    # Check if background pre-download already finished (fast path for inline mode)
-    preloaded = audio_service.get_predownloaded(key)
-    if preloaded is not None:
-        audio_bytes, filename = preloaded
-        logger.info("audio endpoint: served from predownload cache key=%s size=%dKB",
-                    key, len(audio_bytes) // 1024)
-    else:
-        try:
-            audio_bytes, filename = await audio_service.stream_to_bytes(cached.url)
-        except Exception as exc:
-            logger.warning("audio endpoint: stream failed key=%s: %s", key, exc)
-            raise HTTPException(status_code=502, detail="Failed to fetch audio") from exc
-
-    ext = filename.rsplit(".", 1)[-1].lower()
-    content_type = "audio/mpeg" if ext == "mp3" else "audio/mp4"
-
-    logger.info("audio endpoint: served key=%s title=%r size=%dKB",
-                key, cached.title, len(audio_bytes) // 1024)
-    return Response(
-        content=audio_bytes,
-        media_type=content_type,
-        headers={"Content-Disposition": f'inline; filename="{filename}"'},
-    )
+        raise HTTPException(404, "Track not found or session expired")
+    if _active >= MAX_ACTIVE:
+        raise HTTPException(429, "Audio service busy", headers={"Retry-After": "5"})
+    _active += 1
+    transferred = False
+    try:
+        preloaded = audio_service.get_predownloaded(key)
+        if preloaded is None:
+            preloaded = await audio_service.stream_to_bytes(cached.url)
+        data, _filename = preloaded
+        if not 0 < len(data) <= audio_service.MAX_BYTES:
+            raise DownloadError("audio_too_large")
+        response = LeasedAudioResponse(
+            data,
+            media_type="audio/mpeg",
+            headers={
+                "Content-Disposition": 'inline; filename="audio.mp3"',
+                "Cache-Control": "private, no-store",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+        transferred = True
+        return response
+    except DownloadError:
+        raise HTTPException(503, "Audio is unavailable", headers={"Retry-After": "5"}) from None
+    except Exception:
+        raise HTTPException(502, "Failed to fetch audio") from None
+    finally:
+        if not transferred:
+            _active -= 1

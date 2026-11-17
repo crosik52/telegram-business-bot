@@ -1,0 +1,92 @@
+name: Build Save Log image
+
+on:
+  push:
+    branches: [main, codex/github-build]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Build the committed runtime
+        shell: bash
+        run: |
+          context=$(mktemp -d)
+          trap 'rm -rf -- "$context"' EXIT
+          git archive --format=tar "$GITHUB_SHA" \
+            app requirements.txt alembic-clean.ini alembic_clean \
+            deploy/vps/Dockerfile deploy/vps/Dockerfile.dockerignore deploy/vps/preflight.py \
+            | tar -xf - -C "$context"
+
+          image="ghcr.io/${GITHUB_REPOSITORY,,}-runtime"
+          tag="sha-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker build --platform linux/amd64 --pull \
+            --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --file "$context/deploy/vps/Dockerfile" --tag "$image:$tag" "$context"
+          printf 'IMAGE_REF=%s\nIMAGE_TAG=%s\n' "$image" "$image:$tag" >> "$GITHUB_ENV"
+
+      - name: Check the built image offline
+        shell: bash
+        run: |
+          result=$(mktemp)
+          trap 'rm -f -- "$result"' EXIT
+          set +e
+          timeout 90s docker run --rm --interactive --network none --read-only \
+            --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 \
+            --memory 768m --cpus 2 --tmpfs /tmp:rw,nosuid,nodev,size=96m,mode=1777 \
+            --entrypoint python "$IMAGE_TAG" - < deploy/github/smoke.py > "$result"
+          probe_status=$?
+          set -e
+          if (( probe_status != 0 )); then
+            jq -c 'select(.ok == false) | {stage, error_type}' "$result"
+            printf 'Offline image probe failed (exit %d).\n' "$probe_status" >&2
+            exit "$probe_status"
+          fi
+          jq -e '.ok == true and .checked_source_files == 11 and .compiled_python == 9
+            and .parsed_templates == 2 and .passed == 29
+            and (.cases | length == 29 and all(.[]; . == true))
+            and .network_calls == false and .database_calls == false and .lifespan_started == false' \
+            "$result" > /dev/null
+
+      - name: Publish checked image to GitHub Container Registry
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          owner_type=$(gh api "repos/$GITHUB_REPOSITORY" --jq .owner.type)
+          case "$owner_type" in
+            Organization) owner_path=orgs ;;
+            User) owner_path=users ;;
+            *) echo 'Unknown package owner type.' >&2; exit 1 ;;
+          esac
+          result=$(mktemp)
+          export DOCKER_CONFIG
+          DOCKER_CONFIG=$(mktemp -d)
+          trap 'rm -f -- "$result"; rm -rf -- "$DOCKER_CONFIG"' EXIT
+          package="${IMAGE_REF##*/}"
+          package_url="$GITHUB_API_URL/$owner_path/$GITHUB_REPOSITORY_OWNER/packages/container/$package"
+          status=$(curl --silent --show-error --max-time 20 --output "$result" --write-out '%{http_code}' \
+            --config - "$package_url" <<< "header = \"Authorization: Bearer $GH_TOKEN\"")
+          case "$status" in
+            200) jq -e '.visibility == "private"' "$result" > /dev/null ;;
+            404) ;; # GitHub creates new container packages private by default.
+            *) echo "Could not verify package visibility (HTTP $status)." >&2; exit 1 ;;
+          esac
+
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          unset GH_TOKEN
+          docker push "$IMAGE_TAG"
+          digest=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$IMAGE_TAG" \
+            | awk -v prefix="$IMAGE_REF@" 'index($0, prefix) == 1 {print}')
+          [[ "$digest" == "$IMAGE_REF@"* && "${digest#*@}" =~ ^sha256:[0-9a-f]{64}$ ]]
+          printf 'Save Log image `%s`\n\nSource `%s`\n' "$digest" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"

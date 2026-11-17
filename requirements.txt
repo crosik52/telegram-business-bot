@@ -13,8 +13,8 @@ python-multipart==0.0.30
 itsdangerous==2.2.0
 matplotlib
 Pillow
-yt-dlp
-gallery-dl
+yt-dlp==2026.8.19
+gallery-dl==1.32.16
 httpx
 aiosqlite
 pytest

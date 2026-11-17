@@ -10,13 +10,33 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-class Settings(BaseSettings):
+class DownloadCookieSettings(BaseSettings):
+    """Only optional cookie configuration; no production token/database fallback."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # External readonly Netscape files; only authenticated owner !video jobs.
+    download_cookie_owner_id: int | None = Field(default=None, gt=0, alias="DOWNLOAD_COOKIE_OWNER_ID")
+    youtube_cookie_file: Path | None = Field(default=None, alias="YOUTUBE_COOKIE_FILE", repr=False)
+    instagram_cookie_file: Path | None = Field(default=None, alias="INSTAGRAM_COOKIE_FILE", repr=False)
+    tiktok_cookie_file: Path | None = Field(default=None, alias="TIKTOK_COOKIE_FILE", repr=False)
+
+    @field_validator("download_cookie_owner_id", "youtube_cookie_file", "instagram_cookie_file",
+                     "tiktok_cookie_file", mode="before")
+    @classmethod
+    def empty_cookie_setting_disables(cls, value):
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+
+class Settings(DownloadCookieSettings):
     """Central application settings, populated from environment variables."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -41,6 +61,11 @@ class Settings(BaseSettings):
         alias="DATABASE_URL",
     )
 
+    database_pool_size: int = Field(default=5, ge=1, le=15, alias="DATABASE_POOL_SIZE")
+    database_max_overflow: int = Field(default=5, ge=0, le=10, alias="DATABASE_MAX_OVERFLOW")
+
+    database_auto_init: bool = Field(default=True, alias="DATABASE_AUTO_INIT")
+
     # --- Dashboard / auth -------------------------------------------------
     dashboard_admin_username: str = Field("admin", alias="DASHBOARD_ADMIN_USERNAME")
     dashboard_admin_password: str = Field("changeme", alias="DASHBOARD_ADMIN_PASSWORD")
@@ -49,14 +74,25 @@ class Settings(BaseSettings):
         default=60 * 60 * 12, alias="SESSION_MAX_AGE_SECONDS"
     )
 
-    # --- Mini App super-admin ----------------------------------------------
-    # The Telegram @username (without "@") that is allowed to open the
-    # /app/admin mini app panel and manage every connected user. Distinct
-    # from the web dashboard login above — this is Telegram-identity-based,
-    # verified via signed WebApp initData, not a password.
-    miniapp_admin_username: str = Field(
-        default="niggathree", alias="MINIAPP_ADMIN_USERNAME"
-    )
+    # Stable Telegram identity; unset disables all administrator privileges.
+    miniapp_admin_id: int | None = Field(default=None, gt=0, alias="MINIAPP_ADMIN_ID")
+
+    @field_validator("miniapp_admin_id", mode="before")
+    @classmethod
+    def empty_admin_id_disables_admin(cls, value):
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    def validate_webhook_security(self) -> None:
+        """Fail before DB/network activity when production webhook is unprotected."""
+        import re
+
+        secret = self.telegram_webhook_secret
+        if self.environment.lower() in {"production", "prod"} and not secret:
+            raise RuntimeError("Production requires TELEGRAM_WEBHOOK_SECRET")
+        if secret and not re.fullmatch(r"[A-Za-z0-9_-]{1,256}", secret):
+            raise RuntimeError("Invalid TELEGRAM_WEBHOOK_SECRET format")
 
     @property
     def normalized_database_url(self) -> str:

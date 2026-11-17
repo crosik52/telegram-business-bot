@@ -27,7 +27,12 @@ def get_bot(settings: Settings) -> Bot:
 def get_dispatcher() -> Dispatcher:
     global _dispatcher
     if _dispatcher is None:
+        from app.middlewares.channel_gate import BotFeatureGateMiddleware
         _dispatcher = Dispatcher()
+        gate = BotFeatureGateMiddleware()
+        for observer in (_dispatcher.message, _dispatcher.callback_query,
+                         _dispatcher.inline_query, _dispatcher.chosen_inline_result):
+            observer.outer_middleware(gate)
         _dispatcher.include_router(commands_router)
         _dispatcher.include_router(business_router)
     return _dispatcher

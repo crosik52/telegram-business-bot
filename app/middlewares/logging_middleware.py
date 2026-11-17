@@ -20,7 +20,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         logger.info(
             "%s %s -> %s (%.1fms)",
             request.method,
-            request.url.path,
+            "/audio/{key}" if request.url.path.startswith("/audio/") else request.url.path,
             response.status_code,
             duration_ms,
         )

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Integer, JSON, String
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Index, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.base import Base
@@ -61,8 +61,8 @@ class SubscriptionConfig(Base):
     benefits: Mapped[dict] = mapped_column(JSON, nullable=False, default=lambda: dict(DEFAULT_BENEFITS))
     updated_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: dt.datetime.now(dt.timezone.utc),
-        onupdate=lambda: dt.datetime.now(dt.timezone.utc),
+        default=lambda: dt.datetime.now(dt.UTC),
+        onupdate=lambda: dt.datetime.now(dt.UTC),
     )
 
 
@@ -82,8 +82,8 @@ class VipSubscriptionConfig(Base):
     benefits: Mapped[dict] = mapped_column(JSON, nullable=False, default=lambda: dict(DEFAULT_VIP_BENEFITS))
     updated_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: dt.datetime.now(dt.timezone.utc),
-        onupdate=lambda: dt.datetime.now(dt.timezone.utc),
+        default=lambda: dt.datetime.now(dt.UTC),
+        onupdate=lambda: dt.datetime.now(dt.UTC),
     )
 
 
@@ -102,6 +102,12 @@ class UserSubscription(Base):
     """
 
     __tablename__ = "user_subscriptions"
+    __table_args__ = (
+        Index("uix_user_subscriptions_charge_id", "payment_charge_id", unique=True,
+              postgresql_where=text("payment_charge_id IS NOT NULL")).ddl_if(dialect="postgresql"),
+        Index("uix_user_subscriptions_one_active", "user_telegram_id", unique=True,
+              postgresql_where=text("is_active = true")).ddl_if(dialect="postgresql"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
@@ -117,5 +123,5 @@ class UserSubscription(Base):
     stars_paid: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: dt.datetime.now(dt.timezone.utc),
+        default=lambda: dt.datetime.now(dt.UTC),
     )

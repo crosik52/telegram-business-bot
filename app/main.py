@@ -308,12 +308,15 @@ async def _cleanup_loop() -> None:
     await asyncio.sleep(60)
     while True:
         try:
-            async for session in get_db_session():
+            # No message removal until the owner explicitly approves a retention policy.
+            if os.environ.get("MESSAGE_RETENTION_ENABLED", "false").lower() == "true":
                 keep_days = int(os.environ.get("MESSAGE_RETENTION_DAYS", "90"))
-                # Keep deleted messages as long as regular ones so owners can
-                # still recover notifications/media for recently-deleted messages.
-                await purge_old_messages(session, max_age_days=keep_days,
-                                         deleted_max_age_days=keep_days)
+                if keep_days <= 0:
+                    raise ValueError("MESSAGE_RETENTION_DAYS must be positive")
+                async for session in get_db_session():
+                    await purge_old_messages(
+                        session, max_age_days=keep_days, deleted_max_age_days=keep_days
+                    )
             _l1_evict_expired()
         except Exception:
             logger.exception("DB cleanup failed — will retry next cycle")
@@ -322,6 +325,7 @@ async def _cleanup_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    settings.validate_webhook_security()
     logger.info("Starting Telegram Business Bot (environment=%s)", settings.environment)
 
     if settings.is_sqlite:
@@ -346,76 +350,79 @@ async def lifespan(app: FastAPI):
     import app.models.subscription       # noqa: F401, PLC0415  — registers VipSubscriptionConfig
     import app.models.giveaway           # noqa: F401, PLC0415  — registers GiveawayConfig
     engine = get_engine()
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        # Drop the now-unused media_cache table on every dialect.
-        # The table was dead code: the Telegram Business API never exposes
-        # view-once media to bots, so caching bytes was never possible.
-        from sqlalchemy import text as _text
-        await conn.execute(_text("DROP TABLE IF EXISTS media_cache CASCADE"))
-        # Safe column additions for tables that already exist in production
-        if not settings.is_sqlite:
-            from sqlalchemy import text
-            # Enable pg_trgm for fast ILIKE trigram search on messages.
-            # A real nested transaction (SAVEPOINT) isolates any privilege
-            # error so it cannot abort the outer schema-migration transaction.
-            try:
-                async with conn.begin_nested():
-                    await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
-            except Exception:
-                logger.warning(
-                    "Could not create pg_trgm extension (missing privilege?). "
-                    "Message search will still work but may be slower without "
-                    "trigram indexes."
-                )
-            await conn.execute(text(
-                "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS owned_themes JSONB"
-            ))
-            await conn.execute(text(
-                "ALTER TABLE referrals ADD COLUMN IF NOT EXISTS referred_first_name VARCHAR(128)"
-            ))
-            await conn.execute(text(
-                "ALTER TABLE referrals ADD COLUMN IF NOT EXISTS referred_username VARCHAR(64)"
-            ))
-            await conn.execute(text(
-                "ALTER TABLE referrals ADD COLUMN IF NOT EXISTS evaluation_failures INTEGER NOT NULL DEFAULT 0"
-            ))
-            await conn.execute(text(
-                "ALTER TABLE user_subscriptions ADD COLUMN IF NOT EXISTS sub_type VARCHAR(20) DEFAULT 'premium'"
-            ))
-            await conn.execute(text(
-                "ALTER TABLE giveaway_config ADD COLUMN IF NOT EXISTS prize_1_image VARCHAR(512)"
-            ))
-            await conn.execute(text(
-                "ALTER TABLE giveaway_config ADD COLUMN IF NOT EXISTS prize_2_image VARCHAR(512)"
-            ))
-            await conn.execute(text(
-                "ALTER TABLE giveaway_config ADD COLUMN IF NOT EXISTS prize_3_image VARCHAR(512)"
-            ))
-            await conn.execute(text(
-                "ALTER TABLE giveaway_config ADD COLUMN IF NOT EXISTS opens_at TIMESTAMPTZ"
-            ))
-            await conn.execute(text(
-                "ALTER TABLE chat_settings ADD COLUMN IF NOT EXISTS delete_msgs_until TIMESTAMPTZ"
-            ))
-            await conn.execute(text(
-                "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS streak_reminders_enabled BOOLEAN NOT NULL DEFAULT TRUE"
-            ))
-            await conn.execute(text(
-                "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS dl_contact_videos BOOLEAN NOT NULL DEFAULT TRUE"
-            ))
-            await conn.execute(text(
-                "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS dl_contact_videos_mutual BOOLEAN NOT NULL DEFAULT FALSE"
-            ))
-            await conn.execute(text(
-                "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS chat_filter_mode VARCHAR(20) NOT NULL DEFAULT 'all'"
-            ))
-            await conn.execute(text(
-                "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS chat_whitelist JSONB"
-            ))
-            await conn.execute(text(
-                "ALTER TABLE business_connections ADD COLUMN IF NOT EXISTS bot_id BIGINT"
-            ))
+    if settings.database_auto_init:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+            # Drop the now-unused media_cache table on every dialect.
+            # The table was dead code: the Telegram Business API never exposes
+            # view-once media to bots, so caching bytes was never possible.
+            from sqlalchemy import text as _text
+            await conn.execute(_text("DROP TABLE IF EXISTS media_cache CASCADE"))
+            # Safe column additions for tables that already exist in production
+            if not settings.is_sqlite:
+                from sqlalchemy import text
+                # Enable pg_trgm for fast ILIKE trigram search on messages.
+                # A real nested transaction (SAVEPOINT) isolates any privilege
+                # error so it cannot abort the outer schema-migration transaction.
+                try:
+                    async with conn.begin_nested():
+                        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+                except Exception:
+                    logger.warning(
+                        "Could not create pg_trgm extension (missing privilege?). "
+                        "Message search will still work but may be slower without "
+                        "trigram indexes."
+                    )
+                await conn.execute(text(
+                    "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS owned_themes JSONB"
+                ))
+                await conn.execute(text(
+                    "ALTER TABLE referrals ADD COLUMN IF NOT EXISTS referred_first_name VARCHAR(128)"
+                ))
+                await conn.execute(text(
+                    "ALTER TABLE referrals ADD COLUMN IF NOT EXISTS referred_username VARCHAR(64)"
+                ))
+                await conn.execute(text(
+                    "ALTER TABLE referrals ADD COLUMN IF NOT EXISTS evaluation_failures INTEGER NOT NULL DEFAULT 0"
+                ))
+                await conn.execute(text(
+                    "ALTER TABLE user_subscriptions ADD COLUMN IF NOT EXISTS sub_type VARCHAR(20) DEFAULT 'premium'"
+                ))
+                await conn.execute(text(
+                    "ALTER TABLE giveaway_config ADD COLUMN IF NOT EXISTS prize_1_image VARCHAR(512)"
+                ))
+                await conn.execute(text(
+                    "ALTER TABLE giveaway_config ADD COLUMN IF NOT EXISTS prize_2_image VARCHAR(512)"
+                ))
+                await conn.execute(text(
+                    "ALTER TABLE giveaway_config ADD COLUMN IF NOT EXISTS prize_3_image VARCHAR(512)"
+                ))
+                await conn.execute(text(
+                    "ALTER TABLE giveaway_config ADD COLUMN IF NOT EXISTS opens_at TIMESTAMPTZ"
+                ))
+                await conn.execute(text(
+                    "ALTER TABLE chat_settings ADD COLUMN IF NOT EXISTS delete_msgs_until TIMESTAMPTZ"
+                ))
+                await conn.execute(text(
+                    "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS streak_reminders_enabled BOOLEAN NOT NULL DEFAULT TRUE"
+                ))
+                await conn.execute(text(
+                    "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS dl_contact_videos BOOLEAN NOT NULL DEFAULT TRUE"
+                ))
+                await conn.execute(text(
+                    "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS dl_contact_videos_mutual BOOLEAN NOT NULL DEFAULT FALSE"
+                ))
+                await conn.execute(text(
+                    "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS chat_filter_mode VARCHAR(20) NOT NULL DEFAULT 'all'"
+                ))
+                await conn.execute(text(
+                    "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS chat_whitelist JSONB"
+                ))
+                await conn.execute(text(
+                    "ALTER TABLE business_connections ADD COLUMN IF NOT EXISTS bot_id BIGINT"
+                ))
+    else:
+        logger.info("Automatic database DDL disabled; schema must be provisioned manually")
 
     if settings.webhook_base_url:
         from aiogram.types import MenuButtonWebApp, WebAppInfo
@@ -464,6 +471,9 @@ async def lifespan(app: FastAPI):
             "Set it (or call setWebhook manually) before the bot can receive updates."
         )
 
+    from app.services.telegram_inbox_service import run_inbox_worker
+    inbox_task = asyncio.create_task(run_inbox_worker())
+
     # ── Periodic DB cleanup task ──────────────────────────────────────────────
     cleanup_task = asyncio.create_task(_cleanup_loop())
     # ── Streak reminder background task ───────────────────────────────────────
@@ -479,6 +489,13 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    inbox_task.cancel()
+    try:
+        await inbox_task
+    except asyncio.CancelledError:
+        pass
+    from app.services.audio_service import shutdown_predownloads
+    await shutdown_predownloads()
     cleanup_task.cancel()
     streak_task.cancel()
     milestone_sweep_task.cancel()
@@ -521,6 +538,8 @@ app = FastAPI(title="Telegram Business Bot", lifespan=lifespan)
 app.add_middleware(RequestLoggingMiddleware)
 from app.miniapp.subscription_middleware import SubscriptionGateMiddleware  # noqa: E402
 app.add_middleware(SubscriptionGateMiddleware)
+from app.middlewares.audio_transfer import AudioTransferMiddleware  # noqa: E402
+app.add_middleware(AudioTransferMiddleware)
 
 app.include_router(health.router)
 app.include_router(mockup_proxy.router)
